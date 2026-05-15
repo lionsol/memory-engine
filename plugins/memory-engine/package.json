@@ -1,0 +1,13 @@
+{
+  "name": "memory-engine-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "openclaw": {
+    "extensions": ["index.js"]
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  }
+}

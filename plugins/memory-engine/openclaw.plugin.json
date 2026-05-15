@@ -1,0 +1,26 @@
+{
+  "id": "memory-engine",
+  "name": "Memory Engine",
+  "description": "Enhanced memory with confidence scoring, time-decay, and lifecycle management.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "archiveThreshold": {
+        "type": "number",
+        "default": 0.15,
+        "description": "Confidence threshold for automatic archival"
+      },
+      "conflictPenalty": {
+        "type": "number",
+        "default": 0.5,
+        "description": "Penalty applied to conflicted memories"
+      },
+      "beta": {
+        "type": "number",
+        "default": 0.3,
+        "description": "Consolidation rate factor"
+      }
+    }
+  }
+}
