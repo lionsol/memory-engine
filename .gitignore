@@ -1,0 +1,26 @@
+# OpenClaw runtime
+.openclaw/
+.clawhub/
+
+# Dependencies
+node_modules/
+
+# Build artifacts
+*.tar.gz
+*.tgz
+
+# Stray files
+nul
+1
+
+# Editor files
+*.bak
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
