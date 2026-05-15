@@ -2,6 +2,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
 import Database from "better-sqlite3";
 import { mkdirSync, appendFileSync, existsSync, readFileSync } from "fs";
+import { execSync } from "child_process";
 import { resolve } from "path";
 import { homedir } from "os";
 
@@ -93,6 +94,13 @@ function resolvePrefixes(db, prefixes) {
   return results;
 }
 
+function resolveSFKey() {
+  try {
+    const cfg = JSON.parse(readFileSync(resolve(homedir(), '.openclaw/openclaw.json'), 'utf-8'));
+    return cfg.models?.providers?.siliconflow?.apiKey || '';
+  } catch(e) { return ''; }
+}
+
 export default definePluginEntry({
   id: "memory-engine",
   name: "Memory Engine",
@@ -161,12 +169,13 @@ export default definePluginEntry({
             description: "List of chunk ID prefixes to cite/reinforce",
           },
           hit: { type: "boolean" },
+          deep: { type: "boolean", description: "Use LLM for semantic contradiction check (slow path)" },
           top_k: { type: "number", default: 5 },
         },
         required: ["action"],
       },
       execute: async (_toolCallId, params) => {
-        const { action, text, category, protected: isProtected, chunk_id, hit, top_k } = params;
+        const { action, text, category, protected: isProtected, chunk_id, hit, top_k, deep } = params;
         const k = top_k || 5;
         const nowSec = Math.floor(Date.now() / 1000);
 
