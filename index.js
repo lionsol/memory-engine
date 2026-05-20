@@ -215,8 +215,8 @@ export default definePluginEntry({
     initLanceDB().catch(e => console.warn("[memory-engine] LanceDB init deferred:", e.message));
 
     // Register memory prompt supplement — guides agent to cite memory IDs
-    api.registerMemoryPromptSupplement(({ addParagraph }) => {
-      addParagraph([
+    api.registerMemoryPromptSupplement((_params) => {
+      return [
         "## Memory Engine - 记忆置信度系统",
         "",
         "### 工作流",
@@ -226,7 +226,7 @@ export default definePluginEntry({
         "",
         "规则：引用搜索结果却不调 `cite`，那些记忆会随时间衰减消失。",
         "每次 `cite` 让记忆更牢固（hit+1, conf+0.1, 半衰期延长）。",
-      ].join("\n"));
+      ];
     });
 
     api.registerTool({
