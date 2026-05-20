@@ -4,6 +4,38 @@ All notable changes to the OpenClaw Memory System.
 
 ---
 
+## [v1.4] — 2026-05-20
+
+### Added
+
+- **autoRouteCategory 规则引擎** — `smart_add` 入口新增实时分类路由。6 组正则规则自动识别身份信息、临时内容、偏好习惯、决策结论、配置密钥，无需等待夜间 cron。显式传 category 时尊重原值，不覆盖。
+
+- **LanceDB 双引擎存储** — 在 `memory-confidence` 新增 LanceDB 向量数据库，与 SQLite 并行存储：
+  - 写入：`add` 时异步写 LanceDB（vector + text），不阻塞返回
+  - 检索：Search 新增 Channel 1b (LanceDB 向量召回)，与 OpenClaw Manager、FTS5、KG 组成 4 通道 RRF 融合
+  - 初始化：插件启动时异步 init，fire-and-forget 不阻塞启动
+
+- **迁移脚本** — `scripts/migrate-to-lancedb.js`：从 SQLite 读取所有未归档 chunks，写入 LanceDB。
+
+- **LanceDB 端到端测试** — `scripts/e2e-lancedb-test.js`：验证 autoRouteCategory → generateEmbedding → LanceDB 写入/查询 → RRF 融合全链路。
+
+### Changed
+
+- **session-checkpoint.js** — 夜间检查点升级为 Unified Nightly Smart Extraction：
+  - 3 个独立 LLM 调用 → 合并为 1 次 LLM 调用
+  - 4 类输出：smart_memories(6类) + episode_summary + configs
+  - FTS5 去重检测（`isDuplicate`），避免重复写入
+  - 写入全部 6 种 category，含 confidence 记录
+  - 保留原有冲突标记逻辑
+
+- **Embedding 维度修正** — LanceDB schema 使用 2560 维（Qwen3-Embedding-4B 实际输出），修正之前误用的 1024 维。
+
+### Fixed
+
+- **session-checkpoint cron 超时** — 从默认超时 → 120s，避免 SiliconFlow LLM 请求被 SIGTERM。
+
+---
+
 ## [v1.3] — 2026-05-18
 
 ### Added

@@ -1,6 +1,8 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
 import Database from "better-sqlite3";
+import lancedb from '@lancedb/lancedb';
+import crypto from 'crypto';
 import { mkdirSync, appendFileSync, existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { homedir } from "os";
@@ -9,6 +11,73 @@ const DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
 const WORKSPACE = resolve(homedir(), ".openclaw/workspace");
 const SMART_ADD_DIR = "memory/smart-add";
 const KG_PATH = resolve(homedir(), ".openclaw/workspace/knowledge-graph.json");
+const LANCEDB_PATH = resolve(homedir(), ".openclaw/memory/lancedb");
+const EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-4B";
+
+// ── LanceDB globals (initialized in register) ──
+let lancedbTable = null;
+
+/**
+ * Generate embedding via SiliconFlow embedding API.
+ */
+async function generateEmbedding(text) {
+  const apiKey = resolveSFKey();
+  if (!apiKey) throw new Error("SiliconFlow API key not found");
+
+  const { https } = await import('node:https');
+  const url = new URL("/v1/embeddings", getSFBaseUrl());
+  const body = JSON.stringify({
+    model: EMBEDDING_MODEL,
+    input: text.slice(0, 8000),
+  });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+    }, (res) => {
+      let data = "";
+      res.on("data", chunk => data += chunk);
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) return reject(new Error(parsed.error.message));
+          resolve(parsed.data?.[0]?.embedding || []);
+        } catch (e) {
+          reject(new Error(`Embedding parse: ${e.message}`));
+        }
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+/**
+ * Initialize LanceDB: connect and ensure the chunks table exists.
+ */
+async function initLanceDB() {
+  try {
+    const db = await lancedb.connect(LANCEDB_PATH);
+    const tableNames = await db.tableNames();
+    if (tableNames.includes('chunks')) {
+      lancedbTable = await db.openTable('chunks');
+    } else {
+      lancedbTable = await db.createTable('chunks', [
+        { id: crypto.randomUUID(), text: "", vector: new Array(2560).fill(0), timestamp: Date.now() }
+      ]);
+    }
+    console.log("[memory-engine] LanceDB initialized at", LANCEDB_PATH);
+    return true;
+  } catch (e) {
+    console.warn("[memory-engine] LanceDB init skipped:", e.message);
+    return false;
+  }
+}
 
 const CATEGORY_MAP = {
   temporary:       { conf: 0.40, tau: 2.0 },
@@ -32,6 +101,32 @@ function calcTau(hits, baseTau) {
 function catParams(category, isProtected) {
   if (isProtected || category === "user_identity") return { conf: 0.95, tau: 365.0 };
   return CATEGORY_MAP[category] || CATEGORY_MAP.raw_log;
+}
+
+/**
+ * Auto-route text to an appropriate category via regex rules.
+ * Only overrides when no explicit category was passed (or raw_log default).
+ */
+function autoRouteCategory(text, metadata = {}) {
+  if (metadata.category && metadata.category !== 'raw_log') {
+    return metadata.category;
+  }
+  if (/api[_-]?key|voice[_-]?id|model\s*[:=]|\/[a-z0-9_\/\.-]+\.[a-z]{2,5}|[a-f0-9]{32,}/i.test(text)) {
+    return 'preference';
+  }
+  if (/我是|我叫|我的名字|我的职业|我在.*工作|我住在/.test(text)) {
+    return 'user_identity';
+  }
+  if (/暂时|临时|一次性|仅这次|就现在|当前会话|测试一下|试试看/.test(text)) {
+    return 'temporary';
+  }
+  if (/我喜欢|我习惯|我偏好|我常用|我一般|我倾向于|记住|别忘了|以后都|下次|我的设置/.test(text)) {
+    return 'preference';
+  }
+  if (/决定|结论|总结|教训|经验|最终选择|定下来|确定了/.test(text)) {
+    return 'preference';
+  }
+  return 'raw_log';
 }
 
 function calcRealtimeConf(row, now) {
@@ -116,6 +211,9 @@ export default definePluginEntry({
       console.error("[memory-engine] failed to init confidence table:", e.message);
     }
 
+    // Initialize LanceDB (async, fire-and-forget)
+    initLanceDB().catch(e => console.warn("[memory-engine] LanceDB init deferred:", e.message));
+
     // Register memory prompt supplement — guides agent to cite memory IDs
     api.registerMemoryPromptSupplement(({ addParagraph }) => {
       addParagraph([
@@ -178,6 +276,7 @@ export default definePluginEntry({
         },
         required: ["action"],
       },
+
       execute: async (_toolCallId, params) => {
         const { action, text, category, protected: isProtected, chunk_id, hit, top_k, deep } = params;
         const k = top_k || 5;
@@ -186,7 +285,8 @@ export default definePluginEntry({
         try {
           if (action === "add") {
             if (!text) return { error: "text required for add" };
-            const cat = category || "raw_log";
+            // ── Auto-route category via rule engine ──
+            const cat = autoRouteCategory(text, { category });
             const now = new Date();
             const dateStr = now.toISOString().slice(0, 10);
             const ts = now.toISOString().replace(/[:.]/g, "").slice(0, 15);
@@ -198,7 +298,7 @@ export default definePluginEntry({
             const entry = `${header}## ${entryId}\n\nCategory: ${cat}${isProtected ? " | Protected" : ""}\n\n${text.trim()}\n\n`;
             appendFileSync(filePath, header ? entry : `\n${entry}`);
 
-            // Sync via manager
+            // Sync via manager — populates SQLite chunks + FTS5
             try {
               const { manager } = await getMemorySearchManager({});
               if (manager) await manager.sync();
@@ -206,7 +306,7 @@ export default definePluginEntry({
               // fallback: reindex may happen on next cycle
             }
 
-            // Write confidence
+            // Write confidence + dual-write to LanceDB
             const result = withDb(db => {
               const fileRel = filePath.replace(WORKSPACE + "/", "");
               const newChunks = db.prepare([
@@ -227,6 +327,20 @@ export default definePluginEntry({
                   }
                 });
                 txn();
+
+                // Fire-and-forget: background LanceDB write
+                if (lancedbTable) {
+                  generateEmbedding(text).then(vec => {
+                    if (vec && vec.length > 0) {
+                      lancedbTable.add([{
+                        id: newChunks[0].id,
+                        text: text.slice(0, 2000),
+                        vector: vec,
+                        timestamp: Date.now()
+                      }]).catch(() => {});
+                    }
+                  }).catch(() => {});
+                }
               }
               return { chunks_added: newChunks.length, category: cat, confidence: conf, tau };
             });
@@ -245,6 +359,55 @@ export default definePluginEntry({
                 vectorCandidates = raw?.entries || raw || [];
               }
             } catch (e) {}
+
+            // Channel 1b: LanceDB vector search (if initialized)
+            let lanceCandidates = [];
+            if (lancedbTable) {
+              try {
+                const queryVec = await generateEmbedding(text);
+                if (queryVec && queryVec.length > 0) {
+                  const rawLance = await lancedbTable.search(queryVec).limit(30).execute();
+                  if (rawLance) {
+                    // LanceDB v2 returns async iterable, not Array
+                    let lanceRows = [];
+                    if (typeof rawLance[Symbol.asyncIterator] === 'function') {
+                      for await (const batch of rawLance) {
+                        for (const row of batch) lanceRows.push(row);
+                      }
+                    } else if (Array.isArray(rawLance)) {
+                      lanceRows = rawLance;
+                    }
+
+                    if (lanceRows.length > 0) {
+                      lanceCandidates = withDb(db => {
+                        const confMap = new Map();
+                        const confRows = db.prepare(`SELECT chunk_id, confidence, last_confidence_update, base_tau, hit_count, is_protected, conflict_flag, category FROM memory_confidence`).all();
+                        for (const r of confRows) confMap.set(r.chunk_id, r);
+                        return lanceRows
+                          .filter(l => confMap.has(l.id))
+                          .map(l => {
+                            const meta = confMap.get(l.id);
+                            return {
+                              id: l.id, text: (l.text || '').slice(0, 600),
+                              category: meta.category,
+                              similarity: l._distance !== undefined ? 1 - l._distance : 0.6,
+                              confidence_realtime: meta.is_protected ? meta.confidence
+                                : Math.round(calcRealtimeConf(meta, nowSec) * 10000) / 10000,
+                              hit_count: meta.hit_count,
+                              is_protected: meta.is_protected,
+                              conflict_flag: meta.conflict_flag,
+                            };
+                          })
+                          .sort((a, b) => b.similarity - a.similarity)
+                          .slice(0, 30);
+                      });
+                    }
+                  }
+                }
+              } catch (e) {
+                // LanceDB query failed, non-fatal
+              }
+            }
 
             // Channel 2: FTS5 full-text search
             let ftsCandidates = [];
@@ -347,6 +510,11 @@ export default definePluginEntry({
                 return res.slice(0, 30);
               });
               if (scored.length > 0) channels.vector = scored;
+            }
+
+            // Channel 1b: LanceDB
+            if (lanceCandidates.length > 0) {
+              channels.lance = lanceCandidates;
             }
 
             if (ftsCandidates.length > 0) {

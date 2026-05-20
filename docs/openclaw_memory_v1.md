@@ -1,6 +1,6 @@
 ﻿
 
-# OpenClaw 记忆系统 v1.2 架构与开发文档 (SQLite 增强版)
+# OpenClaw 记忆系统 v1.4 架构与开发文档 (LanceDB + SQLite 双引擎)
 
 ## 1. 架构核心哲学 (Design Philosophy)
 
@@ -368,5 +368,86 @@ agentmemory.add({
 - `[昨日概要]` — 昨日 episode 摘要
 - `[受保护记忆]` — `user_identity` + `protected` 标记的记忆列表
 - 仅主 session 和 heartbeat session 生效
+
+---
+
+## 11. v1.4 — autoRouteCategory + LanceDB 双引擎 (2026-05-20)
+
+### 11.1 实时分类规则引擎
+
+`plugins/memory-engine/index.js` 新增 `autoRouteCategory()` 函数，在 `smart_add` 入口实时路由：
+
+| 规则 | 匹配示例 | 目标类别 |
+|------|----------|----------|
+| API key / 配置值 | `api_key = sk-...` | preference |
+| 身份介绍 | `我是Sol, 一名开发者` | user_identity |
+| 临时性表述 | `临时测试一下` | temporary |
+| 偏好习惯 | `我喜欢用Zsh` | preference |
+| 决策结论 | `最终选择了Linux` | preference |
+| 无匹配 | 日常对话 | raw_log |
+
+显式传 category 且非 raw_log 时尊重原值，不覆盖。
+
+### 11.2 LanceDB 双引擎存储
+
+**初始化**：插件 `register()` 时异步 init，fire-and-forget 不阻塞启动。
+
+**写入路径**：
+```
+smart_add → ① 规则引擎 → ② 写 smart-add 文件 → ③ manager.sync()
+         → ④ SQLite confidence (同步)
+         → ⑤ generateEmbedding → LanceDB (异步，fire-and-forget)
+```
+
+**检索路径**（4 通道 RRF 融合）：
+```
+Channel 1:  OpenClaw Manager (向量)
+Channel 1b: LanceDB (向量)
+Channel 2:  FTS5 (关键词)
+Channel 3:  KG Bridge (概念)
+                 ↓
+          RRF 融合 (k=60)
+                 ↓
+          门控 → 加权排序
+```
+
+**向量维度**：Qwen3-Embedding-4B 输出 2560 维。
+
+**数据库位置**：`~/.openclaw/memory/lancedb/` — 独立目录，与 SQLite 同级。
+
+### 11.3 Session Checkpoint 增强
+
+`scripts/session-checkpoint.js` 合并为单次 LLM 调用：
+
+**旧版** (v1.3)：2 次 LLM 调用（配置提取 + 摘要生成）
+**新版** (v1.4)：1 次 LLM 调用，统一 prompt，产出 3 类结果：
+
+1. `smart_memories` — 6 种类型：profile / preference / entity / event / case / pattern
+2. `episode_summary` — ≤200 字每日摘要
+3. `configs` — 配置信息提取（格式保持不变）
+
+**新增功能**：
+- FTS5 去重检测（`isDuplicate`），避免重复写入
+- 写入全部 6 种 memory_engine category 及 confidence 记录
+- 空内容占位 episode（`writeEmptyEpisode`）
+
+### 11.4 关键变更
+
+| 组件 | 变更 |
+|------|------|
+| `plugins/memory-engine/index.js` | +autoRouteCategory, +initLanceDB, +generateEmbedding, 双写 + 4通道检索 |
+| `scripts/session-checkpoint.js` | 3→1 LLM 调用, +mapToCategory, +appendSmartAdd, +isDuplicate |
+| `scripts/migrate-to-lancedb.js` | 新增，一次性迁移脚本 |
+| `scripts/e2e-lancedb-test.js` | 新增，端到端验证脚本 |
+| `package.json` | +@lancedb/lancedb 依赖 |
+| cron: session-checkpoint | 超时 默认→120s |
+
+### 11.5 数据分布
+
+| 存储引擎 | 存储内容 | 行数 |
+|----------|----------|------|
+| SQLite `chunks` | 原始文本 (OpenClaw 索引) | ~327 |
+| SQLite `memory_confidence` | 元数据 (置信度/分类/强化) | ~94 |
+| LanceDB `chunks` | 向量 + 文本 | ~94 |
 
 此文档可直接交付工程团队执行。
