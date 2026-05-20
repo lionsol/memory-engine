@@ -306,45 +306,66 @@ export default definePluginEntry({
               // fallback: reindex may happen on next cycle
             }
 
-            // Write confidence + dual-write to LanceDB
+            // Get new chunks
+            const { conf, tau } = catParams(cat, isProtected);
+            let lanceWritten = 0;
+
             const result = withDb(db => {
               const fileRel = filePath.replace(WORKSPACE + "/", "");
               const newChunks = db.prepare([
                 "SELECT id FROM chunks WHERE path = ?",
                 "AND id NOT IN (SELECT chunk_id FROM memory_confidence)"
               ].join(" ")).all(fileRel);
-              const { conf, tau } = catParams(cat, isProtected);
-              if (newChunks.length > 0) {
-                const insert = db.prepare([
-                  "INSERT INTO memory_confidence",
-                  "(chunk_id, initial_confidence, confidence, last_confidence_update,",
-                  "base_tau, hit_count, is_archived, is_protected, conflict_flag, category)",
-                  "VALUES (?, ?, ?, ?, ?, 0, 0, ?, 0, ?)"
-                ].join(" "));
-                const txn = db.transaction(() => {
-                  for (const row of newChunks) {
-                    insert.run(row.id, conf, conf, nowSec, tau, isProtected ? 1 : 0, cat);
+
+              if (newChunks.length <= 0) {
+                return { chunks_added: 0, category: cat, confidence: conf, tau };
+              }
+
+              // ① Write SQLite confidence first (lightweight, instantaneous)
+              const insert = db.prepare([
+                "INSERT INTO memory_confidence",
+                "(chunk_id, initial_confidence, confidence, last_confidence_update,",
+                "base_tau, hit_count, is_archived, is_protected, conflict_flag, category)",
+                "VALUES (?, ?, ?, ?, ?, 0, 0, ?, 0, ?)"
+              ].join(" "));
+              const txn = db.transaction(() => {
+                for (const row of newChunks) {
+                  insert.run(row.id, conf, conf, nowSec, tau, isProtected ? 1 : 0, cat);
+                }
+              });
+              txn();
+
+              return { chunks_added: newChunks.length, category: cat, confidence: conf, tau, newChunks };
+            });
+
+            // ② Generate embedding + write LanceDB (synchronous, with rollback)
+            if (result.newChunks && lancedbTable) {
+              try {
+                const vec = await generateEmbedding(text);
+                if (vec && vec.length > 0) {
+                  await lancedbTable.add([{
+                    id: result.newChunks[0].id,
+                    text: text.slice(0, 2000),
+                    vector: vec,
+                    timestamp: Date.now()
+                  }]);
+                  lanceWritten = 1;
+                }
+              } catch (e) {
+                // LanceDB write failed → rollback SQLite to avoid orphan
+                console.warn("[memory-engine] LanceDB write failed, rolling back SQLite:", e.message);
+                withDb(db => {
+                  const del = db.prepare("DELETE FROM memory_confidence WHERE chunk_id = ?");
+                  for (const row of result.newChunks) {
+                    del.run(row.id);
                   }
                 });
-                txn();
-
-                // Fire-and-forget: background LanceDB write
-                if (lancedbTable) {
-                  generateEmbedding(text).then(vec => {
-                    if (vec && vec.length > 0) {
-                      lancedbTable.add([{
-                        id: newChunks[0].id,
-                        text: text.slice(0, 2000),
-                        vector: vec,
-                        timestamp: Date.now()
-                      }]).catch(() => {});
-                    }
-                  }).catch(() => {});
-                }
+                // Re-throw so the caller knows the add failed
+                throw new Error(`LanceDB write failed, SQLite rolled back: ${e.message}`);
               }
-              return { chunks_added: newChunks.length, category: cat, confidence: conf, tau };
-            });
-            return { success: true, ...result };
+            }
+
+            return { success: true, chunks_added: result.chunks_added, category: result.category, confidence: result.confidence, tau: result.tau, lance_written: lanceWritten };
           }
 
           if (action === "search") {
