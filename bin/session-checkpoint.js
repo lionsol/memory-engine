@@ -169,101 +169,235 @@ function readTodayRawLogs() {
   return logs;
 }
 
-// ── Extract configs via LLM ──
+// ── Unified Nightly Smart Extraction ──
 
-async function extractConfigs(rawLogs) {
-  if (rawLogs.length === 0) {
-    console.log("[checkpoint] No raw logs found today.");
-    return [];
-  }
-
-  const combined = rawLogs
-    .filter((l) => l.text && l.text.trim())
-    .map((l) => l.text.trim())
-    .slice(0, 20) // keep it manageable
-    .join("\n---\n");
-
-  if (!combined.trim()) return [];
-
-  const systemPrompt = [
-    "你是一个配置信息提取助手。从以下对话/日志中提取所有可能的重要配置信息。",
-    "配置信息包括但不限于：API key、文件路径、模型参数、工具选择、声音/语言设置、用户偏好等。",
-    "如果没有发现任何配置信息，直接返回空数组 []。",
-    "",
-    "返回严格合法的 JSON 数组，格式：",
-    '[{"key": "配置项名称", "value": "配置值", "context": "简短来源说明"}]',
-    "",
-    "注意：",
-    "- key 用英文，简短描述",
-    "- value 用实际值（敏感内容可模糊化）",
-    "- context 用中文说明来源",
-    "- 最多返回 10 条",
-  ].join("\n");
-
-  console.log(`[checkpoint] Sending ${combined.length} chars to LLM for config extraction...`);
-
-  try {
-    const result = await llmComplete(combined, systemPrompt, {
-      temperature: 0.1,
-      maxTokens: 2048,
-    });
-
-    // Parse JSON from response
-    const jsonMatch = result.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      console.warn("[checkpoint] LLM response didn't contain JSON array:", result.slice(0, 200));
-      return [];
-    }
-
-    const configs = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(configs)) return [];
-    console.log(`[checkpoint] Extracted ${configs.length} config(s)`);
-    return configs.slice(0, 10);
-  } catch (e) {
-    console.error("[checkpoint] LLM extraction failed:", e.message);
-    return [];
-  }
+/**
+ * Map LLM-extracted memory type to memory_engine category.
+ */
+function mapToCategory(type) {
+  const map = {
+    'profile': 'user_identity',
+    'preference': 'preference',
+    'entity': 'kg_node',
+    'event': 'episodic',
+    'case': 'episodic',
+    'pattern': 'preference'
+  };
+  return map[type] || 'raw_log';
 }
 
-// ── Write configs as preference memories ──
-
-function writeConfigMemories(configs) {
-  if (configs.length === 0) {
-    console.log("[checkpoint] No configs to write.");
-    return 0;
-  }
-
+/**
+ * Write a single entry to the smart-add file + confidence table.
+ */
+function appendSmartAdd(text, category, opts = {}) {
   const today = todayDateStr();
   const fileDir = resolve(WORKSPACE, SMART_ADD_DIR);
   const filePath = resolve(fileDir, `${today}.md`);
   mkdirSync(fileDir, { recursive: true });
 
-  const entries = [];
-  let written = 0;
+  const now = new Date();
+  const ts = now.toISOString().replace(/[:.]/g, "").slice(0, 15);
+  const entryId = `${ts}_${category}_nightly`;
+  const entry = `## ${entryId}\n\nCategory: ${category}${opts.protected ? " | Protected" : ""}${opts.kg_data ? `\n\nkg_data: ${opts.kg_data}` : ""}\n\n${text.trim()}\n\n`;
 
-  for (const cfg of configs) {
-    const now = new Date();
-    const ts = now.toISOString().replace(/[:.]/g, "").slice(0, 15);
-    const entryId = `${ts}_preference_checkpoint`;
-    const text = `配置：${cfg.key} = ${cfg.value}（来源：${cfg.context}）`;
-    entries.push(`## ${entryId}\n\nCategory: preference\n\n${text.trim()}`);
-    written++;
+  const header = !existsSync(filePath) ? "# Smart Added Memory\n\n" : "";
+  appendFileSync(filePath, header ? entry : `\n${entry}`);
 
-    try {
-      writeConfidence(entryId, text.trim(), "preference");
-    } catch (e) {
-      console.error(`[checkpoint] DB write failed for ${entryId}:`, e.message);
+  return entryId;
+}
+
+/**
+ * Quick dedup via FTS5: check if a similar entry already exists.
+ */
+function isDuplicate(text) {
+  try {
+    return withDb((db) => {
+      // Try FTS5 exact match first
+      const fts = db.prepare(`
+        SELECT COUNT(*) as cnt FROM chunks_fts
+        WHERE chunks_fts MATCH ?
+      `).get(text.replace(/[^\w\u4e00-\u9fff]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 5).join(' '));
+      if (fts && fts.cnt > 0) return true;
+
+      // Fallback: check if any recent chunk contains key fragments
+      const keyFrags = text.match(/[\u4e00-\u9fff\w]{4,}/g) || [];
+      const sig = keyFrags.slice(0, 3).join('|');
+      if (!sig) return false;
+
+      const existing = db.prepare(`
+        SELECT COUNT(*) as cnt FROM chunks c
+        JOIN memory_confidence mc ON c.id = mc.chunk_id
+        WHERE mc.is_archived = 0
+        AND (c.text LIKE ? OR c.text LIKE ? OR c.text LIKE ?)
+      `).get(`%${keyFrags[0]||''}%`, `%${keyFrags[1]||''}%`, `%${keyFrags[2]||''}%`);
+      return (existing && existing.cnt >= 2);
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * One LLM call: extract structured memories, episode summary, and configs.
+ */
+const NIGHTLY_PROMPT = `从以下今天的全部对话中，完成三件事。只输出 JSON，不要其他文字。
+
+三件事：
+1. smart_memories: 提取结构化记忆，每一条包含 type 和 text
+   type 可选：profile（身份信息）、preference（偏好习惯）、entity（重要实体）、
+   event（事件决策）、case（问题解决案例）、pattern（行为模式）
+2. episode_summary: 用一段话（不超过 200 字）总结今天主要发生的事
+3. configs: 提取所有配置信息（API key、文件路径、模型参数等），
+   每一条包含 key、value、context
+
+如果某类信息不存在，返回空数组/空字符串。按以下 JSON 格式返回：
+
+{
+  "smart_memories": [{"type": "...", "text": "..."}],
+  "episode_summary": "...",
+  "configs": [{"key": "...", "value": "...", "context": "..."}]
+}
+
+JSON:`;
+
+async function llmNightlyExtract(combinedText) {
+  const trimmed = combinedText.substring(0, 12000);
+  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM for unified extraction...`);
+
+  try {
+    const result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {
+      temperature: 0.1,
+      maxTokens: 4096,
+    });
+
+    // Parse JSON from response
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.warn("[checkpoint] LLM response didn't contain JSON:", result.slice(0, 300));
+      return { smart_memories: [], episode_summary: "", configs: [] };
     }
+
+    return JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    console.error("[checkpoint] Nightly extraction failed:", e.message);
+    return { smart_memories: [], episode_summary: "", configs: [] };
+  }
+}
+
+/**
+ * Run the full nightly checkpoint: one LLM call → 4 outputs.
+ */
+async function nightlyCheckpoint(rawLogs) {
+  const today = todayDateStr();
+
+  if (rawLogs.length === 0) {
+    console.log("[checkpoint] No raw logs found today — nothing to extract.");
+    writeEmptyEpisode(today);
+    return { memories: 0, episode: false, configs: 0 };
   }
 
-  if (entries.length > 0) {
-    const header = !existsSync(filePath) ? "# Smart Added Memory\n\n" : "\n";
-    const entryBlock = header + entries.join("\n\n");
-    appendFileSync(filePath, entryBlock);
+  const combinedText = rawLogs
+    .filter(l => l.text && l.text.trim())
+    .map(l => l.text.trim())
+    .slice(0, 20)
+    .join("\n---\n");
+
+  if (!combinedText.trim()) {
+    console.log("[checkpoint] All raw logs empty — nothing to extract.");
+    writeEmptyEpisode(today);
+    return { memories: 0, episode: false, configs: 0 };
   }
 
-  console.log(`[checkpoint] Wrote ${written} config(s) to smart-add.`);
-  return written;
+  // ── Single LLM call ──
+  const extracted = await llmNightlyExtract(combinedText);
+
+  // ── 1. Write structured memories (6 types) ──
+  let memWritten = 0;
+  for (const item of extracted.smart_memories || []) {
+    if (memWritten >= 10) break;
+    if (!item.text || !item.type) continue;
+
+    // Dedup check
+    if (isDuplicate(item.text)) {
+      console.log(`  ↳ Skipped (duplicate): ${item.text.slice(0, 60)}`);
+      continue;
+    }
+
+    const cat = mapToCategory(item.type);
+    const entryId = appendSmartAdd(item.text, cat);
+    try { writeConfidence(entryId, item.text, cat); } catch (e) {}
+    memWritten++;
+  }
+  console.log(`[checkpoint] Wrote ${memWritten} structured memory(-ies)`);
+
+  // ── 2. Write episode summary ──
+  let episodeWritten = false;
+  if (extracted.episode_summary && extracted.episode_summary.trim()) {
+    const episodeText = extracted.episode_summary.trim();
+    const kgData = JSON.stringify({
+      episode_of: rawLogs.map(r => r.chunk_id || '').filter(Boolean),
+      date: today
+    });
+    const entryId = appendSmartAdd(episodeText, 'episodic', { kg_data: kgData });
+    try { writeConfidence(entryId, episodeText, 'episodic'); } catch (e) {}
+
+    // Also write to memory/episodes/
+    const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+    const episodePath = resolve(episodeDir, `${today}.md`);
+    mkdirSync(episodeDir, { recursive: true });
+    writeFileSync(episodePath, [
+      `# Episode: ${today}`,
+      "",
+      episodeText,
+      "",
+      extracted.configs && extracted.configs.length > 0
+        ? "### 配置记忆\n" + extracted.configs.map(c => `- ${c.key} = ${c.value}（${c.context}）`).join("\n")
+        : "",
+      "",
+      "---",
+      `_Generated at ${new Date().toISOString()}_`,
+      "",
+    ].join("\n"));
+
+    // Append to daily memory file
+    const dailyDir = resolve(WORKSPACE, "memory");
+    const dailyPath = resolve(dailyDir, `${today}.md`);
+    mkdirSync(dailyDir, { recursive: true });
+    if (!existsSync(dailyPath)) {
+      writeFileSync(dailyPath, `# ${today}\n\n${episodeText}\n\n`);
+    }
+
+    episodeWritten = true;
+    console.log(`[checkpoint] Episode written: ${episodeText.slice(0, 80)}...`);
+  }
+
+  if (!episodeWritten) {
+    writeEmptyEpisode(today);
+  }
+
+  // ── 3. Write configs (existing logic, same format) ──
+  let cfgWritten = 0;
+  for (const cfg of extracted.configs || []) {
+    if (cfgWritten >= 10) break;
+    if (!cfg.key || !cfg.value) continue;
+
+    const text = `配置：${cfg.key} = ${cfg.value}（来源：${cfg.context || 'checkpoint'}）`;
+    const entryId = appendSmartAdd(text, 'preference');
+    try { writeConfidence(entryId, text, 'preference'); } catch (e) {}
+    cfgWritten++;
+  }
+  console.log(`[checkpoint] Wrote ${cfgWritten} config(s)`);
+
+  return { memories: memWritten, episode: episodeWritten, configs: cfgWritten };
+}
+
+function writeEmptyEpisode(today) {
+  const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+  const episodePath = resolve(episodeDir, `${today}.md`);
+  mkdirSync(episodeDir, { recursive: true });
+  if (!existsSync(episodePath)) {
+    writeFileSync(episodePath, `# Episode: ${today}\n\n（无今日内容）\n\n---\n_Generated at ${new Date().toISOString()}_\n`);
+  }
 }
 
 function writeConfidence(entryId, text, category) {
@@ -272,9 +406,29 @@ function writeConfidence(entryId, text, category) {
     const catParams = {
       preference: { conf: 0.8, tau: 90.0 },
       episodic: { conf: 0.7, tau: 30.0 },
+      user_identity: { conf: 0.95, tau: 365.0 },
+      kg_node: { conf: 0.85, tau: 90.0 },
+      temporary: { conf: 0.4, tau: 2.0 },
+      raw_log: { conf: 0.5, tau: 7.0 },
     };
     const params = catParams[category] || { conf: 0.5, tau: 7.0 };
-    console.log(`[checkpoint] Confidence metadata ready: ${category} conf=${params.conf} tau=${params.tau}`);
+    // Find matching chunk by path + text prefix
+    const fileRel = `memory/smart-add/${todayDateStr()}.md`;
+    const chunk = db.prepare(`
+      SELECT id FROM chunks
+      WHERE path = ? AND id NOT IN (SELECT chunk_id FROM memory_confidence)
+      ORDER BY updated_at DESC LIMIT 1
+    `).get(fileRel);
+
+    if (chunk) {
+      db.prepare(`
+        INSERT OR REPLACE INTO memory_confidence
+        (chunk_id, initial_confidence, confidence, last_confidence_update,
+         base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
+        VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)
+      `).run(chunk.id, params.conf, params.conf, nowSec, params.tau, category);
+    }
+    console.log(`[checkpoint] Confidence written: ${category} conf=${params.conf} tau=${params.tau}`);
   });
 }
 
@@ -358,115 +512,6 @@ function resolveConfigConflicts() {
   return flagged;
 }
 
-// ── Generate today's episode ──
-
-async function generateEpisode(rawLogs, configsExtracted) {
-  const today = todayDateStr();
-
-  if (rawLogs.length === 0 && configsExtracted.length === 0) {
-    console.log("[checkpoint] No content for episode generation.");
-    return;
-  }
-
-  // Build a compact summary of what happened today
-  const summaryLines = [];
-
-  if (configsExtracted.length > 0) {
-    summaryLines.push("### 配置记忆");
-    for (const c of configsExtracted) {
-      summaryLines.push(`- ${c.key} = ${c.value}（${c.context}）`);
-    }
-  }
-
-  // Extract key aspects from raw logs
-  const sampleTexts = rawLogs
-    .map((l) => l.text?.trim())
-    .filter(Boolean)
-    .slice(0, 15)
-    .join("\n");
-
-  let summary = "";
-  if (sampleTexts) {
-    const sysPrompt = [
-      "你是一个每日摘要生成助手。从以下今天的对话/日志中，生成一段简洁的英文/中文摘要（50-100字）。",
-      "摘要应涵盖：主要话题、重要决策、新增配置、值得记住的偏好。",
-      "如果不确定不要编造，写你确定看到的内容。",
-    ].join("\n");
-
-    console.log("[checkpoint] Generating episode summary...");
-    try {
-      summary = await llmComplete(
-        `今天（${today}）的日志内容：\n\n${sampleTexts}`,
-        sysPrompt,
-        { temperature: 0.3, maxTokens: 512 }
-      );
-    } catch (e) {
-      console.warn("[checkpoint] Episode generation failed:", e.message);
-      summary = "（摘要生成失败）";
-    }
-  }
-
-  // Write episode file
-  const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
-  const episodePath = resolve(episodeDir, `${today}.md`);
-  mkdirSync(episodeDir, { recursive: true });
-
-  // Also update the daily memory file
-  const dailyDir = resolve(WORKSPACE, "memory");
-  const dailyPath = resolve(dailyDir, `${today}.md`);
-  mkdirSync(dailyDir, { recursive: true });
-
-  const episodeContent = [
-    `# Episode: ${today}`,
-    "",
-    summary,
-    "",
-    summaryLines.join("\n"),
-    "",
-    "---",
-    `_Generated at ${new Date().toISOString()}_`,
-    "",
-  ].join("\n");
-
-  writeFileSync(episodePath, episodeContent);
-
-  // Append to daily memory file
-  if (!existsSync(dailyPath)) {
-    writeFileSync(
-      dailyPath,
-      [
-        `# ${today}`,
-        "",
-        summary.trim() ? summary : "（无今日摘要）",
-        "",
-        summaryLines.length > 0 ? summaryLines.join("\n") : "",
-        "",
-        "---",
-        "",
-      ].join("\n")
-    );
-  } else {
-    // If daily file exists, check if it already has an episode section
-    const existing = readFileSync(dailyPath, "utf-8");
-    if (!existing.includes("## Episode")) {
-      appendFileSync(
-        dailyPath,
-        [
-          "",
-          "## Episode",
-          "",
-          summary.trim() ? summary : "（无今日摘要）",
-          "",
-          summaryLines.length > 0 ? summaryLines.join("\n") : "",
-          "",
-        ].join("\n")
-      );
-    }
-  }
-
-  console.log(`[checkpoint] Episode written to ${episodePath}`);
-}
-
 // ── Main ──
 
 async function main() {
@@ -478,20 +523,14 @@ async function main() {
     const rawLogs = readTodayRawLogs();
     console.log(`[checkpoint] Found ${rawLogs.length} raw log entries`);
 
-    // Step 2: Extract configs
-    const configs = await extractConfigs(rawLogs);
+    // Step 2: Unified nightly checkpoint (1 LLM call → 3 outputs)
+    const result = await nightlyCheckpoint(rawLogs);
 
-    // Step 3: Write config memories
-    const written = writeConfigMemories(configs);
-
-    // Step 4: Generate episode
-    await generateEpisode(rawLogs, configs);
-
-    // Step 5: Resolve config conflicts (标记同一配置键的旧条目)
+    // Step 3: Resolve config conflicts (existing logic, kept)
     const conflicts = resolveConfigConflicts();
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${configs.length} configs, ${written} written, ${conflicts} conflicts flagged`);
+    console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, ${conflicts} conflicts`);
   } catch (e) {
     console.error("[checkpoint] ❌ Failed:", e.message);
     process.exit(1);

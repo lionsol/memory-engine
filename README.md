@@ -1,4 +1,4 @@
-# OpenClaw Memory System v1.3
+# OpenClaw Memory System v1.4
 
 > **存算分离 · 惰性衰减 · 实证强化**  
 > 为 AI Agent 构建的 SQLite 增强型长期记忆系统，具备置信度生命周期管理、知识图谱双轨融合与混合门控检索。
@@ -13,12 +13,12 @@
 
 传统 RAG 记忆系统在"查询时"被动搜索原始日志，容易陷入**语义冗余、置信度缺失、知识僵尸化**三大陷阱。
 
-记忆引擎v1.2以agentmemory和knowledge graph为基础 借鉴认知科学中的**间隔重复效应**与**遗忘曲线**，将记忆管理升级为**主动生命周期治理**：
+记忆引擎v1.4新增**LanceDB 双引擎存储**与**实时分类规则引擎**，将记忆系统从单一 SQLite 升级为 LanceDB + SQLite 双轨架构。同时借鉴认知科学中的**间隔重复效应**与**遗忘曲线**，将记忆管理升级为**主动生命周期治理**：
 
 - **写入时编译**：信息入库即赋予初始置信度与半衰期，不同类别走不同遗忘曲线
 - **检索时惰性衰减**：不写库、不刷表，仅在召回瞬间实时计算时间衰减
 - **引用时才强化**：只有被 Agent 实际采纳的记忆才增加权重，杜绝噪音虚假繁荣
-- **双轨融合**：SQLite 作为持久真相来源，Node.js 知识图谱作为内存抽象引擎
+- **双轨融合**：SQLite 作为持久元数据存储，LanceDB 作为向量引擎，Node.js 知识图谱作为内存抽象引擎
 
 ---
 
@@ -27,14 +27,16 @@
 graph TD
     subgraph Agent["🧠 Agent 层"]
         direction LR
+        AC["🔄 规则引擎<br/>autoRouteCategory"]
         GW["📥 写入网关<br/>smart_add"]
         IR["🔍 检索拦截器<br/>hybrid_search"]
         CH["🪝 引用强化钩子<br/>Update Hook"]
     end
 
-    subgraph SQLite["🗄️ SQLite (memory_confidence)"]
+    subgraph Dual["💾 双引擎存储"]
         direction LR
-        TBL["📊 字段：<br/>initial_confidence<br/>confidence<br/>hit_count<br/>base_tau<br/>conflict_flag<br/>category<br/>kg_data<br/>is_archived<br/>is_protected"]
+        LDB["⚡ LanceDB<br/>向量 + 文本"]
+        SQL["🗄️ SQLite<br/>元数据 + FTS5"]
     end
 
     subgraph KG["🕸️ Knowledge Graph (Node.js 内存)"]
@@ -44,14 +46,17 @@ graph TD
         CONFLICT["冲突标记 (conflict_flag)"]
     end
 
-    GW -->|"写入新记忆 + 初始元数据"| TBL
-    IR -->|"宽泛召回 → 惰性衰减 → 门控加权"| TBL
-    CH -->|"命中+1, 更新快照"| TBL
-    TBL -.->|"加载 kg_data 重建图谱"| KG
-    KG -->|"漂移/冲突结果写回"| TBL
+    AC -->|"6组正则路由"| GW
+    GW -->|"写入"| LDB
+    GW -->|"写入"| SQL
+    IR -->|"4通道 RRF 融合"| LDB
+    IR -->|"4通道 RRF 融合"| SQL
+    CH -->|"命中+1, 更新快照"| SQL
+    SQL -.->|"加载 kg_data 重建图谱"| KG
+    KG -->|"漂移/冲突结果写回"| SQL
 
     style Agent fill:#e1f5fe,stroke:#01579b
-    style SQLite fill:#fff3e0,stroke:#e65100
+    style Dual fill:#fff3e0,stroke:#e65100
     style KG fill:#e8f5e9,stroke:#1b5e20
 ```
 
@@ -98,7 +103,7 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 | `kg_node` | 0.85 | 90 天 | 图谱提炼的结构化结论 |
 | `user_identity` | 0.95 | 365 天 | 核心身份、受保护信息 |
 
-> **自动分类升级**: `smart_add` 可识别配置关键词（API key、voice ID、model名、文件路径等），自动将 `raw_log` 提升为 `preference` 类别。
+> **自动分类升级 v1.4**: `smart_add` 入口新增 `autoRouteCategory` 规则引擎（6 组正则），实时自动路由，无需等待夜间 cron。显式传 category 时尊重原值。
 
 ---
 
@@ -131,6 +136,14 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 | v1.0 | 单通道：向量 + 置信度加权 |
 | v1.1 | 双通道：向量 + FTS5（简单并集） |
 | **v1.2** | **三通道：向量 + FTS5 + KG → RRF 融合** |
+
+### v1.4 (2026-05-20) — 规则引擎 + LanceDB 双引擎存储
+
+- **autoRouteCategory 规则引擎** — `smart_add` 入口 6 组正则实时分类路由，无需等待夜间 cron
+- **LanceDB 双引擎** — LanceDB 存储向量+文本，与 SQLite（元数据）并行读写
+- **4 通道 RRF 融合** — 检索管线新增 LanceDB 向量通道，与 Manager + FTS5 + KG 构成 4 通道
+- **session-checkpoint 增强** — 3→1 次 LLM 调用，产出 6 类结构化记忆 + 摘要 + 配置 + 去重
+- **迁移脚本** — `scripts/migrate-to-lancedb.js` 一次性迁移现有 chunks
 
 ### v1.3 (2026-05-18) — 插件合约 + session 检查点
 
