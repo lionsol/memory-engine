@@ -176,7 +176,10 @@ async function cmdSearch(query, topK) {
     const meta = metaMap.get(l.id);
     if (!meta || meta.is_archived) continue;
     const sim = l._distance !== undefined ? 1 - l._distance : 0.5;
-    if (sim < 0.55) continue;
+    // LanceDB cosine distance: lower = more similar
+    // Real embedded items cluster at dist~0.2-0.7, placeholder items at dist~1.0
+    // Only filter out placeholder items (dist >= 1.0 = no semantic relation)
+    if (sim <= 0 && l._distance >= 0.95) continue;
     const conf = meta.is_protected ? meta.confidence : Math.round(meta.confidence * Math.exp(-(nowSec - (meta.last_confidence_update || nowSec)) / 86400 / (meta.base_tau || 7)) * 10000) / 10000;
     results.push({ id: l.id.slice(0, 16), text: (l.text || '').slice(0, 200), category: meta.category, similarity: sim, confidence: conf, source: 'lance' });
   }
@@ -207,19 +210,37 @@ async function cmdSearch(query, topK) {
     });
   } catch (e) {}
 
-  // RRF fuse
-  const fused = [];
-  const groups = {};
+  // RRF fuse (per-channel, same as plugin)
+  // Group results by source channel
+  const channels = {};
   for (const r of results) {
-    if (!groups[r.id]) groups[r.id] = { ...r, sources: [r.source], rrfScore: 0 };
-    else groups[r.id].sources.push(r.source);
+    if (!channels[r.source]) channels[r.source] = [];
+    channels[r.source].push(r);
   }
-  const sorted = results.sort((a, b) => b.similarity - a.similarity);
-  sorted.forEach((r, idx) => {
-    if (groups[r.id]) groups[r.id].rrfScore += 1 / (60 + idx + 1);
-  });
+  // Sort each channel by similarity descending
+  for (const ch of Object.values(channels)) ch.sort((a, b) => b.similarity - a.similarity);
 
-  const final = Object.values(groups).sort((a, b) => b.rrfScore - a.rrfScore).slice(0, topK);
+  // Calculate RRF per item across all channels
+  const fusion = new Map();
+  for (const [chName, ranked] of Object.entries(channels)) {
+    for (const item of ranked) {
+      let acc = 0;
+      for (const items of Object.values(channels)) {
+        const rank = items.findIndex(i => i.id === item.id);
+        if (rank >= 0) acc += 1 / (60 + rank + 1);
+      }
+      const key = item.id;
+      const exist = fusion.get(key) || { ...item, sources: [], rrfScore: 0 };
+      exist.rrfScore = acc;
+      exist.sources.push(chName);
+      fusion.set(key, exist);
+    }
+  }
+
+  // Sort by RRF score desc, tiebreak by similarity
+  const final = Array.from(fusion.values())
+    .sort((a, b) => (b.rrfScore - a.rrfScore) || (b.similarity - a.similarity))
+    .slice(0, topK);
 
   console.log(`🔍 Search: "${query}" — ${final.length}/${results.length} results`);
   console.log(`   Sources: lance=${lanceHits.length}, fts5=${results.filter(r => r.source === 'fts5').length}`);
@@ -258,9 +279,14 @@ async function main() {
     if (!text) { console.error('Usage: node memory-engine-cli.js add <text> [--category <cat>]'); process.exit(1); }
     await cmdAdd(text, explicitCat);
   } else if (cmd === 'search') {
-    const query = args.slice(1).filter(a => !a.startsWith('--')).join(' ');
+    // Strip the --top-k argument from query
     const kIdx = args.indexOf('--top-k');
     const topK = kIdx >= 0 ? parseInt(args[kIdx + 1]) : 5;
+    const query = args.slice(1).filter((a, i) => {
+      if (a.startsWith('--')) return false;
+      if (kIdx >= 0 && (i === kIdx || i === kIdx + 1)) return false;
+      return true;
+    }).join(' ');
     if (!query) { console.error('Usage: node memory-engine-cli.js search <query> [--top-k <n>]'); process.exit(1); }
     await cmdSearch(query, topK);
   } else if (cmd === 'status') {

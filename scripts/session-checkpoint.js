@@ -129,24 +129,25 @@ function readTodayRawLogs() {
   const smartAddPath = resolve(WORKSPACE, SMART_ADD_DIR, `${today}.md`);
   if (existsSync(smartAddPath)) {
     const content = readFileSync(smartAddPath, "utf-8");
-    // Parse entries: ## timestamp_category\n\nCategory: xxx\n\ntext
     const entries = content.split(/\n## /);
     for (const entry of entries) {
       const catMatch = entry.match(/Category:\s*(\S+)/);
       const textMatch = entry.split(/\n\n/).slice(1).join("\n\n").trim();
       if (catMatch && textMatch) {
-        logs.push({ category: catMatch[1], text: textMatch });
+        // Tag entries as "conversation" or "note" based on category
+        const isNote = ['preference', 'kg_node'].includes(catMatch[1]);
+        logs.push({
+          category: catMatch[1],
+          text: textMatch,
+          source: isNote ? 'note' : 'conversation'
+        });
       }
     }
   }
 
-  // Source 2: raw_log from confidence DB
+  // Source 2: raw_log from confidence DB (these are real conversation data)
   try {
     withDb((db) => {
-      const todayMs = new Date();
-      todayMs.setHours(0, 0, 0, 0);
-      const startOfDay = todayMs.getTime();
-
       const rows = db
         .prepare(
           `SELECT c.text, mc.category
@@ -159,7 +160,7 @@ function readTodayRawLogs() {
         .all();
 
       for (const row of rows) {
-        logs.push({ category: "raw_log", text: row.text });
+        logs.push({ category: "raw_log", text: row.text, source: 'conversation' });
       }
     });
   } catch (e) {
@@ -240,13 +241,19 @@ function isDuplicate(text) {
 /**
  * One LLM call: extract structured memories, episode summary, and configs.
  */
-const NIGHTLY_PROMPT = `从以下今天的全部对话中，完成三件事。只输出 JSON，不要其他文字。
+const NIGHTLY_PROMPT = `从以下今天的全部内容中，完成三件事。只输出 JSON，不要其他文字。
+
+⚠️ 注意：输入内容包含两类数据——
+A) **真实对话**（User 和 Assistant 之间的实际交流内容）
+B) **配置笔记**（系统自动记录的配置参数、推荐方案、数据记录，格式如 "配置：xxx = yyy" 或 "推荐使用..."）
+
+在生成 episode_summary 时，**只总结 A 类（真实对话）**。B 类配置笔记不应被描述为"今天讨论了..."。
 
 三件事：
 1. smart_memories: 提取结构化记忆，每一条包含 type 和 text
    type 可选：profile（身份信息）、preference（偏好习惯）、entity（重要实体）、
    event（事件决策）、case（问题解决案例）、pattern（行为模式）
-2. episode_summary: 用一段话（不超过 200 字）总结今天主要发生的事
+2. episode_summary: 用一段话（不超过 200 字）总结今天**真实发生的对话**。配置笔记和推荐方案不算对话。
 3. configs: 提取所有配置信息（API key、文件路径、模型参数等），
    每一条包含 key、value、context
 
@@ -296,17 +303,26 @@ async function nightlyCheckpoint(rawLogs) {
     return { memories: 0, episode: false, configs: 0 };
   }
 
-  const combinedText = rawLogs
-    .filter(l => l.text && l.text.trim())
+  // Split rawLogs into conversation data (for episode summary) and all data (for config extraction)
+  const conversationLogs = rawLogs
+    .filter(l => l.text && l.text.trim() && l.source === 'conversation');
+  const allLogs = rawLogs
+    .filter(l => l.text && l.text.trim());
+
+  // Use ALL data for the LLM call (it can distinguish types per the prompt instructions)
+  const combinedText = allLogs
     .map(l => l.text.trim())
     .slice(0, 20)
     .join("\n---\n");
 
   if (!combinedText.trim()) {
-    console.log("[checkpoint] All raw logs empty — nothing to extract.");
+    console.log("[checkpoint] All logs empty — nothing to extract.");
     writeEmptyEpisode(today);
     return { memories: 0, episode: false, configs: 0 };
   }
+
+  // Log the data mix for debugging
+  console.log(`[checkpoint] Conversation entries: ${conversationLogs.length}, Total entries: ${allLogs.length}`);
 
   // ── Single LLM call ──
   const extracted = await llmNightlyExtract(combinedText);
@@ -341,34 +357,50 @@ async function nightlyCheckpoint(rawLogs) {
     const entryId = appendSmartAdd(episodeText, 'episodic', { kg_data: kgData });
     try { writeConfidence(entryId, episodeText, 'episodic'); } catch (e) {}
 
-    // Also write to memory/episodes/
-    const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
-    const episodePath = resolve(episodeDir, `${today}.md`);
-    mkdirSync(episodeDir, { recursive: true });
-    writeFileSync(episodePath, [
-      `# Episode: ${today}`,
-      "",
-      episodeText,
-      "",
-      extracted.configs && extracted.configs.length > 0
-        ? "### 配置记忆\n" + extracted.configs.map(c => `- ${c.key} = ${c.value}（${c.context}）`).join("\n")
-        : "",
-      "",
-      "---",
-      `_Generated at ${new Date().toISOString()}_`,
-      "",
-    ].join("\n"));
-
-    // Append to daily memory file
-    const dailyDir = resolve(WORKSPACE, "memory");
-    const dailyPath = resolve(dailyDir, `${today}.md`);
-    mkdirSync(dailyDir, { recursive: true });
-    if (!existsSync(dailyPath)) {
-      writeFileSync(dailyPath, `# ${today}\n\n${episodeText}\n\n`);
+    // Validate: if episode mentions things that were never actually discussed
+    // (phrases like '讨论了' + config terms with no conversation data), skip it
+    if (conversationLogs.length === 0) {
+      const halluPatterns = [
+        /讨论了.*配置/, /讨论了.*推荐/, /讨论了.*方案/,
+        /讨论.*记忆系统/, /讨论.*法律文书/, /讨论.*股票/
+      ];
+      const isHallucinated = halluPatterns.some(p => p.test(episodeText));
+      if (isHallucinated) {
+        console.warn(`[checkpoint] ⚠️ Episode appears hallucinated (no conversation logs found but summary mentions discussion). Discarding.`);
+        episodeWritten = false;
+        writeEmptyEpisode(today);
+      }
     }
 
-    episodeWritten = true;
-    console.log(`[checkpoint] Episode written: ${episodeText.slice(0, 80)}...`);
+    if (episodeWritten) {
+      // Write to memory/episodes/
+      const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+      const episodePath = resolve(episodeDir, `${today}.md`);
+      mkdirSync(episodeDir, { recursive: true });
+      writeFileSync(episodePath, [
+        `# Episode: ${today}`,
+        "",
+        episodeText,
+        "",
+        extracted.configs && extracted.configs.length > 0
+          ? "### 配置记忆\n" + extracted.configs.map(c => `- ${c.key} = ${c.value}（${c.context}）`).join("\n")
+          : "",
+        "",
+        "---",
+        `_Generated at ${new Date().toISOString()}_`,
+        "",
+      ].join("\n"));
+
+      // Append to daily memory file
+      const dailyDir = resolve(WORKSPACE, "memory");
+      const dailyPath = resolve(dailyDir, `${today}.md`);
+      mkdirSync(dailyDir, { recursive: true });
+      if (!existsSync(dailyPath)) {
+        writeFileSync(dailyPath, `# ${today}\n\n${episodeText}\n\n`);
+      }
+
+      console.log(`[checkpoint] Episode written: ${episodeText.slice(0, 80)}...`);
+    }
   }
 
   if (!episodeWritten) {
