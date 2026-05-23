@@ -62,6 +62,16 @@ function todayDateStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Returns YESTERDAY's date string (YYYY-MM-DD) in local timezone (Asia/Shanghai).
+ * The script runs at 03:55 CST to process the previous day's data.
+ */
+function yesterdayDateStr() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // ── LLM call via SiliconFlow ──
 
 function llmComplete(prompt, systemPrompt, options = {}) {
@@ -71,9 +81,10 @@ function llmComplete(prompt, systemPrompt, options = {}) {
 
     const baseUrl = getSFBaseUrl();
     const url = new URL("/chat/completions", baseUrl);
-    const model = options.model || "deepseek-ai/DeepSeek-V4-Flash";
+    const model = options.model || "deepseek-ai/DeepSeek-V3.2";
     const temperature = options.temperature ?? 0.1;
     const maxTokens = options.maxTokens ?? 1024;
+    const requestTimeoutMs = options.timeoutMs ?? 45000;
 
     const body = JSON.stringify({
       model,
@@ -113,6 +124,10 @@ function llmComplete(prompt, systemPrompt, options = {}) {
         });
       }
     );
+    req.setTimeout(requestTimeoutMs, () => {
+      req.destroy();
+      reject(new Error(`LLM request timed out after ${requestTimeoutMs}ms`));
+    });
     req.on("error", reject);
     req.write(body);
     req.end();
@@ -121,12 +136,12 @@ function llmComplete(prompt, systemPrompt, options = {}) {
 
 // ── Read today's raw content ──
 
-function readTodayRawLogs() {
-  const today = todayDateStr();
+function readYesterdayRawLogs() {
+  const yesterday = yesterdayDateStr();
   const logs = [];
 
   // Source 1: smart-add file
-  const smartAddPath = resolve(WORKSPACE, SMART_ADD_DIR, `${today}.md`);
+  const smartAddPath = resolve(WORKSPACE, SMART_ADD_DIR, `${yesterday}.md`);
   if (existsSync(smartAddPath)) {
     const content = readFileSync(smartAddPath, "utf-8");
     const entries = content.split(/\n## /);
@@ -241,40 +256,42 @@ function isDuplicate(text) {
 /**
  * One LLM call: extract structured memories, episode summary, and configs.
  */
-const NIGHTLY_PROMPT = `从以下今天的全部内容中，完成三件事。只输出 JSON，不要其他文字。
+const NIGHTLY_PROMPT = `你是我的个人记忆整理助手。以下是今天收集的各种碎片化记录，
+包括对话摘要、项目状态、梦境记录、配置笔记等。
 
-⚠️ 注意：输入内容包含两类数据——
-A) **真实对话**（User 和 Assistant 之间的实际交流内容）
-B) **配置笔记**（系统自动记录的配置参数、推荐方案、数据记录，格式如 "配置：xxx = yyy" 或 "推荐使用..."）
+请按以下结构输出今日摘要，并包含结构化记忆和配置信息。
+只输出 JSON，不要其他文字。
 
-在生成 episode_summary 时，**只总结 A 类（真实对话）**。B 类配置笔记不应被描述为"今天讨论了..."。
-
-三件事：
-1. smart_memories: 提取结构化记忆，每一条包含 type 和 text
-   type 可选：profile（身份信息）、preference（偏好习惯）、entity（重要实体）、
-   event（事件决策）、case（问题解决案例）、pattern（行为模式）
-2. episode_summary: 用一段话（不超过 200 字）总结今天**真实发生的对话**。配置笔记和推荐方案不算对话。
-3. configs: 提取所有配置信息（API key、文件路径、模型参数等），
-   每一条包含 key、value、context
-
-如果某类信息不存在，返回空数组/空字符串。按以下 JSON 格式返回：
-
+JSON 结构：
 {
-  "smart_memories": [{"type": "...", "text": "..."}],
-  "episode_summary": "...",
-  "configs": [{"key": "...", "value": "...", "context": "..."}]
+  "episode_summary": "一段话（不超过 300 字），按以下结构组织：\n1. 核心对话与决策：今天讨论了什么重要话题，做了什么决定\n2. 项目进展：哪些项目有更新或状态变化\n3. 个人记录：梦境、想法、笔记等零散内容\n4. 待办/后续：从今天内容中浮现出的后续事项",
+  "smart_memories": [
+    {"type": "profile|preference|entity|event|case|pattern", "text": "具体内容"}
+  ],
+  "configs": [
+    {"key": "配置名", "value": "值", "context": "来源说明"}
+  ]
 }
+
+注意事项：
+- 配置笔记和推荐方案不应被描述为"讨论了..."
+- 如果某类信息不存在，返回空数组/空字符串
+
+今天的内容：
+---
+{chunks_text}
+---
 
 JSON:`;
 
 async function llmNightlyExtract(combinedText) {
-  const trimmed = combinedText.substring(0, 12000);
-  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM for unified extraction...`);
+  const trimmed = combinedText.substring(0, 45000);
+  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM for unified extraction (DeepSeek-V3.2, 64K ctx)...`);
 
   try {
     const result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {
       temperature: 0.1,
-      maxTokens: 4096,
+      maxTokens: 8192,
     });
 
     // Parse JSON from response
@@ -295,11 +312,11 @@ async function llmNightlyExtract(combinedText) {
  * Run the full nightly checkpoint: one LLM call → 4 outputs.
  */
 async function nightlyCheckpoint(rawLogs) {
-  const today = todayDateStr();
+  const episodeDate = yesterdayDateStr();
 
   if (rawLogs.length === 0) {
-    console.log("[checkpoint] No raw logs found today — nothing to extract.");
-    writeEmptyEpisode(today);
+    console.log("[checkpoint] No raw logs found — nothing to extract.");
+    writeEmptyEpisode(episodeDate);
     return { memories: 0, episode: false, configs: 0 };
   }
 
@@ -312,12 +329,11 @@ async function nightlyCheckpoint(rawLogs) {
   // Use ALL data for the LLM call (it can distinguish types per the prompt instructions)
   const combinedText = allLogs
     .map(l => l.text.trim())
-    .slice(0, 20)
     .join("\n---\n");
 
   if (!combinedText.trim()) {
     console.log("[checkpoint] All logs empty — nothing to extract.");
-    writeEmptyEpisode(today);
+    writeEmptyEpisode(episodeDate);
     return { memories: 0, episode: false, configs: 0 };
   }
 
@@ -352,10 +368,13 @@ async function nightlyCheckpoint(rawLogs) {
     const episodeText = extracted.episode_summary.trim();
     const kgData = JSON.stringify({
       episode_of: rawLogs.map(r => r.chunk_id || '').filter(Boolean),
-      date: today
+      date: episodeDate
     });
     const entryId = appendSmartAdd(episodeText, 'episodic', { kg_data: kgData });
     try { writeConfidence(entryId, episodeText, 'episodic'); } catch (e) {}
+
+    // Default to valid; will be overridden if hallucination detected
+    episodeWritten = true;
 
     // Validate: if episode mentions things that were never actually discussed
     // (phrases like '讨论了' + config terms with no conversation data), skip it
@@ -368,17 +387,17 @@ async function nightlyCheckpoint(rawLogs) {
       if (isHallucinated) {
         console.warn(`[checkpoint] ⚠️ Episode appears hallucinated (no conversation logs found but summary mentions discussion). Discarding.`);
         episodeWritten = false;
-        writeEmptyEpisode(today);
+        writeEmptyEpisode(episodeDate);
       }
     }
 
     if (episodeWritten) {
       // Write to memory/episodes/
       const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
-      const episodePath = resolve(episodeDir, `${today}.md`);
+      const episodePath = resolve(episodeDir, `${episodeDate}.md`);
       mkdirSync(episodeDir, { recursive: true });
       writeFileSync(episodePath, [
-        `# Episode: ${today}`,
+        `# Episode: ${episodeDate}`,
         "",
         episodeText,
         "",
@@ -393,10 +412,10 @@ async function nightlyCheckpoint(rawLogs) {
 
       // Append to daily memory file
       const dailyDir = resolve(WORKSPACE, "memory");
-      const dailyPath = resolve(dailyDir, `${today}.md`);
+      const dailyPath = resolve(dailyDir, `${episodeDate}.md`);
       mkdirSync(dailyDir, { recursive: true });
       if (!existsSync(dailyPath)) {
-        writeFileSync(dailyPath, `# ${today}\n\n${episodeText}\n\n`);
+        writeFileSync(dailyPath, `# ${episodeDate}\n\n${episodeText}\n\n`);
       }
 
       console.log(`[checkpoint] Episode written: ${episodeText.slice(0, 80)}...`);
@@ -404,7 +423,7 @@ async function nightlyCheckpoint(rawLogs) {
   }
 
   if (!episodeWritten) {
-    writeEmptyEpisode(today);
+    writeEmptyEpisode(episodeDate);
   }
 
   // ── 3. Write configs (existing logic, same format) ──
@@ -662,8 +681,8 @@ async function main() {
 
   try {
     // Step 1: Gather raw logs
-    const rawLogs = readTodayRawLogs();
-    console.log(`[checkpoint] Found ${rawLogs.length} raw log entries`);
+    const rawLogs = readYesterdayRawLogs();
+    console.log(`[checkpoint] Found ${rawLogs.length} raw log entries (yesterday: ${yesterdayDateStr()})`);
 
     // Step 2: Unified nightly checkpoint (1 LLM call → 3 outputs)
     const result = await nightlyCheckpoint(rawLogs);
