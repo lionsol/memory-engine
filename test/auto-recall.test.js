@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   shouldForceAutoRecall,
   shouldSkipAutoRecall,
+  buildFtsFallbackQuery,
   formatAutoRecallContext,
+  sanitizeFtsQuery,
 } from "../auto-recall.js";
 
 test("skips slash commands", () => {
@@ -25,6 +27,18 @@ test("forces recall for memory trigger phrases", () => {
 
 test("does not skip substantive short prompt", () => {
   assert.equal(shouldSkipAutoRecall("fix startup dependency issue"), false);
+});
+
+test("keeps Chinese terms in FTS query sanitization", () => {
+  const query = sanitizeFtsQuery("记忆：Win11 升级 + OpenClaw?");
+  assert.equal(query, "记忆 Win11 升级 OpenClaw");
+});
+
+test("builds bounded fallback FTS OR query", () => {
+  const query = buildFtsFallbackQuery("记忆引擎插件加载 hook 触发");
+  assert.match(query, / OR /);
+  assert.match(query, /hook/);
+  assert.ok(query.split(" OR ").length <= 8);
 });
 
 test("formats top memory results as prepend context", () => {

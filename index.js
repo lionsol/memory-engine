@@ -5,7 +5,7 @@ import lancedb from '@lancedb/lancedb';
 import crypto from 'crypto';
 import { mkdirSync, appendFileSync, existsSync, readFileSync } from "fs";
 import { resolve } from "path";
-import { formatAutoRecallContext, shouldSkipAutoRecall } from "./auto-recall.js";
+import { buildFtsFallbackQuery, formatAutoRecallContext, sanitizeFtsQuery, shouldSkipAutoRecall } from "./auto-recall.js";
 import { homedir } from "os";
 
 const DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
@@ -160,6 +160,66 @@ function ensureConfidenceTable(db) {
   db.exec("CREATE INDEX IF NOT EXISTS idx_mc_category ON memory_confidence(category)");
 }
 
+function ensureMemoryEventsTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      session_id TEXT,
+      trace_id TEXT,
+      memory_id TEXT,
+      latency_ms INTEGER,
+      candidate_count INTEGER,
+      injected_count INTEGER,
+      cited_count INTEGER,
+      vector_score REAL,
+      fts_score REAL,
+      final_score REAL,
+      source TEXT,
+      metadata_json TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_memory_events_created ON memory_events(created_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_memory_events_trace ON memory_events(trace_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_memory_events_session ON memory_events(session_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_memory_events_type ON memory_events(event_type)");
+}
+
+function ensureMemoryEngineTables(db) {
+  ensureConfidenceTable(db);
+  ensureMemoryEventsTable(db);
+}
+
+function recordMemoryEvent(event) {
+  try {
+    withDb(db => {
+      ensureMemoryEventsTable(db);
+      db.prepare([
+        "INSERT INTO memory_events",
+        "(event_type, session_id, trace_id, memory_id, latency_ms, candidate_count, injected_count, cited_count, vector_score, fts_score, final_score, source, metadata_json)",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ].join(" ")).run(
+        event.event_type,
+        event.session_id || null,
+        event.trace_id || null,
+        event.memory_id || null,
+        event.latency_ms ?? null,
+        event.candidate_count ?? null,
+        event.injected_count ?? null,
+        event.cited_count ?? null,
+        event.vector_score ?? null,
+        event.fts_score ?? null,
+        event.final_score ?? null,
+        event.source || null,
+        event.metadata_json ? JSON.stringify(event.metadata_json) : null
+      );
+    });
+  } catch (e) {
+    console.warn("[memory-engine] memory event write failed:", e.message);
+  }
+}
+
 function batchReinforce(db, ids, nowSec) {
   const stmt = db.prepare([
     "UPDATE memory_confidence SET",
@@ -227,9 +287,9 @@ async function hybridSearch(text, { topK = 5 } = {}) {
   } catch (e) {}
 
   try {
-    const safeQuery = text.replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+    const safeQuery = sanitizeFtsQuery(text);
     if (safeQuery) {
-      const fts = withDb(db => db.prepare(`
+      const ftsSelectSql = `
         SELECT c.id, c.text,
           COALESCE(mc.confidence, 0.5) as confidence,
           mc.last_confidence_update, COALESCE(mc.base_tau, 7.0) as base_tau,
@@ -242,7 +302,14 @@ async function hybridSearch(text, { topK = 5 } = {}) {
           AND COALESCE(mc.is_archived, 0) = 0
         ORDER BY bm25(chunks_fts, 0)
         LIMIT 20
-      `).all(safeQuery));
+      `;
+      let fts = withDb(db => db.prepare(ftsSelectSql).all(safeQuery));
+      if (fts.length === 0) {
+        const fallbackQuery = buildFtsFallbackQuery(text);
+        if (fallbackQuery && fallbackQuery !== safeQuery) {
+          fts = withDb(db => db.prepare(ftsSelectSql).all(fallbackQuery));
+        }
+      }
       if (fts.length > 0) {
         channels.fts = fts.map(row => ({
           id: row.id,
@@ -320,7 +387,7 @@ export default definePluginEntry({
   register(api) {
     // Ensure confidence table exists at startup
     try {
-      withDb(db => ensureConfidenceTable(db));
+      withDb(db => ensureMemoryEngineTables(db));
     } catch (e) {
       console.error("[memory-engine] failed to init confidence table:", e.message);
     }
@@ -329,14 +396,24 @@ export default definePluginEntry({
     initLanceDB().catch(e => console.warn("[memory-engine] LanceDB init deferred:", e.message));
 
 
-    const autoRecallConfig = api.config?.autoRecall || {};
+    const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
+    const autoRecallConfig =
+      api.pluginConfig?.autoRecall ||
+      pluginEntryConfig?.autoRecall ||
+      api.config?.autoRecall ||
+      {};
     if (autoRecallConfig.enabled && typeof api.on === "function") {
       const autoRecallTopK = Math.max(1, Number(autoRecallConfig.topK || 3));
       const autoRecallTimeoutMs = Math.max(1000, Number(autoRecallConfig.timeoutMs || 8000));
+      console.log(`[memory-engine] autoRecall hook registered topK=${autoRecallTopK} timeoutMs=${autoRecallTimeoutMs}`);
       api.on("before_prompt_build", async (event) => {
         try {
           const prompt = String(event?.prompt || "").trim();
           if (shouldSkipAutoRecall(prompt)) return;
+          const traceId = crypto.randomUUID();
+          const startedAt = Date.now();
+          const sessionId = event?.sessionId || event?.session_id || event?.sessionKey || null;
+          recordMemoryEvent({ event_type: "recall_started", session_id: sessionId, trace_id: traceId, source: "autoRecall", metadata_json: { prompt: prompt.slice(0, 500), topK: autoRecallTopK } });
           const result = await hybridSearch(prompt, { topK: autoRecallTopK });
           const hits = result?.results?.length || 0;
           console.log(`[memory-engine] autoRecall: prompt="${prompt.slice(0,60)}" hits=${hits} topK=${autoRecallTopK}`);
@@ -348,8 +425,26 @@ export default definePluginEntry({
               console.log(`  #${i+1} [${id}] cat=${c} conf=${conf} text="${(r.text||"").slice(0,80)}"`);
             });
           }
+          const sessionIdForEvents = event?.sessionId || event?.session_id || event?.sessionKey || null;
+          result.results.slice(0, Math.max(3, autoRecallTopK)).forEach((r, i) => {
+            const id = String(r.id || "").slice(0, 16);
+            recordMemoryEvent({
+              event_type: "memory_candidate_retrieved",
+              session_id: sessionIdForEvents,
+              trace_id: traceId,
+              memory_id: id,
+              final_score: r.rrf_score,
+              source: "autoRecall",
+              metadata_json: { rank: i + 1, category: r.category, confidence: r.confidence, sources: r.sources, preview: (r.text || "").slice(0, 200) }
+            });
+          });
           const prependContext = formatAutoRecallContext(result.results, { topK: autoRecallTopK });
-          if (!prependContext) return;
+          if (!prependContext) {
+            recordMemoryEvent({ event_type: "recall_completed", session_id: sessionIdForEvents, trace_id: traceId, latency_ms: Date.now() - startedAt, candidate_count: hits, injected_count: 0, source: "autoRecall" });
+            return;
+          }
+          result.results.slice(0, autoRecallTopK).forEach(r => recordMemoryEvent({ event_type: "memory_injected", session_id: sessionIdForEvents, trace_id: traceId, memory_id: String(r.id || "").slice(0, 16), source: "autoRecall", metadata_json: { category: r.category, confidence: r.confidence, preview: (r.text || "").slice(0, 200) } }));
+          recordMemoryEvent({ event_type: "recall_completed", session_id: sessionIdForEvents, trace_id: traceId, latency_ms: Date.now() - startedAt, candidate_count: hits, injected_count: Math.min(hits, autoRecallTopK), source: "autoRecall" });
           return { prependContext };
         } catch (e) {
           api.logger?.warn?.(`memory-engine autoRecall skipped: ${e.message}`);
@@ -509,6 +604,11 @@ export default definePluginEntry({
               }
             }
 
+            if (result.newChunks) {
+              for (const row of result.newChunks) {
+                recordMemoryEvent({ event_type: "memory_created", memory_id: row.id, source: "memory_engine.add", metadata_json: { category: result.category, confidence: result.confidence, tau: result.tau, lance_written: lanceWritten } });
+              }
+            }
             return { success: true, chunks_added: result.chunks_added, category: result.category, confidence: result.confidence, tau: result.tau, lance_written: lanceWritten };
           }
 
@@ -577,7 +677,7 @@ export default definePluginEntry({
             // Channel 2: FTS5 full-text search
             let ftsCandidates = [];
             try {
-              const safeQuery = text.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+              const safeQuery = sanitizeFtsQuery(text);
               if (safeQuery) {
                 withDb(db => {
                   ftsCandidates = db.prepare(`
@@ -616,7 +716,7 @@ export default definePluginEntry({
                     withDb(db => {
                       const seen = new Set();
                       for (const name of names) {
-                        const safeName = name.replace(/[^\w\s]/g, ' ').trim();
+                        const safeName = sanitizeFtsQuery(name);
                         if (!safeName || safeName.length < 2) continue;
                         const rows = db.prepare([
                           'SELECT DISTINCT c.id, c.text,',
@@ -761,6 +861,10 @@ export default definePluginEntry({
               const fullIds = resolvePrefixes(db, chunk_ids);
               if (fullIds.length === 0) return { success: true, reinforced: 0, note: "no matching chunks found" };
               const count = batchReinforce(db, fullIds, nowSec);
+              for (const id of fullIds) {
+                recordMemoryEvent({ event_type: "memory_cited", memory_id: id, cited_count: 1, source: "memory_engine.cite" });
+                recordMemoryEvent({ event_type: "memory_reinforced", memory_id: id, source: "memory_engine.cite" });
+              }
               return {
                 success: true,
                 reinforced: count,
@@ -836,6 +940,7 @@ export default definePluginEntry({
               if (toArchive.length > 0) {
                 const ph = toArchive.map(() => "?").join(",");
                 db.prepare(`UPDATE memory_confidence SET is_archived = 1 WHERE chunk_id IN (${ph})`).run(...toArchive);
+                for (const id of toArchive) recordMemoryEvent({ event_type: "memory_archived", memory_id: id, source: "memory_engine.archive", metadata_json: { threshold } });
               }
               return { archived: toArchive.length, threshold };
             });

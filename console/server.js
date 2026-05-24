@@ -22,10 +22,19 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
 }
 
+function jsonForScript(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 function render(name, data = {}) {
   const layout = fs.readFileSync(path.join(viewsDir, "layout.ejs"), "utf8");
   const page = fs.readFileSync(path.join(viewsDir, `${name}.ejs`), "utf8");
-  const json = escapeHtml(JSON.stringify(data));
+  const json = jsonForScript(data);
   return layout
     .replaceAll("{{title}}", escapeHtml(data.title || "Memory Console Lite"))
     .replaceAll("{{active}}", escapeHtml(data.active || "dashboard"))
@@ -66,7 +75,7 @@ async function handleApi(req, res, url) {
 }
 
 function routePage(pathname) {
-  if (pathname === "/") return { view: "dashboard", active: "dashboard", title: "Dashboard", data: overviewSnapshot() };
+  if (pathname === "/") return { view: "dashboard", active: "dashboard", title: "Dashboard", data: { ...overviewSnapshot(), telemetry: recallTelemetry() } };
   if (pathname === "/sessions") return { view: "session-trace", active: "sessions", title: "Session Trace", data: { traces: recentTraces({ limit: 100 }) } };
   if (pathname === "/memories") return { view: "memory-inspector", active: "memories", title: "Memory Inspector", data: { memories: listMemories({ limit: 100 }) } };
   if (pathname === "/telemetry") return { view: "telemetry", active: "telemetry", title: "Telemetry", data: recallTelemetry() };
