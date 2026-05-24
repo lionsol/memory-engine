@@ -5,6 +5,7 @@ import lancedb from '@lancedb/lancedb';
 import crypto from 'crypto';
 import { mkdirSync, appendFileSync, existsSync, readFileSync } from "fs";
 import { resolve } from "path";
+import { formatAutoRecallContext, shouldSkipAutoRecall } from "./auto-recall.js";
 import { homedir } from "os";
 
 const DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
@@ -189,6 +190,119 @@ function resolvePrefixes(db, prefixes) {
   return results;
 }
 
+async function hybridSearch(text, { topK = 5 } = {}) {
+  const k = topK || 5;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const channels = {};
+
+  try {
+    const { manager } = await getMemorySearchManager({});
+    if (manager) {
+      const raw = await manager.search(text, { limit: 30 });
+      const candidates = raw?.entries || raw || [];
+      const scored = withDb(db => {
+        const confRows = db.prepare(`SELECT chunk_id, confidence, last_confidence_update, base_tau, hit_count, is_protected, conflict_flag, category, is_archived FROM memory_confidence`).all();
+        const confMap = new Map(confRows.map(r => [r.chunk_id, r]));
+        const res = [];
+        for (const c of candidates) {
+          const id = c.id || c.chunkId;
+          if (!id) continue;
+          const meta = confMap.get(id);
+          if (!meta || meta.is_archived) continue;
+          const rtConf = meta.is_protected ? meta.confidence : calcRealtimeConf(meta, nowSec);
+          res.push({
+            id,
+            text: (c.text || c.content || "").slice(0, 600),
+            category: meta.category,
+            similarity: Math.round((c.similarity ?? c.score ?? 0.5) * 10000) / 10000,
+            confidence_realtime: Math.round(rtConf * 10000) / 10000,
+            hit_count: meta.hit_count,
+          });
+        }
+        res.sort((a, b) => b.similarity - a.similarity);
+        return res.slice(0, 30);
+      });
+      if (scored.length > 0) channels.vector = scored;
+    }
+  } catch (e) {}
+
+  try {
+    const safeQuery = text.replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+    if (safeQuery) {
+      const fts = withDb(db => db.prepare(`
+        SELECT c.id, c.text,
+          COALESCE(mc.confidence, 0.5) as confidence,
+          mc.last_confidence_update, COALESCE(mc.base_tau, 7.0) as base_tau,
+          COALESCE(mc.hit_count, 0) as hit_count, COALESCE(mc.is_protected, 0) as is_protected,
+          COALESCE(mc.conflict_flag, 0) as conflict_flag, COALESCE(mc.category, 'raw_log') as category
+        FROM chunks_fts f
+        JOIN chunks c ON c.id = f.id
+        LEFT JOIN memory_confidence mc ON c.id = mc.chunk_id
+        WHERE chunks_fts MATCH ?
+          AND COALESCE(mc.is_archived, 0) = 0
+        ORDER BY bm25(chunks_fts, 0)
+        LIMIT 20
+      `).all(safeQuery));
+      if (fts.length > 0) {
+        channels.fts = fts.map(row => ({
+          id: row.id,
+          text: row.text.slice(0, 600),
+          category: row.category,
+          similarity: 0.5,
+          confidence_realtime: row.is_protected ? row.confidence : Math.round(calcRealtimeConf(row, nowSec) * 10000) / 10000,
+          hit_count: row.hit_count,
+        }));
+      }
+    }
+  } catch (e) {}
+
+  const names = Object.keys(channels);
+  if (names.length === 0) return { pool: 0, results: [], channels: [], note: "no channels returned results" };
+
+  const fusion = new Map();
+  for (const [chName, rankedItems] of Object.entries(channels)) {
+    rankedItems.forEach((item) => {
+      const exist = fusion.get(item.id) || {
+        id: item.id,
+        text: item.text,
+        category: item.category,
+        sources: [],
+        rrfScore: 0,
+        similarity: item.similarity,
+        confidence_realtime: item.confidence_realtime,
+        hits: item.hit_count,
+      };
+      if (!exist.sources.includes(chName)) exist.sources.push(chName);
+      let acc = 0;
+      for (const items of Object.values(channels)) {
+        const rank = items.findIndex(i => i.id === item.id);
+        if (rank >= 0) acc += 1 / (60 + rank + 1);
+      }
+      exist.rrfScore = Math.round(acc * 10000) / 10000;
+      fusion.set(item.id, exist);
+    });
+  }
+
+  const fused = Array.from(fusion.values()).sort((a, b) => b.rrfScore - a.rrfScore);
+  const results = fused.slice(0, k).map(item => ({
+    id: item.id.slice(0, 16),
+    text: item.text.slice(0, 240),
+    category: item.category,
+    rrf_score: item.rrfScore,
+    sources: item.sources,
+    similarity: item.similarity,
+    confidence: item.confidence_realtime,
+    hits: item.hits,
+  }));
+
+  return {
+    pool: fused.length,
+    channels: names,
+    channel_sizes: Object.fromEntries(Object.entries(channels).map(([name, items]) => [name, items.length])),
+    results,
+  };
+}
+
 function resolveSFKey() {
   try {
     const cfg = JSON.parse(readFileSync(resolve(homedir(), '.openclaw/openclaw.json'), 'utf-8'));
@@ -213,6 +327,36 @@ export default definePluginEntry({
 
     // Initialize LanceDB (async, fire-and-forget)
     initLanceDB().catch(e => console.warn("[memory-engine] LanceDB init deferred:", e.message));
+
+
+    const autoRecallConfig = api.config?.autoRecall || {};
+    if (autoRecallConfig.enabled && typeof api.on === "function") {
+      const autoRecallTopK = Math.max(1, Number(autoRecallConfig.topK || 3));
+      const autoRecallTimeoutMs = Math.max(1000, Number(autoRecallConfig.timeoutMs || 8000));
+      api.on("before_prompt_build", async (event) => {
+        try {
+          const prompt = String(event?.prompt || "").trim();
+          if (shouldSkipAutoRecall(prompt)) return;
+          const result = await hybridSearch(prompt, { topK: autoRecallTopK });
+          const hits = result?.results?.length || 0;
+          console.log(`[memory-engine] autoRecall: prompt="${prompt.slice(0,60)}" hits=${hits} topK=${autoRecallTopK}`);
+          if (hits > 0) {
+            result.results.slice(0, 3).forEach((r, i) => {
+              const id = String(r.id || "").slice(0, 16);
+              const c = r.category || "?";
+              const conf = r.confidence ?? r.confidence_realtime ?? "?";
+              console.log(`  #${i+1} [${id}] cat=${c} conf=${conf} text="${(r.text||"").slice(0,80)}"`);
+            });
+          }
+          const prependContext = formatAutoRecallContext(result.results, { topK: autoRecallTopK });
+          if (!prependContext) return;
+          return { prependContext };
+        } catch (e) {
+          api.logger?.warn?.(`memory-engine autoRecall skipped: ${e.message}`);
+          return;
+        }
+      }, { timeoutMs: autoRecallTimeoutMs });
+    }
 
     // Register memory prompt supplement — guides agent to cite memory IDs
     api.registerMemoryPromptSupplement((_params) => {
