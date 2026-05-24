@@ -4,6 +4,37 @@ All notable changes to the OpenClaw Memory System.
 
 ---
 
+## [v1.5] — 2026-05-24
+
+### Added
+
+- **autoRecall 自动注入** — 在 `before_prompt_build` hook 中注册混合检索，每轮回复前自动注入 topK 相关记忆。
+  - 自适应跳过：问候、斜杠命令、短确认不检索
+  - 记忆关键词强制检索（如「记得」「记忆」「之前」）
+  - 默认关闭，配置 `autoRecall.enabled: true` 开启
+- **Memory Console Lite V1** — 独立 Node.js 控制台，运行指标可视化：
+  - 新增 `memory_events` 表，记录 autoRecall、候选、注入、创建、引用、强化、归档
+  - Dashboard / Session Trace / Memory Inspector / Telemetry / Metrics 页面
+  - API: `/api/sessions`, `/api/memories`, `/api/telemetry/*`, `/api/metrics/*`
+  - 启动: `npm run console` → `http://localhost:8787/`
+- **Task classifier** — `scripts/task-classifier.js`：根据输入关键词判断任务类型（coding 或 default）
+- **Coding agent profile** — 新增 `coding` agent，使用 Codex runtime（`openai/gpt-5.5`）
+
+### Fixed
+
+- **插件不启动** — `openclaw.plugin.json` 缺少 `activation.onStartup: true`，gateway 只加载 7 个插件，memory-engine 不被启动
+- **autoRecall 配置读不到** — 代码读 `api.config?.autoRecall`，实际插件配置在 `api.pluginConfig`，修正为兼容读取
+- **Dashboard JSON 渲染** — `<script type="application/json">` 内 JSON 被 HTML escape 转成 `&quot;`，`JSON.parse()` 失败。新增 `jsonForScript()` 只转 `<>&` 不转引号
+- **SQLite 数据库损坏** — `PRAGMA quick_check` 检测到 malformed，Console API 查询索引时崩溃。降级为无排序查询避免触发损坏路径
+- **peer dependency 缺失** — `import from "openclaw/plugin-sdk/plugin-entry"` 找不到模块，需手动 symlink 到 `/usr/lib/node_modules/openclaw`
+
+### Changed
+
+- GitHub 仓库 `openclaw_memory` → `memory-engine`，filter-repo 清洗历史（109 → 19 文件）
+- `auto-recall.js`：`shouldSkipAutoRecall` / `shouldForceAutoRecall` / `formatAutoRecallContext` 逻辑独立抽取
+
+---
+
 ## [v1.4] — 2026-05-20
 
 ### Added
