@@ -1,0 +1,12 @@
+<section class="toolbar">
+  <h1>Memory Inspector</h1>
+  <div class="filters">
+    <input data-memory-query placeholder="Search text, path, id">
+    <select data-memory-archived><option value="active">active</option><option value="archived">archived</option><option value="all">all</option></select>
+    <button data-memory-search>Search</button>
+  </div>
+</section>
+<section class="split wide-left">
+  <section><h2>Memories</h2><div class="panel table-wrap"><table data-memories></table></div></section>
+  <section><h2>Details</h2><div class="panel" data-memory-detail></div></section>
+</section>
