@@ -3,7 +3,10 @@
   "name": "Memory Engine",
   "description": "Enhanced memory with confidence scoring, time-decay, and lifecycle management.",
   "contracts": {
-    "tools": ["memory_engine", "image_vision"]
+    "tools": [
+      "memory_engine",
+      "image_vision"
+    ]
   },
   "configSchema": {
     "type": "object",
@@ -23,6 +26,32 @@
         "type": "number",
         "default": 0.3,
         "description": "Consolidation rate factor"
+      },
+      "autoRecall": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {
+          "enabled": false,
+          "topK": 3,
+          "timeoutMs": 8000
+        },
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable before_prompt_build auto recall injection"
+          },
+          "topK": {
+            "type": "number",
+            "default": 3,
+            "description": "Number of memories to inject before each prompt"
+          },
+          "timeoutMs": {
+            "type": "number",
+            "default": 8000,
+            "description": "Timeout for auto recall before_prompt_build hook in milliseconds"
+          }
+        }
       }
     }
   }

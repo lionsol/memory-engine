@@ -5,9 +5,15 @@
   "type": "module",
   "main": "index.js",
   "openclaw": {
-    "extensions": ["index.js"]
+    "extensions": [
+      "index.js"
+    ]
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "@lancedb/lancedb": "^0.29.0",
+    "better-sqlite3": "^11.10.0"
+  },
+  "scripts": {
+    "test": "node --test"
   }
 }
