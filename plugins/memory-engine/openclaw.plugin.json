@@ -54,5 +54,8 @@
         }
       }
     }
+  },
+  "activation": {
+    "onStartup": true
   }
 }

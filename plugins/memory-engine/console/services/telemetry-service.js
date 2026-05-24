@@ -24,13 +24,13 @@ export function recallTelemetry() {
       WHERE created_at >= datetime('now', '-7 days')
     `).get();
     const byHour = db.prepare(`
-      SELECT strftime('%Y-%m-%d %H:00', created_at) AS bucket, COUNT(*) AS count
+      SELECT strftime('%Y-%m-%d %H:00', datetime(created_at, '+8 hours')) AS bucket, COUNT(*) AS count
       FROM memory_events
       WHERE event_type = 'recall_completed' AND created_at >= datetime('now', '-48 hours')
       GROUP BY bucket
       ORDER BY bucket ASC
     `).all();
-    return { totals, byHour };
+    return { totals, byHour, timezone: "Asia/Shanghai" };
   }, { readonly: true });
 }
 

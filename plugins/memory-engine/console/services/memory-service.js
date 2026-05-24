@@ -35,16 +35,30 @@ export function listMemories({ q = "", category = "", archived = "active", limit
     if (archived === "active") where.push("COALESCE(mc.is_archived, 0) = 0");
     if (archived === "archived") where.push("COALESCE(mc.is_archived, 0) = 1");
     params.limit = Math.min(Number(limit) || 100, 500);
-    const sql = `
-      SELECT c.*, mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
+    const select = `
+      SELECT c.id, c.path, c.source, c.start_line, c.end_line, c.hash, c.model, c.text, c.updated_at,
+             mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
              mc.hit_count, mc.is_archived, mc.is_protected, mc.conflict_flag, mc.category, mc.kg_data
       FROM chunks c
       LEFT JOIN memory_confidence mc ON mc.chunk_id = c.id
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+    `;
+    const orderedSql = `${select}
       ORDER BY COALESCE(mc.is_protected, 0) DESC, COALESCE(mc.confidence, 0) DESC, c.id DESC
       LIMIT @limit
     `;
-    return db.prepare(sql).all(params).map(normalizeMemory);
+    const fallbackSql = `${select}
+      LIMIT @limit
+    `;
+    try {
+      return db.prepare(orderedSql).all(params).map(normalizeMemory);
+    } catch (error) {
+      if (!/malformed/i.test(error.message)) throw error;
+      return db.prepare(fallbackSql).all(params).map(row => ({
+        ...normalizeMemory(row),
+        warning: "ordered query skipped because SQLite reported database disk image is malformed",
+      }));
+    }
   }, { readonly: true });
 }
 
@@ -52,12 +66,12 @@ export function getMemory(idPrefix) {
   return withDb(db => {
     if (!tableExists(db, "chunks")) return null;
     const row = db.prepare(`
-      SELECT c.*, mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
+      SELECT c.id, c.path, c.source, c.start_line, c.end_line, c.hash, c.model, c.text, c.updated_at,
+             mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
              mc.hit_count, mc.is_archived, mc.is_protected, mc.conflict_flag, mc.category, mc.kg_data
       FROM chunks c
       LEFT JOIN memory_confidence mc ON mc.chunk_id = c.id
       WHERE c.id LIKE ? || '%'
-      ORDER BY LENGTH(c.id) ASC
       LIMIT 1
     `).get(idPrefix);
     return row ? normalizeMemory(row) : null;

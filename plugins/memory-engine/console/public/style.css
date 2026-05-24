@@ -59,6 +59,10 @@ tr[data-click]:hover { background: #f6fbfa; }
 .bar-row { display: grid; grid-template-columns: 150px 1fr 58px; gap: 8px; align-items: center; margin: 7px 0; }
 .bar { height: 12px; border-radius: 999px; background: #e6edf3; overflow: hidden; }
 .bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.summary-grid div { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: #f8fafc; }
+.summary-grid span, .summary-grid strong { display: block; }
+.summary-grid strong { margin-top: 3px; font-size: 18px; }
 .detail { display: grid; gap: 10px; }
 .detail pre { white-space: pre-wrap; word-break: break-word; margin: 0; font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }

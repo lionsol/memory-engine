@@ -30,12 +30,37 @@ async function api(path, options) {
 function initDashboard() {
   if (!$('[data-dashboard-cards]')) return;
   const counts = Object.fromEntries((pageData.eventCounts || []).map(row => [row.event_type, row.count]));
+  const telemetry = pageData.telemetry || {};
+  const totals = telemetry.totals || {};
   cards('[data-dashboard-cards]', [
     { label: 'Memories', value: pageData.memoryCount || 0 },
     { label: 'Active', value: pageData.activeCount || 0 },
     { label: 'Archived', value: pageData.archivedCount || 0 },
     { label: 'Recall 7d', value: counts.recall_completed || 0 },
   ]);
+  cards('[data-recall-cards]', [
+    { label: 'Auto Recall', value: totals.completed || 0 },
+    { label: 'Candidates', value: totals.candidates || 0 },
+    { label: 'Injected', value: totals.injected || 0 },
+    { label: 'Avg Latency', value: totals.avg_latency_ms ? `${totals.avg_latency_ms}ms` : '-' },
+  ]);
+  bars('[data-recall-bars]', telemetry.byHour || [], 'bucket', 'count');
+  const tz = telemetry.timezone || 'Asia/Shanghai';
+  const started = totals.started || 0;
+  const completed = totals.completed || 0;
+  const injected = totals.injected || 0;
+  const candidates = totals.candidates || 0;
+  const injectionRate = candidates ? Math.round(injected / candidates * 100) : 0;
+  const completionRate = started ? Math.round(completed / started * 100) : 0;
+  const summary = $('[data-recall-summary]');
+  if (summary) {
+    summary.innerHTML = `<div class="summary-grid">
+      <div><span class="muted">Timezone</span><strong>${esc(tz)}</strong></div>
+      <div><span class="muted">Completion</span><strong>${completionRate}%</strong></div>
+      <div><span class="muted">Injection</span><strong>${injectionRate}%</strong></div>
+      <div><span class="muted">Buckets</span><strong>${esc((telemetry.byHour || []).length)}</strong></div>
+    </div>`;
+  }
   bars('[data-event-mix]', pageData.eventCounts || [], 'event_type', 'count');
   table('[data-recent-events]', [
     { label: 'Time', value: r => r.created_at },
