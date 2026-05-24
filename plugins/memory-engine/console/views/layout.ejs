@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}} · Memory Console Lite</title>
+  <link rel="stylesheet" href="/public/style.css">
+</head>
+<body data-active="{{active}}">
+  <aside class="sidebar">
+    <div class="brand">Memory Console <span>Lite</span></div>
+    <nav>
+      <a href="/" data-nav="dashboard">Dashboard</a>
+      <a href="/sessions" data-nav="sessions">Session Trace</a>
+      <a href="/memories" data-nav="memories">Memory Inspector</a>
+      <a href="/telemetry" data-nav="telemetry">Telemetry</a>
+      <a href="/metrics" data-nav="metrics">Metrics</a>
+    </nav>
+  </aside>
+  <main>{{content}}</main>
+  <script id="page-data" type="application/json">{{data}}</script>
+  <script src="/public/charts.js"></script>
+</body>
+</html>

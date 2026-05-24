@@ -1,0 +1,118 @@
+import { ensureMemoryConfidenceTable, recordEvent, safeJson, tableExists, withDb } from "./db.js";
+
+function normalizeMemory(row) {
+  return {
+    id: row.id ?? row.chunk_id,
+    short_id: String(row.id ?? row.chunk_id ?? "").slice(0, 16),
+    text: row.text ?? "",
+    path: row.path ?? row.file_path ?? "",
+    category: row.category ?? "unknown",
+    confidence: row.confidence ?? null,
+    initial_confidence: row.initial_confidence ?? null,
+    hit_count: row.hit_count ?? 0,
+    is_archived: Number(row.is_archived ?? 0),
+    is_protected: Number(row.is_protected ?? 0),
+    conflict_flag: Number(row.conflict_flag ?? 0),
+    base_tau: row.base_tau ?? null,
+    last_confidence_update: row.last_confidence_update ?? null,
+    kg_data: safeJson(row.kg_data, null),
+  };
+}
+
+export function listMemories({ q = "", category = "", archived = "active", limit = 100 } = {}) {
+  return withDb(db => {
+    if (!tableExists(db, "chunks")) return [];
+    const where = [];
+    const params = {};
+    if (q) {
+      where.push("(c.text LIKE @q OR c.path LIKE @q OR c.id LIKE @q)");
+      params.q = `%${q}%`;
+    }
+    if (category) {
+      where.push("mc.category = @category");
+      params.category = category;
+    }
+    if (archived === "active") where.push("COALESCE(mc.is_archived, 0) = 0");
+    if (archived === "archived") where.push("COALESCE(mc.is_archived, 0) = 1");
+    params.limit = Math.min(Number(limit) || 100, 500);
+    const sql = `
+      SELECT c.*, mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
+             mc.hit_count, mc.is_archived, mc.is_protected, mc.conflict_flag, mc.category, mc.kg_data
+      FROM chunks c
+      LEFT JOIN memory_confidence mc ON mc.chunk_id = c.id
+      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      ORDER BY COALESCE(mc.is_protected, 0) DESC, COALESCE(mc.confidence, 0) DESC, c.id DESC
+      LIMIT @limit
+    `;
+    return db.prepare(sql).all(params).map(normalizeMemory);
+  }, { readonly: true });
+}
+
+export function getMemory(idPrefix) {
+  return withDb(db => {
+    if (!tableExists(db, "chunks")) return null;
+    const row = db.prepare(`
+      SELECT c.*, mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
+             mc.hit_count, mc.is_archived, mc.is_protected, mc.conflict_flag, mc.category, mc.kg_data
+      FROM chunks c
+      LEFT JOIN memory_confidence mc ON mc.chunk_id = c.id
+      WHERE c.id LIKE ? || '%'
+      ORDER BY LENGTH(c.id) ASC
+      LIMIT 1
+    `).get(idPrefix);
+    return row ? normalizeMemory(row) : null;
+  }, { readonly: true });
+}
+
+function findMemoryInOpenDb(db, idPrefix) {
+  if (!tableExists(db, "chunks")) return null;
+  const row = db.prepare(`
+    SELECT c.*, mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
+           mc.hit_count, mc.is_archived, mc.is_protected, mc.conflict_flag, mc.category, mc.kg_data
+    FROM chunks c
+    LEFT JOIN memory_confidence mc ON mc.chunk_id = c.id
+    WHERE c.id LIKE ? || '%'
+    ORDER BY LENGTH(c.id) ASC
+    LIMIT 1
+  `).get(idPrefix);
+  return row ? normalizeMemory(row) : null;
+}
+
+export function archiveMemory(idPrefix) {
+  return withDb(db => {
+    ensureMemoryConfidenceTable(db);
+    const memory = findMemoryInOpenDb(db, idPrefix);
+    if (!memory) return { ok: false, error: "memory not found" };
+    db.prepare("UPDATE memory_confidence SET is_archived = 1 WHERE chunk_id = ?").run(memory.id);
+    recordEvent(db, { event_type: "memory_archived", memory_id: memory.id, source: "console" });
+    return { ok: true, id: memory.id };
+  });
+}
+
+export function deleteMemory(idPrefix) {
+  return withDb(db => {
+    const memory = findMemoryInOpenDb(db, idPrefix);
+    if (!memory) return { ok: false, error: "memory not found" };
+    if (tableExists(db, "chunks")) db.prepare("DELETE FROM chunks WHERE id = ?").run(memory.id);
+    db.prepare("DELETE FROM memory_confidence WHERE chunk_id = ?").run(memory.id);
+    recordEvent(db, { event_type: "memory_deleted", memory_id: memory.id, source: "console" });
+    return { ok: true, id: memory.id };
+  });
+}
+
+export function updateConfidence(idPrefix, value) {
+  return withDb(db => {
+    ensureMemoryConfidenceTable(db);
+    const memory = findMemoryInOpenDb(db, idPrefix);
+    if (!memory) return { ok: false, error: "memory not found" };
+    const confidence = Math.max(0, Math.min(1, Number(value)));
+    if (!Number.isFinite(confidence)) return { ok: false, error: "confidence must be a number from 0 to 1" };
+    db.prepare(`
+      INSERT INTO memory_confidence (chunk_id, initial_confidence, confidence, last_confidence_update)
+      VALUES (?, ?, ?, strftime('%s','now'))
+      ON CONFLICT(chunk_id) DO UPDATE SET confidence = excluded.confidence, last_confidence_update = excluded.last_confidence_update
+    `).run(memory.id, confidence, confidence);
+    recordEvent(db, { event_type: "memory_confidence_updated", memory_id: memory.id, source: "console", final_score: confidence });
+    return { ok: true, id: memory.id, confidence };
+  });
+}
