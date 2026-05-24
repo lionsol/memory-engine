@@ -121,7 +121,8 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 
 ---
 
-## ✨ v1.2 新增特性 (2026-05-16)
+## ✨ 新增特性
+###  v1.2(2026-05-16)
 
 ### FTS5 并行召回
 利用 OpenClaw 原生 `chunks_fts` 虚拟表,在向量搜索的同时并行执行 FTS5 BM25 全文搜索。专有名词、代码库名、API 名称等关键词精准命中,弥补纯语义搜索短板。
@@ -139,6 +140,15 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 | v1.1 | 双通道:向量 + FTS5(简单并集) |
 | **v1.2** | **三通道:向量 + FTS5 + KG → RRF 融合** |
 
+### v1.3 (2026-05-18) - 插件合约 + session 检查点
+
+- **Plugin contracts** - 声明 `contracts: { tools: true }` 和工具名,完善 OpenClaw 插件注册
+- **image_vision 工具** - 注册到 memory-engine 插件,调用 Qwen3-VL-32B-Instruct 识别图片
+- **session-checkpoint.js** - 新脚本:每日 03:55 提取配置 → 写 preference → 生成 episode → 标记冲突
+- **detectConfig()** - smart_add 中自动检测配置关键词,将 raw_log 升级为 preference
+- **冲突自动标记** - 同 key 配置只保留最新,旧条目设 conflict_flag=1
+- **Prompt Supplement** - 动态注入昨日 episode + 受保护记忆,session 启动即 warm-start
+
 ### v1.4 (2026-05-20) - 规则引擎 + LanceDB 双引擎存储
 
 - **autoRouteCategory 规则引擎** - `smart_add` 入口 6 组正则实时分类路由,无需等待夜间 cron
@@ -153,12 +163,5 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - **Memory Console Lite** — 独立控制台 (`http://localhost:8787/`)，Dashboard / Session Trace / Memory Inspector / Telemetry / Metrics
 - **Task classifier** — `scripts/task-classifier.js` 按输入关键词路由 coding / default 任务
 
-### v1.3 (2026-05-18) - 插件合约 + session 检查点
 
-- **Plugin contracts** - 声明 `contracts: { tools: true }` 和工具名,完善 OpenClaw 插件注册
-- **image_vision 工具** - 注册到 memory-engine 插件,调用 Qwen3-VL-32B-Instruct 识别图片
-- **session-checkpoint.js** - 新脚本:每日 03:55 提取配置 → 写 preference → 生成 episode → 标记冲突
-- **detectConfig()** - smart_add 中自动检测配置关键词,将 raw_log 升级为 preference
-- **冲突自动标记** - 同 key 配置只保留最新,旧条目设 conflict_flag=1
-- **Prompt Supplement** - 动态注入昨日 episode + 受保护记忆,session 启动即 warm-start
 
