@@ -180,7 +180,6 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - retrieval pipeline 更清晰
 - 为后续 recall strategy 扩展做准备
 
----
 
 ### Memory Console 指标系统升级
 
@@ -201,7 +200,6 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - 记忆类别覆盖是否健康
 - retrieval 是否发生“单一化”
 
----
 
 #### Reinforcement Concentration（强化集中度）
 
@@ -217,7 +215,6 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - reinforcement 是否过度集中
 - 长期记忆结构是否失衡
 
----
 
 ### Console Dashboard 改进
 
@@ -227,7 +224,6 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - 新增 Reinforcement Metrics 卡片
 - 保持旧 telemetry API 向后兼容
 
----
 
 ### CodeGraph 集成
 
@@ -242,7 +238,6 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - `.codegraph/` gitignore 保护
 - graph scope 控制流程（避免 node_modules 污染）
 
----
 
 ### Runtime / 基础设施改进
 
