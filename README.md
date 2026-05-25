@@ -161,6 +161,114 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 
 - **autoRecall 自动检索** — 注册 `before_prompt_build` hook，每轮回复前自动调混合检索注入 topK 记忆
 - **Memory Console Lite** — 独立控制台 (`http://localhost:8787/`)，Dashboard / Session Trace / Memory Inspector / Telemetry / Metrics
+
+## 2026-05-25 更新日志
+
+### v1.5.1 (2026-05-25) - Memory Engine 架构整理
+
+完成 FTS 查询预处理解耦：
+
+- 新增 `query-utils.js`
+- 将：
+  - `sanitizeFtsQuery()`
+  - `buildFtsFallbackQuery()`
+  从 `auto-recall.js` 抽离
+- `index.js` 与 `auto-recall.js` 统一改为依赖 `query-utils.js`
+
+效果：
+
+- 消除 `index -> auto-recall` 的反向耦合
+- retrieval pipeline 更清晰
+- 为后续 recall strategy 扩展做准备
+
+---
+
+### Memory Console 指标系统升级
+
+新增第一代“记忆质量指标（Memory Quality Metrics）”。
+
+#### Retrieval Diversity（检索多样性）
+
+基于近 7 天 `memory_candidate_retrieved` 事件统计：
+
+- `distinct_categories`
+- `entropy`
+- `normalized_entropy`
+- `top1_share`
+
+用于评估：
+
+- recall 是否过度集中
+- 记忆类别覆盖是否健康
+- retrieval 是否发生“单一化”
+
+---
+
+#### Reinforcement Concentration（强化集中度）
+
+基于 active memories 的 `hit_count` 分析：
+
+- `reinforced_memories`
+- `top10_share`
+- `hhi`
+
+用于评估：
+
+- 是否出现“超级记忆”
+- reinforcement 是否过度集中
+- 长期记忆结构是否失衡
+
+---
+
+### Console Dashboard 改进
+
+更新 Metrics 页面：
+
+- 新增 Diversity Metrics 卡片
+- 新增 Reinforcement Metrics 卡片
+- 保持旧 telemetry API 向后兼容
+
+---
+
+### CodeGraph 集成
+
+完成 CodeGraph + Codex CLI 工作流接入：
+
+- 成功建立 memory-engine 局部代码图谱
+- 验证 symbol / call graph / dependency tracing 工作正常
+- 建立 lightweight graph indexing 工作流
+
+新增：
+
+- `.codegraph/` gitignore 保护
+- graph scope 控制流程（避免 node_modules 污染）
+
+---
+
+### Runtime / 基础设施改进
+
+更新 `session-checkpoint.js`：
+
+- LLM timeout：
+  - `45s → 120s`
+- Cron timeout：
+  - `120s → 300s`
+- Cron 时间：
+  - `03:55 → 03:30`
+
+新增：
+
+- `getDSKey()`
+- `getDSBaseUrl()`
+- DeepSeek fallback 支持
+- provider 抽象能力
+- `quickHealthCheck()`
+- `writeLLMTimeoutEpisode()`
+
+并将密钥独立迁移至：
+
+```txt
+credentials/deepseek-api-key
 - **Task classifier** — `scripts/task-classifier.js` 按输入关键词路由 coding / default 任务
 
 
