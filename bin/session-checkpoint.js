@@ -47,6 +47,28 @@ function getSFBaseUrl() {
   }
 }
 
+function getDSKey() {
+  // Read from secure file first, then openclaw.json, then env var
+  try {
+    const keyPath = resolve(WORKSPACE, "../credentials/deepseek-api-key");
+    const key = readFileSync(keyPath, "utf-8").trim();
+    if (key) return key;
+  } catch (e) { /* file not found */ }
+  try {
+    return getConfig().models?.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function getDSBaseUrl() {
+  try {
+    return getConfig().models?.providers?.deepseek?.baseUrl || "https://api.deepseek.com";
+  } catch (e) {
+    return "https://api.deepseek.com";
+  }
+}
+
 // ── DB helpers ──
 
 function withDb(fn) {
@@ -72,16 +94,21 @@ function yesterdayDateStr() {
   return d.toISOString().slice(0, 10);
 }
 
-// ── LLM call via SiliconFlow ──
+// ── Generic LLM call ──
 
 function llmComplete(prompt, systemPrompt, options = {}) {
-  return new Promise((resolve, reject) => {
-    const apiKey = getSFKey();
-    if (!apiKey) return reject(new Error("SiliconFlow API key not found"));
+  const { provider = "siliconflow" } = options;
+  const keyFn = provider === "deepseek" ? getDSKey : getSFKey;
+  const baseFn = provider === "deepseek" ? getDSBaseUrl : getSFBaseUrl;
+  const defaultModel = provider === "deepseek" ? "deepseek-chat" : "deepseek-ai/DeepSeek-V3.2";
 
-    const baseUrl = getSFBaseUrl();
+  return new Promise((resolve, reject) => {
+    const apiKey = keyFn();
+    if (!apiKey) return reject(new Error(`${provider} API key not found`));
+
+    const baseUrl = baseFn();
     const url = new URL("/chat/completions", baseUrl);
-    const model = options.model || "deepseek-ai/DeepSeek-V3.2";
+    const model = options.model || defaultModel;
     const temperature = options.temperature ?? 0.1;
     const maxTokens = options.maxTokens ?? 1024;
     const requestTimeoutMs = options.timeoutMs ?? 45000;
@@ -284,28 +311,67 @@ JSON 结构：
 
 JSON:`;
 
+/**
+ * Quick health check: a tiny ping to the provider before sending the full prompt.
+ * Returns true if reachable, false if timeout/error.
+ */
+function quickHealthCheck(provider) {
+  const keyFn = provider === "deepseek" ? getDSKey : getSFKey;
+  if (!keyFn()) return false;
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(false), 10000);
+    llmComplete("回复 OK 即可", null, { provider, model: provider === "deepseek" ? "deepseek-chat" : "deepseek-ai/DeepSeek-V3.2", maxTokens: 10, timeoutMs: 10000 })
+      .then(() => { clearTimeout(timeout); resolve(true); })
+      .catch(() => { clearTimeout(timeout); resolve(false); });
+  });
+}
+
 async function llmNightlyExtract(combinedText) {
   const trimmed = combinedText.substring(0, 45000);
-  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM for unified extraction (DeepSeek-V3.2, 64K ctx)...`);
 
+  // Try primary: SiliconFlow DeepSeek-V3.2
+  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM (SiliconFlow DeepSeek-V3.2, 120s timeout)...`);
+  let result;
   try {
-    const result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {
+    result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {
       temperature: 0.1,
       maxTokens: 8192,
+      timeoutMs: 120000,
     });
+  } catch (e) {
+    console.warn(`[checkpoint] SiliconFlow primary failed: ${e.message}`);
 
-    // Parse JSON from response
-    const jsonMatch = result.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.warn("[checkpoint] LLM response didn't contain JSON:", result.slice(0, 300));
-      return { smart_memories: [], episode_summary: "", configs: [] };
+    // Fallback: try deepseek.com DeepSeek V4 Flash
+    if (!getDSKey()) {
+      console.warn("[checkpoint] DeepSeek API key not configured — skipping fallback");
+      return { smart_memories: [], episode_summary: "", configs: [], error: "llm超时" };
     }
 
-    return JSON.parse(jsonMatch[0]);
-  } catch (e) {
-    console.error("[checkpoint] Nightly extraction failed:", e.message);
+    console.log(`[checkpoint] Falling back to deepseek.com (DeepSeek V4 Flash, 120s timeout)...`);
+    try {
+      result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {
+        provider: "deepseek",
+        model: "deepseek-chat",
+        temperature: 0.1,
+        maxTokens: 8192,
+        timeoutMs: 120000,
+      });
+      console.log("[checkpoint] Fallback succeeded via deepseek.com");
+    } catch (e2) {
+      console.error(`[checkpoint] Fallback also failed: ${e2.message}`);
+      return { smart_memories: [], episode_summary: "", configs: [], error: "llm超时" };
+    }
+  }
+
+  // Parse JSON from response
+  const jsonMatch = result.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.warn("[checkpoint] LLM response didn't contain JSON:", result.slice(0, 300));
     return { smart_memories: [], episode_summary: "", configs: [] };
   }
+
+  return JSON.parse(jsonMatch[0]);
 }
 
 /**
@@ -342,6 +408,13 @@ async function nightlyCheckpoint(rawLogs) {
 
   // ── Single LLM call ──
   const extracted = await llmNightlyExtract(combinedText);
+
+  // ── Timeout guard: llm超时 → write marker episode and exit early ──
+  if (extracted.error === "llm超时") {
+    console.log("[checkpoint] llm超时 — both providers failed");
+    writeLLMTimeoutEpisode(episodeDate);
+    return { memories: 0, episode: false, configs: 0, timeout: true };
+  }
 
   // ── 1. Write structured memories (6 types) ──
   let memWritten = 0;
@@ -449,6 +522,14 @@ function writeEmptyEpisode(today) {
   if (!existsSync(episodePath)) {
     writeFileSync(episodePath, `# Episode: ${today}\n\n（无今日内容）\n\n---\n_Generated at ${new Date().toISOString()}_\n`);
   }
+}
+
+function writeLLMTimeoutEpisode(today) {
+  const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+  const episodePath = resolve(episodeDir, `${today}.md`);
+  mkdirSync(episodeDir, { recursive: true });
+  writeFileSync(episodePath, `# Episode: ${today}\n\n⚠️ llm超时 — 当日日志未处理（SiliconFlow + DeepSeek 均不可用）\n\n---\n_Generated at ${new Date().toISOString()}_\n`);
+  console.log("[checkpoint] LLM timeout episode marker written");
 }
 
 function writeConfidence(entryId, text, category) {
@@ -694,7 +775,11 @@ async function main() {
     const conflicts = resolveConfigConflicts();
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, ${repaired} vectors repaired, ${conflicts} conflicts`);
+    if (result.timeout) {
+      console.log(`[checkpoint] ⏰ llm超时 — completed in ${elapsed}s`);
+    } else {
+      console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, ${repaired} vectors repaired, ${conflicts} conflicts`);
+    }
   } catch (e) {
     console.error("[checkpoint] ❌ Failed:", e.message);
     process.exit(1);
