@@ -1,4 +1,4 @@
-# OpenClaw Memory System v1.5
+# OpenClaw Memory System v1.6
 
 > **存算分离 · 惰性衰减 · 实证强化 · 自动召回**
 > 为 AI Agent 构建的 SQLite 增强型长期记忆系统，具备置信度生命周期管理、知识图谱双轨融合与混合门控检索。
@@ -163,7 +163,7 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - **Memory Console Lite** — 独立控制台 (`http://localhost:8787/`)，Dashboard / Session Trace / Memory Inspector / Telemetry / Metrics
 
 
-### v1.5.1 (2026-05-25) - Memory Engine 架构整理
+### v1.6 (2026-05-25) - Memory Engine 架构整理
 
 完成 FTS 查询预处理解耦：
 
