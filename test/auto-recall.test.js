@@ -5,6 +5,7 @@ import {
   shouldSkipAutoRecall,
   buildFtsFallbackQuery,
   formatAutoRecallContext,
+  parseCitedMemoryIds,
   sanitizeFtsQuery,
 } from "../auto-recall.js";
 
@@ -41,6 +42,10 @@ test("builds bounded fallback FTS OR query", () => {
   assert.ok(query.split(" OR ").length <= 8);
 });
 
+test("parses cited memory ids from assistant metadata", () => {
+  assert.deepEqual(parseCitedMemoryIds('ok\\ncited_memory_ids: ["abcdef1234567890", "bad"]'), ["abcdef1234567890"]);
+});
+
 test("formats top memory results as prepend context", () => {
   const text = formatAutoRecallContext([
     {
@@ -55,5 +60,5 @@ test("formats top memory results as prepend context", () => {
   assert.match(text, /Auto Recall/);
   assert.match(text, /abcdef1234567890/);
   assert.match(text, /preference/);
-  assert.match(text, /memory_engine action="cite"/);
+  assert.match(text, /cited_memory_ids/);
 });

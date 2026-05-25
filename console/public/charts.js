@@ -149,13 +149,28 @@ function initMetrics() {
   if (!$('[data-metric-cards]')) return;
   const overview = pageData.overview || {};
   const conf = overview.confidence || {};
+  const reinforcement = overview.reinforcement || {};
+  const retrieval = pageData.retrieval || {};
+  const diversity = retrieval.diversity || {};
   cards('[data-metric-cards]', [
     { label: 'Events', value: overview.events || 0 },
     { label: 'Memories', value: overview.memories || 0 },
     { label: 'Avg Confidence', value: conf.avg_confidence ?? '-' },
     { label: 'Conflicts', value: conf.conflicts || 0 },
   ]);
-  bars('[data-category-bars]', (pageData.retrieval || {}).categories || [], 'category', 'count');
+  cards('[data-diversity-cards]', [
+    { label: 'Div Window', value: `${diversity.window_days || 7}d` },
+    { label: 'Distinct Categories', value: diversity.distinct_categories ?? 0 },
+    { label: 'Norm Entropy', value: diversity.normalized_entropy ?? 0 },
+    { label: 'Top1 Share', value: diversity.top1_share !== undefined ? `${Math.round((diversity.top1_share || 0) * 100)}%` : '-' },
+  ]);
+  cards('[data-reinforcement-cards]', [
+    { label: 'Active Memories', value: reinforcement.active_memories ?? 0 },
+    { label: 'Reinforced', value: reinforcement.reinforced_memories ?? 0 },
+    { label: 'Top10 Share', value: reinforcement.top10_share !== undefined ? `${Math.round((reinforcement.top10_share || 0) * 100)}%` : '-' },
+    { label: 'HHI', value: reinforcement.hhi ?? 0 },
+  ]);
+  bars('[data-category-bars]', retrieval.categories || [], 'category', 'count');
   table('[data-conflicts]', [
     { label: 'Category', value: r => r.category },
     { label: 'Count', value: r => r.count },

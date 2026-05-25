@@ -1,3 +1,6 @@
+import { buildFtsFallbackQuery, sanitizeFtsQuery } from "./query-utils.js";
+export { buildFtsFallbackQuery, sanitizeFtsQuery } from "./query-utils.js";
+
 const MEMORY_TRIGGER_RE = /\b(remember|recall|memory|memories|previous|last time|said before|preference|preferences|habit|habits)\b|[\u8bb0\u5fc6]|\u8bb0\u5f97|\u4e4b\u524d|\u4e0a\u6b21|\u6211\u8bf4\u8fc7|\u4f60\u8fd8\u8bb0\u5f97|\u56de\u5fc6|\u504f\u597d|\u4e60\u60ef/i;
 
 const GREETING_RE = /^(hi|hello|hey|yo|good morning|good evening|\u4f60\u597d|\u55e8|\u65e9|\u65e9\u4e0a\u597d|\u665a\u5b89)[.!?\s]*$/i;
@@ -34,30 +37,28 @@ function trimMemoryText(text, maxLength = 240) {
   return `${normalized.slice(0, maxLength - 1)}...`;
 }
 
-export function sanitizeFtsQuery(text) {
-  return String(text || "")
-    .normalize("NFKC")
-    .replace(/[^\p{L}\p{N}_\s]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+export function parseCitedMemoryIds(text) {
+  const raw = String(text || "");
+  const found = new Set();
+  const jsonLike = raw.match(/cited_memory_ids\s*[:=]\s*(\[[^\]\n]*\])/i);
 
-export function buildFtsFallbackQuery(text, maxTerms = 8) {
-  const sanitized = sanitizeFtsQuery(text);
-  const tokens = sanitized.match(/[\p{Script=Han}]{2,}|[\p{L}\p{N}_]{2,}/gu) || [];
-  const terms = [];
-
-  for (const token of tokens) {
-    if (/^[\p{Script=Han}]+$/u.test(token) && token.length > 4) {
-      for (let index = 0; index <= token.length - 2; index += 1) {
-        terms.push(token.slice(index, index + 2));
+  if (jsonLike) {
+    try {
+      const parsed = JSON.parse(jsonLike[1]);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const id = String(item || "").trim();
+          if (/^[a-f0-9]{8,64}$/i.test(id)) found.add(id);
+        }
       }
-    } else {
-      terms.push(token);
-    }
+    } catch {}
   }
 
-  return [...new Set(terms)].slice(0, maxTerms).join(" OR ");
+  for (const match of raw.matchAll(/\b[0-9a-f]{16,64}\b/gi)) {
+    found.add(match[0]);
+  }
+
+  return [...found];
 }
 
 export function formatAutoRecallContext(results, options = {}) {
@@ -68,7 +69,8 @@ export function formatAutoRecallContext(results, options = {}) {
   const lines = [
     "## Auto Recall - relevant memory",
     "",
-    "The following memories may help answer this turn. Use only if relevant. If you rely on any item, cite it with memory_engine action=\"cite\".",
+    "The following memories may help answer this turn. Use only if relevant.",
+    "If your answer relies on any item, include a final metadata line exactly like: cited_memory_ids: [\"memory_id\"] using the IDs shown below.",
     "",
   ];
 
