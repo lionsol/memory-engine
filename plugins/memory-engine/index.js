@@ -5,7 +5,8 @@ import lancedb from '@lancedb/lancedb';
 import crypto from 'crypto';
 import { mkdirSync, appendFileSync, existsSync, readFileSync } from "fs";
 import { resolve } from "path";
-import { buildFtsFallbackQuery, formatAutoRecallContext, sanitizeFtsQuery, shouldSkipAutoRecall } from "./auto-recall.js";
+import { formatAutoRecallContext, parseCitedMemoryIds, shouldSkipAutoRecall } from "./auto-recall.js";
+import { buildFtsFallbackQuery, sanitizeFtsQuery } from "./query-utils.js";
 import { homedir } from "os";
 
 const DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
@@ -239,6 +240,16 @@ function batchReinforce(db, ids, nowSec) {
   return txn();
 }
 
+function resolveHookSessionId(event, ctx) {
+  return event?.sessionId ||
+    event?.session_id ||
+    event?.sessionKey ||
+    ctx?.sessionId ||
+    ctx?.sessionKey ||
+    ctx?.runId ||
+    null;
+}
+
 function resolvePrefixes(db, prefixes) {
   const results = [];
   for (const pf of prefixes) {
@@ -403,16 +414,18 @@ export default definePluginEntry({
       api.config?.autoRecall ||
       {};
     if (autoRecallConfig.enabled && typeof api.on === "function") {
+      const autoRecallTraceByRun = new Map();
+      const autoRecallTraceBySession = new Map();
       const autoRecallTopK = Math.max(1, Number(autoRecallConfig.topK || 3));
       const autoRecallTimeoutMs = Math.max(1000, Number(autoRecallConfig.timeoutMs || 8000));
       console.log(`[memory-engine] autoRecall hook registered topK=${autoRecallTopK} timeoutMs=${autoRecallTimeoutMs}`);
-      api.on("before_prompt_build", async (event) => {
+      api.on("before_prompt_build", async (event, ctx) => {
         try {
           const prompt = String(event?.prompt || "").trim();
           if (shouldSkipAutoRecall(prompt)) return;
           const traceId = crypto.randomUUID();
           const startedAt = Date.now();
-          const sessionId = event?.sessionId || event?.session_id || event?.sessionKey || null;
+          const sessionId = resolveHookSessionId(event, ctx);
           recordMemoryEvent({ event_type: "recall_started", session_id: sessionId, trace_id: traceId, source: "autoRecall", metadata_json: { prompt: prompt.slice(0, 500), topK: autoRecallTopK } });
           const result = await hybridSearch(prompt, { topK: autoRecallTopK });
           const hits = result?.results?.length || 0;
@@ -425,7 +438,7 @@ export default definePluginEntry({
               console.log(`  #${i+1} [${id}] cat=${c} conf=${conf} text="${(r.text||"").slice(0,80)}"`);
             });
           }
-          const sessionIdForEvents = event?.sessionId || event?.session_id || event?.sessionKey || null;
+          const sessionIdForEvents = resolveHookSessionId(event, ctx);
           result.results.slice(0, Math.max(3, autoRecallTopK)).forEach((r, i) => {
             const id = String(r.id || "").slice(0, 16);
             recordMemoryEvent({
@@ -443,14 +456,59 @@ export default definePluginEntry({
             recordMemoryEvent({ event_type: "recall_completed", session_id: sessionIdForEvents, trace_id: traceId, latency_ms: Date.now() - startedAt, candidate_count: hits, injected_count: 0, source: "autoRecall" });
             return;
           }
+          const injectedIds = result.results.slice(0, autoRecallTopK).map(r => String(r.id || "").slice(0, 16));
           result.results.slice(0, autoRecallTopK).forEach(r => recordMemoryEvent({ event_type: "memory_injected", session_id: sessionIdForEvents, trace_id: traceId, memory_id: String(r.id || "").slice(0, 16), source: "autoRecall", metadata_json: { category: r.category, confidence: r.confidence, preview: (r.text || "").slice(0, 200) } }));
           recordMemoryEvent({ event_type: "recall_completed", session_id: sessionIdForEvents, trace_id: traceId, latency_ms: Date.now() - startedAt, candidate_count: hits, injected_count: Math.min(hits, autoRecallTopK), source: "autoRecall" });
+          const traceState = { traceId, sessionId: sessionIdForEvents, injectedIds };
+          const runKey = ctx?.runId || event?.runId;
+          if (runKey) autoRecallTraceByRun.set(runKey, traceState);
+          if (sessionIdForEvents) autoRecallTraceBySession.set(sessionIdForEvents, traceState);
           return { prependContext };
         } catch (e) {
           api.logger?.warn?.(`memory-engine autoRecall skipped: ${e.message}`);
           return;
         }
       }, { timeoutMs: autoRecallTimeoutMs });
+
+      api.on("before_agent_finalize", async (event, ctx) => {
+        try {
+          const text = event?.lastAssistantMessage || "";
+          const citedIds = parseCitedMemoryIds(text);
+          if (citedIds.length === 0) return;
+          const sessionId = resolveHookSessionId(event, ctx);
+          const traceState =
+            autoRecallTraceByRun.get(event?.runId || ctx?.runId) ||
+            autoRecallTraceBySession.get(sessionId);
+          const allowed = new Set(traceState?.injectedIds || []);
+          const idsToReinforce = citedIds.filter(id => allowed.size === 0 || allowed.has(id.slice(0, 16)));
+          if (idsToReinforce.length === 0) return;
+          const fullIds = withDb(db => {
+            const resolved = resolvePrefixes(db, idsToReinforce);
+            if (resolved.length > 0) batchReinforce(db, resolved, Math.floor(Date.now() / 1000));
+            return resolved;
+          });
+          for (const id of fullIds) {
+            recordMemoryEvent({
+              event_type: "memory_cited",
+              session_id: sessionId,
+              trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,
+              memory_id: id.slice(0, 16),
+              cited_count: 1,
+              source: "autoRecall.finalize",
+              metadata_json: { cited_memory_ids: citedIds, runId: event?.runId || ctx?.runId || null }
+            });
+            recordMemoryEvent({
+              event_type: "memory_reinforced",
+              session_id: sessionId,
+              trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,
+              memory_id: id.slice(0, 16),
+              source: "autoRecall.finalize"
+            });
+          }
+        } catch (e) {
+          api.logger?.warn?.(`memory-engine autoRecall citation finalize skipped: ${e.message}`);
+        }
+      });
     }
 
     // Register memory prompt supplement — guides agent to cite memory IDs

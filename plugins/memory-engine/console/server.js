@@ -16,7 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
 const viewsDir = path.join(__dirname, "views");
 const port = Number(process.env.MEMORY_CONSOLE_PORT || 8787);
-const host = process.env.MEMORY_CONSOLE_HOST || "127.0.0.1";
+const host = process.env.MEMORY_CONSOLE_HOST || "0.0.0.0";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));

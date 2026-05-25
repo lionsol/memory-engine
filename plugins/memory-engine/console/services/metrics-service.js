@@ -1,5 +1,11 @@
 import { tableExists, withDb } from "./db.js";
 
+function round(value, digits = 3) {
+  if (!Number.isFinite(value)) return 0;
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
 export function overviewMetrics() {
   return withDb(db => {
     const events = db.prepare("SELECT COUNT(*) AS count FROM memory_events").get().count;
@@ -11,7 +17,30 @@ export function overviewMetrics() {
         SUM(CASE WHEN is_protected = 1 THEN 1 ELSE 0 END) AS protected
       FROM memory_confidence
     `).get();
-    return { events, memories, confidence };
+    const activeHits = db.prepare(`
+      SELECT COALESCE(hit_count, 0) AS hit_count
+      FROM memory_confidence
+      WHERE COALESCE(is_archived, 0) = 0
+      ORDER BY hit_count DESC
+    `).all();
+    const hitValues = activeHits.map(row => Number(row.hit_count) || 0);
+    const totalHits = hitValues.reduce((sum, value) => sum + value, 0);
+    const reinforcedMemories = hitValues.filter(value => value > 0).length;
+    const top10Hits = hitValues.slice(0, 10).reduce((sum, value) => sum + value, 0);
+    const hhi = totalHits > 0
+      ? hitValues.reduce((sum, value) => {
+        const share = value / totalHits;
+        return sum + share * share;
+      }, 0)
+      : 0;
+    const reinforcement = {
+      active_memories: hitValues.length,
+      reinforced_memories: reinforcedMemories,
+      total_hits: totalHits,
+      top10_share: totalHits > 0 ? round(top10Hits / totalHits, 4) : 0,
+      hhi: round(hhi, 4),
+    };
+    return { events, memories, confidence, reinforcement };
   }, { readonly: true });
 }
 
@@ -27,11 +56,28 @@ export function retrievalMetrics() {
     const categories = db.prepare(`
       SELECT COALESCE(json_extract(metadata_json, '$.category'), 'unknown') AS category, COUNT(*) AS count
       FROM memory_events
-      WHERE event_type = 'memory_candidate_retrieved'
+      WHERE event_type = 'memory_candidate_retrieved' AND created_at >= datetime('now', '-7 days')
       GROUP BY category
       ORDER BY count DESC
     `).all();
-    return { aggregate, categories };
+    const categoryTotal = categories.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+    const distinctCategories = categories.length;
+    const entropy = categoryTotal > 0
+      ? categories.reduce((sum, row) => {
+        const probability = (Number(row.count) || 0) / categoryTotal;
+        return probability > 0 ? sum - (probability * Math.log(probability)) : sum;
+      }, 0)
+      : 0;
+    const top1 = categories[0] ? Number(categories[0].count) || 0 : 0;
+    const diversity = {
+      window_days: 7,
+      candidate_events: categoryTotal,
+      distinct_categories: distinctCategories,
+      entropy: round(entropy, 4),
+      normalized_entropy: distinctCategories > 1 ? round(entropy / Math.log(distinctCategories), 4) : 0,
+      top1_share: categoryTotal > 0 ? round(top1 / categoryTotal, 4) : 0,
+    };
+    return { aggregate, categories, diversity };
   }, { readonly: true });
 }
 
