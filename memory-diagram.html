@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>记忆管理架构图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  body { display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
+  .mermaid { max-width: 1200px; padding: 40px; }
+</style>
+</head>
+<body>
+<div class="mermaid">
+graph LR
+ subgraph "记忆管理4大核心问题"
+ direction LR
+ P1("存什么&lt;br/&gt;Extraction")
+ P2("怎么存&lt;br/&gt;Storage")
+ P3("怎么找&lt;br/&gt;Retrieval")
+ P4("怎么管&lt;br/&gt;Lifecycle")
+ end
+
+ subgraph "OpenClaw 原生短板"
+ direction TB
+ S1("LLM 自主判断&lt;br/&gt;无结构化约束") --> P1
+ S2("单文件存储&lt;br/&gt;查询弱") --> P2
+ S3("被动搜索&lt;br/&gt;Agent常忘记搜") --> P3
+ S4("只增不减&lt;br/&gt;无遗忘机制") --> P4
+ end
+
+ subgraph "你的方案"
+ direction TB
+ Y1("规则引擎 + 凌晨Smart Extraction") -.->|精准补强| P1
+ Y2("LanceDB + SQLite 双引擎") -.->|精准补强| P2
+ Y3("autoRecall 自动注入") -.->|精准补强| P3
+ Y4("惰性衰减 + 冲突检测 + 三级晋升") -.->|精准补强| P4
+ end
+
+ style S1 fill:#f9f,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+ style S2 fill:#f9f,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+ style S3 fill:#f9f,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+ style S4 fill:#f9f,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+</div>
+</body>
+</html>

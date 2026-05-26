@@ -50,3 +50,12 @@ scripts/duty-reminder.sh
 scripts/image-vision.py
 chat-patched.js
 skills/nuwa-skill
+
+# codegraph index
+.codegraph/
+*.db
+*.db-shm
+*.db-wal
+
+coverage/
+dist/

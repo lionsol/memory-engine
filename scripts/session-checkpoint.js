@@ -10,6 +10,7 @@
  */
 
 const https = require("node:https");
+const crypto = require("node:crypto");
 const { homedir } = require("node:os");
 const { resolve } = require("node:path");
 const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync } = require("node:fs");
@@ -171,19 +172,17 @@ function readYesterdayRawLogs() {
   const smartAddPath = resolve(WORKSPACE, SMART_ADD_DIR, `${yesterday}.md`);
   if (existsSync(smartAddPath)) {
     const content = readFileSync(smartAddPath, "utf-8");
-    const entries = content.split(/\n## /);
-    for (const entry of entries) {
-      const catMatch = entry.match(/Category:\s*(\S+)/);
-      const textMatch = entry.split(/\n\n/).slice(1).join("\n\n").trim();
-      if (catMatch && textMatch) {
-        // Tag entries as "conversation" or "note" based on category
-        const isNote = ['preference', 'kg_node'].includes(catMatch[1]);
-        logs.push({
-          category: catMatch[1],
-          text: textMatch,
-          source: isNote ? 'note' : 'conversation'
-        });
-      }
+    const entries = parseSmartAddEntries(content);
+    for (const parsed of entries) {
+      const cat = parsed.category || inferCategoryFromEntry(parsed.raw || parsed.text);
+      const body = parsed.text || parsed.raw || "";
+      if (!body.trim()) continue;
+      const isNote = ["preference", "kg_node"].includes(cat);
+      logs.push({
+        category: cat,
+        text: body,
+        source: isNote ? "note" : "conversation",
+      });
     }
   }
 
@@ -212,6 +211,43 @@ function readYesterdayRawLogs() {
   return logs;
 }
 
+function inferCategoryFromEntry(text) {
+  const raw = String(text || "");
+  if (/^KG_concept_/mi.test(raw)) return "kg_node";
+  if (/^Node:\s*/mi.test(raw) && /^Properties:\s*/mi.test(raw)) return "kg_node";
+  return "raw_log";
+}
+
+function parseSmartAddEntries(content) {
+  const normalized = String(content || "").replace(/\r\n/g, "\n");
+  const blockRe = /(?:<!--\s*smart-add-fingerprint:\s*[a-f0-9]{8,64}\s*-->\s*\n)?##\s+[\s\S]*?(?=\n(?:<!--\s*smart-add-fingerprint:\s*[a-f0-9]{8,64}\s*-->\s*\n)?##\s+|$)/gi;
+  const blocks = (normalized.match(blockRe) || []).map((b) => b.trim());
+
+  const entries = [];
+  for (const block of blocks) {
+    const lines = block.split("\n");
+    if (lines.length === 0) continue;
+    const entryId = String(lines[0] || "").replace(/^##\s*/, "").trim();
+    const categoryLine = lines.find((line) => /^\s*Category:\s*/i.test(line));
+    const category = categoryLine
+      ? String(categoryLine.replace(/^\s*Category:\s*/i, "").split("|")[0] || "").trim()
+      : null;
+    const text = lines
+      .filter((line) =>
+        !/^\s*Category:\s*/i.test(line)
+        && !/^\s*kg_data:\s*/i.test(line)
+        && !/^\s*##\s*/.test(line)
+        && !/^\s*<!--\s*smart-add-fingerprint:\s*[a-f0-9]{8,64}\s*-->\s*$/i.test(line)
+      )
+      .join("\n")
+      .trim();
+
+    if (!text) continue;
+    entries.push({ entryId, category, text, raw: block });
+  }
+  return entries;
+}
+
 // ── Unified Nightly Smart Extraction ──
 
 /**
@@ -237,11 +273,14 @@ function appendSmartAdd(text, category, opts = {}) {
   const fileDir = resolve(WORKSPACE, SMART_ADD_DIR);
   const filePath = resolve(fileDir, `${today}.md`);
   mkdirSync(fileDir, { recursive: true });
+  const fingerprint = smartAddFingerprint({ category, raw: text, kg_data: opts.kg_data });
+  const existing = readSmartAddFingerprints(today);
+  if (existing.has(fingerprint)) return null;
 
   const now = new Date();
   const ts = now.toISOString().replace(/[:.]/g, "").slice(0, 15);
   const entryId = `${ts}_${category}_nightly`;
-  const entry = `## ${entryId}\n\nCategory: ${category}${opts.protected ? " | Protected" : ""}${opts.kg_data ? `\n\nkg_data: ${opts.kg_data}` : ""}\n\n${text.trim()}\n\n`;
+  const entry = `<!-- smart-add-fingerprint: ${fingerprint} -->\n## ${entryId}\n\nCategory: ${category}${opts.protected ? " | Protected" : ""}${opts.kg_data ? `\n\nkg_data: ${opts.kg_data}` : ""}\n\n${text.trim()}\n\n`;
 
   const header = !existsSync(filePath) ? "# Smart Added Memory\n\n" : "";
   appendFileSync(filePath, header ? entry : `\n${entry}`);
@@ -249,11 +288,58 @@ function appendSmartAdd(text, category, opts = {}) {
   return entryId;
 }
 
+function canonicalizeSmartAddEntry({ raw = "", category = "", kg_data = "" }) {
+  const normalized = String(raw || "").replace(/\r\n/g, "\n");
+  const withoutTitle = normalized.replace(/^\s*##\s+.*\n?/, "");
+  const withoutComments = withoutTitle.replace(/<!--[\s\S]*?-->/g, "");
+  const cat = String(category || "").trim();
+  const kg = String(kg_data || "").trim();
+  const base = cat ? `Category: ${cat}${kg ? `\n\nkg_data: ${kg}` : ""}\n\n${withoutComments}` : withoutComments;
+  return base.replace(/\s+/g, " ").trim();
+}
+
+function smartAddFingerprint(entry) {
+  const canonical = canonicalizeSmartAddEntry(entry || {});
+  return crypto.createHash("sha256").update(canonical).digest("hex");
+}
+
+function parseNodeProperties(text) {
+  const raw = String(text || "");
+  const nodeMatch = raw.match(/^Node:\s*(.+)$/mi);
+  const propsMatch = raw.match(/^Properties:\s*(.+)$/mi);
+  return {
+    node: nodeMatch ? nodeMatch[1].trim() : "",
+    properties: propsMatch ? propsMatch[1].trim() : "",
+  };
+}
+
+function readSmartAddFingerprints(date = todayDateStr()) {
+  const filePath = resolve(WORKSPACE, SMART_ADD_DIR, `${date}.md`);
+  if (!existsSync(filePath)) return new Set();
+  const content = readFileSync(filePath, "utf-8");
+  const fpCommentRe = /<!--\s*smart-add-fingerprint:\s*([a-f0-9]{8,64})\s*-->/gi;
+  const parsed = parseSmartAddEntries(content);
+  const set = new Set();
+  let match;
+  while ((match = fpCommentRe.exec(content)) !== null) {
+    if (match[1]) set.add(String(match[1]).toLowerCase());
+  }
+  for (const entry of parsed) {
+    const fp = smartAddFingerprint({ raw: entry.raw || entry.text });
+    set.add(fp);
+  }
+  return set;
+}
+
 /**
  * Quick dedup via FTS5: check if a similar entry already exists.
  */
-function isDuplicate(text) {
+function isDuplicate(text, category = "raw_log") {
   try {
+    const fp = smartAddFingerprint({ category, raw: text });
+    const todayFp = readSmartAddFingerprints(todayDateStr());
+    if (todayFp.has(fp)) return true;
+
     return withDb((db) => {
       // Try FTS5 exact match first
       const fts = db.prepare(`
@@ -287,6 +373,7 @@ const NIGHTLY_PROMPT = `你是我的个人记忆整理助手。以下是今天�
 包括对话摘要、项目状态、梦境记录、配置笔记等。
 
 请按以下结构输出今日摘要，并包含结构化记忆和配置信息。
+注意：条目按时间顺序排列，请涵盖全天各时段的内容，确保最近新增的条目也被纳入摘要。
 只输出 JSON，不要其他文字。
 
 JSON 结构：
@@ -423,13 +510,19 @@ async function nightlyCheckpoint(rawLogs) {
     if (!item.text || !item.type) continue;
 
     // Dedup check
-    if (isDuplicate(item.text)) {
+    if (isDuplicate(item.text, mapToCategory(item.type))) {
       console.log(`  ↳ Skipped (duplicate): ${item.text.slice(0, 60)}`);
       continue;
     }
 
     const cat = mapToCategory(item.type);
+    const stableText = String(item.text || "").trim();
+    if (!stableText) continue;
     const entryId = appendSmartAdd(item.text, cat);
+    if (!entryId) {
+      console.log(`  ↳ Skipped (duplicate/fingerprint): ${stableText.slice(0, 60)}`);
+      continue;
+    }
     try { writeConfidence(entryId, item.text, cat); } catch (e) {}
     memWritten++;
   }
@@ -444,7 +537,11 @@ async function nightlyCheckpoint(rawLogs) {
       date: episodeDate
     });
     const entryId = appendSmartAdd(episodeText, 'episodic', { kg_data: kgData });
-    try { writeConfidence(entryId, episodeText, 'episodic'); } catch (e) {}
+    if (entryId) {
+      try { writeConfidence(entryId, episodeText, 'episodic'); } catch (e) {}
+    } else {
+      console.log("[checkpoint] Episode smart-add append skipped by fingerprint dedup");
+    }
 
     // Default to valid; will be overridden if hallucination detected
     episodeWritten = true;
@@ -507,6 +604,10 @@ async function nightlyCheckpoint(rawLogs) {
 
     const text = `配置：${cfg.key} = ${cfg.value}（来源：${cfg.context || 'checkpoint'}）`;
     const entryId = appendSmartAdd(text, 'preference');
+    if (!entryId) {
+      console.log(`  ↳ Skipped config (duplicate/fingerprint): ${cfg.key}`);
+      continue;
+    }
     try { writeConfidence(entryId, text, 'preference'); } catch (e) {}
     cfgWritten++;
   }

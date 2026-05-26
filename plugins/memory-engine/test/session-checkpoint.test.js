@@ -1,0 +1,102 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { resolve } from "path";
+import { appendSmartAdd, readSmartAddFingerprints } from "../session-checkpoint.js";
+
+function makeTmpDir() {
+  return mkdtempSync(resolve(tmpdir(), "memory-engine-smart-add-"));
+}
+
+test("readSmartAddFingerprints reads fingerprint comments", () => {
+  const dir = makeTmpDir();
+  const filePath = resolve(dir, "2026-05-26.md");
+  writeFileSync(filePath, [
+    "# Smart Added Memory",
+    "",
+    "## e1",
+    "",
+    "Category: raw_log",
+    "<!-- smart-add-fingerprint: abcdef1234567890 -->",
+    "",
+    "hello",
+    "",
+  ].join("\n"));
+
+  const fingerprints = readSmartAddFingerprints(filePath);
+  assert.equal(fingerprints.has("abcdef1234567890"), true);
+});
+
+test("appendSmartAdd dedupes by fingerprint before writing", () => {
+  const dir = makeTmpDir();
+  const filePath = resolve(dir, "2026-05-26.md");
+  const payload = {
+    fileDir: dir,
+    filePath,
+    entryId: "20260526T000000_raw_log",
+    category: "raw_log",
+    isProtected: false,
+    text: "duplicate text",
+    fingerprint: "1111222233334444",
+  };
+
+  const first = appendSmartAdd(payload);
+  const second = appendSmartAdd({ ...payload, entryId: "20260526T000001_raw_log" });
+
+  assert.equal(first.appended, true);
+  assert.equal(second.appended, false);
+  assert.equal(second.reason, "fingerprint");
+});
+
+test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exists", () => {
+  const dir = makeTmpDir();
+  const filePath = resolve(dir, "2026-05-26.md");
+  writeFileSync(filePath, [
+    "# Smart Added Memory",
+    "",
+    "## old_entry",
+    "",
+    "Category: raw_log",
+    "",
+    "legacy body text",
+    "",
+  ].join("\n"));
+
+  const result = appendSmartAdd({
+    fileDir: dir,
+    filePath,
+    entryId: "20260526T000002_raw_log",
+    category: "raw_log",
+    isProtected: false,
+    text: "legacy body text",
+    fingerprint: "aaaabbbbccccdddd",
+  });
+
+  assert.equal(result.appended, false);
+  assert.equal(result.reason, "legacy-text");
+  const content = readFileSync(filePath, "utf8");
+  assert.equal((content.match(/## /g) || []).length, 1);
+});
+
+import { buildSmartAddFingerprint } from "../smart-add-fingerprint.js";
+
+test("buildSmartAddFingerprint normalizes LF and CRLF equivalently", () => {
+  const a = buildSmartAddFingerprint("line1\nline2\n", "raw_log", false);
+  const b = buildSmartAddFingerprint("line1\r\nline2\r\n", "raw_log", false);
+  const c = buildSmartAddFingerprint("line1\rline2\r", "raw_log", false);
+  assert.equal(a, b);
+  assert.equal(a, c);
+});
+
+test("buildSmartAddFingerprint normalizes category case", () => {
+  const a = buildSmartAddFingerprint("same text", "Episodic", false);
+  const b = buildSmartAddFingerprint("same text", "episodic", false);
+  assert.equal(a, b);
+});
+
+test("buildSmartAddFingerprint keeps protected flag distinct", () => {
+  const a = buildSmartAddFingerprint("same text", "episodic", false);
+  const b = buildSmartAddFingerprint("same text", "episodic", true);
+  assert.notEqual(a, b);
+});

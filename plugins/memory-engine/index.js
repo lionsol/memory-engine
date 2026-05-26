@@ -2,22 +2,43 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
 import Database from "better-sqlite3";
 import lancedb from '@lancedb/lancedb';
-import crypto from 'crypto';
-import { mkdirSync, appendFileSync, existsSync, readFileSync } from "fs";
+import { buildSmartAddFingerprint } from "./smart-add-fingerprint.js";
+import { localDateKey } from "./date-utils.js";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { resolve } from "path";
-import { formatAutoRecallContext, parseCitedMemoryIds, shouldSkipAutoRecall } from "./auto-recall.js";
-import { buildFtsFallbackQuery, sanitizeFtsQuery } from "./query-utils.js";
-import { homedir } from "os";
+import { explainAutoRecallSkip, formatAutoRecallContext, parseCitedMemoryIds, shouldInjectCandidate } from "./auto-recall.js";
+import {
+  buildLikeFallbackPatterns,
+  buildFtsFallbackQuery,
+  extractQueryTokens,
+  normalizeFtsQuery,
+  rankFtsFallbackCandidates,
+  sanitizeFtsQuery,
+  stripPromptMetadataPrefix,
+} from "./query-utils.js";
+import { appendSmartAdd } from "./session-checkpoint.js";
+import {
+  DB_PATH,
+  HOME_DIR,
+  INDEX_SYNC_WATCH_DIRS,
+  SMART_ADD_DIR,
+  WORKSPACE,
+  getSharedMemoryManager,
+} from "./memory-manager-runtime.js";
 
-const DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
-const WORKSPACE = resolve(homedir(), ".openclaw/workspace");
-const SMART_ADD_DIR = "memory/smart-add";
-const KG_PATH = resolve(homedir(), ".openclaw/workspace/knowledge-graph.json");
-const LANCEDB_PATH = resolve(homedir(), ".openclaw/memory/lancedb");
+const KG_PATH = resolve(HOME_DIR, ".openclaw/workspace/knowledge-graph.json");
+const LANCEDB_PATH = resolve(HOME_DIR, ".openclaw/memory/lancedb");
 const EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-4B";
+const MEMORY_SUPPLEMENT_SENTINEL = "MEMORY_SUPPLEMENT_SENTINEL";
+const MEMORY_SUPPLEMENT_BOUNDARY_START = "<!-- MEMORY_ENGINE_SUPPLEMENT_START -->";
+const MEMORY_SUPPLEMENT_BOUNDARY_END = "<!-- MEMORY_ENGINE_SUPPLEMENT_END -->";
 
 // ── LanceDB globals (initialized in register) ──
 let lancedbTable = null;
+const indexSyncState = {
+  lastSyncAt: 0,
+  lastMaxMtimeMs: 0,
+};
 
 /**
  * Generate embedding via SiliconFlow embedding API.
@@ -221,6 +242,74 @@ function recordMemoryEvent(event) {
   }
 }
 
+function buildRecallCompletedMetadata({
+  skipped = false,
+  skip_reason = null,
+  candidate_count = 0,
+  candidate_count_before_gate = 0,
+  candidate_count_after_gate = 0,
+  strict_count = 0,
+  fallback_count = 0,
+  post_rerank_count = 0,
+  injected_count = 0,
+} = {}) {
+  return {
+    skipped: Boolean(skipped),
+    skip_reason: skip_reason || null,
+    candidate_count: Number(candidate_count) || 0,
+    candidate_count_before_gate: Number(candidate_count_before_gate) || 0,
+    candidate_count_after_gate: Number(candidate_count_after_gate) || 0,
+    strict_count: Number(strict_count) || 0,
+    fallback_count: Number(fallback_count) || 0,
+    post_rerank_count: Number(post_rerank_count) || 0,
+    injected_count: Number(injected_count) || 0,
+  };
+}
+
+function gateThresholdForCategory(category, minCoverage = null) {
+  const normalized = String(category || "raw_log").toLowerCase();
+  const finalScoreMin =
+    normalized === "raw_log" ? 0.05 :
+    normalized === "episodic" ? 0.02 :
+    null;
+  return {
+    final_score_min: finalScoreMin,
+    min_coverage: Number.isFinite(minCoverage) ? Number(minCoverage) : null,
+  };
+}
+
+function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
+  const debugInfo = result?.debug || {};
+  const strippedPrompt = stripPromptMetadataPrefix(prompt);
+  const normalizedQuery = String(debugInfo.query_normalized || normalizeFtsQuery(strippedPrompt));
+  const finalFtsQuery = String(
+    debugInfo.fts_query_final ||
+    buildFtsFallbackQuery(strippedPrompt) ||
+    normalizedQuery
+  );
+  const postRerankTopK = Array.isArray(debugInfo.post_rerank_topK) ? debugInfo.post_rerank_topK : [];
+  return {
+    query_original: String(prompt || ""),
+    query_stripped: String(debugInfo.query_stripped || strippedPrompt),
+    query_normalized: normalizedQuery,
+    fts_query_final: finalFtsQuery,
+    fallbacks_triggered: Array.isArray(debugInfo.fallbacks_triggered) ? debugInfo.fallbacks_triggered : [],
+    candidate_count: Number(result?.results?.length || 0),
+    strict_count: Number(debugInfo.strict_count ?? 0),
+    fallback_count: Number(debugInfo.fallback_count ?? 0),
+    post_rerank_count: postRerankTopK.length,
+    post_rerank_topK: postRerankTopK,
+    candidate_count_before_gate: Number(debugInfo.candidate_count_before_gate ?? result?.results?.length ?? 0),
+    candidate_count_after_gate: Number(debugInfo.candidate_count_after_gate ?? result?.results?.length ?? 0),
+    rejected_candidates: Array.isArray(debugInfo.rejected_candidates) ? debugInfo.rejected_candidates : [],
+    gate_decisions: Array.isArray(debugInfo.gate_decisions) ? debugInfo.gate_decisions : [],
+    injected_count: Number(debugInfo.injected_count ?? 0),
+    skipped: Boolean(skipReason),
+    skip_reason: skipReason || null,
+    candidate_counts_before_filtering: debugInfo.candidate_counts_before_filtering || {},
+  };
+}
+
 function batchReinforce(db, ids, nowSec) {
   const stmt = db.prepare([
     "UPDATE memory_confidence SET",
@@ -261,19 +350,291 @@ function resolvePrefixes(db, prefixes) {
   return results;
 }
 
+function collectIndexedFiles() {
+  const files = [];
+
+  for (const dirRel of INDEX_SYNC_WATCH_DIRS) {
+    const absDir = resolve(WORKSPACE, dirRel);
+    if (!existsSync(absDir)) continue;
+    let entries = [];
+    try {
+      entries = readdirSync(absDir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.endsWith(".md")) continue;
+      const absFile = resolve(absDir, entry);
+      let stat;
+      try {
+        stat = statSync(absFile);
+      } catch {
+        continue;
+      }
+      if (!stat.isFile()) continue;
+      const relPath = absFile.replace(WORKSPACE + "/", "");
+      files.push({
+        relPath,
+        absPath: absFile,
+        mtimeMs: stat.mtimeMs,
+      });
+    }
+  }
+
+  files.sort((a, b) => a.relPath.localeCompare(b.relPath));
+  return files;
+}
+
+function tableExists(db, name) {
+  const row = db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ?").get(name);
+  return !!row;
+}
+
+function readIndexedPathState(db, pathList) {
+  if (!Array.isArray(pathList) || pathList.length <= 0) {
+    return { paths: [], updatedAt: {} };
+  }
+  if (!tableExists(db, "chunks")) {
+    return { paths: [], updatedAt: {} };
+  }
+  const placeholders = pathList.map(() => "?").join(", ");
+  const rows = db.prepare([
+    "SELECT path, MAX(updated_at) AS updated_at",
+    "FROM chunks",
+    `WHERE path IN (${placeholders})`,
+    "GROUP BY path",
+  ].join(" ")).all(...pathList);
+  const paths = rows.map(r => r.path).sort((a, b) => a.localeCompare(b));
+  const updatedAt = {};
+  for (const row of rows) {
+    updatedAt[row.path] = row.updated_at ?? null;
+  }
+  return { paths, updatedAt };
+}
+
+function extractCategoryFromText(text = "") {
+  const match = String(text || "").match(/(?:^|\n)Category:\s*([a-z_]+)/i);
+  return match?.[1] ? String(match[1]).toLowerCase() : "";
+}
+
+function inferCategoryFromChunk(path = "", text = "") {
+  const fromText = extractCategoryFromText(text);
+  if (fromText && CATEGORY_MAP[fromText]) return fromText;
+  if (String(path).startsWith("memory/episodes/")) return "episodic";
+  return "raw_log";
+}
+
+function deriveCandidateSources({ path = "", category = "", text = "" }) {
+  const tags = [];
+  const p = String(path);
+  const c = String(category).toLowerCase();
+  const t = String(text).toLowerCase();
+  if (p.startsWith("memory/smart-add/")) tags.push("smart-add");
+  if (p.startsWith("memory/episodes/") || c === "episodic") tags.push("episodic");
+  if (/session\s*checkpoint|session[_ -]?key|session[_ -]?id/.test(t) || /session[-_]?checkpoint/i.test(p)) {
+    tags.push("session_checkpoint");
+  }
+  return tags;
+}
+
+function tokenizeQuery(text, maxTerms = 10) {
+  return extractQueryTokens(text, maxTerms);
+}
+
+function lexicalMatchScore(haystack, terms) {
+  if (!Array.isArray(terms) || terms.length === 0) return 0;
+  const raw = String(haystack || "").toLowerCase();
+  let matched = 0;
+  for (const term of terms) {
+    if (!term) continue;
+    if (raw.includes(term)) matched += 1;
+  }
+  if (matched === 0) return 0;
+  return Math.round((matched / terms.length) * 10000) / 10000;
+}
+
+function backfillConfidenceForIndexedChunks(db, nowSec) {
+  const rows = db.prepare(`
+    SELECT c.id, c.path, c.text
+    FROM chunks c
+    LEFT JOIN memory_confidence mc ON c.id = mc.chunk_id
+    WHERE mc.chunk_id IS NULL
+      AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
+    ORDER BY c.updated_at DESC
+    LIMIT 500
+  `).all();
+  if (rows.length === 0) return { scanned: 0, inserted: 0 };
+
+  const insert = db.prepare([
+    "INSERT OR IGNORE INTO memory_confidence",
+    "(chunk_id, initial_confidence, confidence, last_confidence_update,",
+    "base_tau, hit_count, is_archived, is_protected, conflict_flag, category)",
+    "VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)"
+  ].join(" "));
+  let inserted = 0;
+  const txn = db.transaction(() => {
+    for (const row of rows) {
+      const category = inferCategoryFromChunk(row.path, row.text);
+      const { conf, tau } = catParams(category, false);
+      const info = insert.run(row.id, conf, conf, nowSec, tau, category);
+      if (info.changes > 0) inserted += 1;
+    }
+  });
+  txn();
+  return { scanned: rows.length, inserted };
+}
+
+async function syncIndexIfNeeded(reason = "autoRecall") {
+  const nowMs = Date.now();
+  const nowSec = Math.floor(nowMs / 1000);
+  const scannedFiles = collectIndexedFiles();
+  const stats = {
+    fileCount: scannedFiles.length,
+    maxMtimeMs: scannedFiles.reduce((m, f) => Math.max(m, f.mtimeMs), 0),
+  };
+  const scannedPaths = scannedFiles.map(f => f.relPath);
+  const changed = stats.maxMtimeMs > indexSyncState.lastMaxMtimeMs;
+  const needsInitialSync = indexSyncState.lastSyncAt === 0;
+  const beforeState = withDb(db => readIndexedPathState(db, scannedPaths));
+
+  if (!changed && !needsInitialSync) {
+    return withDb(db => ({
+      synced: false,
+      reason: "fresh",
+      memory_root: WORKSPACE,
+      watch_dirs: [...INDEX_SYNC_WATCH_DIRS],
+      files: stats.fileCount,
+      scanned_paths: scannedPaths,
+      indexed_paths_before: beforeState.paths,
+      indexed_paths_after: beforeState.paths,
+      skipped_paths: scannedPaths.filter(p => !beforeState.paths.includes(p)),
+      updated_at: beforeState.updatedAt,
+      changed_paths: [],
+      manager_dirty_before: null,
+      force_sync: false,
+      backfill: backfillConfidenceForIndexedChunks(db, nowSec),
+    }));
+  }
+
+  const previousMaxMtimeMs = indexSyncState.lastMaxMtimeMs;
+  const changedPaths = scannedFiles
+    .filter(f => f.mtimeMs > previousMaxMtimeMs)
+    .map(f => f.relPath);
+  indexSyncState.lastMaxMtimeMs = Math.max(indexSyncState.lastMaxMtimeMs, stats.maxMtimeMs);
+  try {
+    const { manager } = await getSharedMemoryManager();
+    if (manager) {
+      const managerStatusBefore = typeof manager.status === "function" ? manager.status() : null;
+      const managerDirtyBefore = Boolean(managerStatusBefore?.dirty);
+      const forceSync = changed && !managerDirtyBefore;
+      await manager.sync(forceSync ? { reason, force: true } : { reason });
+      indexSyncState.lastSyncAt = nowMs;
+      const afterState = withDb(db => readIndexedPathState(db, scannedPaths));
+      return withDb(db => ({
+        synced: true,
+        reason,
+        memory_root: WORKSPACE,
+        watch_dirs: [...INDEX_SYNC_WATCH_DIRS],
+        files: stats.fileCount,
+        scanned_paths: scannedPaths,
+        indexed_paths_before: beforeState.paths,
+        indexed_paths_after: afterState.paths,
+        skipped_paths: scannedPaths.filter(p => !afterState.paths.includes(p)),
+        updated_at: afterState.updatedAt,
+        changed_paths: changedPaths,
+        manager_dirty_before: managerDirtyBefore,
+        force_sync: forceSync,
+        backfill: backfillConfidenceForIndexedChunks(db, nowSec),
+      }));
+    }
+  } catch {}
+
+  const fallbackAfterState = withDb(db => readIndexedPathState(db, scannedPaths));
+  return withDb(db => ({
+    synced: false,
+    reason: "manager_unavailable",
+    memory_root: WORKSPACE,
+    watch_dirs: [...INDEX_SYNC_WATCH_DIRS],
+    files: stats.fileCount,
+    scanned_paths: scannedPaths,
+    indexed_paths_before: beforeState.paths,
+    indexed_paths_after: fallbackAfterState.paths,
+    skipped_paths: scannedPaths.filter(p => !fallbackAfterState.paths.includes(p)),
+    updated_at: fallbackAfterState.updatedAt,
+    changed_paths: changedPaths,
+    manager_dirty_before: null,
+    force_sync: false,
+    backfill: backfillConfidenceForIndexedChunks(db, nowSec),
+  }));
+}
+
+function computeRecencyBoost(createdAtSec, nowSec) {
+  if (!createdAtSec || !Number.isFinite(createdAtSec)) return 0;
+  const ageDays = Math.max(0, (nowSec - createdAtSec) / 86400);
+  // Keep recency as a tie-breaker, not the dominant ranking signal.
+  const boost = 0.06 * Math.exp(-ageDays / 2.5);
+  return Math.round(boost * 10000) / 10000;
+}
+
+function computeCategoryBoost(category, text = "") {
+  const cat = String(category || "").toLowerCase();
+  if (cat === "episodic") return 0.12;
+  const raw = String(text || "").toLowerCase();
+  if (raw.includes("session checkpoint") || raw.includes("session-checkpoint")) return 0.1;
+  return 0;
+}
+
 async function hybridSearch(text, { topK = 5 } = {}) {
   const k = topK || 5;
   const nowSec = Math.floor(Date.now() / 1000);
   const channels = {};
+  const rawQuery = String(text || "");
+  const strippedQuery = stripPromptMetadataPrefix(rawQuery);
+  const normalizedQuery = normalizeFtsQuery(strippedQuery);
+  const fallbackFtsQuery = buildFtsFallbackQuery(strippedQuery);
+  const queryTerms = tokenizeQuery(normalizedQuery);
+  const candidateCounts = {
+    vector_raw: 0,
+    vector_after_conf_filter: 0,
+    fts_raw_primary: 0,
+    fts_raw_final: 0,
+    like_raw: 0,
+    recent_raw: 0,
+    episode_raw: 0,
+    recent_fallback_raw: 0,
+  };
+  const debug = {
+    query_original: rawQuery,
+    query_stripped: strippedQuery,
+    query_normalized: normalizedQuery,
+    fts_query_final: normalizedQuery,
+    vector_query: strippedQuery,
+    query_terms: queryTerms,
+    candidate_counts_before_filtering: candidateCounts,
+    fallbacks_triggered: [],
+    strict_count: 0,
+    fallback_count: 0,
+    post_rerank_topK: [],
+  };
+
+  try {
+    debug.sync = await syncIndexIfNeeded("hybridSearch");
+  } catch (e) {
+    debug.sync = { synced: false, reason: "sync_error", error: e.message };
+  }
 
   try {
     const { manager } = await getMemorySearchManager({});
     if (manager) {
-      const raw = await manager.search(text, { limit: 30 });
+      const raw = await manager.search(strippedQuery, { limit: 30 });
       const candidates = raw?.entries || raw || [];
+      candidateCounts.vector_raw = candidates.length;
       const scored = withDb(db => {
         const confRows = db.prepare(`SELECT chunk_id, confidence, last_confidence_update, base_tau, hit_count, is_protected, conflict_flag, category, is_archived FROM memory_confidence`).all();
         const confMap = new Map(confRows.map(r => [r.chunk_id, r]));
+        const tsRows = db.prepare("SELECT id, path, updated_at FROM chunks").all();
+        const tsMap = new Map(tsRows.map(r => [r.id, r.updated_at || 0]));
+        const pathMap = new Map(tsRows.map(r => [r.id, r.path || ""]));
         const res = [];
         for (const c of candidates) {
           const id = c.id || c.chunkId;
@@ -288,20 +649,25 @@ async function hybridSearch(text, { topK = 5 } = {}) {
             similarity: Math.round((c.similarity ?? c.score ?? 0.5) * 10000) / 10000,
             confidence_realtime: Math.round(rtConf * 10000) / 10000,
             hit_count: meta.hit_count,
+            created_at: tsMap.get(id) || 0,
+            path: pathMap.get(id) || "",
           });
         }
         res.sort((a, b) => b.similarity - a.similarity);
         return res.slice(0, 30);
       });
+      candidateCounts.vector_after_conf_filter = scored.length;
       if (scored.length > 0) channels.vector = scored;
     }
   } catch (e) {}
 
+  let ftsIsEmpty = true;
   try {
-    const safeQuery = sanitizeFtsQuery(text);
-    if (safeQuery) {
+    if (normalizedQuery) {
       const ftsSelectSql = `
         SELECT c.id, c.text,
+          c.path,
+          c.updated_at,
           COALESCE(mc.confidence, 0.5) as confidence,
           mc.last_confidence_update, COALESCE(mc.base_tau, 7.0) as base_tau,
           COALESCE(mc.hit_count, 0) as hit_count, COALESCE(mc.is_protected, 0) as is_protected,
@@ -314,69 +680,295 @@ async function hybridSearch(text, { topK = 5 } = {}) {
         ORDER BY bm25(chunks_fts, 0)
         LIMIT 20
       `;
-      let fts = withDb(db => db.prepare(ftsSelectSql).all(safeQuery));
-      if (fts.length === 0) {
-        const fallbackQuery = buildFtsFallbackQuery(text);
-        if (fallbackQuery && fallbackQuery !== safeQuery) {
-          fts = withDb(db => db.prepare(ftsSelectSql).all(fallbackQuery));
-        }
-      }
-      if (fts.length > 0) {
-        channels.fts = fts.map(row => ({
+      const strictRows = withDb(db => db.prepare(ftsSelectSql).all(normalizedQuery));
+      candidateCounts.fts_raw_primary = strictRows.length;
+      debug.strict_count = strictRows.length;
+      if (strictRows.length > 0) {
+        ftsIsEmpty = false;
+        candidateCounts.fts_raw_final = strictRows.length;
+        debug.fts_query_final = normalizedQuery;
+        channels.fts = strictRows.map(row => ({
           id: row.id,
           text: row.text.slice(0, 600),
           category: row.category,
           similarity: 0.5,
           confidence_realtime: row.is_protected ? row.confidence : Math.round(calcRealtimeConf(row, nowSec) * 10000) / 10000,
           hit_count: row.hit_count,
+          created_at: row.updated_at || 0,
+          path: row.path || "",
         }));
+      } else if (fallbackFtsQuery && fallbackFtsQuery !== normalizedQuery) {
+        const fallbackRows = withDb(db => db.prepare(ftsSelectSql).all(fallbackFtsQuery));
+        debug.fallback_count = fallbackRows.length;
+        candidateCounts.fts_raw_final = fallbackRows.length;
+        debug.fts_query_final = fallbackFtsQuery;
+        ftsIsEmpty = fallbackRows.length === 0;
+        if (fallbackRows.length > 0) {
+          const reranked = rankFtsFallbackCandidates(fallbackRows, {
+            rawQuery: strippedQuery,
+            queryTerms,
+            nowSec,
+            topK: 20,
+          });
+          debug.post_rerank_topK = reranked.post_rerank_topK;
+          channels.fts = reranked.ranked.map(row => ({
+            id: row.id,
+            text: String(row.text || "").slice(0, 600),
+            category: row.category,
+            similarity: row.fallback_score,
+            confidence_realtime: row.is_protected ? row.confidence : Math.round(calcRealtimeConf(row, nowSec) * 10000) / 10000,
+            hit_count: row.hit_count,
+            created_at: row.updated_at || 0,
+            path: row.path || "",
+          }));
+        }
+      } else {
+        candidateCounts.fts_raw_final = strictRows.length;
       }
     }
   } catch (e) {}
+
+  if (ftsIsEmpty) {
+    debug.fallbacks_triggered.push("fts_empty");
+    try {
+      const likePatterns = buildLikeFallbackPatterns(normalizedQuery, 8);
+      debug.like_patterns = likePatterns;
+      if (likePatterns.length > 0) {
+        const likeRows = withDb(db => {
+          const where = likePatterns.map(() => "(c.path LIKE ? OR c.text LIKE ?)").join(" OR ");
+          const sql = `
+            SELECT c.id, c.text, c.path, c.updated_at,
+              COALESCE(mc.confidence, 0.5) as confidence,
+              mc.last_confidence_update, COALESCE(mc.base_tau, 7.0) as base_tau,
+              COALESCE(mc.hit_count, 0) as hit_count, COALESCE(mc.is_protected, 0) as is_protected,
+              COALESCE(mc.conflict_flag, 0) as conflict_flag, COALESCE(mc.category, 'raw_log') as category
+            FROM chunks c
+            LEFT JOIN memory_confidence mc ON c.id = mc.chunk_id
+            WHERE COALESCE(mc.is_archived, 0) = 0
+              AND (${where})
+            ORDER BY c.updated_at DESC
+            LIMIT 30
+          `;
+          const params = likePatterns.flatMap(pattern => [pattern, pattern]);
+          return db.prepare(sql).all(...params);
+        });
+        candidateCounts.like_raw = likeRows.length;
+        if (likeRows.length > 0) {
+          debug.fallbacks_triggered.push("like_search");
+          channels.like = likeRows.map(row => {
+            const lexical = lexicalMatchScore(`${row.path}\n${row.text}`, queryTerms);
+            return {
+              id: row.id,
+              text: row.text.slice(0, 600),
+              category: row.category,
+              similarity: Math.round((0.3 + lexical) * 10000) / 10000,
+              confidence_realtime: row.is_protected ? row.confidence : Math.round(calcRealtimeConf(row, nowSec) * 10000) / 10000,
+              hit_count: row.hit_count,
+              created_at: row.updated_at || 0,
+              path: row.path || "",
+            };
+          });
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    const recentRows = withDb(db => db.prepare(`
+      SELECT c.id, c.text, c.path, c.updated_at,
+        COALESCE(mc.confidence, 0.5) as confidence,
+        mc.last_confidence_update, COALESCE(mc.base_tau, 7.0) as base_tau,
+        COALESCE(mc.hit_count, 0) as hit_count, COALESCE(mc.is_protected, 0) as is_protected,
+        COALESCE(mc.conflict_flag, 0) as conflict_flag, COALESCE(mc.category, 'raw_log') as category
+      FROM chunks c
+      LEFT JOIN memory_confidence mc ON c.id = mc.chunk_id
+      WHERE COALESCE(mc.is_archived, 0) = 0
+        AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
+      ORDER BY c.updated_at DESC
+      LIMIT 120
+    `).all());
+    candidateCounts.recent_raw = recentRows.length;
+    const scoredRecent = recentRows
+      .map(row => {
+        const category = row.category || inferCategoryFromChunk(row.path, row.text);
+        const lexical = lexicalMatchScore(`${row.path}\n${row.text}`, queryTerms);
+        if (lexical <= 0) return null;
+        const recency = computeRecencyBoost(row.updated_at || 0, nowSec);
+        return {
+          id: row.id,
+          text: row.text.slice(0, 600),
+          category,
+          similarity: Math.round((0.35 + lexical + recency) * 10000) / 10000,
+          confidence_realtime: row.is_protected ? row.confidence : Math.round(calcRealtimeConf(row, nowSec) * 10000) / 10000,
+          hit_count: row.hit_count,
+          created_at: row.updated_at || 0,
+          path: row.path || "",
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 20);
+    if (scoredRecent.length > 0) channels.recent = scoredRecent;
+
+    const episodeRows = scoredRecent
+      .filter(row => row.category === "episodic" || String(row.path).startsWith("memory/episodes/"))
+      .map(row => ({ ...row, similarity: Math.round((row.similarity + 0.08) * 10000) / 10000 }))
+      .slice(0, 20);
+    candidateCounts.episode_raw = episodeRows.length;
+    if (episodeRows.length > 0) channels.episode = episodeRows;
+  } catch {}
+
+  if (ftsIsEmpty) {
+    if (candidateCounts.like_raw === 0 && Array.isArray(channels.vector) && channels.vector.length > 0) {
+      debug.fallbacks_triggered.push("vector_only");
+    }
+    try {
+      const recentFallbackRows = withDb(db => db.prepare(`
+        SELECT c.id, c.text, c.path, c.updated_at,
+          COALESCE(mc.confidence, 0.5) as confidence,
+          mc.last_confidence_update, COALESCE(mc.base_tau, 7.0) as base_tau,
+          COALESCE(mc.hit_count, 0) as hit_count, COALESCE(mc.is_protected, 0) as is_protected,
+          COALESCE(mc.conflict_flag, 0) as conflict_flag, COALESCE(mc.category, 'raw_log') as category
+        FROM chunks c
+        LEFT JOIN memory_confidence mc ON c.id = mc.chunk_id
+        WHERE COALESCE(mc.is_archived, 0) = 0
+          AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
+        ORDER BY c.updated_at DESC
+        LIMIT 20
+      `).all());
+      candidateCounts.recent_fallback_raw = recentFallbackRows.length;
+      if (recentFallbackRows.length > 0) {
+        debug.fallbacks_triggered.push("recent_episodic");
+        channels.recent_fallback = recentFallbackRows.map(row => {
+          const category = row.category || inferCategoryFromChunk(row.path, row.text);
+          const recency = computeRecencyBoost(row.updated_at || 0, nowSec);
+          return {
+            id: row.id,
+            text: row.text.slice(0, 600),
+            category,
+            similarity: Math.round((0.25 + recency) * 10000) / 10000,
+            confidence_realtime: row.is_protected ? row.confidence : Math.round(calcRealtimeConf(row, nowSec) * 10000) / 10000,
+            hit_count: row.hit_count,
+            created_at: row.updated_at || 0,
+            path: row.path || "",
+          };
+        });
+      }
+    } catch {}
+  }
 
   const names = Object.keys(channels);
   if (names.length === 0) return { pool: 0, results: [], channels: [], note: "no channels returned results" };
 
   const fusion = new Map();
   for (const [chName, rankedItems] of Object.entries(channels)) {
-    rankedItems.forEach((item) => {
+    rankedItems.forEach((item, idx) => {
       const exist = fusion.get(item.id) || {
         id: item.id,
         text: item.text,
         category: item.category,
+        channels: [],
+        semantic_sources: [],
         sources: [],
         rrfScore: 0,
+        recencyBoost: 0,
+        categoryBoost: 0,
+        finalScore: 0,
         similarity: item.similarity,
         confidence_realtime: item.confidence_realtime,
         hits: item.hit_count,
+        created_at: item.created_at || 0,
+        path: item.path || "",
       };
-      if (!exist.sources.includes(chName)) exist.sources.push(chName);
-      let acc = 0;
-      for (const items of Object.values(channels)) {
-        const rank = items.findIndex(i => i.id === item.id);
-        if (rank >= 0) acc += 1 / (60 + rank + 1);
+      if (!exist.channels.includes(chName)) exist.channels.push(chName);
+      const semanticTags = deriveCandidateSources(item);
+      for (const tag of semanticTags) {
+        if (!exist.semantic_sources.includes(tag)) exist.semantic_sources.push(tag);
       }
-      exist.rrfScore = Math.round(acc * 10000) / 10000;
+      exist.rrfScore += 1 / (60 + idx + 1);
+      if (!exist.path && item.path) exist.path = item.path;
+      if (!exist.category && item.category) exist.category = item.category;
       fusion.set(item.id, exist);
     });
   }
 
-  const fused = Array.from(fusion.values()).sort((a, b) => b.rrfScore - a.rrfScore);
-  const results = fused.slice(0, k).map(item => ({
+  const fused = Array.from(fusion.values()).map(item => {
+    item.rrfScore = Math.round(item.rrfScore * 10000) / 10000;
+    item.recencyBoost = computeRecencyBoost(item.created_at, nowSec);
+    item.categoryBoost = computeCategoryBoost(item.category, item.text);
+    item.finalScore = Math.round((item.rrfScore + item.recencyBoost + item.categoryBoost) * 10000) / 10000;
+    item.sources = [...new Set([...item.channels, ...item.semantic_sources])];
+    return item;
+  });
+
+  const preRerank = [...fused]
+    .sort((a, b) => b.rrfScore - a.rrfScore)
+    .slice(0, 8)
+    .map(item => ({
+      id: item.id.slice(0, 16),
+      score: item.rrfScore,
+      category: item.category,
+      sources: item.sources,
+      path: item.path,
+      preview: String(item.text || "").slice(0, 100),
+    }));
+
+  const postRerank = [...fused]
+    .sort((a, b) => b.finalScore - a.finalScore)
+    .slice(0, 8)
+    .map(item => ({
+      id: item.id.slice(0, 16),
+      score: item.finalScore,
+      rrf_score: item.rrfScore,
+      recency_boost: item.recencyBoost,
+      category_boost: item.categoryBoost,
+      category: item.category,
+      sources: item.sources,
+      path: item.path,
+      preview: String(item.text || "").slice(0, 100),
+    }));
+
+  const sourceBreakdown = {};
+  const categoryBreakdown = {};
+  for (const item of fused) {
+    for (const src of item.sources) {
+      sourceBreakdown[src] = (sourceBreakdown[src] || 0) + 1;
+    }
+    const cat = item.category || "unknown";
+    categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + 1;
+  }
+
+  const fusedSorted = [...fused].sort((a, b) => b.finalScore - a.finalScore);
+  const debugInfo = {
+    ...debug,
+    channel_sizes: Object.fromEntries(Object.entries(channels).map(([name, items]) => [name, items.length])),
+    source_breakdown: sourceBreakdown,
+    category_breakdown: categoryBreakdown,
+    pre_rerank_top: preRerank,
+    post_rerank_top: postRerank,
+  };
+
+  const results = fusedSorted.slice(0, k).map(item => ({
     id: item.id.slice(0, 16),
     text: item.text.slice(0, 240),
+    path: item.path || "",
     category: item.category,
     rrf_score: item.rrfScore,
+    recency_boost: item.recencyBoost,
+    category_boost: item.categoryBoost,
+    final_score: item.finalScore,
     sources: item.sources,
     similarity: item.similarity,
     confidence: item.confidence_realtime,
     hits: item.hits,
+    created_at: item.created_at || 0,
   }));
 
   return {
-    pool: fused.length,
+    pool: fusedSorted.length,
     channels: names,
     channel_sizes: Object.fromEntries(Object.entries(channels).map(([name, items]) => [name, items.length])),
+    debug: debugInfo,
     results,
   };
 }
@@ -407,6 +999,8 @@ export default definePluginEntry({
     initLanceDB().catch(e => console.warn("[memory-engine] LanceDB init deferred:", e.message));
 
 
+    const autoRecallTraceByRun = new Map();
+    const autoRecallTraceBySession = new Map();
     const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
     const autoRecallConfig =
       api.pluginConfig?.autoRecall ||
@@ -414,28 +1008,127 @@ export default definePluginEntry({
       api.config?.autoRecall ||
       {};
     if (autoRecallConfig.enabled && typeof api.on === "function") {
-      const autoRecallTraceByRun = new Map();
-      const autoRecallTraceBySession = new Map();
       const autoRecallTopK = Math.max(1, Number(autoRecallConfig.topK || 3));
       const autoRecallTimeoutMs = Math.max(1000, Number(autoRecallConfig.timeoutMs || 8000));
       console.log(`[memory-engine] autoRecall hook registered topK=${autoRecallTopK} timeoutMs=${autoRecallTimeoutMs}`);
       api.on("before_prompt_build", async (event, ctx) => {
         try {
           const prompt = String(event?.prompt || "").trim();
-          if (shouldSkipAutoRecall(prompt)) return;
           const traceId = crypto.randomUUID();
           const startedAt = Date.now();
           const sessionId = resolveHookSessionId(event, ctx);
+          const skipReason = explainAutoRecallSkip(prompt);
+          if (skipReason) {
+            const skipDebugMetadata = buildAutoRecallDebugMetadata(prompt, null, skipReason);
+            recordMemoryEvent({
+              event_type: "auto_recall_debug",
+              session_id: sessionId,
+              trace_id: traceId,
+              source: "autoRecall",
+              metadata_json: skipDebugMetadata,
+            });
+            recordMemoryEvent({
+              event_type: "recall_completed",
+              session_id: sessionId,
+              trace_id: traceId,
+              latency_ms: Date.now() - startedAt,
+              candidate_count: 0,
+              injected_count: 0,
+              source: "autoRecall",
+              metadata_json: buildRecallCompletedMetadata({
+                skipped: true,
+                skip_reason: skipReason,
+                candidate_count: 0,
+                strict_count: 0,
+                fallback_count: 0,
+                post_rerank_count: 0,
+              }),
+            });
+            return;
+          }
           recordMemoryEvent({ event_type: "recall_started", session_id: sessionId, trace_id: traceId, source: "autoRecall", metadata_json: { prompt: prompt.slice(0, 500), topK: autoRecallTopK } });
           const result = await hybridSearch(prompt, { topK: autoRecallTopK });
           const hits = result?.results?.length || 0;
+          const gateDebug = {
+            candidate_count_before_gate: hits,
+            candidate_count_after_gate: 0,
+            rejected_candidates: [],
+            gate_decisions: [],
+            injected_count: 0,
+          };
+          const gateQuery = String(result?.debug?.query_stripped || stripPromptMetadataPrefix(prompt));
+          const gatedResults = (Array.isArray(result?.results) ? result.results : []).filter(candidate => {
+            const gate = shouldInjectCandidate(candidate, gateQuery, gateDebug);
+            const category = String(candidate?.category || "raw_log").toLowerCase();
+            const id = String(candidate?.id || "").slice(0, 16);
+            const finalScoreRaw = Number(candidate?.final_score ?? candidate?.finalScore ?? candidate?.rrf_score ?? 0);
+            const finalScore = Number.isFinite(finalScoreRaw) ? Number(finalScoreRaw.toFixed(6)) : 0;
+            const decision = {
+              id,
+              injected: Boolean(gate?.inject),
+              rejection_reason: gate?.reason || null,
+              rejected_reason: gate?.rejected_reason || gate?.reason || null,
+              matched_key_classes: Array.isArray(gate?.matched_key_classes) ? gate.matched_key_classes : [],
+              threshold_used: gateThresholdForCategory(category, gate?.min_coverage),
+              category,
+              final_score: finalScore,
+            };
+            gateDebug.gate_decisions.push(decision);
+            if (gate?.inject) return true;
+            gateDebug.rejected_candidates.push({
+              id,
+              category,
+              reason: gate?.reason || "gated",
+              rejected_reason: gate?.rejected_reason || gate?.reason || "gated",
+              matched_key_classes: Array.isArray(gate?.matched_key_classes) ? gate.matched_key_classes : [],
+              preview: String(candidate?.text || "").slice(0, 120),
+            });
+            return false;
+          });
+          gateDebug.candidate_count_after_gate = gatedResults.length;
+          gateDebug.injected_count = Math.min(gatedResults.length, autoRecallTopK);
+          result.debug = {
+            ...(result?.debug || {}),
+            ...gateDebug,
+          };
           console.log(`[memory-engine] autoRecall: prompt="${prompt.slice(0,60)}" hits=${hits} topK=${autoRecallTopK}`);
+          const debugInfo = result?.debug || {};
+          const postRerankCount = Array.isArray(debugInfo.post_rerank_topK) ? debugInfo.post_rerank_topK.length : 0;
+          recordMemoryEvent({
+            event_type: "auto_recall_debug",
+            session_id: sessionId,
+            trace_id: traceId,
+            source: "autoRecall",
+            metadata_json: buildAutoRecallDebugMetadata(prompt, result),
+          });
+          console.log(
+            `[memory-engine] autoRecall.debug query original="${String(debugInfo.query_original || "").slice(0, 160)}" normalized="${String(debugInfo.query_normalized || "").slice(0, 160)}" fts_final="${String(debugInfo.fts_query_final || "").slice(0, 160)}" vector_query="${String(debugInfo.vector_query || "").slice(0, 160)}"`
+          );
+          console.log(
+            `[memory-engine] autoRecall.debug strict_count=${debugInfo.strict_count ?? 0} fallback_count=${debugInfo.fallback_count ?? 0} candidate_counts_before_filtering=${JSON.stringify(debugInfo.candidate_counts_before_filtering || {})} fallbacks=${JSON.stringify(debugInfo.fallbacks_triggered || [])} gate_before=${debugInfo.candidate_count_before_gate ?? hits} gate_after=${debugInfo.candidate_count_after_gate ?? hits} rejected=${Array.isArray(debugInfo.rejected_candidates) ? debugInfo.rejected_candidates.length : 0}`
+          );
+          if (Array.isArray(debugInfo.post_rerank_topK) && debugInfo.post_rerank_topK.length > 0) {
+            console.log(`[memory-engine] autoRecall.debug post_rerank_topK=${JSON.stringify(debugInfo.post_rerank_topK)}`);
+          }
+          console.log(`[memory-engine] autoRecall.debug channels=${JSON.stringify(result?.channel_sizes || {})} source_breakdown=${JSON.stringify(debugInfo.source_breakdown || {})} category_breakdown=${JSON.stringify(debugInfo.category_breakdown || {})} sync=${JSON.stringify(debugInfo.sync || {})}`);
+          if (Array.isArray(debugInfo.pre_rerank_top)) {
+            console.log(`[memory-engine] autoRecall.debug pre_rerank_top=${JSON.stringify(debugInfo.pre_rerank_top)}`);
+          }
+          if (Array.isArray(debugInfo.post_rerank_top)) {
+            console.log(`[memory-engine] autoRecall.debug post_rerank_top=${JSON.stringify(debugInfo.post_rerank_top)}`);
+          }
           if (hits > 0) {
-            result.results.slice(0, 3).forEach((r, i) => {
+            console.log(`[memory-engine] autoRecall.debug query="${prompt.slice(0, 160)}" candidates=${result.results.map(r => r.id).join(",")}`);
+            result.results.slice(0, 5).forEach((r, i) => {
               const id = String(r.id || "").slice(0, 16);
               const c = r.category || "?";
               const conf = r.confidence ?? r.confidence_realtime ?? "?";
-              console.log(`  #${i+1} [${id}] cat=${c} conf=${conf} text="${(r.text||"").slice(0,80)}"`);
+              const finalScore = r.final_score ?? r.rrf_score ?? "?";
+              const rrfScore = r.rrf_score ?? "?";
+              const recencyBoost = r.recency_boost ?? 0;
+              const categoryBoost = r.category_boost ?? 0;
+              const createdAt = r.created_at ? new Date(r.created_at * 1000).toISOString() : "n/a";
+              console.log(`  #${i+1} [${id}] finalScore=${finalScore} rrfScore=${rrfScore} recencyBoost=${recencyBoost} categoryBoost=${categoryBoost} cat=${c} conf=${conf} createdAt=${createdAt} preview="${(r.text||"").slice(0,100)}"`);
             });
           }
           const sessionIdForEvents = resolveHookSessionId(event, ctx);
@@ -446,19 +1139,106 @@ export default definePluginEntry({
               session_id: sessionIdForEvents,
               trace_id: traceId,
               memory_id: id,
-              final_score: r.rrf_score,
+              final_score: r.final_score ?? r.rrf_score,
               source: "autoRecall",
               metadata_json: { rank: i + 1, category: r.category, confidence: r.confidence, sources: r.sources, preview: (r.text || "").slice(0, 200) }
             });
           });
-          const prependContext = formatAutoRecallContext(result.results, { topK: autoRecallTopK });
+          const prependContext = formatAutoRecallContext(gatedResults, { topK: autoRecallTopK });
           if (!prependContext) {
-            recordMemoryEvent({ event_type: "recall_completed", session_id: sessionIdForEvents, trace_id: traceId, latency_ms: Date.now() - startedAt, candidate_count: hits, injected_count: 0, source: "autoRecall" });
+            recordMemoryEvent({
+              event_type: "recall_completed",
+              session_id: sessionIdForEvents,
+              trace_id: traceId,
+              latency_ms: Date.now() - startedAt,
+              candidate_count: hits,
+              injected_count: 0,
+              source: "autoRecall",
+              metadata_json: buildRecallCompletedMetadata({
+                skipped: false,
+                skip_reason: null,
+                candidate_count: hits,
+                candidate_count_before_gate: Number(debugInfo.candidate_count_before_gate ?? hits),
+                candidate_count_after_gate: Number(debugInfo.candidate_count_after_gate ?? 0),
+                strict_count: Number(debugInfo.strict_count ?? 0),
+                fallback_count: Number(debugInfo.fallback_count ?? 0),
+                post_rerank_count: postRerankCount,
+                injected_count: 0,
+              }),
+            });
             return;
           }
-          const injectedIds = result.results.slice(0, autoRecallTopK).map(r => String(r.id || "").slice(0, 16));
-          result.results.slice(0, autoRecallTopK).forEach(r => recordMemoryEvent({ event_type: "memory_injected", session_id: sessionIdForEvents, trace_id: traceId, memory_id: String(r.id || "").slice(0, 16), source: "autoRecall", metadata_json: { category: r.category, confidence: r.confidence, preview: (r.text || "").slice(0, 200) } }));
-          recordMemoryEvent({ event_type: "recall_completed", session_id: sessionIdForEvents, trace_id: traceId, latency_ms: Date.now() - startedAt, candidate_count: hits, injected_count: Math.min(hits, autoRecallTopK), source: "autoRecall" });
+          const gateDecisions = Array.isArray(debugInfo.gate_decisions) ? debugInfo.gate_decisions : [];
+          const gateDecisionById = new Map(gateDecisions.map(item => [String(item?.id || ""), item]));
+          console.log(`[memory-engine] AUTO_RECALL_GATE_ACTIVE trace_id=${traceId} total_candidates=${gateDecisions.length} gated_injected=${Math.min(gatedResults.length, autoRecallTopK)}`);
+          gateDecisions.forEach(item => {
+            console.log(
+              `[memory-engine] autoRecall.gate decision id=${String(item?.id || "")} injected=${Boolean(item?.injected)} rejection_reason=${item?.rejection_reason || "none"} rejected_reason=${item?.rejected_reason || "none"} matched_key_classes=${JSON.stringify(item?.matched_key_classes || [])} threshold_used=${JSON.stringify(item?.threshold_used || null)} category=${String(item?.category || "raw_log")} final_score=${Number(item?.final_score ?? 0)}`
+            );
+            recordMemoryEvent({
+              event_type: "auto_recall_debug",
+              session_id: sessionIdForEvents,
+              trace_id: traceId,
+              memory_id: String(item?.id || null),
+              source: "autoRecall",
+              metadata_json: {
+                debug_type: "gate_decision",
+                injected: Boolean(item?.injected),
+                rejection_reason: item?.rejection_reason || null,
+                rejected_reason: item?.rejected_reason || item?.rejection_reason || null,
+                matched_key_classes: Array.isArray(item?.matched_key_classes) ? item.matched_key_classes : [],
+                threshold_used: item?.threshold_used || null,
+                category: String(item?.category || "raw_log"),
+                final_score: Number(item?.final_score ?? 0),
+              },
+            });
+          });
+          const injectedIds = gatedResults.slice(0, autoRecallTopK).map(r => String(r.id || "").slice(0, 16));
+          gatedResults.slice(0, autoRecallTopK).forEach(r => {
+            const id = String(r.id || "").slice(0, 16);
+            const decision = gateDecisionById.get(id);
+            const category = String(r.category || decision?.category || "raw_log").toLowerCase();
+            const thresholdUsed = decision?.threshold_used || gateThresholdForCategory(category, null);
+            const finalScoreRaw = Number(r.final_score ?? r.finalScore ?? r.rrf_score ?? decision?.final_score ?? 0);
+            const finalScore = Number.isFinite(finalScoreRaw) ? Number(finalScoreRaw.toFixed(6)) : 0;
+            recordMemoryEvent({
+              event_type: "memory_injected",
+              session_id: sessionIdForEvents,
+              trace_id: traceId,
+              memory_id: id,
+              final_score: finalScore,
+              source: "autoRecall",
+              metadata_json: {
+                injected: true,
+                rejection_reason: null,
+                threshold_used: thresholdUsed,
+                category,
+                final_score: finalScore,
+                confidence: r.confidence,
+                preview: (r.text || "").slice(0, 200),
+              }
+            });
+          });
+          recordMemoryEvent({
+            event_type: "recall_completed",
+            session_id: sessionIdForEvents,
+            trace_id: traceId,
+            latency_ms: Date.now() - startedAt,
+            candidate_count: hits,
+            injected_count: Math.min(gatedResults.length, autoRecallTopK),
+            source: "autoRecall",
+            metadata_json: buildRecallCompletedMetadata({
+              skipped: false,
+              skip_reason: null,
+              candidate_count: hits,
+              candidate_count_before_gate: Number(debugInfo.candidate_count_before_gate ?? hits),
+              candidate_count_after_gate: Number(debugInfo.candidate_count_after_gate ?? gatedResults.length),
+              strict_count: Number(debugInfo.strict_count ?? 0),
+              fallback_count: Number(debugInfo.fallback_count ?? 0),
+              post_rerank_count: postRerankCount,
+              injected_count: Math.min(gatedResults.length, autoRecallTopK),
+            }),
+          });
           const traceState = { traceId, sessionId: sessionIdForEvents, injectedIds };
           const runKey = ctx?.runId || event?.runId;
           if (runKey) autoRecallTraceByRun.set(runKey, traceState);
@@ -513,7 +1293,12 @@ export default definePluginEntry({
 
     // Register memory prompt supplement — guides agent to cite memory IDs
     api.registerMemoryPromptSupplement((_params) => {
-      return [
+      const sessionId = resolveHookSessionId(_params, _params?.ctx || _params);
+      const injected = sessionId ? (autoRecallTraceBySession.get(sessionId)?.injectedIds || []) : [];
+      const supplement = [
+        MEMORY_SUPPLEMENT_BOUNDARY_START,
+        `${MEMORY_SUPPLEMENT_SENTINEL}: active`,
+        `MEMORY_SUPPLEMENT_INJECTED_COUNT: ${injected.length}`,
         "## Memory Engine - 记忆置信度系统",
         "",
         "### 工作流",
@@ -523,7 +1308,10 @@ export default definePluginEntry({
         "",
         "规则：引用搜索结果却不调 `cite`，那些记忆会随时间衰减消失。",
         "每次 `cite` 让记忆更牢固（hit+1, conf+0.1, 半衰期延长）。",
+        MEMORY_SUPPLEMENT_BOUNDARY_END,
       ];
+      console.log(`[memory-engine] supplement.injected memory_count=${injected.length} preview="${supplement.slice(0, 4).join(" | ").slice(0, 180)}"`);
+      return supplement;
     });
 
     api.registerTool({
@@ -585,20 +1373,34 @@ export default definePluginEntry({
             // ── Auto-route category via rule engine ──
             const cat = autoRouteCategory(text, { category });
             const now = new Date();
-            const dateStr = now.toISOString().slice(0, 10);
+            const dateStr = localDateKey(now);
             const ts = now.toISOString().replace(/[:.]/g, "").slice(0, 15);
             const entryId = `${ts}_${cat}`;
             const fileDir = resolve(WORKSPACE, SMART_ADD_DIR);
             const filePath = resolve(fileDir, `${dateStr}.md`);
-            mkdirSync(fileDir, { recursive: true });
-            const header = !existsSync(filePath) ? "# Smart Added Memory\n\n" : "";
-            const entry = `${header}## ${entryId}\n\nCategory: ${cat}${isProtected ? " | Protected" : ""}\n\n${text.trim()}\n\n`;
-            appendFileSync(filePath, header ? entry : `\n${entry}`);
+            const fingerprint = buildSmartAddFingerprint(text, cat, isProtected);
+            const appendResult = appendSmartAdd({
+              fileDir,
+              filePath,
+              entryId,
+              category: cat,
+              isProtected,
+              text,
+              fingerprint,
+              syncCli: false,
+            });
+            if (!appendResult.appended) {
+              return {
+                success: true,
+                deduped: true,
+                reason: appendResult.reason,
+                category: cat,
+              };
+            }
 
             // Sync via manager — populates SQLite chunks + FTS5
             try {
-              const { manager } = await getMemorySearchManager({});
-              if (manager) await manager.sync();
+              await syncIndexIfNeeded("memory_engine.add");
             } catch (e) {
               // fallback: reindex may happen on next cycle
             }

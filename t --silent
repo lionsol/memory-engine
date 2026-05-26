@@ -1,0 +1,548 @@
+[1mdiff --git a/plugins/memory-engine/auto-recall.js b/plugins/memory-engine/auto-recall.js[m
+[1mindex 1be0d75..fbee41d 100644[m
+[1m--- a/plugins/memory-engine/auto-recall.js[m
+[1m+++ b/plugins/memory-engine/auto-recall.js[m
+[36m@@ -1,3 +1,6 @@[m
+[32m+[m[32mimport { buildFtsFallbackQuery, sanitizeFtsQuery } from "./query-utils.js";[m
+[32m+[m[32mexport { buildFtsFallbackQuery, sanitizeFtsQuery } from "./query-utils.js";[m
+[32m+[m
+ const MEMORY_TRIGGER_RE = /\b(remember|recall|memory|memories|previous|last time|said before|preference|preferences|habit|habits)\b|[\u8bb0\u5fc6]|\u8bb0\u5f97|\u4e4b\u524d|\u4e0a\u6b21|\u6211\u8bf4\u8fc7|\u4f60\u8fd8\u8bb0\u5f97|\u56de\u5fc6|\u504f\u597d|\u4e60\u60ef/i;[m
+ [m
+ const GREETING_RE = /^(hi|hello|hey|yo|good morning|good evening|\u4f60\u597d|\u55e8|\u65e9|\u65e9\u4e0a\u597d|\u665a\u5b89)[.!?\s]*$/i;[m
+[36m@@ -34,30 +37,28 @@[m [mfunction trimMemoryText(text, maxLength = 240) {[m
+   return `${normalized.slice(0, maxLength - 1)}...`;[m
+ }[m
+ [m
+[31m-export function sanitizeFtsQuery(text) {[m
+[31m-  return String(text || "")[m
+[31m-    .normalize("NFKC")[m
+[31m-    .replace(/[^\p{L}\p{N}_\s]+/gu, " ")[m
+[31m-    .replace(/\s+/g, " ")[m
+[31m-    .trim();[m
+[31m-}[m
+[31m-[m
+[31m-export function buildFtsFallbackQuery(text, maxTerms = 8) {[m
+[31m-  const sanitized = sanitizeFtsQuery(text);[m
+[31m-  const tokens = sanitized.match(/[\p{Script=Han}]{2,}|[\p{L}\p{N}_]{2,}/gu) || [];[m
+[31m-  const terms = [];[m
+[32m+[m[32mexport function parseCitedMemoryIds(text) {[m
+[32m+[m[32m  const raw = String(text || "");[m
+[32m+[m[32m  const found = new Set();[m
+[32m+[m[32m  const jsonLike = raw.match(/cited_memory_ids\s*[:=]\s*(\[[^\]\n]*\])/i);[m
+ [m
+[31m-  for (const token of tokens) {[m
+[31m-    if (/^[\p{Script=Han}]+$/u.test(token) && token.length > 4) {[m
+[31m-      for (let index = 0; index <= token.length - 2; index += 1) {[m
+[31m-        terms.push(token.slice(index, index + 2));[m
+[32m+[m[32m  if (jsonLike) {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const parsed = JSON.parse(jsonLike[1]);[m
+[32m+[m[32m      if (Array.isArray(parsed)) {[m
+[32m+[m[32m        for (const item of parsed) {[m
+[32m+[m[32m          const id = String(item || "").trim();[m
+[32m+[m[32m          if (/^[a-f0-9]{8,64}$/i.test(id)) found.add(id);[m
+[32m+[m[32m        }[m
+       }[m
+[31m-    } else {[m
+[31m-      terms.push(token);[m
+[31m-    }[m
+[32m+[m[32m    } catch {}[m
+   }[m
+ [m
+[31m-  return [...new Set(terms)].slice(0, maxTerms).join(" OR ");[m
+[32m+[m[32m  for (const match of raw.matchAll(/\b[0-9a-f]{16,64}\b/gi)) {[m
+[32m+[m[32m    found.add(match[0]);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return [...found];[m
+ }[m
+ [m
+ export function formatAutoRecallContext(results, options = {}) {[m
+[36m@@ -68,7 +69,8 @@[m [mexport function formatAutoRecallContext(results, options = {}) {[m
+   const lines = [[m
+     "## Auto Recall - relevant memory",[m
+     "",[m
+[31m-    "The following memories may help answer this turn. Use only if relevant. If you rely on any item, cite it with memory_engine action=\"cite\".",[m
+[32m+[m[32m    "The following memories may help answer this turn. Use only if relevant.",[m
+[32m+[m[32m    "If your answer relies on any item, include a final metadata line exactly like: cited_memory_ids: [\"memory_id\"] using the IDs shown below.",[m
+     "",[m
+   ];[m
+ [m
+[36m@@ -83,4 +85,4 @@[m [mexport function formatAutoRecallContext(results, options = {}) {[m
+   });[m
+ [m
+   return lines.join("\n");[m
+[31m-}[m
+\ No newline at end of file[m
+[32m+[m[32m}[m
+[1mdiff --git a/plugins/memory-engine/console/public/charts.js b/plugins/memory-engine/console/public/charts.js[m
+[1mindex 05b0ff3..9e86e16 100644[m
+[1m--- a/plugins/memory-engine/console/public/charts.js[m
+[1m+++ b/plugins/memory-engine/console/public/charts.js[m
+[36m@@ -149,13 +149,28 @@[m [mfunction initMetrics() {[m
+   if (!$('[data-metric-cards]')) return;[m
+   const overview = pageData.overview || {};[m
+   const conf = overview.confidence || {};[m
+[32m+[m[32m  const reinforcement = overview.reinforcement || {};[m
+[32m+[m[32m  const retrieval = pageData.retrieval || {};[m
+[32m+[m[32m  const diversity = retrieval.diversity || {};[m
+   cards('[data-metric-cards]', [[m
+     { label: 'Events', value: overview.events || 0 },[m
+     { label: 'Memories', value: overview.memories || 0 },[m
+     { label: 'Avg Confidence', value: conf.avg_confidence ?? '-' },[m
+     { label: 'Conflicts', value: conf.conflicts || 0 },[m
+   ]);[m
+[31m-  bars('[data-category-bars]', (pageData.retrieval || {}).categories || [], 'category', 'count');[m
+[32m+[m[32m  cards('[data-diversity-cards]', [[m
+[32m+[m[32m    { label: 'Div Window', value: `${diversity.window_days || 7}d` },[m
+[32m+[m[32m    { label: 'Distinct Categories', value: diversity.distinct_categories ?? 0 },[m
+[32m+[m[32m    { label: 'Norm Entropy', value: diversity.normalized_entropy ?? 0 },[m
+[32m+[m[32m    { label: 'Top1 Share', value: diversity.top1_share !== undefined ? `${Math.round((diversity.top1_share || 0) * 100)}%` : '-' },[m
+[32m+[m[32m  ]);[m
+[32m+[m[32m  cards('[data-reinforcement-cards]', [[m
+[32m+[m[32m    { label: 'Active Memories', value: reinforcement.active_memories ?? 0 },[m
+[32m+[m[32m    { label: 'Reinforced', value: reinforcement.reinforced_memories ?? 0 },[m
+[32m+[m[32m    { label: 'Top10 Share', value: reinforcement.top10_share !== undefined ? `${Math.round((reinforcement.top10_share || 0) * 100)}%` : '-' },[m
+[32m+[m[32m    { label: 'HHI', value: reinforcement.hhi ?? 0 },[m
+[32m+[m[32m  ]);[m
+[32m+[m[32m  bars('[data-category-bars]', retrieval.categories || [], 'category', 'count');[m
+   table('[data-conflicts]', [[m
+     { label: 'Category', value: r => r.category },[m
+     { label: 'Count', value: r => r.count },[m
+[1mdiff --git a/plugins/memory-engine/console/server.js b/plugins/memory-engine/console/server.js[m
+[1mindex c2ddea9..dce0726 100644[m
+[1m--- a/plugins/memory-engine/console/server.js[m
+[1m+++ b/plugins/memory-engine/console/server.js[m
+[36m@@ -16,7 +16,7 @@[m [mconst __dirname = path.dirname(fileURLToPath(import.meta.url));[m
+ const publicDir = path.join(__dirname, "public");[m
+ const viewsDir = path.join(__dirname, "views");[m
+ const port = Number(process.env.MEMORY_CONSOLE_PORT || 8787);[m
+[31m-const host = process.env.MEMORY_CONSOLE_HOST || "127.0.0.1";[m
+[32m+[m[32mconst host = process.env.MEMORY_CONSOLE_HOST || "0.0.0.0";[m
+ [m
+ function escapeHtml(value) {[m
+   return String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));[m
+[1mdiff --git a/plugins/memory-engine/console/services/metrics-service.js b/plugins/memory-engine/console/services/metrics-service.js[m
+[1mindex 0eeb59a..0375d6e 100644[m
+[1m--- a/plugins/memory-engine/console/services/metrics-service.js[m
+[1m+++ b/plugins/memory-engine/console/services/metrics-service.js[m
+[36m@@ -1,5 +1,11 @@[m
+ import { tableExists, withDb } from "./db.js";[m
+ [m
+[32m+[m[32mfunction round(value, digits = 3) {[m
+[32m+[m[32m  if (!Number.isFinite(value)) return 0;[m
+[32m+[m[32m  const factor = 10 ** digits;[m
+[32m+[m[32m  return Math.round(value * factor) / factor;[m
+[32m+[m[32m}[m
+[32m+[m
+ export function overviewMetrics() {[m
+   return withDb(db => {[m
+     const events = db.prepare("SELECT COUNT(*) AS count FROM memory_events").get().count;[m
+[36m@@ -11,7 +17,30 @@[m [mexport function overviewMetrics() {[m
+         SUM(CASE WHEN is_protected = 1 THEN 1 ELSE 0 END) AS protected[m
+       FROM memory_confidence[m
+     `).get();[m
+[31m-    return { events, memories, confidence };[m
+[32m+[m[32m    const activeHits = db.prepare(`[m
+[32m+[m[32m      SELECT COALESCE(hit_count, 0) AS hit_count[m
+[32m+[m[32m      FROM memory_confidence[m
+[32m+[m[32m      WHERE COALESCE(is_archived, 0) = 0[m
+[32m+[m[32m      ORDER BY hit_count DESC[m
+[32m+[m[32m    `).all();[m
+[32m+[m[32m    const hitValues = activeHits.map(row => Number(row.hit_count) || 0);[m
+[32m+[m[32m    const totalHits = hitValues.reduce((sum, value) => sum + value, 0);[m
+[32m+[m[32m    const reinforcedMemories = hitValues.filter(value => value > 0).length;[m
+[32m+[m[32m    const top10Hits = hitValues.slice(0, 10).reduce((sum, value) => sum + value, 0);[m
+[32m+[m[32m    const hhi = totalHits > 0[m
+[32m+[m[32m      ? hitValues.reduce((sum, value) => {[m
+[32m+[m[32m        const share = value / totalHits;[m
+[32m+[m[32m        return sum + share * share;[m
+[32m+[m[32m      }, 0)[m
+[32m+[m[32m      : 0;[m
+[32m+[m[32m    const reinforcement = {[m
+[32m+[m[32m      active_memories: hitValues.length,[m
+[32m+[m[32m      reinforced_memories: reinforcedMemories,[m
+[32m+[m[32m      total_hits: totalHits,[m
+[32m+[m[32m      top10_share: totalHits > 0 ? round(top10Hits / totalHits, 4) : 0,[m
+[32m+[m[32m      hhi: round(hhi, 4),[m
+[32m+[m[32m    };[m
+[32m+[m[32m    return { events, memories, confidence, reinforcement };[m
+   }, { readonly: true });[m
+ }[m
+ [m
+[36m@@ -27,11 +56,28 @@[m [mexport function retrievalMetrics() {[m
+     const categories = db.prepare(`[m
+       SELECT COALESCE(json_extract(metadata_json, '$.category'), 'unknown') AS category, COUNT(*) AS count[m
+       FROM memory_events[m
+[31m-      WHERE event_type = 'memory_candidate_retrieved'[m
+[32m+[m[32m      WHERE event_type = 'memory_candidate_retrieved' AND created_at >= datetime('now', '-7 days')[m
+       GROUP BY category[m
+       ORDER BY count DESC[m
+     `).all();[m
+[31m-    return { aggregate, categories };[m
+[32m+[m[32m    const categoryTotal = categories.reduce((sum, row) => sum + (Number(row.count) || 0), 0);[m
+[32m+[m[32m    const distinctCategories = categories.length;[m
+[32m+[m[32m    const entropy = categoryTotal > 0[m
+[32m+[m[32m      ? categories.reduce((sum, row) => {[m
+[32m+[m[32m        const probability = (Number(row.count) || 0) / categoryTotal;[m
+[32m+[m[32m        return probability > 0 ? sum - (probability * Math.log(probability)) : sum;[m
+[32m+[m[32m      }, 0)[m
+[32m+[m[32m      : 0;[m
+[32m+[m[32m    const top1 = categories[0] ? Number(categories[0].count) || 0 : 0;[m
+[32m+[m[32m    const diversity = {[m
+[32m+[m[32m      window_days: 7,[m
+[32m+[m[32m      candidate_events: categoryTotal,[m
+[32m+[m[32m      distinct_categories: distinctCategories,[m
+[32m+[m[32m      entropy: round(entropy, 4),[m
+[32m+[m[32m      normalized_entropy: distinctCategories > 1 ? round(entropy / Math.log(distinctCategories), 4) : 0,[m
+[32m+[m[32m      top1_share: categoryTotal > 0 ? round(top1 / categoryTotal, 4) : 0,[m
+[32m+[m[32m    };[m
+[32m+[m[32m    return { aggregate, categories, diversity };[m
+   }, { readonly: true });[m
+ }[m
+ [m
+[1mdiff --git a/plugins/memory-engine/console/views/metrics.ejs b/plugins/memory-engine/console/views/metrics.ejs[m
+[1mindex edd2ce7..14b3227 100644[m
+[1m--- a/plugins/memory-engine/console/views/metrics.ejs[m
+[1m+++ b/plugins/memory-engine/console/views/metrics.ejs[m
+[36m@@ -3,6 +3,8 @@[m
+   <button class="icon-button" data-refresh title="Refresh">↻</button>[m
+ </section>[m
+ <section class="grid metrics" data-metric-cards></section>[m
+[32m+[m[32m<section class="grid metrics" data-diversity-cards></section>[m
+[32m+[m[32m<section class="grid metrics" data-reinforcement-cards></section>[m
+ <section class="split">[m
+   <section><h2>Retrieval Categories</h2><div class="panel" data-category-bars></div></section>[m
+   <section><h2>Conflict Buckets</h2><div class="panel table-wrap"><table data-conflicts></table></div></section>[m
+[1mdiff --git a/plugins/memory-engine/index.js b/plugins/memory-engine/index.js[m
+[1mindex 2a73e96..cec7417 100644[m
+[1m--- a/plugins/memory-engine/index.js[m
+[1m+++ b/plugins/memory-engine/index.js[m
+[36m@@ -5,7 +5,8 @@[m [mimport lancedb from '@lancedb/lancedb';[m
+ import crypto from 'crypto';[m
+ import { mkdirSync, appendFileSync, existsSync, readFileSync } from "fs";[m
+ import { resolve } from "path";[m
+[31m-import { buildFtsFallbackQuery, formatAutoRecallContext, sanitizeFtsQuery, shouldSkipAutoRecall } from "./auto-recall.js";[m
+[32m+[m[32mimport { formatAutoRecallContext, parseCitedMemoryIds, shouldSkipAutoRecall } from "./auto-recall.js";[m
+[32m+[m[32mimport { buildFtsFallbackQuery, sanitizeFtsQuery } from "./query-utils.js";[m
+ import { homedir } from "os";[m
+ [m
+ const DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");[m
+[36m@@ -239,6 +240,16 @@[m [mfunction batchReinforce(db, ids, nowSec) {[m
+   return txn();[m
+ }[m
+ [m
+[32m+[m[32mfunction resolveHookSessionId(event, ctx) {[m
+[32m+[m[32m  return event?.sessionId ||[m
+[32m+[m[32m    event?.session_id ||[m
+[32m+[m[32m    event?.sessionKey ||[m
+[32m+[m[32m    ctx?.sessionId ||[m
+[32m+[m[32m    ctx?.sessionKey ||[m
+[32m+[m[32m    ctx?.runId ||[m
+[32m+[m[32m    null;[m
+[32m+[m[32m}[m
+[32m+[m
+ function resolvePrefixes(db, prefixes) {[m
+   const results = [];[m
+   for (const pf of prefixes) {[m
+[36m@@ -403,16 +414,18 @@[m [mexport default definePluginEntry({[m
+       api.config?.autoRecall ||[m
+       {};[m
+     if (autoRecallConfig.enabled && typeof api.on === "function") {[m
+[32m+[m[32m      const autoRecallTraceByRun = new Map();[m
+[32m+[m[32m      const autoRecallTraceBySession = new Map();[m
+       const autoRecallTopK = Math.max(1, Number(autoRecallConfig.topK || 3));[m
+       const autoRecallTimeoutMs = Math.max(1000, Number(autoRecallConfig.timeoutMs || 8000));[m
+       console.log(`[memory-engine] autoRecall hook registered topK=${autoRecallTopK} timeoutMs=${autoRecallTimeoutMs}`);[m
+[31m-      api.on("before_prompt_build", async (event) => {[m
+[32m+[m[32m      api.on("before_prompt_build", async (event, ctx) => {[m
+         try {[m
+           const prompt = String(event?.prompt || "").trim();[m
+           if (shouldSkipAutoRecall(prompt)) return;[m
+           const traceId = crypto.randomUUID();[m
+           const startedAt = Date.now();[m
+[31m-          const sessionId = event?.sessionId || event?.session_id || event?.sessionKey || null;[m
+[32m+[m[32m          const sessionId = resolveHookSessionId(event, ctx);[m
+           recordMemoryEvent({ event_type: "recall_started", session_id: sessionId, trace_id: traceId, source: "autoRecall", metadata_json: { prompt: prompt.slice(0, 500), topK: autoRecallTopK } });[m
+           const result = await hybridSearch(prompt, { topK: autoRecallTopK });[m
+           const hits = result?.results?.length || 0;[m
+[36m@@ -425,7 +438,7 @@[m [mexport default definePluginEntry({[m
+               console.log(`  #${i+1} [${id}] cat=${c} conf=${conf} text="${(r.text||"").slice(0,80)}"`);[m
+             });[m
+           }[m
+[31m-          const sessionIdForEvents = event?.sessionId || event?.session_id || event?.sessionKey || null;[m
+[32m+[m[32m          const sessionIdForEvents = resolveHookSessionId(event, ctx);[m
+           result.results.slice(0, Math.max(3, autoRecallTopK)).forEach((r, i) => {[m
+             const id = String(r.id || "").slice(0, 16);[m
+             recordMemoryEvent({[m
+[36m@@ -443,14 +456,59 @@[m [mexport default definePluginEntry({[m
+             recordMemoryEvent({ event_type: "recall_completed", session_id: sessionIdForEvents, trace_id: traceId, latency_ms: Date.now() - startedAt, candidate_count: hits, injected_count: 0, source: "autoRecall" });[m
+             return;[m
+           }[m
+[32m+[m[32m          const injectedIds = result.results.slice(0, autoRecallTopK).map(r => String(r.id || "").slice(0, 16));[m
+           result.results.slice(0, autoRecallTopK).forEach(r => recordMemoryEvent({ event_type: "memory_injected", session_id: sessionIdForEvents, trace_id: traceId, memory_id: String(r.id || "").slice(0, 16), source: "autoRecall", metadata_json: { category: r.category, confidence: r.confidence, preview: (r.text || "").slice(0, 200) } }));[m
+           recordMemoryEvent({ event_type: "recall_completed", session_id: sessionIdForEvents, trace_id: traceId, latency_ms: Date.now() - startedAt, candidate_count: hits, injected_count: Math.min(hits, autoRecallTopK), source: "autoRecall" });[m
+[32m+[m[32m          const traceState = { traceId, sessionId: sessionIdForEvents, injectedIds };[m
+[32m+[m[32m          const runKey = ctx?.runId || event?.runId;[m
+[32m+[m[32m          if (runKey) autoRecallTraceByRun.set(runKey, traceState);[m
+[32m+[m[32m          if (sessionIdForEvents) autoRecallTraceBySession.set(sessionIdForEvents, traceState);[m
+           return { prependContext };[m
+         } catch (e) {[m
+           api.logger?.warn?.(`memory-engine autoRecall skipped: ${e.message}`);[m
+           return;[m
+         }[m
+       }, { timeoutMs: autoRecallTimeoutMs });[m
+[32m+[m
+[32m+[m[32m      api.on("before_agent_finalize", async (event, ctx) => {[m
+[32m+[m[32m        try {[m
+[32m+[m[32m          const text = event?.lastAssistantMessage || "";[m
+[32m+[m[32m          const citedIds = parseCitedMemoryIds(text);[m
+[32m+[m[32m          if (citedIds.length === 0) return;[m
+[32m+[m[32m          const sessionId = resolveHookSessionId(event, ctx);[m
+[32m+[m[32m          const traceState =[m
+[32m+[m[32m            autoRecallTraceByRun.get(event?.runId || ctx?.runId) ||[m
+[32m+[m[32m            autoRecallTraceBySession.get(sessionId);[m
+[32m+[m[32m          const allowed = new Set(traceState?.injectedIds || []);[m
+[32m+[m[32m          const idsToReinforce = citedIds.filter(id => allowed.size === 0 || allowed.has(id.slice(0, 16)));[m
+[32m+[m[32m          if (idsToReinforce.length === 0) return;[m
+[32m+[m[32m          const fullIds = withDb(db => {[m
+[32m+[m[32m            const resolved = resolvePrefixes(db, idsToReinforce);[m
+[32m+[m[32m            if (resolved.length > 0) batchReinforce(db, resolved, Math.floor(Date.now() / 1000));[m
+[32m+[m[32m            return resolved;[m
+[32m+[m[32m          });[m
+[32m+[m[32m          for (const id of fullIds) {[m
+[32m+[m[32m            recordMemoryEvent({[m
+[32m+[m[32m              event_type: "memory_cited",[m
+[32m+[m[32m              session_id: sessionId,[m
+[32m+[m[32m              trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,[m
+[32m+[m[32m              memory_id: id.slice(0, 16),[m
+[32m+[m[32m              cited_count: 1,[m
+[32m+[m[32m              source: "autoRecall.finalize",[m
+[32m+[m[32m              metadata_json: { cited_memory_ids: citedIds, runId: event?.runId || ctx?.runId || null }[m
+[32m+[m[32m            });[m
+[32m+[m[32m            recordMemoryEvent({[m
+[32m+[m[32m              event_type: "memory_reinforced",[m
+[32m+[m[32m              session_id: sessionId,[m
+[32m+[m[32m              trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,[m
+[32m+[m[32m              memory_id: id.slice(0, 16),[m
+[32m+[m[32m              source: "autoRecall.finalize"[m
+[32m+[m[32m            });[m
+[32m+[m[32m          }[m
+[32m+[m[32m        } catch (e) {[m
+[32m+[m[32m          api.logger?.warn?.(`memory-engine autoRecall citation finalize skipped: ${e.message}`);[m
+[32m+[m[32m        }[m
+[32m+[m[32m      });[m
+     }[m
+ [m
+     // Register memory prompt supplement — guides agent to cite memory IDs[m
+[1mdiff --git a/plugins/memory-engine/test/auto-recall.test.js b/plugins/memory-engine/test/auto-recall.test.js[m
+[1mindex 88fa08c..1659ae8 100644[m
+[1m--- a/plugins/memory-engine/test/auto-recall.test.js[m
+[1m+++ b/plugins/memory-engine/test/auto-recall.test.js[m
+[36m@@ -5,6 +5,7 @@[m [mimport {[m
+   shouldSkipAutoRecall,[m
+   buildFtsFallbackQuery,[m
+   formatAutoRecallContext,[m
+[32m+[m[32m  parseCitedMemoryIds,[m
+   sanitizeFtsQuery,[m
+ } from "../auto-recall.js";[m
+ [m
+[36m@@ -41,6 +42,10 @@[m [mtest("builds bounded fallback FTS OR query", () => {[m
+   assert.ok(query.split(" OR ").length <= 8);[m
+ });[m
+ [m
+[32m+[m[32mtest("parses cited memory ids from assistant metadata", () => {[m
+[32m+[m[32m  assert.deepEqual(parseCitedMemoryIds('ok\\ncited_memory_ids: ["abcdef1234567890", "bad"]'), ["abcdef1234567890"]);[m
+[32m+[m[32m});[m
+[32m+[m
+ test("formats top memory results as prepend context", () => {[m
+   const text = formatAutoRecallContext([[m
+     {[m
+[36m@@ -55,5 +60,5 @@[m [mtest("formats top memory results as prepend context", () => {[m
+   assert.match(text, /Auto Recall/);[m
+   assert.match(text, /abcdef1234567890/);[m
+   assert.match(text, /preference/);[m
+[31m-  assert.match(text, /memory_engine action="cite"/);[m
+[32m+[m[32m  assert.match(text, /cited_memory_ids/);[m
+ });[m
+\ No newline at end of file[m
+[1mdiff --git a/scripts/session-checkpoint.js b/scripts/session-checkpoint.js[m
+[1mindex 0e2a6ef..604f19c 100644[m
+[1m--- a/scripts/session-checkpoint.js[m
+[1m+++ b/scripts/session-checkpoint.js[m
+[36m@@ -47,6 +47,28 @@[m [mfunction getSFBaseUrl() {[m
+   }[m
+ }[m
+ [m
+[32m+[m[32mfunction getDSKey() {[m
+[32m+[m[32m  // Read from secure file first, then openclaw.json, then env var[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const keyPath = resolve(WORKSPACE, "../credentials/deepseek-api-key");[m
+[32m+[m[32m    const key = readFileSync(keyPath, "utf-8").trim();[m
+[32m+[m[32m    if (key) return key;[m
+[32m+[m[32m  } catch (e) { /* file not found */ }[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    return getConfig().models?.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY || "";[m
+[32m+[m[32m  } catch (e) {[m
+[32m+[m[32m    return "";[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction getDSBaseUrl() {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    return getConfig().models?.providers?.deepseek?.baseUrl || "https://api.deepseek.com";[m
+[32m+[m[32m  } catch (e) {[m
+[32m+[m[32m    return "https://api.deepseek.com";[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+ // ── DB helpers ──[m
+ [m
+ function withDb(fn) {[m
+[36m@@ -72,16 +94,21 @@[m [mfunction yesterdayDateStr() {[m
+   return d.toISOString().slice(0, 10);[m
+ }[m
+ [m
+[31m-// ── LLM call via SiliconFlow ──[m
+[32m+[m[32m// ── Generic LLM call ──[m
+ [m
+ function llmComplete(prompt, systemPrompt, options = {}) {[m
+[32m+[m[32m  const { provider = "siliconflow" } = options;[m
+[32m+[m[32m  const keyFn = provider === "deepseek" ? getDSKey : getSFKey;[m
+[32m+[m[32m  const baseFn = provider === "deepseek" ? getDSBaseUrl : getSFBaseUrl;[m
+[32m+[m[32m  const defaultModel = provider === "deepseek" ? "deepseek-chat" : "deepseek-ai/DeepSeek-V3.2";[m
+[32m+[m
+   return new Promise((resolve, reject) => {[m
+[31m-    const apiKey = getSFKey();[m
+[31m-    if (!apiKey) return reject(new Error("SiliconFlow API key not found"));[m
+[32m+[m[32m    const apiKey = keyFn();[m
+[32m+[m[32m    if (!apiKey) return reject(new Error(`${provider} API key not found`));[m
+ [m
+[31m-    const baseUrl = getSFBaseUrl();[m
+[32m+[m[32m    const baseUrl = baseFn();[m
+     const url = new URL("/chat/completions", baseUrl);[m
+[31m-    const model = options.model || "deepseek-ai/DeepSeek-V3.2";[m
+[32m+[m[32m    const model = options.model || defaultModel;[m
+     const temperature = options.temperature ?? 0.1;[m
+     const maxTokens = options.maxTokens ?? 1024;[m
+     const requestTimeoutMs = options.timeoutMs ?? 45000;[m
+[36m@@ -284,28 +311,67 @@[m [mJSON 结构：[m
+ [m
+ JSON:`;[m
+ [m
+[32m+[m[32m/**[m
+[32m+[m[32m * Quick health check: a tiny ping to the provider before sending the full prompt.[m
+[32m+[m[32m * Returns true if reachable, false if timeout/error.[m
+[32m+[m[32m */[m
+[32m+[m[32mfunction quickHealthCheck(provider) {[m
+[32m+[m[32m  const keyFn = provider === "deepseek" ? getDSKey : getSFKey;[m
+[32m+[m[32m  if (!keyFn()) return false;[m
+[32m+[m
+[32m+[m[32m  return new Promise((resolve) => {[m
+[32m+[m[32m    const timeout = setTimeout(() => resolve(false), 10000);[m
+[32m+[m[32m    llmComplete("回复 OK 即可", null, { provider, model: provider === "deepseek" ? "deepseek-chat" : "deepseek-ai/DeepSeek-V3.2", maxTokens: 10, timeoutMs: 10000 })[m
+[32m+[m[32m      .then(() => { clearTimeout(timeout); resolve(true); })[m
+[32m+[m[32m      .catch(() => { clearTimeout(timeout); resolve(false); });[m
+[32m+[m[32m  });[m
+[32m+[m[32m}[m
+[32m+[m
+ async function llmNightlyExtract(combinedText) {[m
+   const trimmed = combinedText.substring(0, 45000);[m
+[31m-  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM for unified extraction (DeepSeek-V3.2, 64K ctx)...`);[m
+ [m
+[32m+[m[32m  // Try primary: SiliconFlow DeepSeek-V3.2[m
+[32m+[m[32m  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM (SiliconFlow DeepSeek-V3.2, 120s timeout)...`);[m
+[32m+[m[32m  let result;[m
+   try {[m
+[31m-    const result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {[m
+[32m+[m[32m    result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {[m
+       temperature: 0.1,[m
+       maxTokens: 8192,[m
+[32m+[m[32m      timeoutMs: 120000,[m
+     });[m
+[32m+[m[32m  } catch (e) {[m
+[32m+[m[32m    console.warn(`[checkpoint] SiliconFlow primary failed: ${e.message}`);[m
+ [m
+[31m-    // Parse JSON from response[m
+[31m-    const jsonMatch = result.match(/\{[\s\S]*\}/);[m
+[31m-    if (!jsonMatch) {[m
+[31m-      console.warn("[checkpoint] LLM response didn't contain JSON:", result.slice(0, 300));[m
+[31m-      return { smart_memories: [], episode_summary: "", configs: [] };[m
+[32m+[m[32m    // Fallback: try deepseek.com DeepSeek V4 Flash[m
+[32m+[m[32m    if (!getDSKey()) {[m
+[32m+[m[32m      console.warn("[checkpoint] DeepSeek API key not configured — skipping fallback");[m
+[32m+[m[32m      return { smart_memories: [], episode_summary: "", configs: [], error: "llm超时" };[m
+     }[m
+ [m
+[31m-    return JSON.parse(jsonMatch[0]);[m
+[31m-  } catch (e) {[m
+[31m-    console.error("[checkpoint] Nightly extraction failed:", e.message);[m
+[32m+[m[32m    console.log(`[checkpoint] Falling back to deepseek.com (DeepSeek V4 Flash, 120s timeout)...`);[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {[m
+[32m+[m[32m        provider: "deepseek",[m
+[32m+[m[32m        model: "deepseek-chat",[m
+[32m+[m[32m        temperature: 0.1,[m
+[32m+[m[32m        maxTokens: 8192,[m
+[32m+[m[32m        timeoutMs: 120000,[m
+[32m+[m[32m      });[m
+[32m+[m[32m      console.log("[checkpoint] Fallback succeeded via deepseek.com");[m
+[32m+[m[32m    } catch (e2) {[m
+[32m+[m[32m      console.error(`[checkpoint] Fallback also failed: ${e2.message}`);[m
+[32m+[m[32m      return { smart_memories: [], episode_summary: "", configs: [], error: "llm超时" };[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Parse JSON from response[m
+[32m+[m[32m  const jsonMatch = result.match(/\{[\s\S]*\}/);[m
+[32m+[m[32m  if (!jsonMatch) {[m
+[32m+[m[32m    console.warn("[checkpoint] LLM response didn't contain JSON:", result.slice(0, 300));[m
+     return { smart_memories: [], episode_summary: "", configs: [] };[m
+   }[m
+[32m+[m
+[32m+[m[32m  return JSON.parse(jsonMatch[0]);[m
+ }[m
+ [m
+ /**[m
+[36m@@ -343,6 +409,13 @@[m [masync function nightlyCheckpoint(rawLogs) {[m
+   // ── Single LLM call ──[m
+   const extracted = await llmNightlyExtract(combinedText);[m
+ [m
+[32m+[m[32m  // ── Timeout guard: llm超时 → write marker episode and exit early ──[m
+[32m+[m[32m  if (extracted.error === "llm超时") {[m
+[32m+[m[32m    console.log("[checkpoint] llm超时 — both providers failed");[m
+[32m+[m[32m    writeLLMTimeoutEpisode(episodeDate);[m
+[32m+[m[32m    return { memories: 0, episode: false, configs: 0, timeout: true };[m
+[32m+[m[32m  }[m
+[32m+[m
+   // ── 1. Write structured memories (6 types) ──[m
+   let memWritten = 0;[m
+   for (const item of extracted.smart_memories || []) {[m
+[36m@@ -451,6 +524,14 @@[m [mfunction writeEmptyEpisode(today) {[m
+   }[m
+ }[m
+ [m
+[32m+[m[32mfunction writeLLMTimeoutEpisode(today) {[m
+[32m+[m[32m  const episodeDir = resolve(WORKSPACE, EPISODES_DIR);[m
+[32m+[m[32m  const episodePath = resolve(episodeDir, `${today}.md`);[m
+[32m+[m[32m  mkdirSync(episodeDir, { recursive: true });[m
+[32m+[m[32m  writeFileSync(episodePath, `# Episode: ${today}\n\n⚠️ llm超时 — 当日日志未处理（SiliconFlow + DeepSeek 均不可用）\n\n---\n_Generated at ${new Date().toISOString()}_\n`);[m
+[32m+[m[32m  console.log("[checkpoint] LLM timeout episode marker written");[m
+[32m+[m[32m}[m
+[32m+[m
+ function writeConfidence(entryId, text, category) {[m
+   withDb((db) => {[m
+     const nowSec = Math.floor(Date.now() / 1000);[m
+[36m@@ -694,7 +775,11 @@[m [masync function main() {[m
+     const conflicts = resolveConfigConflicts();[m
+ [m
+     const elapsed = ((Date.now() - start) / 1000).toFixed(1);[m
+[31m-    console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, ${repaired} vectors repaired, ${conflicts} conflicts`);[m
+[32m+[m[32m    if (result.timeout) {[m
+[32m+[m[32m      console.log(`[checkpoint] ⏰ llm超时 — completed in ${elapsed}s`);[m
+[32m+[m[32m    } else {[m
+[32m+[m[32m      console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, ${repaired} vectors repaired, ${conflicts} conflicts`);[m
+[32m+[m[32m    }[m
+   } catch (e) {[m
+     console.error("[checkpoint] ❌ Failed:", e.message);[m
+     process.exit(1);[m
