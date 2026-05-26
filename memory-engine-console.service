@@ -1,0 +1,17 @@
+[Unit]
+Description=Memory Engine Console — Lite Metrics Dashboard
+After=network.target
+Wants=openclaw-gateway.service
+
+[Service]
+Type=simple
+User=lionsol
+WorkingDirectory=/home/lionsol/.openclaw/workspace/plugins/memory-engine
+ExecStart=/usr/bin/node /home/lionsol/.openclaw/workspace/plugins/memory-engine/console/server.js
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:/home/lionsol/.openclaw/memory-engine-console.log
+StandardError=append:/home/lionsol/.openclaw/memory-engine-console.log
+
+[Install]
+WantedBy=multi-user.target
