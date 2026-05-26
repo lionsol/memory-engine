@@ -263,6 +263,7 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 
 ```txt
 credentials/deepseek-api-key
+```
 
 ### v1.7 (2026-05-26) Retrieval 稳定化修复
 
