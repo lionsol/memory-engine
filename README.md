@@ -263,6 +263,40 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 
 ```txt
 credentials/deepseek-api-key
+
+### v1.7 (2026-05-26) Retrieval 稳定化修复
+
+#### 已修复
+
+- 修复 fallback rerank 会将零 grounding 候选提升进入 `post_rerank_topK` 的问题
+- 新增 fallback lexical grounding 过滤：
+  - 当：
+    - `token_coverage <= 0`
+    - `exact_bonus <= 0`
+  - 时直接丢弃候选
+- 阻止仅依赖 `category_boost` / `recency_boost` 的噪音记忆进入 recall
+
+#### 已改进
+
+- query normalization 现已正确剥离 OpenClaw 时间戳污染
+- `version_5_20` token normalization 生效
+- autoRecall injection gate 已接入运行时
+- smart-add ingestion / indexing 已恢复正常
+- session-checkpoint dedup 已修复
+- FTS fallback 已恢复工作
+
+#### 效果
+
+- `5.20+ compatibility` episodic recall 已可稳定命中
+- 旧 raw_log / 模型价格类噪音明显下降
+- fallback rerank 不再提升弱相关 recent memory
+- retrieval precision 明显提高
+
+#### 设计变化
+
+本次修改为 fallback semantic retrieval 建立了 lexical grounding floor：
+
+semantic recall 不再允许完全脱离 token overlap / exact anchor。
 - **Task classifier** — `scripts/task-classifier.js` 按输入关键词路由 coding / default 任务
 
 
