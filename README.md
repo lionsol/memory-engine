@@ -269,29 +269,28 @@ credentials/deepseek-api-key
 
 #### 已修复
 
-- 修复 fallback rerank 会将零 grounding 候选提升进入 `post_rerank_topK` 的问题
-- 新增 fallback lexical grounding 过滤：
-  - 当：
+- 修复了降级重排序（fallback rerank）中允许零依据候选进入 `post_rerank_topK` 的问题
+- 为降级候选添加了词汇依据过滤器：
+  - 满足以下条件时丢弃候选：
     - `token_coverage <= 0`
     - `exact_bonus <= 0`
-  - 时直接丢弃候选
-- 阻止仅依赖 `category_boost` / `recency_boost` 的噪音记忆进入 recall
+- 防止 `category_boost` / `recency_boost` 将无关记忆推到结果前列
 
 #### 已改进
 
-- query normalization 现已正确剥离 OpenClaw 时间戳污染
-- `version_5_20` token normalization 生效
-- autoRecall injection gate 已接入运行时
+- 查询规范化现在能够正确去除 OpenClaw 时间戳污染
+- `version_5_20` 的词元归一化（token normalization）现已正常工作
+- 注入门控（injection gate）现已接入运行时管线
 - smart-add ingestion / indexing 已恢复正常
 - session-checkpoint dedup 已修复
 - FTS fallback 已恢复工作
 
 #### 效果
 
-- `5.20+ compatibility` episodic recall 已可稳定命中
-- 旧 raw_log / 模型价格类噪音明显下降
-- fallback rerank 不再提升弱相关 recent memory
-- retrieval precision 明显提高
+- `5.20+ compatibility` 情景召回现可正确解析
+- 旧原始日志 / 定价类记忆噪音明显下降
+- 降级重排序不再将语义较弱但时间较近的记忆推向高位
+- 检索精度明显提升
 
 #### 设计变化
 
