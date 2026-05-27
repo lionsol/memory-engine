@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { existsSync, readdirSync, statSync } from "fs";
 import { resolve } from "path";
-import { localDateKey } from "../date-utils.js";
+import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "../date-utils.js";
 import {
   DB_PATH,
   INDEX_SYNC_WATCH_DIRS,
@@ -97,6 +97,8 @@ function printUsage() {
   console.log("Usage: node scripts/sync-memory-index.js [--force]");
 }
 
+const SMART_ADD_TIME_ZONE = process.env.MEMORY_ENGINE_TIME_ZONE || DEFAULT_BUSINESS_TIME_ZONE;
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -133,7 +135,7 @@ async function main() {
     const updatedCount = after.paths.filter(path => (before.updatedAt[path] ?? null) !== (after.updatedAt[path] ?? null)).length;
     const skippedCount = scannedPaths.filter(path => !after.paths.includes(path)).length;
 
-    const todayRelPath = `memory/smart-add/${localDateKey()}.md`;
+    const todayRelPath = `memory/smart-add/${dateStrInTimeZone(0, SMART_ADD_TIME_ZONE)}.md`;
     const todayChunkResult = safeWithDb(db => {
       if (!tableExists(db, "chunks")) return 0;
       const row = db.prepare("SELECT COUNT(*) AS c FROM chunks WHERE path = ?").get(todayRelPath);
