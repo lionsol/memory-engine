@@ -1,10 +1,10 @@
-## 9. v1.2 新增特性 (2026-05-16)
+## v1.2 新增特性 (2026-05-16)
 
-### 9.1 FTS5 并行召回
+### FTS5 并行召回
 
 利用 OpenClaw 原生 `chunks_fts`（FTS5 虚拟表，100% 覆盖率），在向量搜索同时并行执行 BM25 全文搜索。专有名词、代码库名、API 名称精准命中，弥补纯语义搜索短板。
 
-### 9.2 RRF 三通道融合
+### RRF 三通道融合
 
 检索请求并行发送至三个独立通道：
 
@@ -16,11 +16,11 @@
 
 结果以 **Reciprocal Rank Fusion** (k=60) 等权融合排序：$\text{RRF}(d) = \sum_{i} \frac{1}{60 + r_i(d)}$
 
-### 9.3 情节摘要中间层 (Episodic Memory)
+### 情节摘要中间层 (Episodic Memory)
 
 新增 `episodic` 类别（conf=0.70, τ=30 天），`summarize` 命令汇聚 raw_log 通过 LLM 生成摘要（失败时关键词回退），`kg_data` 存储 `episode_of` 链接源 chunk ID，`drill <chunk_id>` 下钻查看原文。搜索含时间意向词时自动 RRF 加权 +0.1。
 
-### 9.4 检索管线演进
+### 检索管线演进
 
 | 版本 | 检索方式 |
 |:---|:---|
@@ -37,21 +37,21 @@
 
 ---
 
-## 10. v1.3 新增特性 (2026-05-18)
+## v1.3 新增特性 (2026-05-18)
 
-### 10.1 Plugin Contracts 声明
+### Plugin Contracts 声明
 
 插件入口增加 `contracts: { tools: true }`，`openclaw.plugin.json` 增加工具名声明 `["memory_engine", "image_vision"]`，确保 OpenClaw 插件系统正确注册工具。
 
-### 10.2 image_vision 工具
+### image_vision 工具
 
 新注册 agent 工具，调用 SiliconFlow 的 Qwen3-VL-32B-Instruct 进行图片识别。参数：`image_path`（必填）+ `question`（可选），默认输出中文详细描述。
 
-### 10.3 自动配置检测 (detectConfig)
+### 自动配置检测 (detectConfig)
 
 `smart_add` 写入流程中增加自动分类探测：检测 API Key、Voice ID、模型名、文件路径、长哈希、中文配置关键词（"设置声音为…"等）时自动将 `raw_log` 提升为 `preference`（conf=0.80, tau=90天）。
 
-### 10.4 Session 检查点 (session-checkpoint.js)
+### Session 检查点 (session-checkpoint.js)
 
 `scripts/session-checkpoint.js`，每日 03:55 CST 执行：
 
@@ -61,7 +61,7 @@
 4. 原始日志 → LLM 摘要（150-200字）→ 写入 episodic 类别
 5. **自动冲突标记**：同 key 配置保留最新，旧条目设 `conflict_flag=1`；唯一条目误标则自动解除
 
-### 10.5 Memory Prompt Supplement
+### Memory Prompt Supplement
 
 `registerMemoryPromptSupplement` 在 session 启动时动态注入：
 - `[昨日概要]` — 昨日 episode 摘要
@@ -70,9 +70,9 @@
 
 ---
 
-## 11. v1.4 — autoRouteCategory + LanceDB 双引擎 (2026-05-20)
+## v1.4 — autoRouteCategory + LanceDB 双引擎 (2026-05-20)
 
-### 11.1 实时分类规则引擎
+### 实时分类规则引擎
 
 `plugins/memory-engine/index.js` 新增 `autoRouteCategory()` 函数，在 `smart_add` 入口实时路由：
 
@@ -87,7 +87,7 @@
 
 显式传 category 且非 raw_log 时尊重原值，不覆盖。
 
-### 11.2 LanceDB 双引擎存储
+### LanceDB 双引擎存储
 
 **初始化**：插件 `register()` 时异步 init，fire-and-forget 不阻塞启动。
 
@@ -114,7 +114,7 @@ Channel 3:  KG Bridge (概念)
 
 **数据库位置**：`~/.openclaw/memory/lancedb/` — 独立目录，与 SQLite 同级。
 
-### 11.3 Session Checkpoint 增强
+### Session Checkpoint 增强
 
 `scripts/session-checkpoint.js` 合并为单次 LLM 调用：
 
@@ -130,7 +130,7 @@ Channel 3:  KG Bridge (概念)
 - 写入全部 6 种 memory_engine category 及 confidence 记录
 - 空内容占位 episode（`writeEmptyEpisode`）
 
-### 11.4 关键变更
+### 关键变更
 
 | 组件 | 变更 |
 |------|------|
@@ -141,10 +141,146 @@ Channel 3:  KG Bridge (概念)
 | `package.json` | +@lancedb/lancedb 依赖 |
 | cron: session-checkpoint | 超时 默认→120s |
 
-### 11.5 数据分布
+### 数据分布
 
 | 存储引擎 | 存储内容 | 行数 |
 |----------|----------|------|
 | SQLite `chunks` | 原始文本 (OpenClaw 索引) | ~327 |
 | SQLite `memory_confidence` | 元数据 (置信度/分类/强化) | ~94 |
 | LanceDB `chunks` | 向量 + 文本 | ~94 |
+
+### v1.6 (2026-05-25) - Memory Engine 架构整理
+
+完成 FTS 查询预处理解耦：
+
+- 新增 `query-utils.js`
+- 将：
+  - `sanitizeFtsQuery()`
+  - `buildFtsFallbackQuery()`
+  从 `auto-recall.js` 抽离
+- `index.js` 与 `auto-recall.js` 统一改为依赖 `query-utils.js`
+
+效果：
+
+- 消除 `index -> auto-recall` 的反向耦合
+- retrieval pipeline 更清晰
+- 为后续 recall strategy 扩展做准备
+
+
+### Memory Console 指标系统升级
+
+新增第一代“记忆质量指标（Memory Quality Metrics）”。
+
+#### Retrieval Diversity（检索多样性）
+
+基于近 7 天 `memory_candidate_retrieved` 事件统计：
+
+- `distinct_categories`
+- `entropy`
+- `normalized_entropy`
+- `top1_share`
+
+用于评估：
+
+- recall 是否过度集中
+- 记忆类别覆盖是否健康
+- retrieval 是否发生“单一化”
+
+
+#### Reinforcement Concentration（强化集中度）
+
+基于 active memories 的 `hit_count` 分析：
+
+- `reinforced_memories`
+- `top10_share`
+- `hhi`
+
+用于评估：
+
+- 是否出现“超级记忆”
+- reinforcement 是否过度集中
+- 长期记忆结构是否失衡
+
+
+### Console Dashboard 改进
+
+更新 Metrics 页面：
+
+- 新增 Diversity Metrics 卡片
+- 新增 Reinforcement Metrics 卡片
+- 保持旧 telemetry API 向后兼容
+
+
+### CodeGraph 集成
+
+完成 CodeGraph + Codex CLI 工作流接入：
+
+- 成功建立 memory-engine 局部代码图谱
+- 验证 symbol / call graph / dependency tracing 工作正常
+- 建立 lightweight graph indexing 工作流
+
+新增：
+
+- `.codegraph/` gitignore 保护
+- graph scope 控制流程（避免 node_modules 污染）
+
+
+### Runtime / 基础设施改进
+
+更新 `session-checkpoint.js`：
+
+- LLM timeout：
+  - `45s → 120s`
+- Cron timeout：
+  - `120s → 300s`
+- Cron 时间：
+  - `03:55 → 03:30`
+
+新增：
+
+- `getDSKey()`
+- `getDSBaseUrl()`
+- DeepSeek fallback 支持
+- provider 抽象能力
+- `quickHealthCheck()`
+- `writeLLMTimeoutEpisode()`
+
+并将密钥独立迁移至：
+
+```txt
+credentials/deepseek-api-key
+```
+
+### v1.7 (2026-05-26) Retrieval 稳定化修复
+
+#### 已修复
+
+- 修复了降级重排序（fallback rerank）中允许零依据候选进入 `post_rerank_topK` 的问题
+- 为降级候选添加了词汇依据过滤器：
+  - 满足以下条件时丢弃候选：
+    - `token_coverage <= 0`
+    - `exact_bonus <= 0`
+- 防止 `category_boost` / `recency_boost` 将无关记忆推到结果前列
+
+#### 已改进
+
+- 查询规范化现在能够正确去除 OpenClaw 时间戳污染
+- `version_5_20` 的词元归一化（token normalization）现已正常工作
+- 注入门控（injection gate）现已接入运行时管线
+- smart-add ingestion / indexing 已恢复正常
+- session-checkpoint dedup 已修复
+- FTS fallback 已恢复工作
+
+#### 效果
+
+- `5.20+ compatibility` 情景召回现可正确解析
+- 旧原始日志 / 定价类记忆噪音明显下降
+- 降级重排序不再将语义较弱但时间较近的记忆推向高位
+- 检索精度明显提升
+
+#### 设计变化
+
+本次修改为 fallback semantic retrieval 建立了 lexical grounding floor：
+
+semantic recall 不再允许完全脱离 token overlap / exact anchor。
+- **Task classifier** — `scripts/task-classifier.js` 按输入关键词路由 coding 
