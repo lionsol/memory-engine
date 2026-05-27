@@ -164,8 +164,6 @@ Channel 3:  KG Bridge (概念)
 - SQLite 损坏路径处理
 - peer dependency 缺失（需手动 symlink）
 
-
-
 ---
 
 ## v1.6 (2026-05-25) - Memory Engine 架构整理
@@ -268,6 +266,8 @@ Channel 3:  KG Bridge (概念)
 credentials/deepseek-api-key
 ```
 
+---
+
 ## v1.7 (2026-05-26) Retrieval 稳定化修复
 
 ### 已修复
@@ -300,4 +300,22 @@ credentials/deepseek-api-key
 本次修改为 fallback semantic retrieval 建立了 lexical grounding floor：
 
 semantic recall 不再允许完全脱离 token overlap / exact anchor。
-- **Task classifier** — `scripts/task-classifier.js` 按输入关键词路由 coding 
+- **Task classifier** — `scripts/task-classifier.js` 按输入关键词路由 coding
+
+---
+
+## v1.7.1 (2026-05-27)
+修复 daily episode / smart-add 日期计算的时区错位问题
+
+新增 dateStrInTimeZone(offsetDays, timeZone) 统一日期工具，按业务时区
+Asia/Shanghai 计算自然日，并使用 UTC Date 执行纯日历偏移，避免 UTC
+日期与本地业务日期错位。
+
+session-checkpoint / smart-add daily 路径已切换到该工具，并新增测试覆盖
+2026-05-27 03:30 CST 运行时应处理 2026-05-26 的场景，防止凌晨任务
+误处理前两天数据。
+
+[runtime patch]
+workspace/scripts/session-checkpoint.js
+已切换 business timezone 日期逻辑
+需后续上游化/统一
