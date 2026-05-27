@@ -27,13 +27,13 @@ diff -qr plugins/memory-engine extensions/memory-engine \
 
 以下目录职责不同：
 
-*plugins/memory-engine
-   *源码 / 开发目录
-   *Git 管理
-   *CodeGraph 索引目标
-*extensions/memory-engine
-   *OpenClaw 运行时副本
-   *gateway 实际加载目录
+* plugins/memory-engine
+   * 源码 / 开发目录
+   * Git 管理
+   * CodeGraph 索引目标
+* extensions/memory-engine
+   * OpenClaw 运行时副本
+   * gateway 实际加载目录
 
 修改源码后如果未执行 plugins install --force，
 可能出现：
