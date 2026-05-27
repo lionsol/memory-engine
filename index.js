@@ -3,7 +3,7 @@ import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-r
 import Database from "better-sqlite3";
 import lancedb from '@lancedb/lancedb';
 import { buildSmartAddFingerprint } from "./smart-add-fingerprint.js";
-import { localDateKey } from "./date-utils.js";
+import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "./date-utils.js";
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { resolve } from "path";
 import { explainAutoRecallSkip, formatAutoRecallContext, parseCitedMemoryIds, shouldInjectCandidate } from "./auto-recall.js";
@@ -32,6 +32,7 @@ const EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-4B";
 const MEMORY_SUPPLEMENT_SENTINEL = "MEMORY_SUPPLEMENT_SENTINEL";
 const MEMORY_SUPPLEMENT_BOUNDARY_START = "<!-- MEMORY_ENGINE_SUPPLEMENT_START -->";
 const MEMORY_SUPPLEMENT_BOUNDARY_END = "<!-- MEMORY_ENGINE_SUPPLEMENT_END -->";
+const SMART_ADD_TIME_ZONE = process.env.MEMORY_ENGINE_TIME_ZONE || DEFAULT_BUSINESS_TIME_ZONE;
 
 // ── LanceDB globals (initialized in register) ──
 let lancedbTable = null;
@@ -1373,7 +1374,7 @@ export default definePluginEntry({
             // ── Auto-route category via rule engine ──
             const cat = autoRouteCategory(text, { category });
             const now = new Date();
-            const dateStr = localDateKey(now);
+            const dateStr = dateStrInTimeZone(0, SMART_ADD_TIME_ZONE, now);
             const ts = now.toISOString().replace(/[:.]/g, "").slice(0, 15);
             const entryId = `${ts}_${cat}`;
             const fileDir = resolve(WORKSPACE, SMART_ADD_DIR);
