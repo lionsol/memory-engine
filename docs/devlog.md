@@ -153,14 +153,24 @@ Channel 3:  KG Bridge (概念)
 
 ## v1.5 (2026-05-24) - autoRecall 自动注入 + Memory Console
 
-- **autoRecall 自动检索** — 注册 `before_prompt_build` hook，每轮回复前自动调混合检索注入 topK 记忆
+### 新增功能
+- **autoRecall 自动检索** — 注册 `before_prompt_build` hook，每轮回复前自动调混合检索注入 topK 记忆，自适应跳过问候/斜杠/短确认
 - **Memory Console Lite** — 独立控制台 (`http://localhost:8787/`)，Dashboard / Session Trace / Memory Inspector / Telemetry / Metrics
+
+### bug fix
+- 插件不启动（缺 activation.onStartup: true，只加载了 7 个插件）
+- autoRecall 配置读不到（读 `api.config` 实际在 `api.pluginConfig`）
+- Dashboard JSON 渲染崩——HTML escape 把引号转成了 &quot;，JSON.parse() 失败
+- SQLite 损坏路径处理
+- peer dependency 缺失（需手动 symlink）
+
+
 
 ---
 
 ## v1.6 (2026-05-25) - Memory Engine 架构整理
 
-完成 FTS 查询预处理解耦：
+### 完成 FTS 查询预处理解耦：
 
 - 新增 `query-utils.js`
 - 将：
@@ -211,7 +221,7 @@ Channel 3:  KG Bridge (概念)
 - 长期记忆结构是否失衡
 
 
-### Console Dashboard 改进
+#### Console Dashboard 改进
 
 更新 Metrics 页面：
 
@@ -260,9 +270,9 @@ Channel 3:  KG Bridge (概念)
 credentials/deepseek-api-key
 ```
 
-### v1.7 (2026-05-26) Retrieval 稳定化修复
+## v1.7 (2026-05-26) Retrieval 稳定化修复
 
-#### 已修复
+### 已修复
 
 - 修复了降级重排序（fallback rerank）中允许零依据候选进入 `post_rerank_topK` 的问题
 - 为降级候选添加了词汇依据过滤器：
@@ -271,7 +281,7 @@ credentials/deepseek-api-key
     - `exact_bonus <= 0`
 - 防止 `category_boost` / `recency_boost` 将无关记忆推到结果前列
 
-#### 已改进
+### 已改进
 
 - 查询规范化现在能够正确去除 OpenClaw 时间戳污染
 - `version_5_20` 的词元归一化（token normalization）现已正常工作
@@ -280,14 +290,14 @@ credentials/deepseek-api-key
 - session-checkpoint dedup 已修复
 - FTS fallback 已恢复工作
 
-#### 效果
+### 效果
 
 - `5.20+ compatibility` 情景召回现可正确解析
 - 旧原始日志 / 定价类记忆噪音明显下降
 - 降级重排序不再将语义较弱但时间较近的记忆推向高位
 - 检索精度明显提升
 
-#### 设计变化
+### 设计变化
 
 本次修改为 fallback semantic retrieval 建立了 lexical grounding floor：
 
