@@ -15,7 +15,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "console": "node console/server.js",
+    "console": "node console/cli.js",
     "sync-index": "node scripts/sync-memory-index.js --force"
   }
 }

@@ -98,13 +98,3 @@ export async function createServer() {
     }
   });
 }
-
-if (process.argv.includes("--check")) {
-  initConsoleStorage();
-  console.log("Memory Console Lite check ok");
-} else {
-  const server = await createServer();
-  server.listen(port, host, () => {
-    console.log(`Memory Console Lite running at http://${host}:${port}/`);
-  });
-}
