@@ -1,73 +1,13 @@
 import Database from "better-sqlite3";
-import { existsSync, readdirSync, statSync } from "fs";
-import { resolve } from "path";
 import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "../date-utils.js";
+import { tableExists } from "../lib/db/schema.js";
+import { collectIndexedFiles, readIndexedPathState } from "../lib/sync/index-sync.js";
 import {
   DB_PATH,
   INDEX_SYNC_WATCH_DIRS,
   WORKSPACE,
   getSharedMemoryManager,
 } from "../memory-manager-runtime.js";
-
-function tableExists(db, name) {
-  const row = db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ?").get(name);
-  return !!row;
-}
-
-function collectIndexedFiles(memoryRoot) {
-  const files = [];
-  for (const dirRel of INDEX_SYNC_WATCH_DIRS) {
-    const absDir = resolve(memoryRoot, dirRel);
-    if (!existsSync(absDir)) continue;
-
-    let entries = [];
-    try {
-      entries = readdirSync(absDir);
-    } catch {
-      continue;
-    }
-
-    for (const entry of entries) {
-      if (!entry.endsWith(".md")) continue;
-      const absPath = resolve(absDir, entry);
-      let stat;
-      try {
-        stat = statSync(absPath);
-      } catch {
-        continue;
-      }
-      if (!stat.isFile()) continue;
-      const relPath = absPath.replace(memoryRoot + "/", "");
-      files.push({ relPath, mtimeMs: stat.mtimeMs });
-    }
-  }
-  files.sort((a, b) => a.relPath.localeCompare(b.relPath));
-  return files;
-}
-
-function readIndexedPathState(db, pathList) {
-  if (!Array.isArray(pathList) || pathList.length === 0) {
-    return { paths: [], updatedAt: {} };
-  }
-  if (!tableExists(db, "chunks")) {
-    return { paths: [], updatedAt: {} };
-  }
-
-  const placeholders = pathList.map(() => "?").join(", ");
-  const rows = db.prepare([
-    "SELECT path, MAX(updated_at) AS updated_at",
-    "FROM chunks",
-    `WHERE path IN (${placeholders})`,
-    "GROUP BY path",
-  ].join(" ")).all(...pathList);
-
-  const paths = rows.map(row => row.path).sort((a, b) => a.localeCompare(b));
-  const updatedAt = {};
-  for (const row of rows) {
-    updatedAt[row.path] = row.updated_at ?? null;
-  }
-  return { paths, updatedAt };
-}
 
 function withDb(fn, dbPath = DB_PATH) {
   const db = new Database(dbPath, { readonly: true });
@@ -116,7 +56,7 @@ async function main() {
     const statusBefore = typeof manager.status === "function" ? manager.status() : null;
     const memoryRoot = statusBefore?.workspaceDir || WORKSPACE;
     const dbPathBefore = statusBefore?.dbPath || DB_PATH;
-    const scannedFiles = collectIndexedFiles(memoryRoot);
+    const scannedFiles = collectIndexedFiles(memoryRoot, INDEX_SYNC_WATCH_DIRS);
     const scannedPaths = scannedFiles.map(file => file.relPath);
 
     const beforeResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPathBefore, { paths: [], updatedAt: {} });

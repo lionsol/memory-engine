@@ -4,7 +4,7 @@ import Database from "better-sqlite3";
 import lancedb from '@lancedb/lancedb';
 import { buildSmartAddFingerprint } from "./smart-add-fingerprint.js";
 import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "./date-utils.js";
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { explainAutoRecallSkip, formatAutoRecallContext, parseCitedMemoryIds, shouldInjectCandidate } from "./auto-recall.js";
 import {
@@ -25,6 +25,9 @@ import {
   WORKSPACE,
   getSharedMemoryManager,
 } from "./memory-manager-runtime.js";
+import { insertMemoryEvent } from "./lib/db/events.js";
+import { ensureMemoryEngineTables } from "./lib/db/schema.js";
+import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 
 const KG_PATH = resolve(HOME_DIR, ".openclaw/workspace/knowledge-graph.json");
 const LANCEDB_PATH = resolve(HOME_DIR, ".openclaw/memory/lancedb");
@@ -163,80 +166,10 @@ function calcRealtimeConf(row, now) {
   return Math.max(0, c);
 }
 
-function ensureConfidenceTable(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS memory_confidence (
-      chunk_id TEXT PRIMARY KEY,
-      initial_confidence REAL NOT NULL DEFAULT 0.5,
-      confidence REAL NOT NULL DEFAULT 0.5,
-      last_confidence_update INTEGER,
-      base_tau REAL NOT NULL DEFAULT 7.0,
-      hit_count INTEGER NOT NULL DEFAULT 0,
-      is_archived INTEGER NOT NULL DEFAULT 0,
-      is_protected INTEGER NOT NULL DEFAULT 0,
-      conflict_flag INTEGER NOT NULL DEFAULT 0,
-      category TEXT NOT NULL DEFAULT 'raw_log',
-      kg_data TEXT
-    )
-  `);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_mc_archived ON memory_confidence(is_archived)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_mc_category ON memory_confidence(category)");
-}
-
-function ensureMemoryEventsTable(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS memory_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_type TEXT NOT NULL,
-      session_id TEXT,
-      trace_id TEXT,
-      memory_id TEXT,
-      latency_ms INTEGER,
-      candidate_count INTEGER,
-      injected_count INTEGER,
-      cited_count INTEGER,
-      vector_score REAL,
-      fts_score REAL,
-      final_score REAL,
-      source TEXT,
-      metadata_json TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_memory_events_created ON memory_events(created_at)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_memory_events_trace ON memory_events(trace_id)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_memory_events_session ON memory_events(session_id)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_memory_events_type ON memory_events(event_type)");
-}
-
-function ensureMemoryEngineTables(db) {
-  ensureConfidenceTable(db);
-  ensureMemoryEventsTable(db);
-}
-
 function recordMemoryEvent(event) {
   try {
     withDb(db => {
-      ensureMemoryEventsTable(db);
-      db.prepare([
-        "INSERT INTO memory_events",
-        "(event_type, session_id, trace_id, memory_id, latency_ms, candidate_count, injected_count, cited_count, vector_score, fts_score, final_score, source, metadata_json)",
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      ].join(" ")).run(
-        event.event_type,
-        event.session_id || null,
-        event.trace_id || null,
-        event.memory_id || null,
-        event.latency_ms ?? null,
-        event.candidate_count ?? null,
-        event.injected_count ?? null,
-        event.cited_count ?? null,
-        event.vector_score ?? null,
-        event.fts_score ?? null,
-        event.final_score ?? null,
-        event.source || null,
-        event.metadata_json ? JSON.stringify(event.metadata_json) : null
-      );
+      insertMemoryEvent(db, event, { defaultSource: null });
     });
   } catch (e) {
     console.warn("[memory-engine] memory event write failed:", e.message);
@@ -351,68 +284,6 @@ function resolvePrefixes(db, prefixes) {
   return results;
 }
 
-function collectIndexedFiles() {
-  const files = [];
-
-  for (const dirRel of INDEX_SYNC_WATCH_DIRS) {
-    const absDir = resolve(WORKSPACE, dirRel);
-    if (!existsSync(absDir)) continue;
-    let entries = [];
-    try {
-      entries = readdirSync(absDir);
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.endsWith(".md")) continue;
-      const absFile = resolve(absDir, entry);
-      let stat;
-      try {
-        stat = statSync(absFile);
-      } catch {
-        continue;
-      }
-      if (!stat.isFile()) continue;
-      const relPath = absFile.replace(WORKSPACE + "/", "");
-      files.push({
-        relPath,
-        absPath: absFile,
-        mtimeMs: stat.mtimeMs,
-      });
-    }
-  }
-
-  files.sort((a, b) => a.relPath.localeCompare(b.relPath));
-  return files;
-}
-
-function tableExists(db, name) {
-  const row = db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ?").get(name);
-  return !!row;
-}
-
-function readIndexedPathState(db, pathList) {
-  if (!Array.isArray(pathList) || pathList.length <= 0) {
-    return { paths: [], updatedAt: {} };
-  }
-  if (!tableExists(db, "chunks")) {
-    return { paths: [], updatedAt: {} };
-  }
-  const placeholders = pathList.map(() => "?").join(", ");
-  const rows = db.prepare([
-    "SELECT path, MAX(updated_at) AS updated_at",
-    "FROM chunks",
-    `WHERE path IN (${placeholders})`,
-    "GROUP BY path",
-  ].join(" ")).all(...pathList);
-  const paths = rows.map(r => r.path).sort((a, b) => a.localeCompare(b));
-  const updatedAt = {};
-  for (const row of rows) {
-    updatedAt[row.path] = row.updated_at ?? null;
-  }
-  return { paths, updatedAt };
-}
-
 function extractCategoryFromText(text = "") {
   const match = String(text || "").match(/(?:^|\n)Category:\s*([a-z_]+)/i);
   return match?.[1] ? String(match[1]).toLowerCase() : "";
@@ -488,7 +359,7 @@ function backfillConfidenceForIndexedChunks(db, nowSec) {
 async function syncIndexIfNeeded(reason = "autoRecall") {
   const nowMs = Date.now();
   const nowSec = Math.floor(nowMs / 1000);
-  const scannedFiles = collectIndexedFiles();
+  const scannedFiles = collectIndexedFiles(WORKSPACE, INDEX_SYNC_WATCH_DIRS);
   const stats = {
     fileCount: scannedFiles.length,
     maxMtimeMs: scannedFiles.reduce((m, f) => Math.max(m, f.mtimeMs), 0),
