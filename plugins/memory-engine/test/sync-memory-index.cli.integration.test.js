@@ -13,10 +13,15 @@ import { homedir } from "os";
 import { dirname, resolve } from "path";
 import Database from "better-sqlite3";
 import { fileURLToPath } from "url";
-import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
 import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "../date-utils.js";
+import { detectOpenClawRuntime } from "./helpers/openclaw-runtime.js";
 
 const ENABLE_INTEGRATION = process.env.OPENCLAW_RUN_MEMORY_SYNC_TEST === "1";
+const OPENCLAW_RUNTIME = await detectOpenClawRuntime();
+const getMemorySearchManager = OPENCLAW_RUNTIME.module?.getMemorySearchManager;
+const INTEGRATION_SKIP_REASON = !ENABLE_INTEGRATION
+  ? "skip: set OPENCLAW_RUN_MEMORY_SYNC_TEST=1 to run integration tests"
+  : (OPENCLAW_RUNTIME.available ? false : OPENCLAW_RUNTIME.reason);
 const HOME = homedir();
 const CONFIG_PATH = resolve(HOME, ".openclaw/openclaw.json");
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
@@ -40,7 +45,7 @@ function buildEntryBlock(entryId) {
   ].join("\n");
 }
 
-test("integration: sync-memory-index CLI ingests today's smart-add file", { skip: !ENABLE_INTEGRATION }, async (t) => {
+test("integration: sync-memory-index CLI ingests today's smart-add file", { skip: INTEGRATION_SKIP_REASON }, async (t) => {
   const cfg = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
   const { manager, error } = await getMemorySearchManager({ cfg, agentId: "main" });
   assert.equal(error ?? null, null);
