@@ -304,8 +304,7 @@ semantic recall 不再允许完全脱离 token overlap / exact anchor。
 
 ---
 
-## v1.7.1 (2026-05-27)
-修复 daily episode / smart-add 日期计算的时区错位问题
+## v1.7.1 (2026-05-27) 修复 daily episode / smart-add 日期计算的时区错位问题
 
 新增 dateStrInTimeZone(offsetDays, timeZone) 统一日期工具，按业务时区
 Asia/Shanghai 计算自然日，并使用 UTC Date 执行纯日历偏移，避免 UTC
