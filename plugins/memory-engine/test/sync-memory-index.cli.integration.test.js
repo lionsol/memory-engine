@@ -14,13 +14,14 @@ import { dirname, resolve } from "path";
 import Database from "better-sqlite3";
 import { fileURLToPath } from "url";
 import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
-import { localDateKey } from "../date-utils.js";
+import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "../date-utils.js";
 
 const ENABLE_INTEGRATION = process.env.OPENCLAW_RUN_MEMORY_SYNC_TEST === "1";
 const HOME = homedir();
 const CONFIG_PATH = resolve(HOME, ".openclaw/openclaw.json");
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const SYNC_CLI_PATH = resolve(TEST_DIR, "../scripts/sync-memory-index.js");
+const SMART_ADD_TIME_ZONE = process.env.MEMORY_ENGINE_TIME_ZONE || DEFAULT_BUSINESS_TIME_ZONE;
 
 function shouldSkipUnavailableSync(error) {
   const msg = String(error?.message || error || "");
@@ -48,7 +49,7 @@ test("integration: sync-memory-index CLI ingests today's smart-add file", { skip
   const status = manager.status();
   const workspaceDir = status.workspaceDir;
   const dbPath = status.dbPath;
-  const dateKey = localDateKey();
+  const dateKey = dateStrInTimeZone(0, SMART_ADD_TIME_ZONE);
   const relPath = `memory/smart-add/${dateKey}.md`;
   const fileDir = resolve(workspaceDir, "memory/smart-add");
   const filePath = resolve(fileDir, `${dateKey}.md`);
