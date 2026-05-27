@@ -172,12 +172,10 @@ Channel 3:  KG Bridge (概念)
 
 ### 完成 FTS 查询预处理解耦：
 
-- 新增 `query-utils.js`
-- 将：
+新增 `query-utils.js`，将：
   - `sanitizeFtsQuery()`
-  - `buildFtsFallbackQuery()`
-  从 `auto-recall.js` 抽离
-- `index.js` 与 `auto-recall.js` 统一改为依赖 `query-utils.js`
+  - `buildFtsFallbackQuery()` 从 `auto-recall.js` 抽离
+  - `index.js` 与 `auto-recall.js` 统一改为依赖 `query-utils.js`
 
 效果：
 
