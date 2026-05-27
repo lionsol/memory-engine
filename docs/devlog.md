@@ -149,7 +149,12 @@ Channel 3:  KG Bridge (概念)
 | SQLite `memory_confidence` | 元数据 (置信度/分类/强化) | ~94 |
 | LanceDB `chunks` | 向量 + 文本 | ~94 |
 
-### v1.6 (2026-05-25) - Memory Engine 架构整理
+## v1.5 (2026-05-24) - autoRecall 自动注入 + Memory Console
+
+- **autoRecall 自动检索** — 注册 `before_prompt_build` hook，每轮回复前自动调混合检索注入 topK 记忆
+- **Memory Console Lite** — 独立控制台 (`http://localhost:8787/`)，Dashboard / Session Trace / Memory Inspector / Telemetry / Metrics
+
+## v1.6 (2026-05-25) - Memory Engine 架构整理
 
 完成 FTS 查询预处理解耦：
 
