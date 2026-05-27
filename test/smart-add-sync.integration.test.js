@@ -4,10 +4,15 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "
 import { resolve } from "path";
 import { homedir } from "os";
 import Database from "better-sqlite3";
-import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
 import { addDaysLocal, localDateKey } from "../date-utils.js";
+import { detectOpenClawRuntime } from "./helpers/openclaw-runtime.js";
 
 const ENABLE_INTEGRATION = process.env.OPENCLAW_RUN_MEMORY_SYNC_TEST === "1";
+const OPENCLAW_RUNTIME = await detectOpenClawRuntime();
+const getMemorySearchManager = OPENCLAW_RUNTIME.module?.getMemorySearchManager;
+const INTEGRATION_SKIP_REASON = !ENABLE_INTEGRATION
+  ? "skip: set OPENCLAW_RUN_MEMORY_SYNC_TEST=1 to run integration tests"
+  : (OPENCLAW_RUNTIME.available ? false : OPENCLAW_RUNTIME.reason);
 const HOME = homedir();
 const CONFIG_PATH = resolve(HOME, ".openclaw/openclaw.json");
 
@@ -29,7 +34,7 @@ function shouldSkipUnavailableSync(error) {
   return /fetch failed|embeddings unavailable|node-llama-cpp|ECONN|EPERM|ENET|rate limit/i.test(msg);
 }
 
-test("integration: sync ingests a new smart-add daily file", { skip: !ENABLE_INTEGRATION }, async (t) => {
+test("integration: sync ingests a new smart-add daily file", { skip: INTEGRATION_SKIP_REASON }, async (t) => {
   const cfg = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
   const agentId = "main";
   const { manager, error } = await getMemorySearchManager({ cfg, agentId });

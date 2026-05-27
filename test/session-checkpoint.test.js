@@ -3,13 +3,22 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { resolve } from "path";
-import { appendSmartAdd, readSmartAddFingerprints } from "../session-checkpoint.js";
+import { detectOpenClawRuntime } from "./helpers/openclaw-runtime.js";
+import { buildSmartAddFingerprint } from "../smart-add-fingerprint.js";
+
+const OPENCLAW_RUNTIME = await detectOpenClawRuntime();
+let appendSmartAdd = null;
+let readSmartAddFingerprints = null;
+if (OPENCLAW_RUNTIME.available) {
+  ({ appendSmartAdd, readSmartAddFingerprints } = await import("../session-checkpoint.js"));
+}
+const SKIP_IF_NO_OPENCLAW = OPENCLAW_RUNTIME.available ? false : OPENCLAW_RUNTIME.reason;
 
 function makeTmpDir() {
   return mkdtempSync(resolve(tmpdir(), "memory-engine-smart-add-"));
 }
 
-test("readSmartAddFingerprints reads fingerprint comments", () => {
+test("readSmartAddFingerprints reads fingerprint comments", { skip: SKIP_IF_NO_OPENCLAW }, () => {
   const dir = makeTmpDir();
   const filePath = resolve(dir, "2026-05-26.md");
   writeFileSync(filePath, [
@@ -28,7 +37,7 @@ test("readSmartAddFingerprints reads fingerprint comments", () => {
   assert.equal(fingerprints.has("abcdef1234567890"), true);
 });
 
-test("appendSmartAdd dedupes by fingerprint before writing", () => {
+test("appendSmartAdd dedupes by fingerprint before writing", { skip: SKIP_IF_NO_OPENCLAW }, () => {
   const dir = makeTmpDir();
   const filePath = resolve(dir, "2026-05-26.md");
   const payload = {
@@ -49,7 +58,7 @@ test("appendSmartAdd dedupes by fingerprint before writing", () => {
   assert.equal(second.reason, "fingerprint");
 });
 
-test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exists", () => {
+test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exists", { skip: SKIP_IF_NO_OPENCLAW }, () => {
   const dir = makeTmpDir();
   const filePath = resolve(dir, "2026-05-26.md");
   writeFileSync(filePath, [
@@ -78,8 +87,6 @@ test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exist
   const content = readFileSync(filePath, "utf8");
   assert.equal((content.match(/## /g) || []).length, 1);
 });
-
-import { buildSmartAddFingerprint } from "../smart-add-fingerprint.js";
 
 test("buildSmartAddFingerprint normalizes LF and CRLF equivalently", () => {
   const a = buildSmartAddFingerprint("line1\nline2\n", "raw_log", false);
