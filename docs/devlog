@@ -1,0 +1,150 @@
+## 9. v1.2 新增特性 (2026-05-16)
+
+### 9.1 FTS5 并行召回
+
+利用 OpenClaw 原生 `chunks_fts`（FTS5 虚拟表，100% 覆盖率），在向量搜索同时并行执行 BM25 全文搜索。专有名词、代码库名、API 名称精准命中，弥补纯语义搜索短板。
+
+### 9.2 RRF 三通道融合
+
+检索请求并行发送至三个独立通道：
+
+| 通道 | 候选数 | 方式 |
+|:---|:---:|:---|
+| 向量语义 | 30 | cosine similarity + 置信度衰减 |
+| FTS5 关键词 | 20 | BM25 排序 |
+| KG 概念桥 | 15 | 知识图谱概念 → FTS5 chunks 映射 |
+
+结果以 **Reciprocal Rank Fusion** (k=60) 等权融合排序：$\text{RRF}(d) = \sum_{i} \frac{1}{60 + r_i(d)}$
+
+### 9.3 情节摘要中间层 (Episodic Memory)
+
+新增 `episodic` 类别（conf=0.70, τ=30 天），`summarize` 命令汇聚 raw_log 通过 LLM 生成摘要（失败时关键词回退），`kg_data` 存储 `episode_of` 链接源 chunk ID，`drill <chunk_id>` 下钻查看原文。搜索含时间意向词时自动 RRF 加权 +0.1。
+
+### 9.4 检索管线演进
+
+| 版本 | 检索方式 |
+|:---|:---|
+| v1.0 | 单通道：向量 + 置信度加权 |
+| **v1.2** | **三通道：向量 + FTS5 + KG → RRF 融合** |
+
+**版本记录**
+
+| 版本 | 日期 | 变更说明 |
+|------|------|----------|
+| v1.0 | 2026-05-15 | 整合审查建议：防御性NULL处理、子图置信度字段、弱引用冷启动、归档二次确认、可配置参数、诊断日志 |
+| **v1.2** | **2026-05-16** | **FTS5 并行召回 + RRF 三通道融合 + KG 概念桥 + `episodic` 情节摘要 |
+| **v1.3** | **2026-05-18** | **Plugin contracts + image_vision + session-checkpoint + detectConfig + 冲突标记** |
+
+---
+
+## 10. v1.3 新增特性 (2026-05-18)
+
+### 10.1 Plugin Contracts 声明
+
+插件入口增加 `contracts: { tools: true }`，`openclaw.plugin.json` 增加工具名声明 `["memory_engine", "image_vision"]`，确保 OpenClaw 插件系统正确注册工具。
+
+### 10.2 image_vision 工具
+
+新注册 agent 工具，调用 SiliconFlow 的 Qwen3-VL-32B-Instruct 进行图片识别。参数：`image_path`（必填）+ `question`（可选），默认输出中文详细描述。
+
+### 10.3 自动配置检测 (detectConfig)
+
+`smart_add` 写入流程中增加自动分类探测：检测 API Key、Voice ID、模型名、文件路径、长哈希、中文配置关键词（"设置声音为…"等）时自动将 `raw_log` 提升为 `preference`（conf=0.80, tau=90天）。
+
+### 10.4 Session 检查点 (session-checkpoint.js)
+
+`scripts/session-checkpoint.js`，每日 03:55 CST 执行：
+
+1. 从 DB 读取昨日 raw_log + episodic 的文本
+2. 调用 SiliconFlow API 提取 `<key> = <value>` 形式的新配置
+3. 每条配置写入 preference 记忆
+4. 原始日志 → LLM 摘要（150-200字）→ 写入 episodic 类别
+5. **自动冲突标记**：同 key 配置保留最新，旧条目设 `conflict_flag=1`；唯一条目误标则自动解除
+
+### 10.5 Memory Prompt Supplement
+
+`registerMemoryPromptSupplement` 在 session 启动时动态注入：
+- `[昨日概要]` — 昨日 episode 摘要
+- `[受保护记忆]` — `user_identity` + `protected` 标记的记忆列表
+- 仅主 session 和 heartbeat session 生效
+
+---
+
+## 11. v1.4 — autoRouteCategory + LanceDB 双引擎 (2026-05-20)
+
+### 11.1 实时分类规则引擎
+
+`plugins/memory-engine/index.js` 新增 `autoRouteCategory()` 函数，在 `smart_add` 入口实时路由：
+
+| 规则 | 匹配示例 | 目标类别 |
+|------|----------|----------|
+| API key / 配置值 | `api_key = sk-...` | preference |
+| 身份介绍 | `我是Sol, 一名开发者` | user_identity |
+| 临时性表述 | `临时测试一下` | temporary |
+| 偏好习惯 | `我喜欢用Zsh` | preference |
+| 决策结论 | `最终选择了Linux` | preference |
+| 无匹配 | 日常对话 | raw_log |
+
+显式传 category 且非 raw_log 时尊重原值，不覆盖。
+
+### 11.2 LanceDB 双引擎存储
+
+**初始化**：插件 `register()` 时异步 init，fire-and-forget 不阻塞启动。
+
+**写入路径**：
+```
+smart_add → ① 规则引擎 → ② 写 smart-add 文件 → ③ manager.sync()
+         → ④ SQLite confidence (同步)
+         → ⑤ generateEmbedding → LanceDB (异步，fire-and-forget)
+```
+
+**检索路径**（4 通道 RRF 融合）：
+```
+Channel 1:  OpenClaw Manager (向量)
+Channel 1b: LanceDB (向量)
+Channel 2:  FTS5 (关键词)
+Channel 3:  KG Bridge (概念)
+                 ↓
+          RRF 融合 (k=60)
+                 ↓
+          门控 → 加权排序
+```
+
+**向量维度**：Qwen3-Embedding-4B 输出 2560 维。
+
+**数据库位置**：`~/.openclaw/memory/lancedb/` — 独立目录，与 SQLite 同级。
+
+### 11.3 Session Checkpoint 增强
+
+`scripts/session-checkpoint.js` 合并为单次 LLM 调用：
+
+**旧版** (v1.3)：2 次 LLM 调用（配置提取 + 摘要生成）
+**新版** (v1.4)：1 次 LLM 调用，统一 prompt，产出 3 类结果：
+
+1. `smart_memories` — 6 种类型：profile / preference / entity / event / case / pattern
+2. `episode_summary` — ≤200 字每日摘要
+3. `configs` — 配置信息提取（格式保持不变）
+
+**新增功能**：
+- FTS5 去重检测（`isDuplicate`），避免重复写入
+- 写入全部 6 种 memory_engine category 及 confidence 记录
+- 空内容占位 episode（`writeEmptyEpisode`）
+
+### 11.4 关键变更
+
+| 组件 | 变更 |
+|------|------|
+| `plugins/memory-engine/index.js` | +autoRouteCategory, +initLanceDB, +generateEmbedding, 双写 + 4通道检索 |
+| `scripts/session-checkpoint.js` | 3→1 LLM 调用, +mapToCategory, +appendSmartAdd, +isDuplicate |
+| `scripts/migrate-to-lancedb.js` | 新增，一次性迁移脚本 |
+| `scripts/e2e-lancedb-test.js` | 新增，端到端验证脚本 |
+| `package.json` | +@lancedb/lancedb 依赖 |
+| cron: session-checkpoint | 超时 默认→120s |
+
+### 11.5 数据分布
+
+| 存储引擎 | 存储内容 | 行数 |
+|----------|----------|------|
+| SQLite `chunks` | 原始文本 (OpenClaw 索引) | ~327 |
+| SQLite `memory_confidence` | 元数据 (置信度/分类/强化) | ~94 |
+| LanceDB `chunks` | 向量 + 文本 | ~94 |
