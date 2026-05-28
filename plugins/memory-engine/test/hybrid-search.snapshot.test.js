@@ -68,6 +68,13 @@ const EXPECTED_SNAPSHOT = `{
       "fts_empty",
       "vector_only"
     ],
+    "vector_backend": "memory-core-sqlite",
+    "vector_backend_attempted": "lancedb",
+    "vector_ready_state": "disabled",
+    "vector_stage": "fallback",
+    "vector_error": null,
+    "vector_ms": 0,
+    "vector_query_length": 1,
     "strict_count": 0,
     "fallback_count": 0,
     "post_rerank_topK": [],
@@ -153,6 +160,9 @@ test("hybridSearch snapshot stays JSON-stringify compatible", async () => {
     }),
   });
 
+  if (result?.debug && Number.isFinite(result.debug.vector_ms)) {
+    result.debug.vector_ms = 0;
+  }
   const after = JSON.stringify(result, null, 2);
   assert.equal(after, EXPECTED_SNAPSHOT);
 });
