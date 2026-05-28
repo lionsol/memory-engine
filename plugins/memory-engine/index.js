@@ -27,11 +27,11 @@ import { ensureMemoryEngineTables } from "./lib/db/schema.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
+import { generateEmbedding } from "./lib/siliconflow-runtime.js";
 
 const KG_PATH = resolve(HOME_DIR, ".openclaw/workspace/knowledge-graph.json");
 const LANCEDB_PATH = resolve(HOME_DIR, ".openclaw/memory/lancedb");
 const LANCEDB_READY_TIMEOUT_MS = 400;
-const EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-4B";
 const MEMORY_SUPPLEMENT_SENTINEL = "MEMORY_SUPPLEMENT_SENTINEL";
 const MEMORY_SUPPLEMENT_BOUNDARY_START = "<!-- MEMORY_ENGINE_SUPPLEMENT_START -->";
 const MEMORY_SUPPLEMENT_BOUNDARY_END = "<!-- MEMORY_ENGINE_SUPPLEMENT_END -->";
@@ -48,46 +48,6 @@ const indexSyncState = {
   lastSyncAt: 0,
   lastMaxMtimeMs: 0,
 };
-
-/**
- * Generate embedding via SiliconFlow embedding API.
- */
-async function generateEmbedding(text) {
-  const apiKey = resolveSFKey();
-  if (!apiKey) throw new Error("SiliconFlow API key not found");
-
-  const { https } = await import('node:https');
-  const url = new URL("/v1/embeddings", getSFBaseUrl());
-  const body = JSON.stringify({
-    model: EMBEDDING_MODEL,
-    input: text.slice(0, 8000),
-  });
-
-  return new Promise((resolve, reject) => {
-    const req = https.request(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-    }, (res) => {
-      let data = "";
-      res.on("data", chunk => data += chunk);
-      res.on("end", () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.error) return reject(new Error(parsed.error.message));
-          resolve(parsed.data?.[0]?.embedding || []);
-        } catch (e) {
-          reject(new Error(`Embedding parse: ${e.message}`));
-        }
-      });
-    });
-    req.on("error", reject);
-    req.write(body);
-    req.end();
-  });
-}
 
 /**
  * Initialize LanceDB: connect and ensure the chunks table exists.
@@ -481,13 +441,6 @@ async function syncIndexIfNeeded(reason = "autoRecall") {
   }));
 }
 
-function resolveSFKey() {
-  try {
-    const cfg = JSON.parse(readFileSync(resolve(homedir(), '.openclaw/openclaw.json'), 'utf-8'));
-    return cfg.models?.providers?.siliconflow?.apiKey || '';
-  } catch(e) { return ''; }
-}
-
 export default definePluginEntry({
   id: "memory-engine",
   name: "Memory Engine",
@@ -510,6 +463,11 @@ export default definePluginEntry({
     const autoRecallTraceByRun = new Map();
     const autoRecallTraceBySession = new Map();
     const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
+    const embeddingRuntimeConfig = api.config || pluginEntryConfig || null;
+    const generateEmbeddingRuntime = text => generateEmbedding(text, {
+      cfg: embeddingRuntimeConfig,
+      apiConfig: api.config || null,
+    });
     const autoRecallConfig =
       api.pluginConfig?.autoRecall ||
       pluginEntryConfig?.autoRecall ||
@@ -564,7 +522,7 @@ export default definePluginEntry({
             getLancedbTable: () => lancedbTable,
             getLancedbRuntime: getLanceDBRuntime,
             vectorReadyTimeoutMs: LANCEDB_READY_TIMEOUT_MS,
-            generateEmbedding,
+            generateEmbedding: generateEmbeddingRuntime,
             getMemorySearchManager,
           });
           const hits = result?.results?.length || 0;
@@ -847,7 +805,7 @@ export default definePluginEntry({
       catParams,
       withDb,
       getLancedbTable: () => lancedbTable,
-      generateEmbedding,
+      generateEmbedding: generateEmbeddingRuntime,
       recordMemoryEvent,
       getMemorySearchManager,
       sanitizeFtsQuery,
@@ -933,20 +891,10 @@ export default definePluginEntry({
       },
       async execute(_id, params) {
         try {
-          const { execSync } = await import("child_process");
-          const scriptPath = resolve(WORKSPACE, "scripts/image-vision.py");
-          const imagePath = params.image_path;
-          const question = params.question || "请详细描述这张图片中的内容，包括物体、场景、人物（如有）、动作、氛围等。用中文回答。";
-          
-          if (!existsSync(scriptPath)) {
-            return { content: [{ type: "text", text: `脚本不存在: ${scriptPath}` }] };
-          }
-          
-          const result = execSync(
-            `python3 ${scriptPath} ${JSON.stringify(imagePath)} ${JSON.stringify(question)}`,
-            { encoding: "utf-8", timeout: 120000 }
-          );
-          
+          const imagePath = String(params?.image_path || "");
+          const result = imagePath
+            ? `image_vision disabled for local dev install: ${imagePath}`
+            : "image_vision disabled for local dev install";
           return { content: [{ type: "text", text: result.trim() }] };
         } catch (e) {
           return { content: [{ type: "text", text: `图片识别失败: ${e.message}` }] };
