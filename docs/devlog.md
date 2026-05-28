@@ -646,6 +646,14 @@ memory-engine 完成第一轮结构化重构。
 - console API contract
 - debug metadata 字段
 - 既有 memory 行为
+
+### v0.8.1 (2026-05-28) Bug Fix
+
+- 修复 LanceDB 主路径 embedding 阶段因为 SiliconFlow API key 在 definePluginEntry bundle 上下文不可读而被跳过的问题
+- resolveSFKey 优先从 api.config 获取 key，保证 generateEmbeddingRuntime 在 runtime bundle 中可用
+- 完整透传 vector debug 字段：vector_backend_attempted、vector_stage、vector_error
+- 保持 autoRecall 回退和 FTS/recent fallback 逻辑不变
+- 测试覆盖 key 注入、fallback、embedding 失败及 metadata 安全性
 2026-05-27 03:30 CST 运行时应处理 2026-05-26 的场景，防止凌晨任务
 误处理前两天数据。
 
