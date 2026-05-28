@@ -38,6 +38,14 @@ test("autoRecall debug metadata snapshot stays stable", () => {
       query_stripped: "stripped",
       query_normalized: "norm",
       fts_query_final: "fts",
+      vector_backend: "lancedb",
+      vector_backend_attempted: "lancedb",
+      vector_ready_state: "ready",
+      vector_stage: "lancedb_search",
+      vector_error: null,
+      vector_warning: "table_missing",
+      vector_ms: 12.3,
+      vector_query_length: 8,
       fallbacks_triggered: ["fts_empty"],
       strict_count: 1,
       fallback_count: 2,
@@ -58,6 +66,14 @@ test("autoRecall debug metadata snapshot stays stable", () => {
   "query_stripped": "stripped",
   "query_normalized": "norm",
   "fts_query_final": "fts",
+  "vector_backend": "lancedb",
+  "vector_ready_state": "ready",
+  "vector_backend_attempted": "lancedb",
+  "vector_stage": "lancedb_search",
+  "vector_error": null,
+  "vector_warning": "table_missing",
+  "vector_ms": 12.3,
+  "vector_query_length": 8,
   "fallbacks_triggered": [
     "fts_empty"
   ],
@@ -91,4 +107,35 @@ test("autoRecall debug metadata snapshot stays stable", () => {
   }
 }`
   );
+});
+
+test("autoRecall debug metadata includes vector_init_error only when present", () => {
+  const indexCode = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+  const source = extractFunctionSource(indexCode, "buildAutoRecallDebugMetadata");
+  const context = {
+    buildFtsFallbackQuery,
+    normalizeFtsQuery,
+    stripPromptMetadataPrefix,
+  };
+  vm.runInNewContext(`${source}\nthis.__fn = buildAutoRecallDebugMetadata;`, context);
+  const fn = context.__fn;
+
+  const failedResult = fn("query", {
+    results: [],
+    debug: {
+      query_stripped: "query",
+      vector_ready_state: "failed",
+      vector_init_error: "lancedb init failed",
+    },
+  });
+  const readyResult = fn("query", {
+    results: [],
+    debug: {
+      query_stripped: "query",
+      vector_ready_state: "ready",
+    },
+  });
+
+  assert.equal(failedResult.vector_init_error, "lancedb init failed");
+  assert.equal(Object.prototype.hasOwnProperty.call(readyResult, "vector_init_error"), false);
 });

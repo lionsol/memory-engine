@@ -30,6 +30,7 @@ import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js"
 
 const KG_PATH = resolve(HOME_DIR, ".openclaw/workspace/knowledge-graph.json");
 const LANCEDB_PATH = resolve(HOME_DIR, ".openclaw/memory/lancedb");
+const LANCEDB_READY_TIMEOUT_MS = 400;
 const EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-4B";
 const MEMORY_SUPPLEMENT_SENTINEL = "MEMORY_SUPPLEMENT_SENTINEL";
 const MEMORY_SUPPLEMENT_BOUNDARY_START = "<!-- MEMORY_ENGINE_SUPPLEMENT_START -->";
@@ -38,6 +39,11 @@ const SMART_ADD_TIME_ZONE = process.env.MEMORY_ENGINE_TIME_ZONE || DEFAULT_BUSIN
 
 // ── LanceDB globals (initialized in register) ──
 let lancedbTable = null;
+let lancedbReadyPromise = null;
+const lancedbReadyState = {
+  state: process.env.MEMORY_ENGINE_DISABLE_LANCEDB === "1" ? "disabled" : "pending",
+  error: null,
+};
 const indexSyncState = {
   lastSyncAt: 0,
   lastMaxMtimeMs: 0,
@@ -87,6 +93,12 @@ async function generateEmbedding(text) {
  * Initialize LanceDB: connect and ensure the chunks table exists.
  */
 async function initLanceDB() {
+  if (lancedbReadyState.state === "disabled") {
+    lancedbTable = null;
+    return false;
+  }
+  lancedbReadyState.state = "pending";
+  lancedbReadyState.error = null;
   try {
     const db = await lancedb.connect(LANCEDB_PATH);
     const tableNames = await db.tableNames();
@@ -97,12 +109,55 @@ async function initLanceDB() {
         { id: crypto.randomUUID(), text: "", vector: new Array(2560).fill(0), timestamp: Date.now() }
       ]);
     }
+    lancedbReadyState.state = "ready";
     console.log("[memory-engine] LanceDB initialized at", LANCEDB_PATH);
     return true;
   } catch (e) {
+    lancedbReadyState.state = "failed";
+    lancedbReadyState.error = e?.message ? String(e.message) : String(e);
+    lancedbTable = null;
     console.warn("[memory-engine] LanceDB init skipped:", e.message);
     return false;
   }
+}
+
+function ensureLanceDBReady() {
+  if (lancedbReadyState.state === "disabled") return Promise.resolve(false);
+  if (!lancedbReadyPromise) {
+    lancedbReadyPromise = initLanceDB()
+      .catch(() => false)
+      .finally(() => {
+        // Keep the settled promise for later callers.
+      });
+  }
+  return lancedbReadyPromise;
+}
+
+async function getLanceDBRuntime({ timeoutMs = LANCEDB_READY_TIMEOUT_MS } = {}) {
+  if (lancedbReadyState.state === "disabled") {
+    return { table: null, readyState: "disabled", initError: null, timedOut: false };
+  }
+
+  let timedOut = false;
+  const readyPromise = ensureLanceDBReady();
+  if (lancedbReadyState.state === "pending") {
+    await Promise.race([
+      readyPromise,
+      new Promise(resolve => setTimeout(() => {
+        timedOut = true;
+        resolve();
+      }, Math.max(0, Number(timeoutMs) || 0))),
+    ]);
+  } else {
+    await readyPromise;
+  }
+
+  return {
+    table: lancedbReadyState.state === "ready" ? lancedbTable : null,
+    readyState: lancedbReadyState.state,
+    initError: lancedbReadyState.error || null,
+    timedOut,
+  };
 }
 
 const CATEGORY_MAP = {
@@ -221,11 +276,27 @@ function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
     normalizedQuery
   );
   const postRerankTopK = Array.isArray(debugInfo.post_rerank_topK) ? debugInfo.post_rerank_topK : [];
+  const passthroughVectorFields = {};
+  for (const key of [
+    "vector_backend_attempted",
+    "vector_ready_state",
+    "vector_stage",
+    "vector_error",
+    "vector_warning",
+    "vector_ms",
+    "vector_query_length",
+  ]) {
+    if (debugInfo[key] !== undefined) passthroughVectorFields[key] = debugInfo[key];
+  }
+  if (debugInfo.vector_init_error !== undefined) passthroughVectorFields.vector_init_error = debugInfo.vector_init_error;
   return {
     query_original: String(prompt || ""),
     query_stripped: String(debugInfo.query_stripped || strippedPrompt),
     query_normalized: normalizedQuery,
     fts_query_final: finalFtsQuery,
+    vector_backend: debugInfo.vector_backend ?? null,
+    vector_ready_state: debugInfo.vector_ready_state ?? null,
+    ...passthroughVectorFields,
     fallbacks_triggered: Array.isArray(debugInfo.fallbacks_triggered) ? debugInfo.fallbacks_triggered : [],
     candidate_count: Number(result?.results?.length || 0),
     strict_count: Number(debugInfo.strict_count ?? 0),
@@ -432,8 +503,8 @@ export default definePluginEntry({
       console.error("[memory-engine] failed to init confidence table:", e.message);
     }
 
-    // Initialize LanceDB (async, fire-and-forget)
-    initLanceDB().catch(e => console.warn("[memory-engine] LanceDB init deferred:", e.message));
+    // Initialize LanceDB readiness as early as possible.
+    void ensureLanceDBReady();
 
 
     const autoRecallTraceByRun = new Map();
@@ -489,6 +560,11 @@ export default definePluginEntry({
             calcRealtimeConf,
             syncIndexIfNeeded,
             categoryMap: CATEGORY_MAP,
+            cfg: api.config || null,
+            getLancedbTable: () => lancedbTable,
+            getLancedbRuntime: getLanceDBRuntime,
+            vectorReadyTimeoutMs: LANCEDB_READY_TIMEOUT_MS,
+            generateEmbedding,
             getMemorySearchManager,
           });
           const hits = result?.results?.length || 0;
