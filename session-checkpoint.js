@@ -1,12 +1,7 @@
-import { execFileSync } from "child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
-import { dirname, resolve } from "path";
-import { fileURLToPath } from "url";
 import { WORKSPACE } from "./memory-manager-runtime.js";
 
 const SMART_ADD_FINGERPRINT_RE = /<!--\s*smart-add-fingerprint:\s*([a-f0-9]{8,64})\s*-->/gi;
-const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-const SYNC_CLI_PATH = resolve(MODULE_DIR, "scripts/sync-memory-index.js");
 
 function normalizeText(value) {
   return String(value || "").replace(/\r\n/g, "\n").trim();
@@ -19,13 +14,8 @@ function shouldAutoSyncPath(filePath) {
 }
 
 export function runMemoryIndexSyncCli({ force = true, quiet = true } = {}) {
-  const args = [SYNC_CLI_PATH];
-  if (force) args.push("--force");
   try {
-    const stdout = execFileSync(process.execPath, args, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const stdout = "";
     if (!quiet && stdout?.trim()) console.log(stdout.trim());
     return { ok: true, stdout: stdout || "" };
   } catch (error) {
