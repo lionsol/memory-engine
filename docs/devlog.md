@@ -647,7 +647,7 @@ memory-engine 完成第一轮结构化重构。
 - debug metadata 字段
 - 既有 memory 行为
 
-### v0.8.1 (2026-05-28) Bug Fix
+## v0.8.1 (2026-05-28) Bug Fix
 
 - 修复 LanceDB 主路径 embedding 阶段因为 SiliconFlow API key 在 definePluginEntry bundle 上下文不可读而被跳过的问题
 - resolveSFKey 优先从 api.config 获取 key，保证 generateEmbeddingRuntime 在 runtime bundle 中可用
