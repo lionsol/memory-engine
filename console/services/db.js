@@ -30,6 +30,7 @@ export function withDb(fn, options = {}) {
   const db = openDb(options);
   try {
     ensureMemoryEventsTable(db);
+    ensureMemoryConfidenceTable(db);
     return fn(db);
   } finally {
     db.close();
