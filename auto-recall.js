@@ -346,9 +346,12 @@ export function formatAutoRecallContext(results, options = {}) {
   items.forEach((item, index) => {
     const id = String(item.id || "").slice(0, 16);
     const category = item.category || "raw_log";
+    const confidenceMode = item.confidence_mode || "managed";
+    const sourceType = item.source_type || "memory-engine-managed";
+    const externalBadge = item.external_badge ? "external" : "managed";
     const confidence = item.confidence ?? item.confidence_realtime ?? "n/a";
     const sources = Array.isArray(item.sources) ? item.sources.join(",") : (item.sources || "unknown");
-    lines.push(`${index + 1}. [${id}] category=${category} confidence=${confidence} sources=${sources}`);
+    lines.push(`${index + 1}. [${id}] category=${category} confidence=${confidence} confidence_mode=${confidenceMode} source_type=${sourceType} badge=${externalBadge} sources=${sources}`);
     const memoryText = trimMemoryText(item.text);
     if (memoryText) lines.push(`   ${memoryText}`);
   });

@@ -96,8 +96,13 @@ function initMemories() {
   const renderRows = rows => table('[data-memories]', [
     { label: 'ID', value: r => r.short_id, class: 'id' },
     { label: 'Category', value: r => r.category },
+    { label: 'Conf Mode', value: r => r.confidence_mode },
+    { label: 'Source', value: r => r.source_type },
+    { label: 'External', value: r => r.external_badge ? 'yes' : 'no' },
     { label: 'Conf', value: r => r.confidence?.toFixed ? r.confidence.toFixed(3) : r.confidence },
     { label: 'Hits', value: r => r.hit_count },
+    { label: 'Decay', value: r => r.decay_eligible ? 'yes' : 'no' },
+    { label: 'Archive', value: r => r.archive_eligible ? 'yes' : 'no' },
     { label: 'Flags', value: r => `${r.is_protected ? 'protected ' : ''}${r.conflict_flag ? 'conflict ' : ''}${r.is_archived ? 'archived' : ''}` },
     { label: 'Text', value: r => (r.text || '').slice(0, 140) },
   ], rows.map(row => ({ ...row, click: row.id })));
@@ -107,9 +112,10 @@ function initMemories() {
     if (!row) return;
     const memory = await api(`/api/memories/${encodeURIComponent(row.dataset.click)}`);
     $('[data-memory-detail]').innerHTML = `<div class="detail">
-      <div><span class="badge id">${esc(memory.short_id)}</span> <span class="badge">${esc(memory.category)}</span></div>
+      <div><span class="badge id">${esc(memory.short_id)}</span> <span class="badge">${esc(memory.category)}</span> <span class="badge">${esc(memory.confidence_mode || 'managed')}</span> <span class="badge">${esc(memory.source_type || 'memory-engine-managed')}</span> ${memory.external_badge ? '<span class="badge">external</span>' : ''}</div>
       <pre>${esc(memory.text || '')}</pre>
       <div class="muted">${esc(memory.path || '')}</div>
+      <div class="muted">decay_eligible=${esc(String(Boolean(memory.decay_eligible)))} archive_eligible=${esc(String(Boolean(memory.archive_eligible)))}</div>
       <div class="actions"><button data-archive="${esc(memory.id)}">Archive</button><button class="danger" data-delete="${esc(memory.id)}">Delete</button></div>
     </div>`;
   });
