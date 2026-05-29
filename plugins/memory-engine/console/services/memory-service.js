@@ -1,18 +1,38 @@
 import { ensureMemoryConfidenceTable, recordEvent, safeJson, tableExists, withDb } from "./db.js";
 
+function inferCategoryFromPath(path = "") {
+  const normalized = String(path || "").replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+  if (!normalized) return "external";
+  if (normalized === "memory.md") return "core_profile";
+  if (normalized.startsWith("memory/projects/")) return "project";
+  if (/^memory\/\d{4}-\d{2}-\d{2}\.md$/.test(normalized)) return "daily_journal";
+  if (normalized.startsWith("memory/dreaming/")) return "dreaming";
+  if (normalized === "memory/stats-history.md") return "stats";
+  return "external";
+}
+
 function normalizeMemory(row) {
+  const confidence = row.confidence ?? null;
+  const confidenceMode = confidence === null || confidence === undefined ? "external" : "managed";
+  const inferredCategory = inferCategoryFromPath(row.path ?? row.file_path ?? "");
+  const category = row.category ?? (confidenceMode === "external" ? inferredCategory : "unknown");
   return {
     id: row.id ?? row.chunk_id,
     short_id: String(row.id ?? row.chunk_id ?? "").slice(0, 16),
     text: row.text ?? "",
     path: row.path ?? row.file_path ?? "",
-    category: row.category ?? "unknown",
-    confidence: row.confidence ?? null,
+    category,
+    confidence,
+    confidence_mode: confidenceMode,
+    source_type: confidenceMode === "external" ? "openclaw-core" : "memory-engine-managed",
+    external_badge: confidenceMode === "external",
     initial_confidence: row.initial_confidence ?? null,
     hit_count: row.hit_count ?? 0,
     is_archived: Number(row.is_archived ?? 0),
     is_protected: Number(row.is_protected ?? 0),
     conflict_flag: Number(row.conflict_flag ?? 0),
+    decay_eligible: confidenceMode === "external" ? false : Number(row.is_protected ?? 0) === 0 && Number(row.is_archived ?? 0) === 0,
+    archive_eligible: confidenceMode === "external" ? false : Number(row.is_protected ?? 0) === 0 && Number(row.is_archived ?? 0) === 0,
     base_tau: row.base_tau ?? null,
     last_confidence_update: row.last_confidence_update ?? null,
     kg_data: safeJson(row.kg_data, null),

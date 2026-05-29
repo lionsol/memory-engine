@@ -10,7 +10,6 @@ import { explainAutoRecallSkip, formatAutoRecallContext, parseCitedMemoryIds, sh
 import {
   buildFtsFallbackQuery,
   normalizeFtsQuery,
-  sanitizeFtsQuery,
   stripPromptMetadataPrefix,
 } from "./query-utils.js";
 import { appendSmartAdd } from "./session-checkpoint.js";
@@ -319,11 +318,25 @@ function extractCategoryFromText(text = "") {
   return match?.[1] ? String(match[1]).toLowerCase() : "";
 }
 
-function inferCategoryFromChunk(path = "", text = "") {
+function inferCategoryFromPath(path = "") {
+  const normalized = String(path || "").replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+  if (!normalized) return "external";
+  if (normalized === "memory.md") return "core_profile";
+  if (normalized.startsWith("memory/projects/")) return "project";
+  if (/^memory\/\d{4}-\d{2}-\d{2}\.md$/.test(normalized)) return "daily_journal";
+  if (normalized.startsWith("memory/dreaming/")) return "dreaming";
+  if (normalized === "memory/stats-history.md") return "stats";
+  if (normalized.startsWith("memory/episodes/")) return "episodic";
+  if (normalized.startsWith("memory/smart-add/")) return "raw_log";
+  return "external";
+}
+
+function inferCategoryFromChunk(path = "", text = "", fallback = "raw_log") {
   const fromText = extractCategoryFromText(text);
   if (fromText && CATEGORY_MAP[fromText]) return fromText;
-  if (String(path).startsWith("memory/episodes/")) return "episodic";
-  return "raw_log";
+  const fromPath = inferCategoryFromPath(path);
+  if (fromPath !== "external") return fromPath;
+  return fallback;
 }
 
 function backfillConfidenceForIndexedChunks(db, nowSec) {
@@ -600,12 +613,20 @@ export default definePluginEntry({
               const id = String(r.id || "").slice(0, 16);
               const c = r.category || "?";
               const conf = r.confidence ?? r.confidence_realtime ?? "?";
+              const confMode = r.confidence_mode || "managed";
+              const sourceType = r.source_type || "memory-engine-managed";
+              const externalBadge = Boolean(r.external_badge);
+              const decayEligible = Boolean(r.decay_eligible);
+              const archiveEligible = Boolean(r.archive_eligible);
               const finalScore = r.final_score ?? r.rrf_score ?? "?";
               const rrfScore = r.rrf_score ?? "?";
+              const semanticScore = r.semantic_score ?? r.similarity ?? 0;
               const recencyBoost = r.recency_boost ?? 0;
               const categoryBoost = r.category_boost ?? 0;
+              const confidenceBoost = r.confidence_boost ?? 0;
+              const externalBoost = r.external_boost ?? 0;
               const createdAt = r.created_at ? new Date(r.created_at * 1000).toISOString() : "n/a";
-              console.log(`  #${i+1} [${id}] finalScore=${finalScore} rrfScore=${rrfScore} recencyBoost=${recencyBoost} categoryBoost=${categoryBoost} cat=${c} conf=${conf} createdAt=${createdAt} preview="${(r.text||"").slice(0,100)}"`);
+              console.log(`  #${i+1} [${id}] finalScore=${finalScore} semanticScore=${semanticScore} rrfScore=${rrfScore} recencyBoost=${recencyBoost} categoryBoost=${categoryBoost} confidenceBoost=${confidenceBoost} externalBoost=${externalBoost} cat=${c} conf=${conf} confidenceMode=${confMode} sourceType=${sourceType} externalBadge=${externalBadge} decayEligible=${decayEligible} archiveEligible=${archiveEligible} createdAt=${createdAt} preview="${(r.text||"").slice(0,100)}"`);
             });
           }
           const sessionIdForEvents = resolveHookSessionId(event, ctx);
@@ -618,7 +639,18 @@ export default definePluginEntry({
               memory_id: id,
               final_score: r.final_score ?? r.rrf_score,
               source: "autoRecall",
-              metadata_json: { rank: i + 1, category: r.category, confidence: r.confidence, sources: r.sources, preview: (r.text || "").slice(0, 200) }
+              metadata_json: {
+                rank: i + 1,
+                category: r.category,
+                confidence: r.confidence,
+                confidence_mode: r.confidence_mode || "managed",
+                source_type: r.source_type || "memory-engine-managed",
+                external_badge: Boolean(r.external_badge),
+                decay_eligible: Boolean(r.decay_eligible),
+                archive_eligible: Boolean(r.archive_eligible),
+                sources: r.sources,
+                preview: (r.text || "").slice(0, 200),
+              }
             });
           });
           const prependContext = formatAutoRecallContext(gatedResults, { topK: autoRecallTopK });
@@ -692,6 +724,11 @@ export default definePluginEntry({
                 category,
                 final_score: finalScore,
                 confidence: r.confidence,
+                confidence_mode: r.confidence_mode || "managed",
+                source_type: r.source_type || "memory-engine-managed",
+                external_badge: Boolean(r.external_badge),
+                decay_eligible: Boolean(r.decay_eligible),
+                archive_eligible: Boolean(r.archive_eligible),
                 preview: (r.text || "").slice(0, 200),
               }
             });
@@ -808,7 +845,6 @@ export default definePluginEntry({
       generateEmbedding: generateEmbeddingRuntime,
       recordMemoryEvent,
       getMemorySearchManager,
-      sanitizeFtsQuery,
       calcRealtimeConf,
       existsSync,
       readFileSync,

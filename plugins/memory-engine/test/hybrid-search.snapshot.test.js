@@ -78,6 +78,7 @@ const EXPECTED_SNAPSHOT = `{
     "strict_count": 0,
     "fallback_count": 0,
     "post_rerank_topK": [],
+    "min_confidence": 0.15,
     "sync": {
       "synced": false,
       "reason": "test"
@@ -98,6 +99,11 @@ const EXPECTED_SNAPSHOT = `{
         "id": "chunk-1234567890",
         "score": 0.0164,
         "category": "raw_log",
+        "confidence_mode": "managed",
+        "source_type": "memory-engine-managed",
+        "external_badge": false,
+        "decay_eligible": true,
+        "archive_eligible": true,
         "sources": [
           "vector",
           "smart-add"
@@ -109,11 +115,19 @@ const EXPECTED_SNAPSHOT = `{
     "post_rerank_top": [
       {
         "id": "chunk-1234567890",
-        "score": 0.0164,
+        "score": 1.0064,
+        "semantic_score": 0.91,
         "rrf_score": 0.0164,
         "recency_boost": 0,
         "category_boost": 0,
+        "confidence_boost": 0.08,
+        "external_boost": 0,
         "category": "raw_log",
+        "confidence_mode": "managed",
+        "source_type": "memory-engine-managed",
+        "external_badge": false,
+        "decay_eligible": true,
+        "archive_eligible": true,
         "sources": [
           "vector",
           "smart-add"
@@ -129,10 +143,18 @@ const EXPECTED_SNAPSHOT = `{
       "text": "compat memory text",
       "path": "memory/smart-add/2026-05-26.md",
       "category": "raw_log",
+      "confidence_mode": "managed",
+      "source_type": "memory-engine-managed",
+      "external_badge": false,
+      "decay_eligible": true,
+      "archive_eligible": true,
+      "semantic_score": 0.91,
       "rrf_score": 0.0164,
       "recency_boost": 0,
       "category_boost": 0,
-      "final_score": 0.0164,
+      "confidence_boost": 0.08,
+      "external_boost": 0,
+      "final_score": 1.0064,
       "sources": [
         "vector",
         "smart-add"
