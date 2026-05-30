@@ -105,6 +105,56 @@ function renderReinforcementConcentration(target, summary) {
     </table>
   </div>`;
 }
+
+function renderRecallMissAfterResponse(target, summary) {
+  const node = $(target);
+  if (!node) return;
+  const topMissed = Array.isArray(summary?.top_missed_memories) ? summary.top_missed_memories : [];
+  node.innerHTML = `<div class="diversity-head">
+    <span class="badge">Window: ${esc(summary?.window_days ?? 7)} days</span>
+    <span class="badge">Top N per recall: ${esc(summary?.top_n_per_recall ?? 10)}</span>
+  </div>
+  <div class="diversity-grid concentration-grid">
+    <article class="diversity-dim">
+      <h3>Summary</h3>
+      <div class="diversity-kpis">
+        <div><span>Miss Count</span><strong>${fmt(summary?.miss_count ?? 0)}</strong></div>
+        <div><span>Total Opportunities</span><strong>${fmt(summary?.total_recall_opportunities ?? 0)}</strong></div>
+        <div><span>Miss Rate</span><strong>${pct(summary?.miss_rate ?? 0)}</strong></div>
+      </div>
+    </article>
+  </div>
+  <div class="panel table-wrap">
+    <table class="top-memories">
+      <thead><tr><th>Memory</th><th>Count</th><th>Share</th><th>Category</th><th>Source</th><th>Path</th></tr></thead>
+      <tbody>
+        ${topMissed.length
+    ? topMissed.map(item => `<tr><td class="id">${esc(item.id || 'unknown')}</td><td>${fmt(item.count)}</td><td>${pct(item.share)}</td><td>${esc(item.category || 'unknown')}</td><td>${esc(item.source_type || 'unknown')}</td><td>${esc(item.path || 'unknown')}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="muted">No data yet</td></tr>`}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderAutoRecallInjectionRate(target, summary) {
+  const node = $(target);
+  if (!node) return;
+  node.innerHTML = `<div class="diversity-head">
+    <span class="badge">Window: ${esc(summary?.window_days ?? 7)} days</span>
+  </div>
+  <div class="diversity-grid concentration-grid">
+    <article class="diversity-dim">
+      <h3>AutoRecall Injection</h3>
+      <div class="diversity-kpis">
+        <div><span>Candidate Count</span><strong>${fmt(summary?.candidate_count ?? 0)}</strong></div>
+        <div><span>After Gate</span><strong>${fmt(summary?.candidate_count_after_gate ?? 0)}</strong></div>
+        <div><span>Injected Count</span><strong>${fmt(summary?.injected_count ?? 0)}</strong></div>
+        <div><span>Gate Pass Rate</span><strong>${pct(summary?.gate_pass_rate ?? 0)}</strong></div>
+        <div><span>Injection Rate</span><strong>${pct(summary?.injection_rate ?? 0)}</strong></div>
+      </div>
+    </article>
+  </div>`;
+}
 async function api(path, options) {
   const res = await fetch(path, options);
   return res.json();
@@ -243,6 +293,8 @@ function initMetrics() {
   const diversity = retrieval.diversity || {};
   const retrievalDiversity = retrieval.retrieval_diversity || {};
   const reinforcementConcentration = retrieval.reinforcement_concentration || {};
+  const recallMissAfterResponse = retrieval.recall_miss_after_response || {};
+  const autoRecallInjectionRate = retrieval.auto_recall_injection_rate || {};
   cards('[data-metric-cards]', [
     { label: 'Events', value: overview.events || 0 },
     { label: 'Memories', value: overview.memories || 0 },
@@ -264,6 +316,8 @@ function initMetrics() {
   bars('[data-category-bars]', retrieval.categories || [], 'category', 'count');
   renderRetrievalDiversity('[data-retrieval-diversity]', retrievalDiversity);
   renderReinforcementConcentration('[data-reinforcement-concentration]', reinforcementConcentration);
+  renderRecallMissAfterResponse('[data-recall-miss-after-response]', recallMissAfterResponse);
+  renderAutoRecallInjectionRate('[data-auto-recall-injection-rate]', autoRecallInjectionRate);
   table('[data-conflicts]', [
     { label: 'Category', value: r => r.category },
     { label: 'Count', value: r => r.count },
