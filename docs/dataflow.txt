@@ -1,3 +1,4 @@
+Recall Flow：
 User Query
     ↓
 normalize
@@ -11,3 +12,26 @@ normalize
   rerank
     ↓
 autoRecall inject
+
+
+Write Flow：
+conversation
+    ↓
+smart extraction
+    ↓
+memory candidate
+    ↓
+confidence
+    ↓
+chunks
+
+Lifecycle Flow：
+nightly-maintenance
+    ↓
+detect conflicts
+    ↓
+decay
+    ↓
+archive
+    ↓
+kg bridge
