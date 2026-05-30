@@ -647,7 +647,7 @@ memory-engine 完成第一轮结构化重构。
 - debug metadata 字段
 - 既有 memory 行为
 
-## v0.8.1 (2026-05-28) Bug Fix
+## (2026-05-28) Bug Fix
 
 - 修复 LanceDB 主路径 embedding 阶段因为 SiliconFlow API key 在 definePluginEntry bundle 上下文不可读而被跳过的问题
 - resolveSFKey 优先从 api.config 获取 key，保证 generateEmbeddingRuntime 在 runtime bundle 中可用
@@ -658,3 +658,10 @@ memory-engine 完成第一轮结构化重构。
 误处理前两天数据。
 
 workspace/scripts/session-checkpoint.js 已本地修复为 Asia/Shanghai business date，低耦合，不纳入 memory-engine CodeGraph。
+
+## (2026-05-29) Bug Fixed
+- 修复 OpenClaw core memory 缺失 confidence 时在 vector / LanceDB / FTS5 / fallback 检索链路中被误过滤的问题。
+- 统一 external memory metadata normalize，新增 confidence_mode、source_type、category、decay_eligible、archive_eligible 等字段。
+- 补齐 MEMORY.md、memory/projects、daily journal、dreaming、stats-history 等路径分类推断。
+- 调整 hybrid recall 计分，使 external 候选可参与 rerank，但不污染 managed memory 的 confidence、decay、archive 机制。
+- 控制台补充 external memory 标识与调试字段展示。
