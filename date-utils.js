@@ -1,4 +1,6 @@
-export const DEFAULT_BUSINESS_TIME_ZONE = "Asia/Shanghai";
+import { getDefaultMemoryEngineConfig } from "./lib/config/defaults.js";
+
+export const DEFAULT_BUSINESS_TIME_ZONE = getDefaultMemoryEngineConfig().timezone.business;
 
 const dtfCache = new Map();
 

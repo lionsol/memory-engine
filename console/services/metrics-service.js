@@ -1,4 +1,5 @@
 import { tableExists, withDb } from "./db.js";
+import { getMemoryEngineConfig } from "../../lib/config/runtime.js";
 
 function round(value, digits = 3) {
   if (!Number.isFinite(value)) return 0;
@@ -7,6 +8,7 @@ function round(value, digits = 3) {
 }
 
 export function overviewMetrics() {
+  const metricTopN = Math.max(1, Number(getMemoryEngineConfig(null)?.metrics?.topN) || 10);
   return withDb(db => {
     const events = db.prepare("SELECT COUNT(*) AS count FROM memory_events").get().count;
     const memories = tableExists(db, "chunks") ? db.prepare("SELECT COUNT(*) AS count FROM chunks").get().count : 0;
@@ -26,7 +28,7 @@ export function overviewMetrics() {
     const hitValues = activeHits.map(row => Number(row.hit_count) || 0);
     const totalHits = hitValues.reduce((sum, value) => sum + value, 0);
     const reinforcedMemories = hitValues.filter(value => value > 0).length;
-    const top10Hits = hitValues.slice(0, 10).reduce((sum, value) => sum + value, 0);
+    const topHits = hitValues.slice(0, metricTopN).reduce((sum, value) => sum + value, 0);
     const hhi = totalHits > 0
       ? hitValues.reduce((sum, value) => {
         const share = value / totalHits;
@@ -37,7 +39,7 @@ export function overviewMetrics() {
       active_memories: hitValues.length,
       reinforced_memories: reinforcedMemories,
       total_hits: totalHits,
-      top10_share: totalHits > 0 ? round(top10Hits / totalHits, 4) : 0,
+      top10_share: totalHits > 0 ? round(topHits / totalHits, 4) : 0,
       hhi: round(hhi, 4),
     };
     return { events, memories, confidence, reinforcement };
@@ -45,6 +47,7 @@ export function overviewMetrics() {
 }
 
 export function retrievalMetrics() {
+  const metricWindowDays = Math.max(1, Number(getMemoryEngineConfig(null)?.metrics?.windowDays) || 7);
   return withDb(db => {
     const aggregate = db.prepare(`
       SELECT COUNT(*) AS completed, ROUND(AVG(latency_ms), 1) AS avg_latency_ms,
@@ -56,7 +59,7 @@ export function retrievalMetrics() {
     const categories = db.prepare(`
       SELECT COALESCE(json_extract(metadata_json, '$.category'), 'unknown') AS category, COUNT(*) AS count
       FROM memory_events
-      WHERE event_type = 'memory_candidate_retrieved' AND created_at >= datetime('now', '-7 days')
+      WHERE event_type = 'memory_candidate_retrieved' AND created_at >= datetime('now', '-${metricWindowDays} days')
       GROUP BY category
       ORDER BY count DESC
     `).all();
@@ -70,7 +73,7 @@ export function retrievalMetrics() {
       : 0;
     const top1 = categories[0] ? Number(categories[0].count) || 0 : 0;
     const diversity = {
-      window_days: 7,
+      window_days: metricWindowDays,
       candidate_events: categoryTotal,
       distinct_categories: distinctCategories,
       entropy: round(entropy, 4),

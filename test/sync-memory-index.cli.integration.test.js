@@ -11,7 +11,8 @@ import {
 import { homedir } from "os";
 import { resolve } from "path";
 import Database from "better-sqlite3";
-import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "../date-utils.js";
+import { dateStrInTimeZone } from "../date-utils.js";
+import { getSmartAddTimeZone } from "../lib/config/helpers.js";
 import { detectOpenClawRuntime } from "./helpers/openclaw-runtime.js";
 
 const ENABLE_INTEGRATION = process.env.OPENCLAW_RUN_MEMORY_SYNC_TEST === "1";
@@ -22,7 +23,6 @@ const INTEGRATION_SKIP_REASON = !ENABLE_INTEGRATION
   : (OPENCLAW_RUNTIME.available ? false : OPENCLAW_RUNTIME.reason);
 const HOME = homedir();
 const CONFIG_PATH = resolve(HOME, ".openclaw/openclaw.json");
-const SMART_ADD_TIME_ZONE = process.env.MEMORY_ENGINE_TIME_ZONE || DEFAULT_BUSINESS_TIME_ZONE;
 
 function shouldSkipUnavailableSync(error) {
   const msg = String(error?.message || error || "");
@@ -44,6 +44,7 @@ function buildEntryBlock(entryId) {
 test("integration: sync-memory-index CLI ingests today's smart-add file", { skip: INTEGRATION_SKIP_REASON }, async (t) => {
   const { runMemoryIndexSyncCli } = await import("../session-checkpoint.js");
   const cfg = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
+  const smartAddTimeZone = getSmartAddTimeZone(cfg);
   const { manager, error } = await getMemorySearchManager({ cfg, agentId: "main" });
   assert.equal(error ?? null, null);
   assert.ok(manager);
@@ -51,7 +52,7 @@ test("integration: sync-memory-index CLI ingests today's smart-add file", { skip
   const status = manager.status();
   const workspaceDir = status.workspaceDir;
   const dbPath = status.dbPath;
-  const dateKey = dateStrInTimeZone(0, SMART_ADD_TIME_ZONE);
+  const dateKey = dateStrInTimeZone(0, smartAddTimeZone);
   const relPath = `memory/smart-add/${dateKey}.md`;
   const fileDir = resolve(workspaceDir, "memory/smart-add");
   const filePath = resolve(fileDir, `${dateKey}.md`);

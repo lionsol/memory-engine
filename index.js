@@ -2,7 +2,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
 import lancedb from '@lancedb/lancedb';
 import { buildSmartAddFingerprint } from "./smart-add-fingerprint.js";
-import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "./date-utils.js";
+import { dateStrInTimeZone } from "./date-utils.js";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { explainAutoRecallSkip, formatAutoRecallContext, parseCitedMemoryIds, shouldInjectCandidate } from "./auto-recall.js";
@@ -20,6 +20,8 @@ import {
   getSharedMemoryManager,
 } from "./memory-manager-runtime.js";
 import { ensureEngineWritable, withEngineDb } from "./lib/db/engine-db.js";
+import { getMemoryEngineConfig } from "./lib/config/runtime.js";
+import { getSmartAddTimeZone } from "./lib/config/helpers.js";
 import { insertMemoryEvent } from "./lib/db/events.js";
 import { ensureMemoryEngineTables, migrateLegacyMemoryEventsFromCore } from "./lib/db/schema.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
@@ -33,7 +35,6 @@ const LANCEDB_READY_TIMEOUT_MS = 400;
 const MEMORY_SUPPLEMENT_SENTINEL = "MEMORY_SUPPLEMENT_SENTINEL";
 const MEMORY_SUPPLEMENT_BOUNDARY_START = "<!-- MEMORY_ENGINE_SUPPLEMENT_START -->";
 const MEMORY_SUPPLEMENT_BOUNDARY_END = "<!-- MEMORY_ENGINE_SUPPLEMENT_END -->";
-const SMART_ADD_TIME_ZONE = process.env.MEMORY_ENGINE_TIME_ZONE || DEFAULT_BUSINESS_TIME_ZONE;
 
 // ── LanceDB globals (initialized in register) ──
 let lancedbTable = null;
@@ -483,6 +484,8 @@ export default definePluginEntry({
 
     const autoRecallTraceByRun = new Map();
     const autoRecallTraceBySession = new Map();
+    const memoryEngineConfig = getMemoryEngineConfig(api?.config || null);
+    const smartAddTimeZone = getSmartAddTimeZone(api?.config || null);
     const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
     const embeddingRuntimeConfig = api.config || pluginEntryConfig || null;
     const generateEmbeddingRuntime = text => generateEmbedding(text, {
@@ -495,7 +498,10 @@ export default definePluginEntry({
       api.config?.autoRecall ||
       {};
     if (autoRecallConfig.enabled && typeof api.on === "function") {
-      const autoRecallTopK = Math.max(1, Number(autoRecallConfig.topK || 3));
+      const autoRecallTopK = Math.max(
+        1,
+        Number(autoRecallConfig.topK ?? memoryEngineConfig?.recall?.topK ?? 3) || 3
+      );
       const autoRecallTimeoutMs = Math.max(1000, Number(autoRecallConfig.timeoutMs || 8000));
       console.log(`[memory-engine] autoRecall hook registered topK=${autoRecallTopK} timeoutMs=${autoRecallTimeoutMs}`);
       api.on("before_prompt_build", async (event, ctx) => {
@@ -840,7 +846,7 @@ export default definePluginEntry({
       api,
       autoRouteCategory,
       dateStrInTimeZone,
-      SMART_ADD_TIME_ZONE,
+      SMART_ADD_TIME_ZONE: smartAddTimeZone,
       resolve,
       WORKSPACE,
       SMART_ADD_DIR,
