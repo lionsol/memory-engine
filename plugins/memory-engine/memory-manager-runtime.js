@@ -1,16 +1,27 @@
-import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
-import { resolve } from "path";
+import { resolve, dirname } from "path";
 
 export const HOME_DIR = homedir();
-export const DB_PATH = resolve(HOME_DIR, ".openclaw/memory/main.sqlite");
+export const CORE_DB_PATH = process.env.MEMORY_ENGINE_CORE_DB || resolve(HOME_DIR, ".openclaw/memory/main.sqlite");
+export const ENGINE_DB_PATH = process.env.MEMORY_ENGINE_DB || resolve(HOME_DIR, ".openclaw/memory/memory-engine/memory-engine.sqlite");
+export const ENGINE_DB_DIR = dirname(ENGINE_DB_PATH);
+// Backward compatibility for existing imports; prefer CORE_DB_PATH in new code.
+export const DB_PATH = CORE_DB_PATH;
 export const WORKSPACE = resolve(HOME_DIR, ".openclaw/workspace");
 export const SMART_ADD_DIR = "memory/smart-add";
 export const INDEX_SYNC_WATCH_DIRS = ["memory/smart-add", "memory/episodes"];
 
 export const DEFAULT_AGENT_ID = process.env.OPENCLAW_AGENT_ID || "main";
 export const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || resolve(HOME_DIR, ".openclaw/openclaw.json");
+
+async function resolveMemorySearchManager() {
+  const mod = await import("openclaw/plugin-sdk/memory-core-engine-runtime");
+  if (typeof mod?.getMemorySearchManager !== "function") {
+    throw new Error("openclaw memory-core-engine-runtime unavailable");
+  }
+  return mod.getMemorySearchManager;
+}
 
 export function loadOpenClawConfig(configPath = OPENCLAW_CONFIG_PATH) {
   if (!existsSync(configPath)) {
@@ -30,6 +41,20 @@ export function loadOpenClawConfig(configPath = OPENCLAW_CONFIG_PATH) {
 }
 
 export async function getSharedMemoryManager({ purpose, cfg, agentId, allowImplicit = true } = {}) {
+  let getMemorySearchManager = null;
+  try {
+    getMemorySearchManager = await resolveMemorySearchManager();
+  } catch (error) {
+    return {
+      manager: null,
+      source: "config",
+      cfg: null,
+      agentId: null,
+      configPath: null,
+      error: String(error?.message || error) || "memory manager unavailable",
+    };
+  }
+
   const implicitParams = purpose ? { purpose } : {};
   let implicitError = null;
 

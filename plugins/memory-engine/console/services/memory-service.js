@@ -117,7 +117,15 @@ export function archiveMemory(idPrefix) {
     ensureMemoryConfidenceTable(db);
     const memory = findMemoryInOpenDb(db, idPrefix);
     if (!memory) return { ok: false, error: "memory not found" };
-    db.prepare("UPDATE memory_confidence SET is_archived = 1 WHERE chunk_id = ?").run(memory.id);
+    db.prepare(`
+      INSERT INTO memory_confidence
+        (chunk_id, initial_confidence, confidence, last_confidence_update, base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
+      VALUES (?, 0, 0, strftime('%s','now'), 7.0, 0, 1, 0, 0, ?)
+      ON CONFLICT(chunk_id) DO UPDATE SET
+        is_archived = 1,
+        confidence = MIN(COALESCE(memory_confidence.confidence, 0), 0.05),
+        last_confidence_update = excluded.last_confidence_update
+    `).run(memory.id, memory.category || "raw_log");
     recordEvent(db, { event_type: "memory_archived", memory_id: memory.id, source: "console" });
     return { ok: true, id: memory.id };
   });
@@ -125,10 +133,20 @@ export function archiveMemory(idPrefix) {
 
 export function deleteMemory(idPrefix) {
   return withDb(db => {
+    ensureMemoryConfidenceTable(db);
     const memory = findMemoryInOpenDb(db, idPrefix);
     if (!memory) return { ok: false, error: "memory not found" };
-    if (tableExists(db, "chunks")) db.prepare("DELETE FROM chunks WHERE id = ?").run(memory.id);
-    db.prepare("DELETE FROM memory_confidence WHERE chunk_id = ?").run(memory.id);
+    // Core chunks are owned by OpenClaw and must remain read-only from this plugin.
+    // "Delete" is implemented as a local archival tombstone inside memory_confidence.
+    db.prepare(`
+      INSERT INTO memory_confidence
+        (chunk_id, initial_confidence, confidence, last_confidence_update, base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
+      VALUES (?, 0, 0, strftime('%s','now'), 7.0, 0, 1, 0, 0, ?)
+      ON CONFLICT(chunk_id) DO UPDATE SET
+        is_archived = 1,
+        confidence = MIN(COALESCE(memory_confidence.confidence, 0), 0.01),
+        last_confidence_update = excluded.last_confidence_update
+    `).run(memory.id, memory.category || "raw_log");
     recordEvent(db, { event_type: "memory_deleted", memory_id: memory.id, source: "console" });
     return { ok: true, id: memory.id };
   });
