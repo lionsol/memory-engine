@@ -665,3 +665,49 @@ workspace/scripts/session-checkpoint.js 已本地修复为 Asia/Shanghai busines
 - 补齐 MEMORY.md、memory/projects、daily journal、dreaming、stats-history 等路径分类推断。
 - 调整 hybrid recall 计分，使 external 候选可参与 rerank，但不污染 managed memory 的 confidence、decay、archive 机制。
 - 控制台补充 external memory 标识与调试字段展示。
+
+## v0.8.1 (2026-05-30) 
+
+本次更新主要修复 memory-engine 与 OpenClaw core DB 混用导致的 SQLite/WAL 冲突问题，并补强时间语义相关回归测试。
+
+### 主要改动
+
+- 将 memory-engine 插件自有数据迁移到独立数据库：
+  - 新增 `ENGINE_DB_PATH`
+  - 保留 `CORE_DB_PATH` 只读访问
+  - 避免 `better-sqlite3` 与 OpenClaw gateway 的 `node:sqlite` 同时写同一数据库
+
+- 新增统一连接层：
+  - `lib/db/engine-db.js`
+  - 插件主库读写
+  - OpenClaw core DB 通过 `ATTACH core` 只读访问
+  - 增加写保护，阻止误写 `core/chunks/chunks_fts`
+
+- `memory_events` 改为写入插件独立数据库
+  - 启动时迁移旧 core DB 中的 legacy events
+  - 保持历史 telemetry / recall trace 连续
+
+- Console DB 读取切换到插件库
+  - `console/services/db.js`
+  - `console/services/memory-service.js`
+  - 删除记忆改为 tombstone，不再直接删除 core chunks
+
+- 修复 nightly episode 日期语义
+  - 区分 `targetDate` 与 `generatedAt`
+  - episode ID 使用格式：
+    - `{targetDate}_{category}_nightly_generated_{HHmmss}`
+  - 示例：
+    - `2026-05-28_episodic_nightly_generated_033000`
+
+- 新增回归测试
+  - DB 隔离与 core 只读保护
+  - Asia/Shanghai business timezone
+  - nightly episode targetDate/generatedAt 语义
+
+### 测试结果
+
+```text
+tests 53
+pass 48
+fail 0
+skipped 5
