@@ -1,4 +1,5 @@
 import { withDb } from "./db.js";
+import { getMemoryEngineConfig } from "../../lib/config/runtime.js";
 
 export function latencySeries({ limit = 120 } = {}) {
   return withDb(db => db.prepare(`
@@ -11,6 +12,7 @@ export function latencySeries({ limit = 120 } = {}) {
 }
 
 export function recallTelemetry() {
+  const businessTz = getMemoryEngineConfig(null)?.timezone?.business || "Asia/Shanghai";
   return withDb(db => {
     const totals = db.prepare(`
       SELECT
@@ -30,7 +32,7 @@ export function recallTelemetry() {
       GROUP BY bucket
       ORDER BY bucket ASC
     `).all();
-    return { totals, byHour, timezone: "Asia/Shanghai" };
+    return { totals, byHour, timezone: businessTz };
   }, { readonly: true });
 }
 

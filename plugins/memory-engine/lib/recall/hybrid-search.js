@@ -6,17 +6,11 @@ import {
   rankFtsFallbackCandidates,
   stripPromptMetadataPrefix,
 } from "../../query-utils.js";
+import { getMemoryEngineConfig } from "../config/runtime.js";
 
-const MIN_CONFIDENCE_DEFAULT = 0.15;
-const EXTERNAL_BOOST_VALUE = 0.05;
-const EXTERNAL_SOURCE_BOOST = {
-  core_profile: 0.06,
-  project: 0.05,
-  daily_journal: 0.02,
-  dreaming: 0,
-  stats: -0.05,
-  external: 0.03,
-};
+const DEFAULT_EXTERNAL_CATEGORY_KEYS = Object.keys(
+  getMemoryEngineConfig(null)?.ranking?.categoryBoost?.external || {}
+);
 
 function round4(value) {
   const n = Number(value);
@@ -58,7 +52,7 @@ function inferCategoryFromChunk(path = "", text = "", categoryMap = null, fallba
   const fromText = extractCategoryFromText(text);
   if (fromText) {
     if (!categoryMap || categoryMap[fromText]) return fromText;
-    if (Object.prototype.hasOwnProperty.call(EXTERNAL_SOURCE_BOOST, fromText)) return fromText;
+    if (DEFAULT_EXTERNAL_CATEGORY_KEYS.includes(fromText)) return fromText;
   }
   const fromPath = inferCategoryFromPath(path);
   if (fromPath !== "external") return fromPath;
@@ -95,26 +89,36 @@ function lexicalMatchScore(haystack, terms) {
   return round4(matched / terms.length);
 }
 
-function computeRecencyBoost(createdAtSec, nowSec) {
+function computeRecencyBoost(createdAtSec, nowSec, rankingConfig = {}) {
   if (!createdAtSec || !Number.isFinite(createdAtSec)) return 0;
   const ageDays = Math.max(0, (nowSec - createdAtSec) / 86400);
-  const boost = 0.06 * Math.exp(-ageDays / 2.5);
+  const recencyCfg = rankingConfig?.recencyBoost || {};
+  const base = toFiniteNumber(recencyCfg.base) ?? 0.06;
+  const decayDays = toFiniteNumber(recencyCfg.decayDays) ?? 2.5;
+  const safeDecay = decayDays > 0 ? decayDays : 2.5;
+  const boost = base * Math.exp(-ageDays / safeDecay);
   return round4(boost);
 }
 
-function computeManagedCategoryBoost(category, text = "") {
+function computeManagedCategoryBoost(category, text = "", rankingConfig = {}) {
+  const managedCfg = rankingConfig?.categoryBoost?.managed || {};
   const cat = String(category || "").toLowerCase();
-  if (cat === "episodic") return 0.12;
+  const episodicBoost = Number(managedCfg.episodic);
+  const sessionCheckpointBoost = Number(managedCfg.sessionCheckpoint);
+  if (cat === "episodic") return Number.isFinite(episodicBoost) ? episodicBoost : 0.12;
   const raw = String(text || "").toLowerCase();
-  if (raw.includes("session checkpoint") || raw.includes("session-checkpoint")) return 0.1;
+  if (raw.includes("session checkpoint") || raw.includes("session-checkpoint")) {
+    return Number.isFinite(sessionCheckpointBoost) ? sessionCheckpointBoost : 0.1;
+  }
   return 0;
 }
 
-function resolveEffectiveMinConfidence(cfg = null) {
-  const fromCfg = cfg?.memory?.minConfidence ?? cfg?.autoRecall?.minConfidence;
+function resolveEffectiveMinConfidence(cfg = null, engineConfig = null) {
+  const mergedConfig = engineConfig || getMemoryEngineConfig(cfg);
+  const fromCfg = cfg?.memory?.minConfidence ?? cfg?.autoRecall?.minConfidence ?? mergedConfig?.confidence?.min;
   const fromEnv = process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
   const resolved = toFiniteNumber(fromCfg ?? fromEnv);
-  if (resolved === null) return MIN_CONFIDENCE_DEFAULT;
+  if (resolved === null) return toFiniteNumber(mergedConfig?.confidence?.min) ?? 0.15;
   return Math.max(0, Math.min(1, resolved));
 }
 
@@ -210,27 +214,37 @@ function isCandidateAllowedForRerank(item, minConfidence) {
   return conf >= minConfidence;
 }
 
-function categoryBoost(item) {
+function categoryBoost(item, rankingConfig = {}) {
   if (item?.confidence_mode === "external") {
+    const externalSourceBoost = rankingConfig?.categoryBoost?.external || {};
+    const fallbackExternalBoost = Number(externalSourceBoost.external);
     const key = String(item?.category || "external").toLowerCase();
-    if (Object.prototype.hasOwnProperty.call(EXTERNAL_SOURCE_BOOST, key)) return EXTERNAL_SOURCE_BOOST[key];
-    return EXTERNAL_SOURCE_BOOST.external;
+    if (Object.prototype.hasOwnProperty.call(externalSourceBoost, key)) {
+      const value = Number(externalSourceBoost[key]);
+      return Number.isFinite(value) ? value : 0;
+    }
+    return Number.isFinite(fallbackExternalBoost) ? fallbackExternalBoost : 0.03;
   }
-  return computeManagedCategoryBoost(item?.category, item?.text);
+  return computeManagedCategoryBoost(item?.category, item?.text, rankingConfig);
 }
 
-function confidenceBoost(item) {
+function confidenceBoost(item, rankingConfig = {}) {
   if (item?.confidence_mode === "external") return 0;
   const conf = toFiniteNumber(item?.confidence);
   if (conf === null) return 0;
-  return round4(conf * 0.1);
+  const weight = toFiniteNumber(rankingConfig?.confidenceWeight) ?? 0.1;
+  return round4(conf * weight);
 }
 
-function externalBoost(item) {
+function externalBoost(item, rankingConfig = {}) {
   if (item?.confidence_mode !== "external") return 0;
+  const excluded = Array.isArray(rankingConfig?.externalBoost?.excludedCategories)
+    ? rankingConfig.externalBoost.excludedCategories
+    : ["dreaming", "stats"];
   const category = String(item?.category || "external").toLowerCase();
-  if (category === "dreaming" || category === "stats") return 0;
-  return EXTERNAL_BOOST_VALUE;
+  if (excluded.includes(category)) return 0;
+  const value = toFiniteNumber(rankingConfig?.externalBoost?.value);
+  return value === null ? 0.05 : value;
 }
 
 function scoreCandidate(item) {
@@ -302,9 +316,21 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
     ? getMemorySearchManagerRuntime
     : (await import("openclaw/plugin-sdk/memory-core-engine-runtime")).getMemorySearchManager;
 
-  const k = topK || 5;
+  const engineConfig = getMemoryEngineConfig(cfg);
+  const recallConfig = engineConfig.recall || {};
+  const rankingConfig = engineConfig.ranking || {};
+  const recallDefaultTopK = Math.max(1, Number(recallConfig.topK) || 5);
+  const k = Math.max(1, Number(topK || recallDefaultTopK) || recallDefaultTopK);
+  const vectorTopK = Math.max(1, Number(recallConfig.vectorTopK) || 30);
+  const ftsTopK = Math.max(1, Number(recallConfig.ftsTopK) || 20);
+  const likePatternTopN = Math.max(1, Number(recallConfig.likePatternTopN) || 8);
+  const likeTopK = Math.max(1, Number(recallConfig.likeTopK) || 30);
+  const recentTopK = Math.max(1, Number(recallConfig.recentTopK) || 120);
+  const recentRerankTopK = Math.max(1, Number(recallConfig.recentRerankTopK) || 20);
+  const recentFallbackTopK = Math.max(1, Number(recallConfig.recentFallbackTopK) || recentRerankTopK);
+  const rrfK = Math.max(1, Number(rankingConfig.rrfK) || 60);
   const nowSec = Math.floor(Date.now() / 1000);
-  const minConfidence = resolveEffectiveMinConfidence(cfg);
+  const minConfidence = resolveEffectiveMinConfidence(cfg, engineConfig);
   const channels = {};
   const rawQuery = String(text || "");
   const strippedQuery = stripPromptMetadataPrefix(rawQuery);
@@ -439,7 +465,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
       } else {
         debug.vector_stage = "lancedb_search";
         try {
-          const rawLance = await lancedbTable.search(queryVec).limit(30).execute();
+          const rawLance = await lancedbTable.search(queryVec).limit(vectorTopK).execute();
           const lanceRows = await collectLanceRows(rawLance);
           vectorHandled = true;
           debug.vector_backend = "lancedb";
@@ -465,7 +491,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
                 .filter(item => Number.isFinite(item.semantic_score))
                 .filter(filterForRerank)
                 .sort((a, b) => b.semantic_score - a.semantic_score)
-                .slice(0, 30)
+                .slice(0, vectorTopK)
             );
             candidateCounts.vector_after_conf_filter = scored.length;
             if (scored.length > 0) channels.vector = scored;
@@ -500,7 +526,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
 
     if (vectorManager) {
       try {
-        const raw = await vectorManager.search(strippedQuery, { limit: 30 });
+        const raw = await vectorManager.search(strippedQuery, { limit: vectorTopK });
         const candidates = raw?.entries || raw || [];
         debug.vector_backend = "memory-core-sqlite";
         candidateCounts.vector_raw = candidates.length;
@@ -524,7 +550,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
             .filter(item => Number.isFinite(item.semantic_score))
             .filter(filterForRerank)
             .sort((a, b) => b.semantic_score - a.semantic_score)
-            .slice(0, 30)
+            .slice(0, vectorTopK)
         );
         candidateCounts.vector_after_conf_filter = scored.length;
         if (scored.length > 0) channels.vector = scored;
@@ -553,7 +579,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
         WHERE chunks_fts MATCH ?
           AND COALESCE(mc.is_archived, 0) = 0
         ORDER BY bm25(chunks_fts, 0)
-        LIMIT 20
+        LIMIT ${ftsTopK}
       `;
       const strictRows = withDb(db => db.prepare(ftsSelectSql).all(normalizedQuery));
       candidateCounts.fts_raw_primary = strictRows.length;
@@ -581,7 +607,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
             rawQuery: strippedQuery,
             queryTerms,
             nowSec,
-            topK: 20,
+            topK: ftsTopK,
           });
           debug.post_rerank_topK = reranked.post_rerank_topK;
           channels.fts = uniqueById(
@@ -606,7 +632,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
   if (ftsIsEmpty) {
     debug.fallbacks_triggered.push("fts_empty");
     try {
-      const likePatterns = buildLikeFallbackPatterns(normalizedQuery, 8);
+      const likePatterns = buildLikeFallbackPatterns(normalizedQuery, likePatternTopN);
       debug.like_patterns = likePatterns;
       if (likePatterns.length > 0) {
         const likeRows = withDb(db => {
@@ -623,7 +649,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
             WHERE COALESCE(mc.is_archived, 0) = 0
               AND (${where})
             ORDER BY c.updated_at DESC
-            LIMIT 30
+            LIMIT ${likeTopK}
           `;
           const params = likePatterns.flatMap(pattern => [pattern, pattern]);
           return db.prepare(sql).all(...params);
@@ -637,7 +663,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
                 const lexical = lexicalMatchScore(`${row.path}\n${row.text}`, queryTerms);
                 return normalizeCandidate({
                   ...row,
-                  similarity: 0.3 + lexical,
+                  similarity: (toFiniteNumber(rankingConfig?.fallbackBaseScore?.like) ?? 0.3) + lexical,
                   created_at: row.updated_at || 0,
                 });
               })
@@ -662,7 +688,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
       WHERE COALESCE(mc.is_archived, 0) = 0
         AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
       ORDER BY c.updated_at DESC
-      LIMIT 120
+      LIMIT ${recentTopK}
     `).all());
     candidateCounts.recent_raw = recentRows.length;
     const scoredRecent = uniqueById(
@@ -670,18 +696,18 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
         .map(row => {
           const lexical = lexicalMatchScore(`${row.path}\n${row.text}`, queryTerms);
           if (lexical <= 0) return null;
-          const recency = computeRecencyBoost(normalizeUnixSeconds(row.updated_at), nowSec);
+          const recency = computeRecencyBoost(normalizeUnixSeconds(row.updated_at), nowSec, rankingConfig);
           return normalizeCandidate({
             ...row,
             category: row.category || inferCategoryFromChunk(row.path, row.text, categoryMap, "raw_log"),
-            similarity: 0.35 + lexical + recency,
+            similarity: (toFiniteNumber(rankingConfig?.fallbackBaseScore?.recent) ?? 0.35) + lexical + recency,
             created_at: row.updated_at || 0,
           });
         })
         .filter(Boolean)
         .filter(filterForRerank)
         .sort((a, b) => b.semantic_score - a.semantic_score)
-        .slice(0, 20)
+        .slice(0, recentRerankTopK)
     );
     if (scoredRecent.length > 0) channels.recent = scoredRecent;
 
@@ -689,10 +715,10 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
       .filter(row => row.category === "episodic" || String(row.path).startsWith("memory/episodes/"))
       .map(row => normalizeCandidate({
         ...row,
-        similarity: row.semantic_score + 0.08,
+        similarity: row.semantic_score + (toFiniteNumber(rankingConfig?.fallbackBaseScore?.episodeBonus) ?? 0.08),
       }))
       .filter(Boolean)
-      .slice(0, 20);
+      .slice(0, recentRerankTopK);
     candidateCounts.episode_raw = episodeRows.length;
     if (episodeRows.length > 0) channels.episode = episodeRows;
   } catch {}
@@ -714,7 +740,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
         WHERE COALESCE(mc.is_archived, 0) = 0
           AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
         ORDER BY c.updated_at DESC
-        LIMIT 20
+        LIMIT ${recentFallbackTopK}
       `).all());
       candidateCounts.recent_fallback_raw = recentFallbackRows.length;
       if (recentFallbackRows.length > 0) {
@@ -723,11 +749,11 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
           recentFallbackRows
             .map(row => {
               const category = row.category || inferCategoryFromChunk(row.path, row.text, categoryMap, "raw_log");
-              const recency = computeRecencyBoost(normalizeUnixSeconds(row.updated_at), nowSec);
+              const recency = computeRecencyBoost(normalizeUnixSeconds(row.updated_at), nowSec, rankingConfig);
               return normalizeCandidate({
                 ...row,
                 category,
-                similarity: 0.25 + recency,
+                similarity: (toFiniteNumber(rankingConfig?.fallbackBaseScore?.recentFallback) ?? 0.25) + recency,
                 created_at: row.updated_at || 0,
               });
             })
@@ -774,7 +800,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
       for (const tag of semanticTags) {
         if (!exist.semantic_sources.includes(tag)) exist.semantic_sources.push(tag);
       }
-      exist.rrfScore += 1 / (60 + idx + 1);
+      exist.rrfScore += 1 / (rrfK + idx + 1);
       exist.semanticScore = Math.max(exist.semanticScore, item.semantic_score || 0);
       if (!exist.path && item.path) exist.path = item.path;
       if (!exist.category && item.category) exist.category = item.category;
@@ -789,10 +815,10 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
   const fused = Array.from(fusion.values()).map(item => {
     item.semanticScore = round4(item.semanticScore);
     item.rrfScore = round4(item.rrfScore);
-    item.recencyBoost = computeRecencyBoost(item.created_at, nowSec);
-    item.categoryBoost = round4(categoryBoost(item));
-    item.confidenceBoost = confidenceBoost(item);
-    item.externalBoost = externalBoost(item);
+    item.recencyBoost = computeRecencyBoost(item.created_at, nowSec, rankingConfig);
+    item.categoryBoost = round4(categoryBoost(item, rankingConfig));
+    item.confidenceBoost = confidenceBoost(item, rankingConfig);
+    item.externalBoost = externalBoost(item, rankingConfig);
     item.finalScore = scoreCandidate(item);
     item.sources = [...new Set([...item.channels, ...item.semantic_sources])];
     return item;
