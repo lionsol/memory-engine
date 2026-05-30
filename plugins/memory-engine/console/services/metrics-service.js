@@ -130,10 +130,16 @@ export function extractRecallTopEntries(rows, { windowDays = 7, topN = 10, nowMs
     const explicitPath = asKey(metadata?.path, "");
     const path = explicitPath || debugPath || "unknown";
     const rankRaw = Number(metadata?.rank);
+    const memoryIdRaw = asKey(row?.memory_id ?? metadata?.memory_id, "");
+    const chunkIdRaw = asKey(metadata?.chunk_id ?? metadata?.id, "");
     grouped.get(recallKey).push({
       row_id: Number(row?.id) || 0,
+      trace_id: traceId || "",
+      recall_key: recallKey,
       rank: Number.isFinite(rankRaw) && rankRaw > 0 ? rankRaw : Number.POSITIVE_INFINITY,
       reference_id: candidateId || "unknown",
+      memory_id: memoryIdRaw || "unknown",
+      chunk_id: chunkIdRaw || "unknown",
       category: asKey(metadata?.category, "unknown"),
       source_type: asKey(metadata?.source_type, "unknown"),
       path,
@@ -234,6 +240,101 @@ function buildReinforcementConcentrationFromEntries(extracted) {
   };
 }
 
+function buildInjectedReferenceSets(rows, { windowDays = 7, nowMs = Date.now() } = {}) {
+  const withinWindow = filterRowsByWindowDays(rows, windowDays, nowMs);
+  const injectedByTrace = new Map();
+  const injectedGlobal = new Set();
+  for (const row of withinWindow) {
+    if (row?.event_type !== "memory_injected") continue;
+    const metadata = safeJson(row?.metadata_json, {});
+    const traceId = asKey(row?.trace_id, "");
+    const referenceId = resolveMemoryReferenceId(row, metadata, "");
+    if (!referenceId) continue;
+    injectedGlobal.add(referenceId);
+    if (!traceId) continue;
+    if (!injectedByTrace.has(traceId)) injectedByTrace.set(traceId, new Set());
+    injectedByTrace.get(traceId).add(referenceId);
+  }
+  return { injectedByTrace, injectedGlobal };
+}
+
+export function buildRecallMissAfterResponseSummary(rows, { windowDays = 7, topN = 10, nowMs = Date.now() } = {}) {
+  const extracted = extractRecallTopEntries(rows, { windowDays, topN, nowMs });
+  const opportunities = Array.isArray(extracted?.entries) ? extracted.entries : [];
+  const { injectedByTrace, injectedGlobal } = buildInjectedReferenceSets(rows, { windowDays, nowMs });
+  const missByReference = new Map();
+
+  for (const item of opportunities) {
+    const referenceId = asKey(item?.reference_id, "unknown");
+    const traceId = asKey(item?.trace_id, "");
+    const injectedSet = traceId ? injectedByTrace.get(traceId) : null;
+    const isInjected = injectedSet ? injectedSet.has(referenceId) : injectedGlobal.has(referenceId);
+    if (isInjected) continue;
+    const existing = missByReference.get(referenceId) || {
+      memory_id: asKey(item?.memory_id, "unknown"),
+      chunk_id: asKey(item?.chunk_id, "unknown"),
+      path: asKey(item?.path, "unknown"),
+      category: asKey(item?.category, "unknown"),
+      source_type: asKey(item?.source_type, "unknown"),
+      count: 0,
+    };
+    existing.count += 1;
+    if (existing.memory_id === "unknown" && item?.memory_id && item.memory_id !== "unknown") existing.memory_id = item.memory_id;
+    if (existing.chunk_id === "unknown" && item?.chunk_id && item.chunk_id !== "unknown") existing.chunk_id = item.chunk_id;
+    if (existing.path === "unknown" && item?.path && item.path !== "unknown") existing.path = item.path;
+    if (existing.category === "unknown" && item?.category && item.category !== "unknown") existing.category = item.category;
+    if (existing.source_type === "unknown" && item?.source_type && item.source_type !== "unknown") existing.source_type = item.source_type;
+    missByReference.set(referenceId, existing);
+  }
+
+  const totalOpportunities = opportunities.length;
+  const sortedMisses = [...missByReference.entries()]
+    .map(([id, value]) => ({ id, ...value }))
+    .sort((a, b) => (b.count - a.count) || String(a.id).localeCompare(String(b.id)));
+  const missCount = sortedMisses.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+  const topMissedMemories = sortedMisses.slice(0, 5).map(item => ({
+    id: item.id,
+    memory_id: item.memory_id || "unknown",
+    chunk_id: item.chunk_id || "unknown",
+    path: item.path || "unknown",
+    category: item.category || "unknown",
+    source_type: item.source_type || "unknown",
+    count: item.count,
+    share: toShare(item.count, totalOpportunities),
+  }));
+
+  return {
+    window_days: Math.max(1, Number(extracted?.window_days) || 7),
+    top_n_per_recall: Math.max(1, Number(extracted?.top_n_per_recall) || 10),
+    total_recall_opportunities: totalOpportunities,
+    miss_count: missCount,
+    miss_rate: toShare(missCount, totalOpportunities),
+    top_missed_memories: topMissedMemories,
+  };
+}
+
+export function buildAutoRecallInjectionRateSummary(rows, { windowDays = 7, nowMs = Date.now() } = {}) {
+  const withinWindow = filterRowsByWindowDays(rows, windowDays, nowMs);
+  let candidateCount = 0;
+  let candidateCountAfterGate = 0;
+  let injectedCount = 0;
+  for (const row of withinWindow) {
+    if (row?.event_type !== "auto_recall_debug") continue;
+    const metadata = safeJson(row?.metadata_json, {});
+    candidateCount += Math.max(0, Number(metadata?.candidate_count) || 0);
+    candidateCountAfterGate += Math.max(0, Number(metadata?.candidate_count_after_gate) || 0);
+    injectedCount += Math.max(0, Number(metadata?.injected_count) || 0);
+  }
+  return {
+    window_days: Math.max(1, Number(windowDays) || 7),
+    candidate_count: candidateCount,
+    candidate_count_after_gate: candidateCountAfterGate,
+    injected_count: injectedCount,
+    injection_rate: toShare(injectedCount, candidateCount),
+    gate_pass_rate: toShare(candidateCountAfterGate, candidateCount),
+  };
+}
+
 export function overviewMetrics() {
   const metricTopN = Math.max(1, Number(getMemoryEngineConfig(null)?.metrics?.topN) || 10);
   return withDb(db => {
@@ -312,7 +413,7 @@ export function retrievalMetrics() {
     const recallRows = db.prepare(`
       SELECT id, event_type, trace_id, session_id, memory_id, metadata_json, created_at
       FROM memory_events
-      WHERE event_type IN ('memory_candidate_retrieved', 'auto_recall_debug')
+      WHERE event_type IN ('memory_candidate_retrieved', 'memory_injected', 'auto_recall_debug')
       ORDER BY id DESC
       LIMIT 5000
     `).all();
@@ -332,12 +433,23 @@ export function retrievalMetrics() {
       path_prefix: summarizeDistribution(extracted.entries, item => item.path_prefix),
     };
     const reinforcementConcentration = buildReinforcementConcentrationFromEntries(extracted);
+    const recallMissAfterResponse = buildRecallMissAfterResponseSummary(recallRows, {
+      windowDays: metricWindowDays,
+      topN: metricTopN,
+      nowMs: metricsNowMs,
+    });
+    const autoRecallInjectionRate = buildAutoRecallInjectionRateSummary(recallRows, {
+      windowDays: metricWindowDays,
+      nowMs: metricsNowMs,
+    });
     return {
       aggregate,
       categories,
       diversity,
       retrieval_diversity: retrievalDiversity,
       reinforcement_concentration: reinforcementConcentration,
+      recall_miss_after_response: recallMissAfterResponse,
+      auto_recall_injection_rate: autoRecallInjectionRate,
     };
   }, { readonly: true });
 }
