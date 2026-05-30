@@ -1,19 +1,20 @@
-import Database from "better-sqlite3";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
 import { insertMemoryEvent } from "../../lib/db/events.js";
+import { openEngineDb } from "../../lib/db/engine-db.js";
 import {
   ensureMemoryConfidenceTable,
   ensureMemoryEventsTable,
+  migrateLegacyMemoryEventsFromCore,
   tableExists,
 } from "../../lib/db/schema.js";
+import { CORE_DB_PATH, ENGINE_DB_PATH } from "../../memory-manager-runtime.js";
 
 export { ensureMemoryConfidenceTable, ensureMemoryEventsTable, tableExists };
 
-export const DB_PATH = process.env.MEMORY_ENGINE_DB || resolve(homedir(), ".openclaw/memory/main.sqlite");
+export const DB_PATH = ENGINE_DB_PATH;
+export const CORE_PATH = CORE_DB_PATH;
 
 export function openDb(options = {}) {
-  return new Database(DB_PATH, { readonly: options.readonly ?? false, fileMustExist: false });
+  return openEngineDb({ readonly: options.readonly ?? false });
 }
 
 export function initConsoleStorage() {
@@ -21,16 +22,21 @@ export function initConsoleStorage() {
   try {
     ensureMemoryEventsTable(db);
     ensureMemoryConfidenceTable(db);
+    migrateLegacyMemoryEventsFromCore(db);
   } finally {
     db.close();
   }
 }
 
 export function withDb(fn, options = {}) {
-  const db = openDb(options);
+  const readonly = Boolean(options.readonly);
+  const db = openDb({ readonly });
   try {
-    ensureMemoryEventsTable(db);
-    ensureMemoryConfidenceTable(db);
+    if (!readonly) {
+      ensureMemoryEventsTable(db);
+      ensureMemoryConfidenceTable(db);
+      migrateLegacyMemoryEventsFromCore(db);
+    }
     return fn(db);
   } finally {
     db.close();

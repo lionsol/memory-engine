@@ -3,13 +3,13 @@ import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "../date-utils.js"
 import { tableExists } from "../lib/db/schema.js";
 import { collectIndexedFiles, readIndexedPathState } from "../lib/sync/index-sync.js";
 import {
-  DB_PATH,
+  CORE_DB_PATH,
   INDEX_SYNC_WATCH_DIRS,
   WORKSPACE,
   getSharedMemoryManager,
 } from "../memory-manager-runtime.js";
 
-function withDb(fn, dbPath = DB_PATH) {
+function withDb(fn, dbPath = CORE_DB_PATH) {
   const db = new Database(dbPath, { readonly: true });
   try {
     return fn(db);
@@ -18,7 +18,7 @@ function withDb(fn, dbPath = DB_PATH) {
   }
 }
 
-function safeWithDb(fn, dbPath = DB_PATH, fallbackValue = null) {
+function safeWithDb(fn, dbPath = CORE_DB_PATH, fallbackValue = null) {
   try {
     return { value: withDb(fn, dbPath), error: null };
   } catch (error) {
@@ -55,7 +55,7 @@ async function main() {
   try {
     const statusBefore = typeof manager.status === "function" ? manager.status() : null;
     const memoryRoot = statusBefore?.workspaceDir || WORKSPACE;
-    const dbPathBefore = statusBefore?.dbPath || DB_PATH;
+    const dbPathBefore = statusBefore?.dbPath || CORE_DB_PATH;
     const scannedFiles = collectIndexedFiles(memoryRoot, INDEX_SYNC_WATCH_DIRS);
     const scannedPaths = scannedFiles.map(file => file.relPath);
 
@@ -67,7 +67,7 @@ async function main() {
     const syncResult = await manager.sync(syncPayload);
 
     const statusAfter = typeof manager.status === "function" ? manager.status() : null;
-    const dbPath = statusAfter?.dbPath || statusBefore?.dbPath || DB_PATH;
+    const dbPath = statusAfter?.dbPath || statusBefore?.dbPath || CORE_DB_PATH;
     const afterResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPath, { paths: [], updatedAt: {} });
     const after = afterResult.value;
 

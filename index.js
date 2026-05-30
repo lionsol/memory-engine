@@ -1,6 +1,5 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
-import Database from "better-sqlite3";
 import lancedb from '@lancedb/lancedb';
 import { buildSmartAddFingerprint } from "./smart-add-fingerprint.js";
 import { DEFAULT_BUSINESS_TIME_ZONE, dateStrInTimeZone } from "./date-utils.js";
@@ -14,15 +13,15 @@ import {
 } from "./query-utils.js";
 import { appendSmartAdd } from "./session-checkpoint.js";
 import {
-  DB_PATH,
   HOME_DIR,
   INDEX_SYNC_WATCH_DIRS,
   SMART_ADD_DIR,
   WORKSPACE,
   getSharedMemoryManager,
 } from "./memory-manager-runtime.js";
+import { ensureEngineWritable, withEngineDb } from "./lib/db/engine-db.js";
 import { insertMemoryEvent } from "./lib/db/events.js";
-import { ensureMemoryEngineTables } from "./lib/db/schema.js";
+import { ensureMemoryEngineTables, migrateLegacyMemoryEventsFromCore } from "./lib/db/schema.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
@@ -47,6 +46,7 @@ const indexSyncState = {
   lastSyncAt: 0,
   lastMaxMtimeMs: 0,
 };
+let memoryStorageReady = false;
 
 /**
  * Initialize LanceDB: connect and ensure the chunks table exists.
@@ -129,8 +129,7 @@ const CATEGORY_MAP = {
 };
 
 function withDb(fn) {
-  const db = new Database(DB_PATH, { readonly: false });
-  try { return fn(db); } finally { db.close(); }
+  return withEngineDb(fn, { readonly: false });
 }
 
 function calcTau(hits, baseTau) {
@@ -180,6 +179,7 @@ function calcRealtimeConf(row, now) {
 }
 
 function recordMemoryEvent(event) {
+  if (!memoryStorageReady) return;
   try {
     withDb(db => {
       insertMemoryEvent(db, event, { defaultSource: null });
@@ -464,9 +464,17 @@ export default definePluginEntry({
   register(api) {
     // Ensure confidence table exists at startup
     try {
-      withDb(db => ensureMemoryEngineTables(db));
+      withDb(db => {
+        ensureMemoryEngineTables(db);
+        const migration = migrateLegacyMemoryEventsFromCore(db);
+        if ((migration?.migrated || 0) > 0) {
+          console.log(`[memory-engine] migrated ${migration.migrated} legacy memory_events rows from core DB`);
+        }
+      });
+      memoryStorageReady = ensureEngineWritable();
     } catch (e) {
       console.error("[memory-engine] failed to init confidence table:", e.message);
+      memoryStorageReady = false;
     }
 
     // Initialize LanceDB readiness as early as possible.
