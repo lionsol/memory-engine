@@ -22,6 +22,89 @@ function bars(target, rows, labelKey = "label", valueKey = "count") {
     return `<div class="bar-row"><div>${esc(row[labelKey])}</div><div class="bar"><span style="width:${Math.round(value / max * 100)}%"></span></div><div class="id">${value}</div></div>`;
   }).join("") : `<span class="muted">No data yet</span>`;
 }
+
+function pct(value) {
+  return `${Math.round((Number(value) || 0) * 100)}%`;
+}
+
+function topDistribution(distribution, limit = 6) {
+  return Object.entries(distribution || {})
+    .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
+    .slice(0, Math.max(1, Number(limit) || 1));
+}
+
+function renderRetrievalDiversity(target, summary) {
+  const node = $(target);
+  if (!node) return;
+  const section = (title, dim) => {
+    const rows = topDistribution(dim?.distribution || {}, 6);
+    return `<article class="diversity-dim">
+      <h3>${esc(title)}</h3>
+      <div class="diversity-kpis">
+        <div><span>Norm Entropy</span><strong>${fmt(dim?.normalized_entropy ?? 0)}</strong></div>
+        <div><span>Top1 Share</span><strong>${pct(dim?.top1_share ?? 0)}</strong></div>
+        <div><span>Distinct</span><strong>${fmt(dim?.distinct_count ?? 0)}</strong></div>
+        <div><span>Total</span><strong>${fmt(dim?.total ?? 0)}</strong></div>
+      </div>
+      <div class="dist-list">
+        ${rows.length
+    ? rows.map(([key, count]) => `<div class="dist-item"><span>${esc(key)}</span><strong>${fmt(count)}</strong></div>`).join("")
+    : `<span class="muted">No data yet</span>`}
+      </div>
+    </article>`;
+  };
+
+  node.innerHTML = `<div class="diversity-head">
+    <span class="badge">Window: ${esc(summary?.window_days ?? 7)} days</span>
+    <span class="badge">Top N per recall: ${esc(summary?.top_n_per_recall ?? 10)}</span>
+    <span class="badge">Recall events: ${esc(summary?.recall_count ?? 0)}</span>
+    <span class="badge">Sampled items: ${esc(summary?.sampled_items_total ?? 0)}</span>
+  </div>
+  <div class="diversity-grid">
+    ${section("Category Diversity", summary?.category)}
+    ${section("Source Type Diversity", summary?.source_type)}
+    ${section("Path Prefix Diversity", summary?.path_prefix)}
+  </div>`;
+}
+
+function renderReinforcementConcentration(target, summary) {
+  const node = $(target);
+  if (!node) return;
+  const topMemories = Array.isArray(summary?.top_memories) ? summary.top_memories : [];
+  node.innerHTML = `<div class="diversity-head">
+    <span class="badge">Window: ${esc(summary?.window_days ?? 7)} days</span>
+    <span class="badge">Top N per recall: ${esc(summary?.top_n_per_recall ?? 10)}</span>
+  </div>
+  <div class="diversity-grid concentration-grid">
+    <article class="diversity-dim">
+      <h3>Summary</h3>
+      <div class="diversity-kpis">
+        <div><span>Total References</span><strong>${fmt(summary?.total_references ?? 0)}</strong></div>
+        <div><span>Unique Memories</span><strong>${fmt(summary?.unique_memories ?? 0)}</strong></div>
+        <div><span>Recall Events</span><strong>${fmt(summary?.recall_count ?? 0)}</strong></div>
+        <div><span>HHI</span><strong>${fmt(summary?.hhi ?? 0)}</strong></div>
+      </div>
+    </article>
+    <article class="diversity-dim">
+      <h3>Concentration</h3>
+      <div class="diversity-kpis">
+        <div><span>Top1 Share</span><strong>${pct(summary?.top1_share ?? 0)}</strong></div>
+        <div><span>Top5 Share</span><strong>${pct(summary?.top5_share ?? 0)}</strong></div>
+        <div><span>Top10 Share</span><strong>${pct(summary?.top10_share ?? 0)}</strong></div>
+      </div>
+    </article>
+  </div>
+  <div class="panel table-wrap">
+    <table class="top-memories">
+      <thead><tr><th>Memory</th><th>Count</th><th>Share</th><th>Category</th><th>Path</th></tr></thead>
+      <tbody>
+        ${topMemories.length
+    ? topMemories.map(item => `<tr><td class="id">${esc(item.id)}</td><td>${fmt(item.count)}</td><td>${pct(item.share)}</td><td>${esc(item.category || 'unknown')}</td><td>${esc(item.path || 'unknown')}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="muted">No data yet</td></tr>`}
+      </tbody>
+    </table>
+  </div>`;
+}
 async function api(path, options) {
   const res = await fetch(path, options);
   return res.json();
@@ -158,6 +241,8 @@ function initMetrics() {
   const reinforcement = overview.reinforcement || {};
   const retrieval = pageData.retrieval || {};
   const diversity = retrieval.diversity || {};
+  const retrievalDiversity = retrieval.retrieval_diversity || {};
+  const reinforcementConcentration = retrieval.reinforcement_concentration || {};
   cards('[data-metric-cards]', [
     { label: 'Events', value: overview.events || 0 },
     { label: 'Memories', value: overview.memories || 0 },
@@ -177,6 +262,8 @@ function initMetrics() {
     { label: 'HHI', value: reinforcement.hhi ?? 0 },
   ]);
   bars('[data-category-bars]', retrieval.categories || [], 'category', 'count');
+  renderRetrievalDiversity('[data-retrieval-diversity]', retrievalDiversity);
+  renderReinforcementConcentration('[data-reinforcement-concentration]', reinforcementConcentration);
   table('[data-conflicts]', [
     { label: 'Category', value: r => r.category },
     { label: 'Count', value: r => r.count },
