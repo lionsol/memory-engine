@@ -7,6 +7,233 @@ function round(value, digits = 3) {
   return Math.round(value * factor) / factor;
 }
 
+function safeJson(value, fallback = null) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function asKey(value, fallback = "unknown") {
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized : fallback;
+}
+
+function parseSqliteDateTimeUtc(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const iso = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const parsed = Date.parse(iso.endsWith("Z") ? iso : `${iso}Z`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toShare(count, total) {
+  const n = Number(count) || 0;
+  const d = Number(total) || 0;
+  if (d <= 0) return 0;
+  return round(n / d, 4);
+}
+
+export function derivePathPrefix(path = "") {
+  const normalized = String(path || "").replace(/\\/g, "/").replace(/^\.?\//, "").trim();
+  if (!normalized) return "unknown";
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 2) return parts.join("/");
+  return `${parts[0]}/${parts[1]}`;
+}
+
+export function summarizeDistribution(items, keySelector) {
+  const counts = new Map();
+  for (const item of (Array.isArray(items) ? items : [])) {
+    const key = asKey(keySelector(item), "unknown");
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const distribution = Object.fromEntries(sorted);
+  const total = sorted.reduce((sum, [, count]) => sum + (Number(count) || 0), 0);
+  const distinctCount = sorted.length;
+  const entropy = total > 0
+    ? sorted.reduce((sum, [, count]) => {
+      const probability = (Number(count) || 0) / total;
+      return probability > 0 ? sum - (probability * Math.log2(probability)) : sum;
+    }, 0)
+    : 0;
+  const top1 = sorted[0]?.[1] ? Number(sorted[0][1]) : 0;
+  return {
+    distribution,
+    total,
+    distinct_count: distinctCount,
+    entropy: round(entropy, 4),
+    normalized_entropy: distinctCount > 1 ? round(entropy / Math.log2(distinctCount), 4) : 0,
+    top1_share: total > 0 ? round(top1 / total, 4) : 0,
+  };
+}
+
+function filterRowsByWindowDays(rows, windowDays, nowMs = Date.now()) {
+  const thresholdMs = nowMs - (Math.max(1, Number(windowDays) || 1) * 86400000);
+  return (Array.isArray(rows) ? rows : []).filter(row => {
+    const ts = parseSqliteDateTimeUtc(row?.created_at);
+    return ts !== null && ts >= thresholdMs;
+  });
+}
+
+export function resolveMemoryReferenceId(row = {}, metadata = {}, fallbackPath = "") {
+  const memoryId = asKey(row?.memory_id ?? metadata?.memory_id, "");
+  if (memoryId) return memoryId;
+  const chunkId = asKey(metadata?.chunk_id ?? metadata?.id, "");
+  if (chunkId) return chunkId;
+  const path = asKey(metadata?.path ?? fallbackPath, "");
+  if (path) return path;
+  return "unknown";
+}
+
+function extractDebugPathMaps(rows) {
+  const byTrace = new Map();
+  for (const row of rows) {
+    if (row?.event_type !== "auto_recall_debug") continue;
+    const traceId = asKey(row?.trace_id, "");
+    if (!traceId) continue;
+    const metadata = safeJson(row?.metadata_json, {});
+    const candidates = [
+      ...(Array.isArray(metadata?.post_rerank_topK) ? metadata.post_rerank_topK : []),
+      ...(Array.isArray(metadata?.post_rerank_top) ? metadata.post_rerank_top : []),
+    ];
+    if (!byTrace.has(traceId)) byTrace.set(traceId, new Map());
+    const traceMap = byTrace.get(traceId);
+    for (const item of candidates) {
+      const itemId = asKey(item?.id, "");
+      if (!itemId) continue;
+      const path = asKey(item?.path, "");
+      if (!path) continue;
+      traceMap.set(itemId, path);
+    }
+  }
+  return byTrace;
+}
+
+export function extractRecallTopEntries(rows, { windowDays = 7, topN = 10, nowMs = Date.now() } = {}) {
+  const withinWindow = filterRowsByWindowDays(rows, windowDays, nowMs);
+  const debugPathMaps = extractDebugPathMaps(withinWindow);
+  const grouped = new Map();
+  for (const row of withinWindow) {
+    if (row?.event_type !== "memory_candidate_retrieved") continue;
+    const metadata = safeJson(row?.metadata_json, {});
+    const traceId = asKey(row?.trace_id, "");
+    const recallKey = traceId || `missing-trace:${asKey(row?.session_id, "unknown")}:${Number(row?.id) || 0}`;
+    if (!grouped.has(recallKey)) grouped.set(recallKey, []);
+    const candidateId = resolveMemoryReferenceId(row, metadata, "");
+    const debugPath = traceId && candidateId
+      ? debugPathMaps.get(traceId)?.get(candidateId) || ""
+      : "";
+    const explicitPath = asKey(metadata?.path, "");
+    const path = explicitPath || debugPath || "unknown";
+    const rankRaw = Number(metadata?.rank);
+    grouped.get(recallKey).push({
+      row_id: Number(row?.id) || 0,
+      rank: Number.isFinite(rankRaw) && rankRaw > 0 ? rankRaw : Number.POSITIVE_INFINITY,
+      reference_id: candidateId || "unknown",
+      category: asKey(metadata?.category, "unknown"),
+      source_type: asKey(metadata?.source_type, "unknown"),
+      path,
+      path_prefix: derivePathPrefix(path),
+    });
+  }
+
+  const flattened = [];
+  for (const entries of grouped.values()) {
+    const sorted = entries
+      .slice()
+      .sort((a, b) => (a.rank - b.rank) || (a.row_id - b.row_id))
+      .slice(0, Math.max(1, Number(topN) || 1));
+    flattened.push(...sorted);
+  }
+  return {
+    entries: flattened,
+    recall_count: grouped.size,
+    window_days: Math.max(1, Number(windowDays) || 7),
+    top_n_per_recall: Math.max(1, Number(topN) || 10),
+  };
+}
+
+export function buildRetrievalDiversitySummary(rows, { windowDays = 7, topN = 10, nowMs = Date.now() } = {}) {
+  const extracted = extractRecallTopEntries(rows, { windowDays, topN, nowMs });
+  const { entries } = extracted;
+  return {
+    window_days: extracted.window_days,
+    top_n_per_recall: extracted.top_n_per_recall,
+    recall_count: extracted.recall_count,
+    sampled_items_total: entries.length,
+    category: summarizeDistribution(entries, item => item.category),
+    source_type: summarizeDistribution(entries, item => item.source_type),
+    path_prefix: summarizeDistribution(entries, item => item.path_prefix),
+  };
+}
+
+export function buildReinforcementConcentrationSummary(rows, { windowDays = 7, topN = 10, nowMs = Date.now() } = {}) {
+  const extracted = extractRecallTopEntries(rows, { windowDays, topN, nowMs });
+  return buildReinforcementConcentrationFromEntries(extracted);
+}
+
+function buildReinforcementConcentrationFromEntries(extracted) {
+  const entries = Array.isArray(extracted?.entries) ? extracted.entries : [];
+  const memoryCounts = new Map();
+  const memoryMeta = new Map();
+  for (const item of entries) {
+    const id = asKey(item?.reference_id, "unknown");
+    memoryCounts.set(id, (memoryCounts.get(id) || 0) + 1);
+    const existing = memoryMeta.get(id) || { category: "unknown", path: "unknown" };
+    if (existing.category === "unknown" && item?.category && item.category !== "unknown") {
+      existing.category = item.category;
+    }
+    if (existing.path === "unknown" && item?.path && item.path !== "unknown") {
+      existing.path = item.path;
+    }
+    memoryMeta.set(id, existing);
+  }
+
+  const sorted = [...memoryCounts.entries()]
+    .map(([id, count]) => ({ id, count: Number(count) || 0 }))
+    .sort((a, b) => b.count - a.count);
+  const distribution = Object.fromEntries(sorted.map(item => [item.id, item.count]));
+  const totalReferences = sorted.reduce((sum, item) => sum + item.count, 0);
+  const uniqueMemories = sorted.length;
+  const top1Count = sorted[0]?.count || 0;
+  const top5Count = sorted.slice(0, 5).reduce((sum, item) => sum + item.count, 0);
+  const top10Count = sorted.slice(0, 10).reduce((sum, item) => sum + item.count, 0);
+  const hhi = totalReferences > 0
+    ? sorted.reduce((sum, item) => {
+      const share = item.count / totalReferences;
+      return sum + (share * share);
+    }, 0)
+    : 0;
+  const topMemories = sorted.slice(0, 10).map(item => {
+    const meta = memoryMeta.get(item.id) || { category: "unknown", path: "unknown" };
+    return {
+      id: item.id,
+      count: item.count,
+      share: toShare(item.count, totalReferences),
+      category: asKey(meta.category, "unknown"),
+      path: asKey(meta.path, "unknown"),
+    };
+  });
+
+  return {
+    window_days: Math.max(1, Number(extracted?.window_days) || 7),
+    top_n_per_recall: Math.max(1, Number(extracted?.top_n_per_recall) || 10),
+    recall_count: Number(extracted?.recall_count) || 0,
+    total_references: totalReferences,
+    unique_memories: uniqueMemories,
+    top1_share: toShare(top1Count, totalReferences),
+    top5_share: toShare(top5Count, totalReferences),
+    top10_share: toShare(top10Count, totalReferences),
+    hhi: round(hhi, 4),
+    distribution,
+    top_memories: topMemories,
+  };
+}
+
 export function overviewMetrics() {
   const metricTopN = Math.max(1, Number(getMemoryEngineConfig(null)?.metrics?.topN) || 10);
   return withDb(db => {
@@ -47,7 +274,9 @@ export function overviewMetrics() {
 }
 
 export function retrievalMetrics() {
-  const metricWindowDays = Math.max(1, Number(getMemoryEngineConfig(null)?.metrics?.windowDays) || 7);
+  const metricConfig = getMemoryEngineConfig(null)?.metrics || {};
+  const metricWindowDays = Math.max(1, Number(metricConfig?.windowDays) || 7);
+  const metricTopN = Math.max(1, Number(metricConfig?.topN) || 10);
   return withDb(db => {
     const aggregate = db.prepare(`
       SELECT COUNT(*) AS completed, ROUND(AVG(latency_ms), 1) AS avg_latency_ms,
@@ -80,7 +309,36 @@ export function retrievalMetrics() {
       normalized_entropy: distinctCategories > 1 ? round(entropy / Math.log(distinctCategories), 4) : 0,
       top1_share: categoryTotal > 0 ? round(top1 / categoryTotal, 4) : 0,
     };
-    return { aggregate, categories, diversity };
+    const recallRows = db.prepare(`
+      SELECT id, event_type, trace_id, session_id, memory_id, metadata_json, created_at
+      FROM memory_events
+      WHERE event_type IN ('memory_candidate_retrieved', 'auto_recall_debug')
+      ORDER BY id DESC
+      LIMIT 5000
+    `).all();
+    const metricsNowMs = Date.now();
+    const extracted = extractRecallTopEntries(recallRows, {
+      windowDays: metricWindowDays,
+      topN: metricTopN,
+      nowMs: metricsNowMs,
+    });
+    const retrievalDiversity = {
+      window_days: extracted.window_days,
+      top_n_per_recall: extracted.top_n_per_recall,
+      recall_count: extracted.recall_count,
+      sampled_items_total: extracted.entries.length,
+      category: summarizeDistribution(extracted.entries, item => item.category),
+      source_type: summarizeDistribution(extracted.entries, item => item.source_type),
+      path_prefix: summarizeDistribution(extracted.entries, item => item.path_prefix),
+    };
+    const reinforcementConcentration = buildReinforcementConcentrationFromEntries(extracted);
+    return {
+      aggregate,
+      categories,
+      diversity,
+      retrieval_diversity: retrievalDiversity,
+      reinforcement_concentration: reinforcementConcentration,
+    };
   }, { readonly: true });
 }
 
