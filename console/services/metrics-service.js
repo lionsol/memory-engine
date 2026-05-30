@@ -29,6 +29,69 @@ function parseSqliteDateTimeUtc(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function schemaHasTable(db, schema, tableName) {
+  try {
+    const row = db
+      .prepare(`SELECT name FROM ${schema}.sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(String(tableName || ""));
+    return Boolean(row?.name);
+  } catch {
+    return false;
+  }
+}
+
+function eventDedupeKey(row = {}) {
+  return [
+    row.event_type ?? "",
+    row.session_id ?? "",
+    row.trace_id ?? "",
+    row.memory_id ?? "",
+    row.latency_ms ?? "",
+    row.candidate_count ?? "",
+    row.injected_count ?? "",
+    row.cited_count ?? "",
+    row.vector_score ?? "",
+    row.fts_score ?? "",
+    row.final_score ?? "",
+    row.source ?? "",
+    row.metadata_json ?? "",
+    row.created_at ?? "",
+  ].join("\u001f");
+}
+
+function readEventsFromSchema(db, schema) {
+  if (!schemaHasTable(db, schema, "memory_events")) return [];
+  return db.prepare(`
+    SELECT
+      id, event_type, session_id, trace_id, memory_id,
+      latency_ms, candidate_count, injected_count, cited_count,
+      vector_score, fts_score, final_score, source, metadata_json, created_at,
+      '${schema}' AS event_source
+    FROM ${schema}.memory_events
+  `).all();
+}
+
+export function readUnifiedMemoryEvents(db, options = {}) {
+  const rows = [
+    ...readEventsFromSchema(db, "main"),
+    ...readEventsFromSchema(db, "core"),
+  ];
+  const deduped = new Map();
+  for (const row of rows) {
+    deduped.set(eventDedupeKey(row), row);
+  }
+  const merged = [...deduped.values()];
+  merged.sort((a, b) => {
+    const tsA = parseSqliteDateTimeUtc(a?.created_at) || 0;
+    const tsB = parseSqliteDateTimeUtc(b?.created_at) || 0;
+    if (tsA !== tsB) return tsB - tsA;
+    return (Number(b?.id) || 0) - (Number(a?.id) || 0);
+  });
+  const limit = Number(options?.limit);
+  if (Number.isFinite(limit) && limit > 0) return merged.slice(0, Math.floor(limit));
+  return merged;
+}
+
 function toShare(count, total) {
   const n = Number(count) || 0;
   const d = Number(total) || 0;
@@ -379,20 +442,38 @@ export function retrievalMetrics() {
   const metricWindowDays = Math.max(1, Number(metricConfig?.windowDays) || 7);
   const metricTopN = Math.max(1, Number(metricConfig?.topN) || 10);
   return withDb(db => {
-    const aggregate = db.prepare(`
-      SELECT COUNT(*) AS completed, ROUND(AVG(latency_ms), 1) AS avg_latency_ms,
-        ROUND(AVG(candidate_count), 1) AS avg_candidates, ROUND(AVG(injected_count), 1) AS avg_injected,
-        SUM(candidate_count) AS candidate_total, SUM(injected_count) AS injected_total
-      FROM memory_events
-      WHERE event_type = 'recall_completed'
-    `).get();
-    const categories = db.prepare(`
-      SELECT COALESCE(json_extract(metadata_json, '$.category'), 'unknown') AS category, COUNT(*) AS count
-      FROM memory_events
-      WHERE event_type = 'memory_candidate_retrieved' AND created_at >= datetime('now', '-${metricWindowDays} days')
-      GROUP BY category
-      ORDER BY count DESC
-    `).all();
+    const metricsNowMs = Date.now();
+    const unifiedEvents = readUnifiedMemoryEvents(db);
+    const recallCompleted = unifiedEvents.filter(event => event?.event_type === "recall_completed");
+    const avgNullable = values => {
+      const nums = values.map(v => Number(v)).filter(Number.isFinite);
+      if (nums.length === 0) return null;
+      return round(nums.reduce((sum, v) => sum + v, 0) / nums.length, 1);
+    };
+    const sumNullable = values => {
+      const nums = values.map(v => Number(v)).filter(Number.isFinite);
+      if (nums.length === 0) return null;
+      return nums.reduce((sum, v) => sum + v, 0);
+    };
+    const aggregate = {
+      completed: recallCompleted.length,
+      avg_latency_ms: avgNullable(recallCompleted.map(event => event.latency_ms)),
+      avg_candidates: avgNullable(recallCompleted.map(event => event.candidate_count)),
+      avg_injected: avgNullable(recallCompleted.map(event => event.injected_count)),
+      candidate_total: sumNullable(recallCompleted.map(event => event.candidate_count)),
+      injected_total: sumNullable(recallCompleted.map(event => event.injected_count)),
+    };
+    const windowEvents = filterRowsByWindowDays(unifiedEvents, metricWindowDays, metricsNowMs);
+    const categoryCounts = new Map();
+    for (const event of windowEvents) {
+      if (event?.event_type !== "memory_candidate_retrieved") continue;
+      const metadata = safeJson(event?.metadata_json, {});
+      const category = asKey(metadata?.category, "unknown");
+      categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+    }
+    const categories = [...categoryCounts.entries()]
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
     const categoryTotal = categories.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
     const distinctCategories = categories.length;
     const entropy = categoryTotal > 0
@@ -410,15 +491,7 @@ export function retrievalMetrics() {
       normalized_entropy: distinctCategories > 1 ? round(entropy / Math.log(distinctCategories), 4) : 0,
       top1_share: categoryTotal > 0 ? round(top1 / categoryTotal, 4) : 0,
     };
-    const recallRows = db.prepare(`
-      SELECT id, event_type, trace_id, session_id, memory_id, metadata_json, created_at
-      FROM memory_events
-      WHERE event_type IN ('memory_candidate_retrieved', 'memory_injected', 'auto_recall_debug')
-      ORDER BY id DESC
-      LIMIT 5000
-    `).all();
-    const metricsNowMs = Date.now();
-    const extracted = extractRecallTopEntries(recallRows, {
+    const extracted = extractRecallTopEntries(unifiedEvents, {
       windowDays: metricWindowDays,
       topN: metricTopN,
       nowMs: metricsNowMs,
@@ -433,12 +506,12 @@ export function retrievalMetrics() {
       path_prefix: summarizeDistribution(extracted.entries, item => item.path_prefix),
     };
     const reinforcementConcentration = buildReinforcementConcentrationFromEntries(extracted);
-    const recallMissAfterResponse = buildRecallMissAfterResponseSummary(recallRows, {
+    const recallMissAfterResponse = buildRecallMissAfterResponseSummary(unifiedEvents, {
       windowDays: metricWindowDays,
       topN: metricTopN,
       nowMs: metricsNowMs,
     });
-    const autoRecallInjectionRate = buildAutoRecallInjectionRateSummary(recallRows, {
+    const autoRecallInjectionRate = buildAutoRecallInjectionRateSummary(unifiedEvents, {
       windowDays: metricWindowDays,
       nowMs: metricsNowMs,
     });
