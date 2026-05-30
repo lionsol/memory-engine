@@ -1,0 +1,13 @@
+User Query
+    ↓
+normalize
+    ↓
+ vector
+   fts
+   kg
+    ↓
+   RRF
+    ↓
+  rerank
+    ↓
+autoRecall inject
