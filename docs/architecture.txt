@@ -1,7 +1,7 @@
 OpenClaw
     │
     ▼
-memory-engine
+memory-engine 
 
 ├─ Recall Layer
 │   ├─ auto-recall
@@ -23,3 +23,73 @@ memory-engine
 │   └─ CORE_DB(read-only)
 │
 └─ Console Layer
+
+
+file system:
+
+┌──────────────────────────────────────────────┐
+│ Source Layer                                 │
+│ ~/.openclaw/workspace/plugins/memory-engine  │
+│                                              │
+│ 你开发的源码                                 │
+│ git commit / git push                        │
+└─────────────────┬────────────────────────────┘
+                  │
+                  │ openclaw plugins install --force
+                  ▼
+┌──────────────────────────────────────────────┐
+│ Runtime Layer                                │
+│ ~/.openclaw/extensions/memory-engine         │
+│                                              │
+│ Gateway 实际加载的插件                       │
+│ Metrics 实际运行的代码                       │
+│ AutoRecall 实际运行的代码                    │
+└─────────────────┬────────────────────────────┘
+                  │
+                  │
+                  ▼
+┌──────────────────────────────────────────────┐
+│ Database Layer                               │
+└──────────────────────────────────────────────┘
+
+   CORE_DB
+   ~/.openclaw/memory/main.sqlite
+
+   ├─ OpenClaw Core Memory
+   ├─ chunks (842)
+   ├─ memory_confidence (97)
+   └─ 已恢复后的健康库
+
+                ▲
+                │ ATTACH (readonly)
+                │
+
+   ENGINE_DB
+   ~/.openclaw/memory/memory-engine/
+   memory-engine.sqlite
+
+   ├─ memory_events
+   ├─ plugin telemetry
+   ├─ recall metrics
+   └─ plugin write path
+
+                ▲
+                │
+
+┌──────────────────────────────────────────────┐
+│ Metrics Console                              │
+│ console/services/metrics-service.js          │
+└──────────────────────────────────────────────┘
+
+readUnifiedMemoryEvents()
+
+      main.memory_events
+              +
+      core.memory_events
+
+            ↓
+
+   Retrieval Diversity
+   Reinforcement Concentration
+   Recall Miss
+   Injection Rate
