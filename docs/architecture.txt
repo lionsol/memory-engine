@@ -1,3 +1,4 @@
+1.architecture
 OpenClaw
     │
     ▼
@@ -25,7 +26,7 @@ memory-engine
 └─ Console Layer
 
 
-file system:
+2.file system:
 
 ┌──────────────────────────────────────────────┐
 │ Source Layer                                 │
