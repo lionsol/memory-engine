@@ -82,17 +82,80 @@ function withDb(fn) {
 }
 
 function todayDateStr() {
-  return new Date().toISOString().slice(0, 10);
+  return dateStringInTimeZone(Date.now(), "Asia/Shanghai");
 }
 
 /**
- * Returns YESTERDAY's date string (YYYY-MM-DD) in local timezone (Asia/Shanghai).
+ * Returns YESTERDAY's date string (YYYY-MM-DD) in business timezone (Asia/Shanghai).
  * The script runs at 03:55 CST to process the previous day's data.
  */
-function yesterdayDateStr() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+function yesterdayDateStr(now = null) {
+  const businessToday = dateStringInTimeZone(now || Date.now(), "Asia/Shanghai");
+  return shiftDateString(businessToday, -1);
+}
+
+function parseDatePartsInTimeZone(dateInput, timeZone = "Asia/Shanghai") {
+  const date = dateInput ? new Date(dateInput) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    return parseDatePartsInTimeZone(new Date(), timeZone);
+  }
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.filter(p => p.type !== "literal").map(p => [p.type, p.value]));
+  return {
+    year: map.year,
+    month: map.month,
+    day: map.day,
+    hour: map.hour,
+    minute: map.minute,
+    second: map.second,
+  };
+}
+
+function dateStringInTimeZone(dateInput, timeZone = "Asia/Shanghai") {
+  const p = parseDatePartsInTimeZone(dateInput, timeZone);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+function shiftDateString(dateStr, days) {
+  const [y, m, d] = String(dateStr || "").split("-").map(n => Number(n));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return dateStr;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + (Number(days) || 0));
+  return dt.toISOString().slice(0, 10);
+}
+
+function buildNightlyEntryId({ targetDate, category = "episodic", generatedAt = null } = {}) {
+  const businessTargetDate = targetDate || yesterdayDateStr(generatedAt || Date.now());
+  const p = parseDatePartsInTimeZone(generatedAt || Date.now(), "Asia/Shanghai");
+  return `${businessTargetDate}_${category}_nightly_generated_${p.hour}${p.minute}${p.second}`;
+}
+
+function mergeKgData(existingKgData, patch = {}) {
+  let base = {};
+  if (existingKgData && typeof existingKgData === "object") {
+    base = { ...existingKgData };
+  } else if (typeof existingKgData === "string" && existingKgData.trim()) {
+    try {
+      base = JSON.parse(existingKgData);
+    } catch (_) {
+      base = {};
+    }
+  }
+  if (patch && typeof patch === "object") {
+    for (const [key, value] of Object.entries(patch)) {
+      if (value !== undefined) base[key] = value;
+    }
+  }
+  return JSON.stringify(base);
 }
 
 // ── Generic LLM call ──
@@ -887,4 +950,12 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  yesterdayDateStr,
+  buildNightlyEntryId,
+  mergeKgData,
+};
