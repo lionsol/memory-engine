@@ -27,6 +27,10 @@ function pct(value) {
   return `${Math.round((Number(value) || 0) * 100)}%`;
 }
 
+function pct1(value) {
+  return `${((Number(value) || 0) * 100).toFixed(1)}%`;
+}
+
 function topDistribution(distribution, limit = 6) {
   return Object.entries(distribution || {})
     .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
@@ -70,7 +74,6 @@ function renderRetrievalDiversity(target, summary) {
 function renderReinforcementConcentration(target, summary) {
   const node = $(target);
   if (!node) return;
-  const topMemories = Array.isArray(summary?.top_memories) ? summary.top_memories : [];
   node.innerHTML = `<div class="diversity-head">
     <span class="badge">Window: ${esc(summary?.window_days ?? 7)} days</span>
     <span class="badge">Top N per recall: ${esc(summary?.top_n_per_recall ?? 10)}</span>
@@ -93,17 +96,22 @@ function renderReinforcementConcentration(target, summary) {
         <div><span>Top10 Share</span><strong>${pct(summary?.top10_share ?? 0)}</strong></div>
       </div>
     </article>
-  </div>
-  <div class="panel table-wrap">
-    <table class="top-memories">
-      <thead><tr><th>Memory</th><th>Count</th><th>Share</th><th>Category</th><th>Path</th></tr></thead>
-      <tbody>
-        ${topMemories.length
-    ? topMemories.map(item => `<tr><td class="id">${esc(item.id)}</td><td>${fmt(item.count)}</td><td>${pct(item.share)}</td><td>${esc(item.category || 'unknown')}</td><td>${esc(item.path || 'unknown')}</td></tr>`).join("")
-    : `<tr><td colspan="5" class="muted">No data yet</td></tr>`}
-      </tbody>
-    </table>
   </div>`;
+}
+
+function renderTopMemories(metrics) {
+  const node = $("#top-memories");
+  if (!node) return;
+  const topMemoriesRaw = metrics?.retrieval?.reinforcement_concentration?.top_memories;
+  const topMemories = Array.isArray(topMemoriesRaw) ? topMemoriesRaw.slice(0, 10) : [];
+  node.innerHTML = `<table class="top-memories">
+    <thead><tr><th>ID</th><th>Count</th><th>Share</th><th>Category</th><th>Path</th></tr></thead>
+    <tbody>
+      ${topMemories.length
+    ? topMemories.map(item => `<tr><td class="id">${esc(item?.id || "unknown")}</td><td>${fmt(item?.count ?? 0)}</td><td>${pct1(item?.share ?? 0)}</td><td>${esc(item?.category || "unknown")}</td><td>${esc(item?.path || "unknown")}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="muted">No data</td></tr>`}
+    </tbody>
+  </table>`;
 }
 
 function renderRecallMissAfterResponse(target, summary) {
@@ -316,6 +324,7 @@ function initMetrics() {
   bars('[data-category-bars]', retrieval.categories || [], 'category', 'count');
   renderRetrievalDiversity('[data-retrieval-diversity]', retrievalDiversity);
   renderReinforcementConcentration('[data-reinforcement-concentration]', reinforcementConcentration);
+  renderTopMemories(pageData);
   renderRecallMissAfterResponse('[data-recall-miss-after-response]', recallMissAfterResponse);
   renderAutoRecallInjectionRate('[data-auto-recall-injection-rate]', autoRecallInjectionRate);
   table('[data-conflicts]', [

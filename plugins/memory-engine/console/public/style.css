@@ -60,6 +60,8 @@ button:hover { border-color: #9fb0c2; }
 .dist-list { display: grid; gap: 4px; }
 .dist-list .dist-item { display: flex; justify-content: space-between; gap: 8px; }
 .top-memories td:last-child { max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#top-memories table { width: 100%; }
+#top-memories td.muted { text-align: center; }
 .table-wrap { overflow: auto; max-height: calc(100vh - 170px); }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
