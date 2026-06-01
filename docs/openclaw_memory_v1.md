@@ -1,6 +1,6 @@
 ﻿
 
-# OpenClaw 记忆系统 v1.4 架构与开发文档 (LanceDB + SQLite 双引擎)
+# OpenClaw 记忆系统 v0.1 架构与开发文档 (LanceDB + SQLite 双引擎)
 
 ## 1. 架构核心哲学 (Design Philosophy)
 
