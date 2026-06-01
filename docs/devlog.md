@@ -751,7 +751,7 @@ workspace/scripts/session-checkpoint.js 已本地修复为 Asia/Shanghai busines
 *   修复了基于 UTC 计算导致的每日剧集日期偏移问题
 *   为夜间剧集分离了 `targetDate` 和 `generatedAt` 语义
 
-### 配置中心化
+### 配置集中化
 
 添加了统一的运行时配置系统：
 
@@ -860,12 +860,6 @@ memory-engine 已进入观测与调优阶段。
 
 ### Added
 
-- **DB 隔离** — memory-engine SQLite DB 从 OpenClaw 核心 DB 独立，不再混用
-- **配置集中化** — settings 统一重构进 `lib/config/` 目录（defaults.js / helpers.js / runtime.js），采用 env > config > fallback 三层获取
-- **指标系统**
-  - retrieval diversity + reinforcement concentration 指标
-  - recall 可观测性指标（miss rate, injection rate 等）
-  - 统一 recall 事件源，所有召回路径使用相同采样点
 - **文档** — architecture.txt / dataflow.txt / 参数调优指南 / devlog
 - **测试覆盖率** — nightly episode targetDate 语义测试、config helpers/runtime 测试
 - **Runtime helper** — `scripts/lib/memory-engine-config-runtime.js`，提供 `getSmartAddTimeZoneRuntime()` / `getMemoryEngineRuntimeConfig()`
