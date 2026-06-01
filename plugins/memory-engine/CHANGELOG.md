@@ -4,6 +4,33 @@ All notable changes to the OpenClaw Memory System.
 
 ---
 
+## [v0.8.2] — 2026-06-01
+
+### Added
+
+- **DB 隔离** — memory-engine SQLite DB 从 OpenClaw 核心 DB 独立，不再混用
+- **配置集中化** — settings 统一重构进 `lib/config/` 目录（defaults.js / helpers.js / runtime.js），采用 env > config > fallback 三层获取
+- **指标系统**
+  - retrieval diversity + reinforcement concentration 指标
+  - recall 可观测性指标（miss rate, injection rate 等）
+  - 统一 recall 事件源，所有召回路径使用相同采样点
+- **文档** — architecture.txt / dataflow.txt / 参数调优指南 / devlog
+- **测试覆盖率** — nightly episode targetDate 语义测试、config helpers/runtime 测试
+- **Runtime helper** — `scripts/lib/memory-engine-config-runtime.js`，提供 `getSmartAddTimeZoneRuntime()` / `getMemoryEngineRuntimeConfig()`
+- **P2 周报脚本** — `scripts/memory-weekly-stats.js`，每周采集 entropy / HHI / miss_rate，附速览趋势行
+
+### Fixed
+
+- **Episode 摘要幻觉** — session-checkpoint 三层防护：区分 smart-add(note) 与 DB raw_log(conversation)，无对话数据时跳过 LLM 生成
+- **统计脚本重构** — memory-stats.js：废品回收率→记忆总览，抢救成功率→健康度，时区修复，触发分类简化
+- **Session-checkpoint 兼容** — `require.main === module` guard + 导出测试函数
+
+### Changed
+
+- 版本号 1.0.0 → 0.8.2（package.json）
+
+---
+
 ## [v1.7] — 2026-05-27
 
 ### Fixed
