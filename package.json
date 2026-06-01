@@ -1,6 +1,6 @@
 {
   "name": "memory-engine-plugin",
-  "version": "1.0.0",
+  "version": "0.8.2",
   "private": true,
   "type": "module",
   "main": "index.js",

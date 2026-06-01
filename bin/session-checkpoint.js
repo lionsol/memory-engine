@@ -231,7 +231,7 @@ function readYesterdayRawLogs() {
   const yesterday = yesterdayDateStr();
   const logs = [];
 
-  // Source 1: smart-add file
+  // Source 1: smart-add file — ALL entries are notes, not conversations
   const smartAddPath = resolve(WORKSPACE, SMART_ADD_DIR, `${yesterday}.md`);
   if (existsSync(smartAddPath)) {
     const content = readFileSync(smartAddPath, "utf-8");
@@ -240,11 +240,10 @@ function readYesterdayRawLogs() {
       const cat = parsed.category || inferCategoryFromEntry(parsed.raw || parsed.text);
       const body = parsed.text || parsed.raw || "";
       if (!body.trim()) continue;
-      const isNote = ["preference", "kg_node"].includes(cat);
       logs.push({
         category: cat,
         text: body,
-        source: isNote ? "note" : "conversation",
+        source: "note",  // smart-add entries are always notes, never conversation
       });
     }
   }
@@ -553,6 +552,13 @@ async function nightlyCheckpoint(rawLogs) {
     return { memories: 0, episode: false, configs: 0 };
   }
 
+  // Guard: no real conversation data → skip LLM call entirely, write incomplete marker
+  if (conversationLogs.length === 0) {
+    console.log(`[checkpoint] No conversation logs found (${allLogs.length} note entries only) — marking as incomplete, skipping LLM.`);
+    writeIncompleteEpisode(episodeDate, allLogs.length);
+    return { memories: 0, episode: false, configs: 0, skipped: true };
+  }
+
   // Log the data mix for debugging
   console.log(`[checkpoint] Conversation entries: ${conversationLogs.length}, Total entries: ${allLogs.length}`);
 
@@ -609,18 +615,20 @@ async function nightlyCheckpoint(rawLogs) {
     // Default to valid; will be overridden if hallucination detected
     episodeWritten = true;
 
-    // Validate: if episode mentions things that were never actually discussed
-    // (phrases like '讨论了' + config terms with no conversation data), skip it
+    // Validate: if no real conversation data found, any "讨论/进行/决定" is hallucination
     if (conversationLogs.length === 0) {
       const halluPatterns = [
-        /讨论了.*配置/, /讨论了.*推荐/, /讨论了.*方案/,
-        /讨论.*记忆系统/, /讨论.*法律文书/, /讨论.*股票/
+        /讨论了/, /进行了/, /决定/, /确认/, /提到/,
+        /讨论/, /对话/, /交流/, /沟通/, /商议/
       ];
       const isHallucinated = halluPatterns.some(p => p.test(episodeText));
       if (isHallucinated) {
-        console.warn(`[checkpoint] ⚠️ Episode appears hallucinated (no conversation logs found but summary mentions discussion). Discarding.`);
+        console.warn(`[checkpoint] ⚠️ Episode hallucinated (0 conversation logs, ${allLogs.length} note entries). Discarding.`);
         episodeWritten = false;
-        writeEmptyEpisode(episodeDate);
+        writeIncompleteEpisode(episodeDate, allLogs.length);
+      } else {
+        // No conversation but no hallucination keywords — write data-only episode
+        console.log(`[checkpoint] No conversation logs, but episode text doesn't mention discussion. Writing as-is.`);
       }
     }
 
@@ -686,6 +694,30 @@ function writeEmptyEpisode(today) {
   if (!existsSync(episodePath)) {
     writeFileSync(episodePath, `# Episode: ${today}\n\n（无今日内容）\n\n---\n_Generated at ${new Date().toISOString()}_\n`);
   }
+}
+
+function writeIncompleteEpisode(today, noteCount) {
+  const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+  const episodePath = resolve(episodeDir, `${today}.md`);
+  mkdirSync(episodeDir, { recursive: true });
+  writeFileSync(episodePath, [
+    `# Episode: ${today}`,
+    "",
+    "⚠️ **数据不完整 — 当日无有效对话记录**",
+    "",
+    `会话日志数据缺失（DB raw_log 条目为空），仅包含 ${noteCount} 条配置笔记/自动写入条目。`,
+    "无足够数据生成可靠摘要，跳过 LLM 摘要生成。",
+    "",
+    "可能原因：",
+    "- DB 损坏后从备份恢复，当天后续对话丢失",
+    "- 当日仅有 cron 任务运行，无用户对话",
+    "- checkpoint 运行时间早于对话发生时间",
+    "",
+    "---",
+    `_Generated at ${new Date().toISOString()}_`,
+    "",
+  ].join("\n"));
+  console.log(`[checkpoint] Incomplete-data episode marker written for ${today} (${noteCount} notes, 0 conversations)`);
 }
 
 function writeLLMTimeoutEpisode(today) {
@@ -941,6 +973,8 @@ async function main() {
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     if (result.timeout) {
       console.log(`[checkpoint] ⏰ llm超时 — completed in ${elapsed}s`);
+    } else if (result.skipped) {
+      console.log(`[checkpoint] ⏭ Skipped (no conversation data) — ${elapsed}s`);
     } else {
       console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, ${repaired} vectors repaired, ${conflicts} conflicts`);
     }
