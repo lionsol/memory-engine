@@ -704,7 +704,7 @@ workspace/scripts/session-checkpoint.js 已本地修复为 Asia/Shanghai busines
   - Asia/Shanghai business timezone
   - nightly episode targetDate/generatedAt 语义
 
-## v0.8.2 - 可观测性与运行时稳定性
+## v0.8.2 (2026-05-31) 可观测性与运行时稳定性
 
 本版本完成了 memory-engine 的首个可观测性里程碑，并将项目过渡到数据驱动的调优阶段。
 
@@ -830,7 +830,7 @@ memory-engine 已进入观测与调优阶段。
 
 下一阶段暂无重大架构变更计划。
 
-## 2026-06-01 更新
+## (2026-06-01) 更新
 
 ### Added
 
