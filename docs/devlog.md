@@ -301,29 +301,29 @@ agentmemory.add({
 
 ## v0.1 项目初始化 (2026-05-10)
 
-### Initial Implementation
+### 初始实现
 
-- Schema migration with confidence, lifecycle, and status columns on `chunks` table.
-- Smart add gateway with category routing.
-- Hybrid search with dynamic threshold gating + exponential decay + weighted scoring.
-- Update hook for citation reinforcement (hit+1, conf+0.1).
-- Pure heartbeat compaction (zero-write to active confidence).
-- KG bridge with subgraph packing (`kg_data` column).
-- Diagnostic logging and parameter tuning guidance.
+- 在 `chunks` 表上进行 Schema 迁移，新增置信度、生命周期和状态列。
+- 支持分类路由的智能添加网关。
+- 混合检索：动态阈值门控 + 指数衰减 + 加权评分。
+- 用于引用增强的更新钩子（命中数 +1，置信度 +0.1）。
+- 纯心跳压缩（对活跃置信度零写入）。
+- KG 桥接：子图打包（`kg_data` 列）。
+- 诊断日志与参数调优指南。
 
 ## v0.1.1 新增功能 (2026-05-15)
 
-### Added
+### 新增
 
-- `memory_confidence` parallel table in SQLite.
-- Category-based confidence routing: initial confidence + base tau per category.
-- Hybrid search (vector similarity + confidence weighting).
-- `smart_add` file → reindex → confidence workflow.
-- `update --hit` for citation reinforcement.
-- `archive` for low-confidence chunk archival.
-- `diagnose` for tracking untracked chunks.
-- `status` for summary statistics.
-- Embedding via `Qwen/Qwen3-Embedding-4B` (SiliconFlow).
+- SQLite 中的 `memory_confidence` 并行表。
+- 基于分类的置信度路由：每个分类的初始置信度 + 基础 tau 值。
+- 混合检索（向量相似度 + 置信度加权）。
+- `smart_add`：文件 → 重索引 → 置信度工作流。
+- `update --hit`：用于引用增强。
+- `archive`：低置信度分块的归档。
+- `diagnose`：追踪未纳管的分块。
+- `status`：汇总统计信息。
+- 通过 `Qwen/Qwen3-Embedding-4B`（SiliconFlow）进行嵌入。
 
 ## v0.2 新增特性 (2026-05-16)
 
