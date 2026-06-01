@@ -299,6 +299,32 @@ agentmemory.add({
 
 # 更新日志
 
+## v0.1 项目初始化 (2026-05-10)
+
+### Initial Implementation
+
+- Schema migration with confidence, lifecycle, and status columns on `chunks` table.
+- Smart add gateway with category routing.
+- Hybrid search with dynamic threshold gating + exponential decay + weighted scoring.
+- Update hook for citation reinforcement (hit+1, conf+0.1).
+- Pure heartbeat compaction (zero-write to active confidence).
+- KG bridge with subgraph packing (`kg_data` column).
+- Diagnostic logging and parameter tuning guidance.
+
+## v0.1.1 新增功能 (2026-05-15)
+
+### Added
+
+- `memory_confidence` parallel table in SQLite.
+- Category-based confidence routing: initial confidence + base tau per category.
+- Hybrid search (vector similarity + confidence weighting).
+- `smart_add` file → reindex → confidence workflow.
+- `update --hit` for citation reinforcement.
+- `archive` for low-confidence chunk archival.
+- `diagnose` for tracking untracked chunks.
+- `status` for summary statistics.
+- Embedding via `Qwen/Qwen3-Embedding-4B` (SiliconFlow).
+
 ## v0.2 新增特性 (2026-05-16)
 
 ### FTS5 并行召回
