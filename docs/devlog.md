@@ -870,3 +870,13 @@ memory-engine 已进入观测与调优阶段。
 - **Episode 摘要幻觉** — session-checkpoint 三层防护：区分 smart-add(note) 与 DB raw_log(conversation)，无对话数据时跳过 LLM 生成
 - **统计脚本重构** — memory-stats.js：废品回收率→记忆总览，抢救成功率→健康度，时区修复，触发分类简化
 - **Session-checkpoint 兼容** — `require.main === module` guard + 导出测试函数
+
+## (2026-06-02) 更新
+
+### Added
+- autoRecall 支持 tiered retrieval：KG/FTS5 优先，vector 仅在 lexical confidence 不足时触发。
+- 新增 lexical confidence debug metadata，用于观察 vector skip 决策。
+
+### Changed
+- 降低 LanceDB vector pipeline 默认开销。
+- 保留 existing RRF fusion、fallback rerank 和 external memory 兼容逻辑。
