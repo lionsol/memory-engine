@@ -55,6 +55,8 @@ const EXPECTED_SNAPSHOT = `{
     "vector_query": "x",
     "query_terms": [],
     "candidate_counts_before_filtering": {
+      "kg_raw": 0,
+      "kg_after_conf_filter": 0,
       "vector_raw": 1,
       "vector_after_conf_filter": 1,
       "fts_raw_primary": 0,
@@ -72,6 +74,8 @@ const EXPECTED_SNAPSHOT = `{
     "vector_backend_attempted": "lancedb",
     "vector_ready_state": "disabled",
     "vector_stage": "fallback",
+    "vector_skipped": false,
+    "vector_skip_reason": null,
     "vector_error": null,
     "vector_ms": 0,
     "vector_query_length": 1,
@@ -79,6 +83,10 @@ const EXPECTED_SNAPSHOT = `{
     "fallback_count": 0,
     "post_rerank_topK": [],
     "min_confidence": 0.15,
+    "lexical_candidate_count": 0,
+    "lexical_top_score": 0,
+    "lexical_confidence": 0,
+    "lexical_confidence_threshold": 0.7,
     "sync": {
       "synced": false,
       "reason": "test"
