@@ -248,24 +248,56 @@ function readYesterdayRawLogs() {
     }
   }
 
-  // Source 2: raw_log from confidence DB (these are real conversation data)
+  // Source 2: raw_log from memory-engine confidence DB (these are real conversation data)
+  // Uses memory-engine DB which has memory_confidence + ATTACHed main.sqlite for chunks
   try {
-    withDb((db) => {
-      const rows = db
-        .prepare(
-          `SELECT c.text, mc.category
-           FROM chunks c
-           JOIN memory_confidence mc ON c.id = mc.chunk_id
-           WHERE mc.category = 'raw_log'
-           ORDER BY c.updated_at DESC
-           LIMIT 100`
-        )
-        .all();
+    const meDbPath = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
+    if (existsSync(meDbPath)) {
+      const meDb = new Database(meDbPath, { readonly: true });
+      try {
+        // memory-engine DB has memory_confidence directly
+        // And ATTACHes main.sqlite as 'main' schema for chunks
+        const rows = meDb
+          .prepare(
+            `SELECT c.text, mc.category
+             FROM main.chunks c
+             JOIN memory_confidence mc ON c.id = mc.chunk_id
+             WHERE mc.category = 'raw_log'
+             ORDER BY c.updated_at DESC
+             LIMIT 100`
+          )
+          .all();
 
-      for (const row of rows) {
-        logs.push({ category: "raw_log", text: row.text, source: 'conversation' });
+        for (const row of rows) {
+          logs.push({ category: "raw_log", text: row.text, source: 'conversation' });
+        }
+      } catch (innerErr) {
+        // Fallback: main.chunks might not be ATTACHed, try direct join via two DBs
+        try {
+          const mainDb = new Database(DB_PATH, { readonly: true });
+          try {
+            const stmt = mainDb.prepare(
+              `SELECT c.text FROM chunks c WHERE c.id = ?`
+            );
+            const confRows = meDb.prepare(
+              `SELECT chunk_id, category FROM memory_confidence WHERE category = 'raw_log' ORDER BY last_confidence_update DESC LIMIT 100`
+            ).all();
+            for (const row of confRows) {
+              const chunk = stmt.get(row.chunk_id);
+              if (chunk) {
+                logs.push({ category: "raw_log", text: chunk.text, source: 'conversation' });
+              }
+            }
+          } finally {
+            mainDb.close();
+          }
+        } catch (fallbackErr) {
+          console.error("[checkpoint] DB read fallback error:", fallbackErr.message);
+        }
+      } finally {
+        meDb.close();
       }
-    });
+    }
   } catch (e) {
     console.error("[checkpoint] DB read warning:", e.message);
   }
