@@ -26,6 +26,7 @@ test("getMemoryEngineConfig merges api.config.memoryEngine overrides", () => {
   assert.equal(resolved.timezone.business, "UTC");
   assert.equal(resolved.recall.topK, 9);
   assert.equal(resolved.recall.vectorTopK, 44);
+  assert.equal(resolved.recall.lexicalConfidenceThreshold, 0.7);
   assert.equal(resolved.ranking.rrfK, 99);
   assert.equal(resolved.ranking.recencyBoost.base, 0.2);
   assert.equal(resolved.ranking.recencyBoost.decayDays, 2.5);
@@ -43,4 +44,9 @@ test("getMemoryEngineConfig does not mutate defaults", () => {
   assert.equal(resolved.recall.topK, 11);
   const after = getDefaultMemoryEngineConfig();
   assert.deepEqual(after, original);
+});
+
+test("getDefaultMemoryEngineConfig exposes lexical confidence threshold", () => {
+  const defaults = getDefaultMemoryEngineConfig();
+  assert.equal(defaults.recall.lexicalConfidenceThreshold, 0.7);
 });

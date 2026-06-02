@@ -241,10 +241,15 @@ function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
     "vector_backend_attempted",
     "vector_ready_state",
     "vector_stage",
+    "vector_skipped",
+    "vector_skip_reason",
     "vector_error",
     "vector_warning",
     "vector_ms",
     "vector_query_length",
+    "lexical_candidate_count",
+    "lexical_top_score",
+    "lexical_confidence",
   ]) {
     if (debugInfo[key] !== undefined) passthroughVectorFields[key] = debugInfo[key];
   }

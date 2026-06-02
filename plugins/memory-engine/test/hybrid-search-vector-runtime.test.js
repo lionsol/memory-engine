@@ -49,6 +49,50 @@ function makeDbForVector({ includeRecentRows = false } = {}) {
   };
 }
 
+function makeDbForTiered({
+  confidence = 0.82,
+  ftsRows = [],
+  fallbackFtsRows = [],
+  kgRows = [],
+  recentRows = [],
+  chunkPath = "memory/smart-add/2026-05-27.md",
+} = {}) {
+  const confidenceRows = [{
+    chunk_id: "chunk-1234567890abcdef",
+    confidence,
+    last_confidence_update: 0,
+    base_tau: 7,
+    hit_count: 3,
+    is_protected: 0,
+    conflict_flag: 0,
+    category: "raw_log",
+    is_archived: 0,
+  }];
+  const chunkRows = [{
+    id: "chunk-1234567890abcdef",
+    path: chunkPath,
+    updated_at: 1710000000,
+  }];
+  return {
+    prepare(sql) {
+      const q = String(sql);
+      return {
+        all(...args) {
+          if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) return confidenceRows;
+          if (q.includes("SELECT id, path, updated_at FROM chunks")) return chunkRows;
+          if (q.includes("FROM memory_confidence mc") && q.includes("mc.kg_data LIKE")) return kgRows;
+          if (q.includes("FROM chunks_fts f")) {
+            const query = String(args[0] || "");
+            return query.includes(" OR ") ? fallbackFtsRows : ftsRows;
+          }
+          if (q.includes("ORDER BY c.updated_at DESC")) return recentRows;
+          return [];
+        },
+      };
+    },
+  };
+}
+
 async function loadHybridSearchFresh() {
   const mod = await import(`../lib/recall/hybrid-search.js?ts=${Date.now()}_${Math.random()}`);
   return mod.hybridSearch;
@@ -429,4 +473,181 @@ test("hybridSearch marks failed readiness and exposes init error while falling b
   }
 
   assert.equal(warnings.some(line => line.includes("lancedb_init_failed")), true);
+});
+
+test("hybridSearch skips vector on strong KG/FTS lexical confidence", async () => {
+  const hybridSearch = await loadHybridSearchFresh();
+  let lancedbSearchCalled = false;
+  let managerCalled = false;
+
+  const result = await hybridSearch("memory-engine compatibility", { topK: 3 }, {
+    withDb: fn => fn(makeDbForTiered({
+      ftsRows: [{
+        id: "chunk-1234567890abcdef",
+        text: "memory-engine compatibility notes",
+        path: "memory/smart-add/memory-engine-compatibility.md",
+        updated_at: 1710000000,
+        confidence: 0.82,
+        last_confidence_update: 0,
+        base_tau: 7,
+        hit_count: 3,
+        is_protected: 0,
+        conflict_flag: 0,
+        category: "raw_log",
+        is_archived: 0,
+      }],
+      kgRows: [{
+        id: "chunk-1234567890abcdef",
+        text: "memory-engine compatibility notes",
+        path: "memory/smart-add/memory-engine-compatibility.md",
+        updated_at: 1710000000,
+        confidence: 0.82,
+        last_confidence_update: 0,
+        base_tau: 7,
+        hit_count: 3,
+        is_protected: 0,
+        conflict_flag: 0,
+        category: "raw_log",
+        is_archived: 0,
+        kg_data: "memory-engine compatibility stable module",
+      }],
+    })),
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    getLancedbTable: () => ({
+      search: () => ({
+        limit: () => ({
+          execute: async () => {
+            lancedbSearchCalled = true;
+            return [];
+          },
+        }),
+      }),
+    }),
+    generateEmbedding: async () => [0.1, 0.2, 0.3],
+    getMemorySearchManager: async () => {
+      managerCalled = true;
+      return { manager: { search: async () => ({ entries: [] }) } };
+    },
+  });
+
+  assert.equal(lancedbSearchCalled, false);
+  assert.equal(managerCalled, false);
+  assert.equal(result?.results?.length > 0, true);
+  assert.equal(result?.debug?.vector_skipped, true);
+  assert.equal(result?.debug?.vector_skip_reason, "lexical_confidence_threshold_met");
+  assert.equal(result?.debug?.vector_stage, "skipped");
+  assert.equal(result?.debug?.lexical_confidence >= 0.7, true);
+});
+
+test("hybridSearch runs vector on weak KG/FTS lexical confidence", async () => {
+  const hybridSearch = await loadHybridSearchFresh();
+  let lancedbSearchCalled = false;
+
+  const result = await hybridSearch("compatibility", { topK: 3 }, {
+    withDb: fn => fn(makeDbForTiered({
+      ftsRows: [{
+        id: "chunk-1234567890abcdef",
+        text: "generic note",
+        path: "memory/smart-add/2026-05-27.md",
+        updated_at: 1710000000,
+        confidence: 0.82,
+        last_confidence_update: 0,
+        base_tau: 7,
+        hit_count: 3,
+        is_protected: 0,
+        conflict_flag: 0,
+        category: "raw_log",
+        is_archived: 0,
+      }],
+    })),
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    getLancedbTable: () => ({
+      search: () => ({
+        limit: () => ({
+          execute: async () => {
+            lancedbSearchCalled = true;
+            return [{
+              id: "chunk-1234567890abcdef",
+              text: "vector text",
+              timestamp: 1710000000,
+              _distance: 0.09,
+            }];
+          },
+        }),
+      }),
+    }),
+    generateEmbedding: async () => [0.1, 0.2, 0.3],
+    getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+  });
+
+  assert.equal(lancedbSearchCalled, true);
+  assert.equal(result?.debug?.vector_skipped, false);
+  assert.equal(result?.debug?.lexical_confidence < 0.7, true);
+  assert.equal(result?.debug?.vector_backend, "lancedb");
+});
+
+test("hybridSearch keeps fallback zero coverage filter and surfaces lexical debug metadata", async () => {
+  const hybridSearch = await loadHybridSearchFresh();
+  let lancedbSearchCalled = false;
+
+  const result = await hybridSearch("5.20+ 和 memory-engine 兼容性", { topK: 3 }, {
+    withDb: fn => fn(makeDbForTiered({
+      fallbackFtsRows: [
+        {
+          id: "chunk-1234567890abcdef",
+          text: "兼容性检查：5.20+ 与 memory-engine 可用",
+          path: "memory/smart-add/2026-05-27.md",
+          updated_at: 1710000000,
+          confidence: 0.82,
+          last_confidence_update: 0,
+          base_tau: 7,
+          hit_count: 3,
+          is_protected: 0,
+          conflict_flag: 0,
+          category: "episodic",
+          is_archived: 0,
+        },
+        {
+          id: "chunk-zero-coverage",
+          text: "memory engine tuning notes",
+          path: "memory/archive/2025-01-01.md",
+          updated_at: 1700000000,
+          confidence: 0.82,
+          last_confidence_update: 0,
+          base_tau: 7,
+          hit_count: 1,
+          is_protected: 0,
+          conflict_flag: 0,
+          category: "raw_log",
+          is_archived: 0,
+        },
+      ],
+    })),
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    getLancedbTable: () => ({
+      search: () => ({
+        limit: () => ({
+          execute: async () => {
+            lancedbSearchCalled = true;
+            return [];
+          },
+        }),
+      }),
+    }),
+    generateEmbedding: async () => [0.1, 0.2, 0.3],
+    getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+  });
+
+  assert.equal(result?.results?.length, 1);
+  assert.equal(result?.results?.[0]?.id, "chunk-1234567890");
+  assert.equal(result?.debug?.candidate_counts_before_filtering?.fts_raw_primary, 0);
+  assert.equal(result?.debug?.candidate_counts_before_filtering?.fts_raw_final, 1);
+  assert.equal(typeof result?.debug?.lexical_candidate_count, "number");
+  assert.equal(typeof result?.debug?.lexical_top_score, "number");
+  assert.equal(typeof result?.debug?.lexical_confidence, "number");
+  assert.equal(typeof result?.debug?.vector_skipped, "boolean");
+  assert.equal(typeof lancedbSearchCalled, "boolean");
 });
