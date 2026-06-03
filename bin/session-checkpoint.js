@@ -81,6 +81,23 @@ function withDb(fn) {
   }
 }
 
+/**
+ * Open memory-engine.sqlite with main.sqlite ATTACHed as 'main' schema.
+ * Use this for all memory_confidence operations.
+ */
+const ME_DB_PATH = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
+
+function withMeDb(fn, options = {}) {
+  const db = new Database(ME_DB_PATH, { readonly: options.readonly || false });
+  try {
+    // Use 'chunks_db' alias (not 'main' — that's reserved for the primary DB in SQLite)
+    db.exec(`ATTACH DATABASE '${DB_PATH.replace(/'/g, "''")}' AS chunks_db`);
+    return fn(db);
+  } finally {
+    db.close();
+  }
+}
+
 function todayDateStr() {
   return dateStringInTimeZone(Date.now(), "Asia/Shanghai");
 }
@@ -249,18 +266,14 @@ function readYesterdayRawLogs() {
   }
 
   // Source 2: raw_log from memory-engine confidence DB (these are real conversation data)
-  // Uses memory-engine DB which has memory_confidence + ATTACHed main.sqlite for chunks
+  // memory-engine.sqlite has memory_confidence, main.sqlite has chunks — ATTACHed via withMeDb
   try {
-    const meDbPath = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
-    if (existsSync(meDbPath)) {
-      const meDb = new Database(meDbPath, { readonly: true });
-      try {
-        // memory-engine DB has memory_confidence directly
-        // And ATTACHes main.sqlite as 'main' schema for chunks
+    if (existsSync(ME_DB_PATH)) {
+      withMeDb((meDb) => {
         const rows = meDb
           .prepare(
             `SELECT c.text, mc.category
-             FROM main.chunks c
+             FROM chunks_db.chunks c
              JOIN memory_confidence mc ON c.id = mc.chunk_id
              WHERE mc.category = 'raw_log'
              ORDER BY c.updated_at DESC
@@ -271,32 +284,7 @@ function readYesterdayRawLogs() {
         for (const row of rows) {
           logs.push({ category: "raw_log", text: row.text, source: 'conversation' });
         }
-      } catch (innerErr) {
-        // Fallback: main.chunks might not be ATTACHed, try direct join via two DBs
-        try {
-          const mainDb = new Database(DB_PATH, { readonly: true });
-          try {
-            const stmt = mainDb.prepare(
-              `SELECT c.text FROM chunks c WHERE c.id = ?`
-            );
-            const confRows = meDb.prepare(
-              `SELECT chunk_id, category FROM memory_confidence WHERE category = 'raw_log' ORDER BY last_confidence_update DESC LIMIT 100`
-            ).all();
-            for (const row of confRows) {
-              const chunk = stmt.get(row.chunk_id);
-              if (chunk) {
-                logs.push({ category: "raw_log", text: chunk.text, source: 'conversation' });
-              }
-            }
-          } finally {
-            mainDb.close();
-          }
-        } catch (fallbackErr) {
-          console.error("[checkpoint] DB read fallback error:", fallbackErr.message);
-        }
-      } finally {
-        meDb.close();
-      }
+      }, { readonly: true });
     }
   } catch (e) {
     console.error("[checkpoint] DB read warning:", e.message);
@@ -434,21 +422,24 @@ function isDuplicate(text, category = "raw_log") {
     const todayFp = readSmartAddFingerprints(todayDateStr());
     if (todayFp.has(fp)) return true;
 
-    return withDb((db) => {
-      // Try FTS5 exact match first
+    // Check FTS5 in main.sqlite first (doesn't need memory_confidence)
+    const ftsMatch = withDb((db) => {
       const fts = db.prepare(`
         SELECT COUNT(*) as cnt FROM chunks_fts
         WHERE chunks_fts MATCH ?
       `).get(text.replace(/[^\w\u4e00-\u9fff]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 5).join(' '));
-      if (fts && fts.cnt > 0) return true;
+      return fts && fts.cnt > 0;
+    });
+    if (ftsMatch) return true;
 
-      // Fallback: check if any recent chunk contains key fragments
-      const keyFrags = text.match(/[\u4e00-\u9fff\w]{4,}/g) || [];
-      const sig = keyFrags.slice(0, 3).join('|');
-      if (!sig) return false;
+    // Fallback via withMeDb (memory_confidence lives in memory-engine.sqlite, chunks in main.sqlite ATTACHed)
+    const keyFrags = text.match(/[\u4e00-\u9fff\w]{4,}/g) || [];
+    const sig = keyFrags.slice(0, 3).join('|');
+    if (!sig) return false;
 
+    return withMeDb((db) => {
       const existing = db.prepare(`
-        SELECT COUNT(*) as cnt FROM chunks c
+        SELECT COUNT(*) as cnt FROM chunks_db.chunks c
         JOIN memory_confidence mc ON c.id = mc.chunk_id
         WHERE mc.is_archived = 0
         AND (c.text LIKE ? OR c.text LIKE ? OR c.text LIKE ?)
@@ -761,35 +752,39 @@ function writeLLMTimeoutEpisode(today) {
 }
 
 function writeConfidence(entryId, text, category) {
-  withDb((db) => {
-    const nowSec = Math.floor(Date.now() / 1000);
-    const catParams = {
-      preference: { conf: 0.8, tau: 90.0 },
-      episodic: { conf: 0.7, tau: 30.0 },
-      user_identity: { conf: 0.95, tau: 365.0 },
-      kg_node: { conf: 0.85, tau: 90.0 },
-      temporary: { conf: 0.4, tau: 2.0 },
-      raw_log: { conf: 0.5, tau: 7.0 },
-    };
-    const params = catParams[category] || { conf: 0.5, tau: 7.0 };
-    // Find matching chunk by path + text prefix
-    const fileRel = `memory/smart-add/${todayDateStr()}.md`;
-    const chunk = db.prepare(`
+  const nowSec = Math.floor(Date.now() / 1000);
+  const catParams = {
+    preference: { conf: 0.8, tau: 90.0 },
+    episodic: { conf: 0.7, tau: 30.0 },
+    user_identity: { conf: 0.95, tau: 365.0 },
+    kg_node: { conf: 0.85, tau: 90.0 },
+    temporary: { conf: 0.4, tau: 2.0 },
+    raw_log: { conf: 0.5, tau: 7.0 },
+  };
+  const params = catParams[category] || { conf: 0.5, tau: 7.0 };
+  // Find matching chunk in main.sqlite (chunks table)
+  const fileRel = `memory/smart-add/${todayDateStr()}.md`;
+  const chunkId = withDb((db) => {
+    const row = db.prepare(`
       SELECT id FROM chunks
-      WHERE path = ? AND id NOT IN (SELECT chunk_id FROM memory_confidence)
+      WHERE path = ?
       ORDER BY updated_at DESC LIMIT 1
     `).get(fileRel);
+    return row ? row.id : null;
+  });
 
-    if (chunk) {
+  if (chunkId) {
+    // Write confidence to memory-engine.sqlite
+    withMeDb((db) => {
       db.prepare(`
         INSERT OR REPLACE INTO memory_confidence
         (chunk_id, initial_confidence, confidence, last_confidence_update,
          base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
         VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)
-      `).run(chunk.id, params.conf, params.conf, nowSec, params.tau, category);
-    }
+      `).run(chunkId, params.conf, params.conf, nowSec, params.tau, category);
+    });
     console.log(`[checkpoint] Confidence written: ${category} conf=${params.conf} tau=${params.tau}`);
-  });
+  }
 }
 
 // ── 配置冲突自动标记 ──
@@ -808,12 +803,12 @@ function resolveConfigConflicts() {
   console.log("[checkpoint] Resolving config conflicts...");
   let flagged = 0;
 
-  withDb((db) => {
-    // 读取所有 preference 和非 archived 的条目
+  withMeDb((db) => {
+    // 读取所有 preference 和非 archived 的条目 (memory_confidence in memory-engine.sqlite, chunks in ATTACHed main.sqlite)
     const rows = db.prepare([
       "SELECT mc.chunk_id, c.text, mc.last_confidence_update, mc.conflict_flag",
       "FROM memory_confidence mc",
-      "JOIN chunks c ON c.id = mc.chunk_id",
+      "JOIN chunks_db.chunks c ON c.id = mc.chunk_id",
       "WHERE mc.category = 'preference'",
       "AND mc.is_archived = 0",
       "ORDER BY mc.last_confidence_update DESC",
@@ -880,10 +875,10 @@ async function repairOrphanVectors() {
     const lancedb = require('@lancedb/lancedb');
     const LANCEDB_PATH = resolve(HOME, '.openclaw/memory/lancedb');
 
-    // Get all SQLite confidence chunk IDs
-    const sqliteIds = withDb(db => {
+    // Get all SQLite confidence chunk IDs (from memory-engine.sqlite)
+    const sqliteIds = withMeDb(db => {
       return db.prepare('SELECT chunk_id, category FROM memory_confidence WHERE is_archived = 0').all();
-    });
+    }, { readonly: true });
 
     // Get all LanceDB chunk IDs via vector search (dummy vector to enumerate)
     let lanceIds = new Set();
