@@ -13,7 +13,7 @@ const https = require("node:https");
 const crypto = require("node:crypto");
 const { homedir } = require("node:os");
 const { resolve } = require("node:path");
-const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync } = require("node:fs");
+const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, readdirSync } = require("node:fs");
 const Database = require("better-sqlite3");
 const zlib = require("node:zlib");
 
@@ -21,6 +21,7 @@ const zlib = require("node:zlib");
 const HOME = homedir();
 const DB_PATH = resolve(HOME, ".openclaw/memory/main.sqlite");
 const WORKSPACE = resolve(HOME, ".openclaw/workspace");
+const SESSIONS_DIR = resolve(HOME, ".openclaw/agents/main/sessions");
 const SMART_ADD_DIR = "memory/smart-add";
 const CONFIG_JSON = resolve(HOME, ".openclaw/openclaw.json");
 const EPISODES_DIR = "memory/episodes";
@@ -288,6 +289,50 @@ function readYesterdayRawLogs() {
     }
   } catch (e) {
     console.error("[checkpoint] DB read warning:", e.message);
+  }
+
+  // Source 3: .jsonl.reset.* files from archived sessions (lost due to session reset)
+  try {
+    if (existsSync(SESSIONS_DIR)) {
+      const resetFiles = readdirSync(SESSIONS_DIR).filter(f => f.includes(".jsonl.reset."));
+      for (const file of resetFiles) {
+        const filePath = resolve(SESSIONS_DIR, file);
+        const resetContent = readFileSync(filePath, "utf-8");
+        const lines = resetContent.split("\n").filter(Boolean);
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line);
+            if (entry.type === "message" && entry.message) {
+              const msg = entry.message;
+              const role = msg.role || "";
+              const content = msg.content || "";
+              if (role === "user" && typeof content === "string" && content.length > 3) {
+                logs.push({ category: "raw_log", text: `**User:** ${content}`, source: "conversation" });
+              } else if (role === "assistant") {
+                let text = "";
+                if (typeof content === "string") text = content;
+                else if (Array.isArray(content)) {
+                  text = content
+                    .filter(x => x && x.type === "text" && x.text)
+                    .map(x => x.text)
+                    .join(" ");
+                }
+                if (text.length > 5) {
+                  logs.push({ category: "raw_log", text: `**Assistant:** ${text}`, source: "conversation" });
+                }
+              }
+            }
+          } catch (e) {
+            // skip malformed lines
+          }
+        }
+      }
+      if (resetFiles.length > 0) {
+        console.log(`[checkpoint] Scanned ${resetFiles.length} reset session files, extracted additional raw_log entries`);
+      }
+    }
+  } catch (e) {
+    console.error("[checkpoint] Reset file scan warning:", e.message);
   }
 
   return logs;
