@@ -8,10 +8,17 @@
 import base64
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
 import urllib.request
+
+def _clean_json(text):
+    """Strip trailing commas before ] and } to make JSON valid."""
+    text = re.sub(r',\s*([\}\]])', r'\1', text)
+    return text
+
 
 HOME = os.path.expanduser("~")
 CONFIG_PATH = os.path.join(HOME, ".openclaw/openclaw.json")
@@ -24,7 +31,7 @@ TIMESTAMP = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 # Read API key
 with open(CONFIG_PATH) as f:
-    cfg = json.load(f)
+    cfg = json.loads(_clean_json(f.read()))
 API_KEY = cfg["models"]["providers"]["siliconflow"]["apiKey"]
 HEADERS = {
     "Content-Type": "application/json",
