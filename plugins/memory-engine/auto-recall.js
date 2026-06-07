@@ -272,7 +272,7 @@ export function shouldInjectCandidate(candidate, query, debug = null) {
 }
 
 function normalizePrompt(prompt) {
-  return String(prompt || "").trim();
+  return stripPromptMetadataPrefix(String(prompt || "").trim());
 }
 
 export function shouldForceAutoRecall(prompt) {
