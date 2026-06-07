@@ -11,7 +11,7 @@ import {
   normalizeFtsQuery,
   stripPromptMetadataPrefix,
 } from "./query-utils.js";
-import { appendSmartAdd } from "./session-checkpoint.js";
+import { appendSmartAdd } from "./smart-add.js";
 import {
   HOME_DIR,
   INDEX_SYNC_WATCH_DIRS,
