@@ -1,15 +1,5 @@
 import { ensureMemoryConfidenceTable, recordEvent, safeJson, tableExists, withDb } from "./db.js";
-
-function inferCategoryFromPath(path = "") {
-  const normalized = String(path || "").replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
-  if (!normalized) return "external";
-  if (normalized === "memory.md") return "core_profile";
-  if (normalized.startsWith("memory/projects/")) return "project";
-  if (/^memory\/\d{4}-\d{2}-\d{2}\.md$/.test(normalized)) return "daily_journal";
-  if (normalized.startsWith("memory/dreaming/")) return "dreaming";
-  if (normalized === "memory/stats-history.md") return "stats";
-  return "external";
-}
+import { inferCategoryFromPath } from "../../lib/category-inference.js";
 
 function normalizeMemory(row) {
   const confidence = row.confidence ?? null;
