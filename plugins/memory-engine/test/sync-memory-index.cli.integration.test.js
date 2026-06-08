@@ -83,16 +83,15 @@ test("integration: sync-memory-index CLI ingests today's smart-add file", { skip
   });
 
   let output;
-  try {
-    const syncResult = runMemoryIndexSyncCli({ force: true, quiet: true });
-    output = syncResult.stdout;
-  } catch (error) {
-    if (shouldSkipUnavailableSync(error)) {
-      t.skip(`sync unavailable in this environment: ${String(error.message || error).slice(0, 200)}`);
+  const syncResult = runMemoryIndexSyncCli({ force: true, quiet: true });
+  if (!syncResult.ok) {
+    if (shouldSkipUnavailableSync(syncResult.error)) {
+      t.skip(`sync unavailable in this environment: ${String(syncResult.error || "").slice(0, 200)}`);
       return;
     }
-    throw error;
+    assert.equal(syncResult.ok, true, syncResult.error || "sync-memory-index CLI failed");
   }
+  output = syncResult.stdout;
 
   let parsed = null;
   try {

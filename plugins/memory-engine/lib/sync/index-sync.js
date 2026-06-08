@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, statSync } from "fs";
 import { resolve } from "path";
 import { tableExists } from "../db/schema.js";
+import { safeRelativePath } from "../path-utils.js";
 
 export function collectIndexedFiles(memoryRoot, watchDirs) {
   const files = [];
@@ -25,7 +26,8 @@ export function collectIndexedFiles(memoryRoot, watchDirs) {
         continue;
       }
       if (!stat.isFile()) continue;
-      const relPath = absPath.replace(memoryRoot + "/", "");
+      const relPath = safeRelativePath(memoryRoot, absPath);
+      if (!relPath) continue;
       files.push({ relPath, mtimeMs: stat.mtimeMs, absPath });
     }
   }

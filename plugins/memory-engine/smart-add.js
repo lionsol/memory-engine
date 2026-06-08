@@ -1,28 +1,66 @@
+import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
+import { safeRelativePath } from "./lib/path-utils.js";
 import { WORKSPACE } from "./memory-manager-runtime.js";
 
 const SMART_ADD_FINGERPRINT_RE = /<!--\s*smart-add-fingerprint:\s*([a-f0-9]{8,64})\s*-->/gi;
+const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+const SYNC_MEMORY_INDEX_SCRIPT = resolve(MODULE_DIR, "scripts/sync-memory-index.js");
 
 function normalizeText(value) {
   return String(value || "").replace(/\r\n/g, "\n").trim();
 }
 
 function shouldAutoSyncPath(filePath) {
-  const normalized = String(filePath || "");
-  const workspacePrefix = WORKSPACE.endsWith("/") ? WORKSPACE : `${WORKSPACE}/`;
-  return normalized.startsWith(workspacePrefix);
+  return safeRelativePath(WORKSPACE, filePath) !== null;
 }
 
-export function runMemoryIndexSyncCli({ force = true, quiet = true } = {}) {
+export function runMemoryIndexSyncCli({
+  force = true,
+  quiet = true,
+  spawnSyncImpl = spawnSync,
+  nodeExecPath = process.execPath,
+  scriptPath = SYNC_MEMORY_INDEX_SCRIPT,
+  cwd = MODULE_DIR,
+  env = process.env,
+} = {}) {
+  const args = [scriptPath];
+  if (force) args.push("--force");
   try {
-    const stdout = "";
-    if (!quiet && stdout?.trim()) console.log(stdout.trim());
-    return { ok: true, stdout: stdout || "" };
+    const result = spawnSyncImpl(nodeExecPath, args, {
+      cwd,
+      env,
+      encoding: "utf8",
+    });
+    const stdout = String(result?.stdout || "");
+    const stderr = String(result?.stderr || "");
+    const status = Number.isInteger(result?.status) ? result.status : null;
+    const signal = result?.signal || null;
+    const errorMessage = result?.error
+      ? String(result.error?.message || result.error)
+      : (status === 0 ? "" : (stderr.trim() || `sync-memory-index exited with status ${status ?? "unknown"}`));
+    if (!quiet && stdout.trim()) console.log(stdout.trim());
+    if (!quiet && stderr.trim()) console.error(stderr.trim());
+    return {
+      ok: !errorMessage,
+      status,
+      signal,
+      stdout,
+      stderr,
+      ...(errorMessage ? { error: errorMessage } : {}),
+    };
   } catch (error) {
-    const stderr = String(error?.stderr || "").trim();
+    const stdout = String(error?.stdout || "");
+    const stderr = String(error?.stderr || "");
     return {
       ok: false,
-      error: stderr || String(error?.message || error),
+      status: Number.isInteger(error?.status) ? error.status : null,
+      signal: error?.signal || null,
+      stdout,
+      stderr,
+      error: stderr.trim() || String(error?.message || error),
     };
   }
 }
