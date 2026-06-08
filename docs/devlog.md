@@ -939,3 +939,87 @@ tests 115
 pass 110
 fail 0
 skipped 5
+```
+## v0.8.2 围绕 Memory Engine 的可维护性、稳定性和测试网做了整理 (2026-06-08) 
+
+### 分类推断共享模块
+
+新增 `lib/category-inference.js`，统一管理 memory path / chunk text 的分类推断规则。
+
+本次替换了以下位置中的重复分类逻辑：
+
+- `index.js`
+- `lib/recall/hybrid-search.js`
+- `console/services/memory-service.js`
+
+同时保留各调用点原有 fallback 语义，没有强行统一行为。
+
+### 轻量静态检查
+
+新增 `npm run check`，并加入 `scripts/static-check.js`。
+
+检查方式使用 Node 原生 `node --check`，覆盖受控 `.js` 文件，不引入 ESLint 或新依赖，避免 lint 噪音和格式化扩散。
+
+### 拆分 index.js runtime/helper 逻辑
+
+从 `index.js` 中拆出低风险 runtime/helper 模块：
+
+- `lib/lancedb-runtime.js`
+  - LanceDB 初始化
+  - ready state
+  - 超时等待
+  - disable env 处理
+
+- `lib/memory-confidence.js`
+  - confidence 参数
+  - category routing
+  - realtime confidence 计算
+  - reinforce
+  - recall metadata helper
+  - gate threshold
+
+- `lib/index-sync-runtime.js`
+  - index sync state
+  - 文件扫描
+  - indexed path state 读取
+  - 是否需要 `manager.sync()` 的判定
+  - `fresh` / `manager_unavailable` / `synced` 返回路径
+  - indexed chunks confidence backfill
+
+`index.js` 保留插件入口、register 编排和 hook wiring，行数从约 942 行降到 653 行。
+
+### 新增测试
+
+- `test/category-inference.test.js`
+- `test/category-inference-consumers.test.js`
+- `test/index-sync-runtime.test.js`
+
+覆盖内容：
+
+- 共享分类规则
+- hybrid-search 与 console consumer 的分类一致性
+- index sync 首次同步后无变化走 `fresh`
+- indexed chunks 缺失 confidence 时执行 backfill
+
+### 提交拆分
+
+- `3c7f21d Share-memory-category-inference`
+- `c17a5fc Add-static-check-script`
+- `443930a Split-memory-runtime-helpers`
+
+### 验证结果
+
+```text
+npm run check
+static check passed: 67 files
+npm test
+tests 122
+pass 117
+fail 0
+skipped 5
+```
+说明
+skipped 5 为既有条件跳过测试：
+
+- 3 个测试依赖完整 OpenClaw runtime，当前环境报 ERR_MODULE_NOT_FOUND 时跳过。
+- 2 个 index sync 集成测试需要显式设置 OPENCLAW_RUN_MEMORY_SYNC_TEST=1 才会运行。
