@@ -996,8 +996,6 @@ skipped 5
 
 ### Verified
 
-- `npm run check`：67 个 JS 文件通过。
-- `npm test`：117 pass / 0 fail / 5 skip。
 - Gateway 重启后插件正常加载。
 - LanceDB 初始化正常。
 - Console API 返回 HTTP 200。
