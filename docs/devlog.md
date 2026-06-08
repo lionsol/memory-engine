@@ -994,6 +994,17 @@ skipped 5
 - `test/category-inference-consumers.test.js`
 - `test/index-sync-runtime.test.js`
 
+### Verified
+
+- `npm run check`：67 个 JS 文件通过。
+- `npm test`：117 pass / 0 fail / 5 skip。
+- Gateway 重启后插件正常加载。
+- LanceDB 初始化正常。
+- Console API 返回 HTTP 200。
+- autoRecall `memory_search` 正常返回 5 条结果，vectorScore / textScore / RRF 融合正常。
+- Console 字段正常：`confidence_mode`、`source_type`、`external_badge`、`decay_eligible`、`archive_eligible` 等字段均有值。
+- index sync 状态正常：100 chunks / 39 paths，无异常。
+
 覆盖内容：
 
 - 共享分类规则
