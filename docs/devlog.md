@@ -883,6 +883,40 @@ memory-engine 已进入观测与调优阶段。
 
 ## (2026-06-08) 更新
 
+### 安全加固
+
+- 关闭 Memory Console 的写接口：
+  - `POST /api/memories/:id/archive`
+  - `POST /api/memories/:id/delete`
+  - `POST /api/memories/:id/confidence`
+- 上述接口现在统一返回 `403`，避免控制台在无鉴权状态下修改记忆数据。
+- 新增受限 JSON body 读取工具，默认最大 64KB。
+  - 超过限制返回 `413 payload too large`
+  - 非法 JSON 返回 `400 invalid json`
+  - 超限后会停止继续读取后续 chunk，降低内存耗尽风险。
+
+### 稳定性修复
+
+- 修复 `runMemoryIndexSyncCli()` 空实现问题。
+  - 现在会真实调用 `scripts/sync-memory-index.js`
+  - 使用 `spawnSync`，避免 shell 注入
+  - 返回真实 `ok/status/signal/stdout/stderr/error`
+  - 同步失败时不再伪造 `ok: true`
+- 新增 `session-checkpoint.js` 兼容导出层，保留旧调用路径。
+
+### 跨平台路径修复
+
+- 新增 `safeRelativePath()` 工具，使用 `path.relative()` 计算相对路径。
+- 统一将内部相对路径规范化为 POSIX `/` 风格。
+- 修复以下路径处理场景：
+  - root 带尾斜杠或不带尾斜杠结果一致
+  - Windows 风格路径可稳定转换
+  - `collectIndexedFiles()` 返回稳定 `relPath`
+  - `memory_engine.add` 查询 `chunks.path` 时使用稳定相对路径
+- 明确约定：
+  - target 不在 root 内时返回 `null`
+  - root 和 target 完全相同时返回空字符串 `""`
+
 ### 测试修复
 
 - 修复 `retrievalMetrics` 的日期敏感测试。
@@ -896,3 +930,12 @@ memory-engine 已进入观测与调优阶段。
 - `runMemoryIndexSyncCli` 成功/失败/无状态返回测试
 - 跨平台路径归一化测试
 - `memory_engine.add` 稳定 `chunks.path` 查询测试
+
+### 验证结果
+
+```text
+npm test
+tests 115
+pass 110
+fail 0
+skipped 5
