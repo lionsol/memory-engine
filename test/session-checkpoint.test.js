@@ -5,6 +5,7 @@ import { tmpdir } from "os";
 import { resolve } from "path";
 import { detectOpenClawRuntime } from "./helpers/openclaw-runtime.js";
 import { buildSmartAddFingerprint } from "../smart-add-fingerprint.js";
+import { runMemoryIndexSyncCli } from "../session-checkpoint.js";
 
 const OPENCLAW_RUNTIME = await detectOpenClawRuntime();
 let appendSmartAdd = null;
@@ -106,4 +107,55 @@ test("buildSmartAddFingerprint keeps protected flag distinct", () => {
   const a = buildSmartAddFingerprint("same text", "episodic", false);
   const b = buildSmartAddFingerprint("same text", "episodic", true);
   assert.notEqual(a, b);
+});
+
+test("runMemoryIndexSyncCli returns ok=true with real runner output", () => {
+  const calls = [];
+  const result = runMemoryIndexSyncCli({
+    force: true,
+    quiet: true,
+    spawnSyncImpl: (...args) => {
+      calls.push(args);
+      return { status: 0, stdout: "{\"reason\":\"cli-sync\"}\n", stderr: "" };
+    },
+    nodeExecPath: "/fake/node",
+    scriptPath: "/fake/scripts/sync-memory-index.js",
+    cwd: "/fake/project",
+    env: { TEST_ENV: "1" },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "{\"reason\":\"cli-sync\"}\n");
+  assert.equal(result.stderr, "");
+  assert.equal("error" in result, false);
+  assert.deepEqual(calls, [[
+    "/fake/node",
+    ["/fake/scripts/sync-memory-index.js", "--force"],
+    { cwd: "/fake/project", env: { TEST_ENV: "1" }, encoding: "utf8" },
+  ]]);
+});
+
+test("runMemoryIndexSyncCli returns ok=false and error on non-zero exit", () => {
+  const result = runMemoryIndexSyncCli({
+    quiet: true,
+    spawnSyncImpl: () => ({ status: 1, stdout: "partial\n", stderr: "sync failed\n" }),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, "partial\n");
+  assert.equal(result.stderr, "sync failed\n");
+  assert.equal(result.error, "sync failed");
+});
+
+test("runMemoryIndexSyncCli does not report fake success when runner provides no success status", () => {
+  const result = runMemoryIndexSyncCli({
+    quiet: true,
+    spawnSyncImpl: () => ({ stdout: "", stderr: "" }),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, null);
+  assert.match(result.error, /status unknown/i);
 });

@@ -237,7 +237,7 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
       console,
     };
     vm.runInNewContext(`${transformed}\nthis.__retrievalMetrics = retrievalMetrics;`, context);
-    const result = context.__retrievalMetrics();
+    const result = context.__retrievalMetrics({ nowMs: Date.parse("2026-06-01T12:00:00Z") });
     const categoryMap = Object.fromEntries((result.categories || []).map(row => [row.category, Number(row.count) || 0]));
     assert.equal(categoryMap.episodic, 1);
     assert.equal(categoryMap.project, 1);
@@ -246,4 +246,3 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
     engineDb.close();
   }
 });
-

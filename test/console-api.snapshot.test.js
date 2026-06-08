@@ -36,3 +36,35 @@ test("console telemetry API route response snapshot is stable", async () => {
 }`
   );
 });
+
+test("console memory write API routes are disabled", async () => {
+  const source = readFileSync(new URL("../console/routes/memories.js", import.meta.url), "utf8");
+  const transformed = source
+    .replace(/^import[^\n]*\n/m, "")
+    .replace("export async function handleMemoryApi", "async function handleMemoryApi");
+  const calls = [];
+  const context = {
+    Buffer,
+    decodeURIComponent,
+    archiveMemory: () => calls.push("archive"),
+    deleteMemory: () => calls.push("delete"),
+    getMemory: () => null,
+    listMemories: () => [],
+    updateConfidence: () => calls.push("confidence"),
+  };
+  vm.runInNewContext(`${transformed}\nthis.__handleMemoryApi = handleMemoryApi;`, context);
+  const handleMemoryApi = context.__handleMemoryApi;
+
+  for (const action of ["archive", "delete", "confidence"]) {
+    const result = await handleMemoryApi({
+      req: [],
+      method: "POST",
+      parts: ["api", "memories", "abc123", action],
+      searchParams: new URLSearchParams(),
+    });
+
+    assert.equal(result.status, 403);
+    assert.equal(result.body.error, "console memory write APIs are disabled");
+  }
+  assert.deepEqual(calls, []);
+});

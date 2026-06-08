@@ -437,12 +437,12 @@ export function overviewMetrics() {
   }, { readonly: true });
 }
 
-export function retrievalMetrics() {
+export function retrievalMetrics({ nowMs = Date.now() } = {}) {
   const metricConfig = getMemoryEngineConfig(null)?.metrics || {};
   const metricWindowDays = Math.max(1, Number(metricConfig?.windowDays) || 7);
   const metricTopN = Math.max(1, Number(metricConfig?.topN) || 10);
   return withDb(db => {
-    const metricsNowMs = Date.now();
+    const metricsNowMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
     const unifiedEvents = readUnifiedMemoryEvents(db);
     const recallCompleted = unifiedEvents.filter(event => event?.event_type === "recall_completed");
     const avgNullable = values => {

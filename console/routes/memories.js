@@ -1,11 +1,9 @@
-import { archiveMemory, deleteMemory, getMemory, listMemories, updateConfidence } from "../services/memory-service.js";
+import { getMemory, listMemories } from "../services/memory-service.js";
 
-async function readJson(req) {
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
-}
+const WRITE_DISABLED_RESPONSE = {
+  status: 403,
+  body: { error: "console memory write APIs are disabled" },
+};
 
 export async function handleMemoryApi({ req, method, parts, searchParams }) {
   if (parts.length === 2 && method === "GET") {
@@ -21,13 +19,7 @@ export async function handleMemoryApi({ req, method, parts, searchParams }) {
     return memory ? { status: 200, body: memory } : { status: 404, body: { error: "memory not found" } };
   }
   if (parts.length === 4 && method === "POST") {
-    const id = decodeURIComponent(parts[2]);
-    if (parts[3] === "archive") return { status: 200, body: archiveMemory(id) };
-    if (parts[3] === "delete") return { status: 200, body: deleteMemory(id) };
-    if (parts[3] === "confidence") {
-      const body = await readJson(req);
-      return { status: 200, body: updateConfidence(id, body.confidence) };
-    }
+    if (["archive", "delete", "confidence"].includes(parts[3])) return WRITE_DISABLED_RESPONSE;
   }
   return null;
 }
