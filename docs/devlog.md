@@ -880,3 +880,19 @@ memory-engine 已进入观测与调优阶段。
 ### Changed
 - 降低 LanceDB vector pipeline 默认开销。
 - 保留 existing RRF fusion、fallback rerank 和 external memory 兼容逻辑。
+
+## (2026-06-08) 更新
+
+### 测试修复
+
+- 修复 `retrievalMetrics` 的日期敏感测试。
+- `retrievalMetrics()` 新增可选 `{ nowMs }` 参数，默认仍使用 `Date.now()`，线上行为不变。
+- 测试中注入固定时间，避免 fixture 随当前日期漂移导致失败。
+
+### 新增测试
+
+- 控制台写接口禁用测试
+- JSON body 限制测试
+- `runMemoryIndexSyncCli` 成功/失败/无状态返回测试
+- 跨平台路径归一化测试
+- `memory_engine.add` 稳定 `chunks.path` 查询测试
