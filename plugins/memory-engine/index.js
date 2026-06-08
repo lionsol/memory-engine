@@ -1,6 +1,5 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { getMemorySearchManager } from "openclaw/plugin-sdk/memory-core-engine-runtime";
-import lancedb from '@lancedb/lancedb';
 import { buildSmartAddFingerprint } from "./smart-add-fingerprint.js";
 import { dateStrInTimeZone } from "./date-utils.js";
 import { existsSync, readFileSync } from "fs";
@@ -24,6 +23,23 @@ import { getMemoryEngineConfig } from "./lib/config/runtime.js";
 import { getSmartAddTimeZone } from "./lib/config/helpers.js";
 import { insertMemoryEvent } from "./lib/db/events.js";
 import { ensureMemoryEngineTables, migrateLegacyMemoryEventsFromCore } from "./lib/db/schema.js";
+import {
+  createBackfillConfidenceForIndexedChunks,
+  createIndexSyncRuntime,
+} from "./lib/index-sync-runtime.js";
+import { createLanceDbRuntime, DEFAULT_LANCEDB_READY_TIMEOUT_MS } from "./lib/lancedb-runtime.js";
+import {
+  autoRouteCategory,
+  batchReinforce,
+  buildRecallCompletedMetadata,
+  calcRealtimeConf,
+  calcTau,
+  CATEGORY_MAP,
+  catParams,
+  gateThresholdForCategory,
+  inferCategoryFromChunk,
+  resolvePrefixes,
+} from "./lib/memory-confidence.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
@@ -31,152 +47,21 @@ import { generateEmbedding } from "./lib/siliconflow-runtime.js";
 
 const KG_PATH = resolve(HOME_DIR, ".openclaw/workspace/knowledge-graph.json");
 const LANCEDB_PATH = resolve(HOME_DIR, ".openclaw/memory/lancedb");
-const LANCEDB_READY_TIMEOUT_MS = 400;
 const MEMORY_SUPPLEMENT_SENTINEL = "MEMORY_SUPPLEMENT_SENTINEL";
 const MEMORY_SUPPLEMENT_BOUNDARY_START = "<!-- MEMORY_ENGINE_SUPPLEMENT_START -->";
 const MEMORY_SUPPLEMENT_BOUNDARY_END = "<!-- MEMORY_ENGINE_SUPPLEMENT_END -->";
-
-// ── LanceDB globals (initialized in register) ──
-let lancedbTable = null;
-let lancedbReadyPromise = null;
-const lancedbReadyState = {
-  state: process.env.MEMORY_ENGINE_DISABLE_LANCEDB === "1" ? "disabled" : "pending",
-  error: null,
-};
-const indexSyncState = {
-  lastSyncAt: 0,
-  lastMaxMtimeMs: 0,
-};
 let memoryStorageReady = false;
-
-/**
- * Initialize LanceDB: connect and ensure the chunks table exists.
- */
-async function initLanceDB() {
-  if (lancedbReadyState.state === "disabled") {
-    lancedbTable = null;
-    return false;
-  }
-  lancedbReadyState.state = "pending";
-  lancedbReadyState.error = null;
-  try {
-    const db = await lancedb.connect(LANCEDB_PATH);
-    const tableNames = await db.tableNames();
-    if (tableNames.includes('chunks')) {
-      lancedbTable = await db.openTable('chunks');
-    } else {
-      lancedbTable = await db.createTable('chunks', [
-        { id: crypto.randomUUID(), text: "", vector: new Array(2560).fill(0), timestamp: Date.now() }
-      ]);
-    }
-    lancedbReadyState.state = "ready";
-    console.log("[memory-engine] LanceDB initialized at", LANCEDB_PATH);
-    return true;
-  } catch (e) {
-    lancedbReadyState.state = "failed";
-    lancedbReadyState.error = e?.message ? String(e.message) : String(e);
-    lancedbTable = null;
-    console.warn("[memory-engine] LanceDB init skipped:", e.message);
-    return false;
-  }
-}
-
-function ensureLanceDBReady() {
-  if (lancedbReadyState.state === "disabled") return Promise.resolve(false);
-  if (!lancedbReadyPromise) {
-    lancedbReadyPromise = initLanceDB()
-      .catch(() => false)
-      .finally(() => {
-        // Keep the settled promise for later callers.
-      });
-  }
-  return lancedbReadyPromise;
-}
-
-async function getLanceDBRuntime({ timeoutMs = LANCEDB_READY_TIMEOUT_MS } = {}) {
-  if (lancedbReadyState.state === "disabled") {
-    return { table: null, readyState: "disabled", initError: null, timedOut: false };
-  }
-
-  let timedOut = false;
-  const readyPromise = ensureLanceDBReady();
-  if (lancedbReadyState.state === "pending") {
-    await Promise.race([
-      readyPromise,
-      new Promise(resolve => setTimeout(() => {
-        timedOut = true;
-        resolve();
-      }, Math.max(0, Number(timeoutMs) || 0))),
-    ]);
-  } else {
-    await readyPromise;
-  }
-
-  return {
-    table: lancedbReadyState.state === "ready" ? lancedbTable : null,
-    readyState: lancedbReadyState.state,
-    initError: lancedbReadyState.error || null,
-    timedOut,
-  };
-}
-
-const CATEGORY_MAP = {
-  temporary:       { conf: 0.40, tau: 2.0 },
-  raw_log:         { conf: 0.50, tau: 7.0 },
-  episodic:        { conf: 0.70, tau: 30.0 },
-  preference:      { conf: 0.70, tau: 30.0 },
-  kg_node:         { conf: 0.85, tau: 90.0 },
-  user_identity:   { conf: 0.95, tau: 365.0 },
-};
+const {
+  ensureLanceDBReady,
+  getLanceDBRuntime,
+  getLancedbTable,
+} = createLanceDbRuntime({
+  dbPath: LANCEDB_PATH,
+  readyTimeoutMs: DEFAULT_LANCEDB_READY_TIMEOUT_MS,
+});
 
 function withDb(fn) {
   return withEngineDb(fn, { readonly: false });
-}
-
-function calcTau(hits, baseTau) {
-  if (baseTau >= 365.0) return baseTau;
-  return baseTau + (365.0 - baseTau) * (1 - Math.exp(-0.3 * hits));
-}
-
-function catParams(category, isProtected) {
-  if (isProtected || category === "user_identity") return { conf: 0.95, tau: 365.0 };
-  return CATEGORY_MAP[category] || CATEGORY_MAP.raw_log;
-}
-
-/**
- * Auto-route text to an appropriate category via regex rules.
- * Only overrides when no explicit category was passed (or raw_log default).
- */
-function autoRouteCategory(text, metadata = {}) {
-  if (metadata.category && metadata.category !== 'raw_log') {
-    return metadata.category;
-  }
-  if (/api[_-]?key|voice[_-]?id|model\s*[:=]|\/[a-z0-9_\/\.-]+\.[a-z]{2,5}|[a-f0-9]{32,}/i.test(text)) {
-    return 'preference';
-  }
-  if (/我是|我叫|我的名字|我的职业|我在.*工作|我住在/.test(text)) {
-    return 'user_identity';
-  }
-  if (/暂时|临时|一次性|仅这次|就现在|当前会话|测试一下|试试看/.test(text)) {
-    return 'temporary';
-  }
-  if (/我喜欢|我习惯|我偏好|我常用|我一般|我倾向于|记住|别忘了|以后都|下次|我的设置/.test(text)) {
-    return 'preference';
-  }
-  if (/决定|结论|总结|教训|经验|最终选择|定下来|确定了/.test(text)) {
-    return 'preference';
-  }
-  return 'raw_log';
-}
-
-function calcRealtimeConf(row, now) {
-  if (row.is_protected) return row.confidence;
-  if (!row.last_confidence_update) return row.confidence;
-  const deltaDays = (now - row.last_confidence_update) / 86400;
-  const tau = calcTau(row.hit_count, row.base_tau);
-  let c = row.confidence * Math.exp(-deltaDays / tau);
-  if (row.conflict_flag) c -= 0.5;
-  return Math.max(0, c);
 }
 
 function recordMemoryEvent(event) {
@@ -188,42 +73,6 @@ function recordMemoryEvent(event) {
   } catch (e) {
     console.warn("[memory-engine] memory event write failed:", e.message);
   }
-}
-
-function buildRecallCompletedMetadata({
-  skipped = false,
-  skip_reason = null,
-  candidate_count = 0,
-  candidate_count_before_gate = 0,
-  candidate_count_after_gate = 0,
-  strict_count = 0,
-  fallback_count = 0,
-  post_rerank_count = 0,
-  injected_count = 0,
-} = {}) {
-  return {
-    skipped: Boolean(skipped),
-    skip_reason: skip_reason || null,
-    candidate_count: Number(candidate_count) || 0,
-    candidate_count_before_gate: Number(candidate_count_before_gate) || 0,
-    candidate_count_after_gate: Number(candidate_count_after_gate) || 0,
-    strict_count: Number(strict_count) || 0,
-    fallback_count: Number(fallback_count) || 0,
-    post_rerank_count: Number(post_rerank_count) || 0,
-    injected_count: Number(injected_count) || 0,
-  };
-}
-
-function gateThresholdForCategory(category, minCoverage = null) {
-  const normalized = String(category || "raw_log").toLowerCase();
-  const finalScoreMin =
-    normalized === "raw_log" ? 0.05 :
-    normalized === "episodic" ? 0.02 :
-    null;
-  return {
-    final_score_min: finalScoreMin,
-    min_coverage: Number.isFinite(minCoverage) ? Number(minCoverage) : null,
-  };
 }
 
 function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
@@ -279,25 +128,6 @@ function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
   };
 }
 
-function batchReinforce(db, ids, nowSec) {
-  const stmt = db.prepare([
-    "UPDATE memory_confidence SET",
-    "hit_count = hit_count + 1,",
-    "confidence = MIN(1.0, confidence + 0.1),",
-    "last_confidence_update = ?",
-    "WHERE chunk_id = ?"
-  ].join(" "));
-  const txn = db.transaction(() => {
-    let count = 0;
-    for (const id of ids) {
-      stmt.run(nowSec, id);
-      if (stmt.changes > 0) count++;
-    }
-    return count;
-  });
-  return txn();
-}
-
 function resolveHookSessionId(event, ctx) {
   return event?.sessionId ||
     event?.session_id ||
@@ -308,157 +138,20 @@ function resolveHookSessionId(event, ctx) {
     null;
 }
 
-function resolvePrefixes(db, prefixes) {
-  const results = [];
-  for (const pf of prefixes) {
-    const rows = db.prepare([
-      "SELECT chunk_id FROM memory_confidence WHERE chunk_id LIKE ? || '%' LIMIT 1"
-    ].join(" ")).all(pf);
-    if (rows.length > 0) results.push(rows[0].chunk_id);
-  }
-  return results;
-}
+const backfillConfidenceForIndexedChunks = createBackfillConfidenceForIndexedChunks({
+  catParams,
+  inferCategoryFromChunk,
+});
 
-function extractCategoryFromText(text = "") {
-  const match = String(text || "").match(/(?:^|\n)Category:\s*([a-z_]+)/i);
-  return match?.[1] ? String(match[1]).toLowerCase() : "";
-}
-
-function inferCategoryFromPath(path = "") {
-  const normalized = String(path || "").replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
-  if (!normalized) return "external";
-  if (normalized === "memory.md") return "core_profile";
-  if (normalized.startsWith("memory/projects/")) return "project";
-  if (/^memory\/\d{4}-\d{2}-\d{2}\.md$/.test(normalized)) return "daily_journal";
-  if (normalized.startsWith("memory/dreaming/")) return "dreaming";
-  if (normalized === "memory/stats-history.md") return "stats";
-  if (normalized.startsWith("memory/episodes/")) return "episodic";
-  if (normalized.startsWith("memory/smart-add/")) return "raw_log";
-  return "external";
-}
-
-function inferCategoryFromChunk(path = "", text = "", fallback = "raw_log") {
-  const fromText = extractCategoryFromText(text);
-  if (fromText && CATEGORY_MAP[fromText]) return fromText;
-  const fromPath = inferCategoryFromPath(path);
-  if (fromPath !== "external") return fromPath;
-  return fallback;
-}
-
-function backfillConfidenceForIndexedChunks(db, nowSec) {
-  const rows = db.prepare(`
-    SELECT c.id, c.path, c.text
-    FROM chunks c
-    LEFT JOIN memory_confidence mc ON c.id = mc.chunk_id
-    WHERE mc.chunk_id IS NULL
-      AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
-    ORDER BY c.updated_at DESC
-    LIMIT 500
-  `).all();
-  if (rows.length === 0) return { scanned: 0, inserted: 0 };
-
-  const insert = db.prepare([
-    "INSERT OR IGNORE INTO memory_confidence",
-    "(chunk_id, initial_confidence, confidence, last_confidence_update,",
-    "base_tau, hit_count, is_archived, is_protected, conflict_flag, category)",
-    "VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)"
-  ].join(" "));
-  let inserted = 0;
-  const txn = db.transaction(() => {
-    for (const row of rows) {
-      const category = inferCategoryFromChunk(row.path, row.text);
-      const { conf, tau } = catParams(category, false);
-      const info = insert.run(row.id, conf, conf, nowSec, tau, category);
-      if (info.changes > 0) inserted += 1;
-    }
-  });
-  txn();
-  return { scanned: rows.length, inserted };
-}
-
-async function syncIndexIfNeeded(reason = "autoRecall") {
-  const nowMs = Date.now();
-  const nowSec = Math.floor(nowMs / 1000);
-  const scannedFiles = collectIndexedFiles(WORKSPACE, INDEX_SYNC_WATCH_DIRS);
-  const stats = {
-    fileCount: scannedFiles.length,
-    maxMtimeMs: scannedFiles.reduce((m, f) => Math.max(m, f.mtimeMs), 0),
-  };
-  const scannedPaths = scannedFiles.map(f => f.relPath);
-  const changed = stats.maxMtimeMs > indexSyncState.lastMaxMtimeMs;
-  const needsInitialSync = indexSyncState.lastSyncAt === 0;
-  const beforeState = withDb(db => readIndexedPathState(db, scannedPaths));
-
-  if (!changed && !needsInitialSync) {
-    return withDb(db => ({
-      synced: false,
-      reason: "fresh",
-      memory_root: WORKSPACE,
-      watch_dirs: [...INDEX_SYNC_WATCH_DIRS],
-      files: stats.fileCount,
-      scanned_paths: scannedPaths,
-      indexed_paths_before: beforeState.paths,
-      indexed_paths_after: beforeState.paths,
-      skipped_paths: scannedPaths.filter(p => !beforeState.paths.includes(p)),
-      updated_at: beforeState.updatedAt,
-      changed_paths: [],
-      manager_dirty_before: null,
-      force_sync: false,
-      backfill: backfillConfidenceForIndexedChunks(db, nowSec),
-    }));
-  }
-
-  const previousMaxMtimeMs = indexSyncState.lastMaxMtimeMs;
-  const changedPaths = scannedFiles
-    .filter(f => f.mtimeMs > previousMaxMtimeMs)
-    .map(f => f.relPath);
-  indexSyncState.lastMaxMtimeMs = Math.max(indexSyncState.lastMaxMtimeMs, stats.maxMtimeMs);
-  try {
-    const { manager } = await getSharedMemoryManager();
-    if (manager) {
-      const managerStatusBefore = typeof manager.status === "function" ? manager.status() : null;
-      const managerDirtyBefore = Boolean(managerStatusBefore?.dirty);
-      const forceSync = changed && !managerDirtyBefore;
-      await manager.sync(forceSync ? { reason, force: true } : { reason });
-      indexSyncState.lastSyncAt = nowMs;
-      const afterState = withDb(db => readIndexedPathState(db, scannedPaths));
-      return withDb(db => ({
-        synced: true,
-        reason,
-        memory_root: WORKSPACE,
-        watch_dirs: [...INDEX_SYNC_WATCH_DIRS],
-        files: stats.fileCount,
-        scanned_paths: scannedPaths,
-        indexed_paths_before: beforeState.paths,
-        indexed_paths_after: afterState.paths,
-        skipped_paths: scannedPaths.filter(p => !afterState.paths.includes(p)),
-        updated_at: afterState.updatedAt,
-        changed_paths: changedPaths,
-        manager_dirty_before: managerDirtyBefore,
-        force_sync: forceSync,
-        backfill: backfillConfidenceForIndexedChunks(db, nowSec),
-      }));
-    }
-  } catch {}
-
-  const fallbackAfterState = withDb(db => readIndexedPathState(db, scannedPaths));
-  return withDb(db => ({
-    synced: false,
-    reason: "manager_unavailable",
-    memory_root: WORKSPACE,
-    watch_dirs: [...INDEX_SYNC_WATCH_DIRS],
-    files: stats.fileCount,
-    scanned_paths: scannedPaths,
-    indexed_paths_before: beforeState.paths,
-    indexed_paths_after: fallbackAfterState.paths,
-    skipped_paths: scannedPaths.filter(p => !fallbackAfterState.paths.includes(p)),
-    updated_at: fallbackAfterState.updatedAt,
-    changed_paths: changedPaths,
-    manager_dirty_before: null,
-    force_sync: false,
-    backfill: backfillConfidenceForIndexedChunks(db, nowSec),
-  }));
-}
+const syncIndexIfNeeded = createIndexSyncRuntime({
+  memoryRoot: WORKSPACE,
+  watchDirs: INDEX_SYNC_WATCH_DIRS,
+  withDb,
+  getSharedMemoryManager,
+  collectIndexedFiles,
+  readIndexedPathState,
+  backfillConfidenceForIndexedChunks,
+});
 
 export default definePluginEntry({
   id: "memory-engine",
@@ -551,9 +244,9 @@ export default definePluginEntry({
             syncIndexIfNeeded,
             categoryMap: CATEGORY_MAP,
             cfg: api.config || null,
-            getLancedbTable: () => lancedbTable,
+            getLancedbTable,
             getLancedbRuntime: getLanceDBRuntime,
-            vectorReadyTimeoutMs: LANCEDB_READY_TIMEOUT_MS,
+            vectorReadyTimeoutMs: DEFAULT_LANCEDB_READY_TIMEOUT_MS,
             generateEmbedding: generateEmbeddingRuntime,
             getMemorySearchManager,
           });
@@ -860,7 +553,7 @@ export default definePluginEntry({
       syncIndexIfNeeded,
       catParams,
       withDb,
-      getLancedbTable: () => lancedbTable,
+      getLancedbTable,
       generateEmbedding: generateEmbeddingRuntime,
       recordMemoryEvent,
       getMemorySearchManager,
