@@ -5,9 +5,26 @@
 # Dependencies
 node_modules/
 
+# ===== Databases / 运行时数据 =====
+*.db
+*.db-shm
+*.db-wal
+memory/
+data/
+knowledge-graph.json
+.codegraph/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
 # Build artifacts
 *.tar.gz
 *.tgz
+dist/
+coverage/
 
 # Stray files
 nul
@@ -17,6 +34,8 @@ nul
 *.bak
 *.swp
 *.swo
+.idea/
+.vscode/
 
 # OS files
 .DS_Store
@@ -25,19 +44,26 @@ Thumbs.db
 # Logs
 *.log
 
+# ===== Secrets / 环境变量 =====
+.env
+.env.*
+!.env.example
+
 # Workspace config (privacy)
 SKILL.md
 
 # Personal config (DO NOT PUSH)
-AGENTS.md
-SOUL.md
-USER.md
-IDENTITY.md
-TOOLS.md
-MEMORY.md
-HEARTBEAT.md
-DREAMS.md
-avatar-edi.jpg
+/SKILL.md
+/AGENTS.md
+/SOUL.md
+/USER.md
+/IDENTITY.md
+/TOOLS.md
+/MEMORY.md
+/HEARTBEAT.md
+/DREAMS.md
+/avatar-edi.jpg
+/duty-*.md
 
 # Personal data
 duty-*.md
@@ -46,10 +72,10 @@ memory/
 data/
 
 # Agent local scripts
-scripts/duty-reminder.sh
-scripts/image-vision.py
-chat-patched.js
-skills/nuwa-skill
+/scripts/duty-reminder.sh
+/scripts/image-vision.py
+/chat-patched.js
+/skills/nuwa-skill
 
 # codegraph index
 .codegraph/
