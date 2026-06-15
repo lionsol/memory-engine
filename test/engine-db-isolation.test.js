@@ -92,3 +92,55 @@ test("engine DB writes stay in plugin DB while core DB remains readonly", async 
     else process.env.MEMORY_ENGINE_DB = oldEngine;
   }
 });
+
+test("withEngineDb reuses one connection inside a shared session and closes it on scope end", async () => {
+  const root = mkdtempSync(resolve(tmpdir(), "memory-engine-db-session-"));
+  const corePath = resolve(root, "core.sqlite");
+  const engineDir = resolve(root, "engine");
+  const enginePath = resolve(engineDir, "memory-engine.sqlite");
+  mkdirSync(engineDir, { recursive: true });
+  createCoreDb(corePath);
+
+  const oldCore = process.env.MEMORY_ENGINE_CORE_DB;
+  const oldEngine = process.env.MEMORY_ENGINE_DB;
+  process.env.MEMORY_ENGINE_CORE_DB = corePath;
+  process.env.MEMORY_ENGINE_DB = enginePath;
+
+  try {
+    const bust = Date.now();
+    const {
+      createEngineDbSession,
+      closeEngineDbSession,
+      withEngineDb,
+    } = await import(`../lib/db/engine-db.js?db-session=${bust}`);
+
+    const session = createEngineDbSession();
+    let firstDb = null;
+    let secondDb = null;
+
+    withEngineDb((db) => {
+      firstDb = db;
+      return db.prepare("SELECT 1 AS value").get();
+    }, { session });
+
+    withEngineDb((db) => {
+      secondDb = db;
+      return db.prepare("SELECT 1 AS value").get();
+    }, { session });
+
+    assert.equal(firstDb, secondDb);
+    assert.equal(firstDb.prepare("SELECT 1 AS value").get()?.value, 1);
+
+    closeEngineDbSession(session);
+
+    assert.throws(
+      () => firstDb.prepare("SELECT 1 AS value").get(),
+      /closed|not open/i,
+    );
+  } finally {
+    if (oldCore === undefined) delete process.env.MEMORY_ENGINE_CORE_DB;
+    else process.env.MEMORY_ENGINE_CORE_DB = oldCore;
+    if (oldEngine === undefined) delete process.env.MEMORY_ENGINE_DB;
+    else process.env.MEMORY_ENGINE_DB = oldEngine;
+  }
+});

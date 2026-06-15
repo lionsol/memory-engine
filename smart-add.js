@@ -65,6 +65,42 @@ export function runMemoryIndexSyncCli({
   }
 }
 
+function normalizeSyncError(error) {
+  return String(error?.message || error || "sync failed");
+}
+
+function normalizeSyncResult(result, defaults = {}) {
+  if (result && typeof result === "object") return { ...defaults, ...result };
+  return { ...defaults, ok: true, result };
+}
+
+export async function runMemoryIndexSync({
+  force = true,
+  quiet = true,
+  loadRunner = () => import("./scripts/sync-memory-index.js"),
+  syncCliRunner = runMemoryIndexSyncCli,
+} = {}) {
+  try {
+    const mod = await loadRunner();
+    if (typeof mod?.runSyncMemoryIndex !== "function") {
+      throw new Error("runSyncMemoryIndex is not available");
+    }
+    const result = await mod.runSyncMemoryIndex({ force });
+    return normalizeSyncResult(result, { ok: true, mode: "in-process" });
+  } catch (error) {
+    const cliResult = syncCliRunner({
+      force,
+      quiet,
+    });
+    return normalizeSyncResult(cliResult, {
+      ok: false,
+      mode: "cli-fallback",
+      fallback_from: "in-process",
+      in_process_error: normalizeSyncError(error),
+    });
+  }
+}
+
 export function readSmartAddFingerprints(filePath) {
   if (!existsSync(filePath)) return new Set();
   const content = readFileSync(filePath, "utf8");
@@ -85,7 +121,7 @@ function hasLegacyTextDuplicate(content, text) {
   return content.includes(normalizedText);
 }
 
-export function appendSmartAdd({
+export async function appendSmartAdd({
   fileDir,
   filePath,
   entryId,
@@ -96,6 +132,8 @@ export function appendSmartAdd({
   syncCli,
   syncCliForce = true,
   syncCliQuiet = true,
+  syncRunner = null,
+  syncCliRunner = runMemoryIndexSyncCli,
 }) {
   const cleanText = normalizeText(text);
   const cat = String(category || "raw_log");
@@ -119,6 +157,27 @@ export function appendSmartAdd({
   appendFileSync(filePath, header ? entry : `\n${entry}`);
   const shouldSync = typeof syncCli === "boolean" ? syncCli : shouldAutoSyncPath(filePath);
   if (!shouldSync) return { appended: true };
-  const sync = runMemoryIndexSyncCli({ force: syncCliForce, quiet: syncCliQuiet });
+  let sync;
+  try {
+    sync = typeof syncRunner === "function"
+      ? await syncRunner({
+        force: syncCliForce,
+        quiet: syncCliQuiet,
+        fileDir,
+        filePath,
+        entryId,
+        category: cat,
+        isProtected: Boolean(isProtected),
+        text: cleanText,
+        fingerprint,
+      })
+      : await runMemoryIndexSync({
+        force: syncCliForce,
+        quiet: syncCliQuiet,
+        syncCliRunner,
+      });
+  } catch (error) {
+    sync = { ok: false, error: normalizeSyncError(error) };
+  }
   return { appended: true, sync };
 }

@@ -196,3 +196,113 @@ test("hybridSearch snapshot stays JSON-stringify compatible", async () => {
   const after = JSON.stringify(result, null, 2);
   assert.equal(after, EXPECTED_SNAPSHOT);
 });
+
+test("hybridSearch reuses one scoped DB session across internal withDb calls", async () => {
+  let baseWithDbCalls = 0;
+  let scopedRuns = 0;
+  let scopedWithDbCalls = 0;
+  let scopedCloseCount = 0;
+  const scopedDb = {
+    prepare(sql) {
+      const q = String(sql);
+      return {
+        all() {
+          if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
+            return [{
+              chunk_id: "chunk-1234567890abcdef",
+              confidence: 0.8,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 2,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "raw_log",
+              is_archived: 0,
+            }];
+          }
+          if (q.includes("SELECT id, path, updated_at FROM chunks")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              path: "memory/smart-add/2026-05-26.md",
+              updated_at: 1710000000,
+            }];
+          }
+          return [];
+        },
+        get() {
+          return null;
+        },
+      };
+    },
+  };
+  const withScopedDb = fn => {
+    baseWithDbCalls += 1;
+    return fn({
+      prepare() {
+        throw new Error("hybridSearch should prefer withDb.scoped in this test");
+      },
+    });
+  };
+  withScopedDb.scoped = async (run) => {
+    scopedRuns += 1;
+    try {
+      return await run((fn) => {
+        scopedWithDbCalls += 1;
+        return fn(scopedDb);
+      });
+    } finally {
+      scopedCloseCount += 1;
+    }
+  };
+
+  const result = await hybridSearch("x", { topK: 3 }, {
+    withDb: withScopedDb,
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async () => ({
+          entries: [{ id: "chunk-1234567890abcdef", text: "compat memory text", similarity: 0.91 }],
+        }),
+      },
+    }),
+  });
+
+  assert.equal(result.pool, 1);
+  assert.equal(scopedRuns, 1);
+  assert.equal(scopedWithDbCalls > 1, true);
+  assert.equal(scopedCloseCount, 1);
+  assert.equal(baseWithDbCalls, 0);
+});
+
+test("hybridSearch minConfidence default and override come from unified config", async () => {
+  const baseRuntime = {
+    withDb: withFakeDb,
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async () => ({
+          entries: [{ id: "chunk-1234567890abcdef", text: "compat memory text", similarity: 0.91 }],
+        }),
+      },
+    }),
+  };
+
+  const defaultResult = await hybridSearch("x", { topK: 3 }, baseRuntime);
+  const overrideResult = await hybridSearch("x", { topK: 3 }, {
+    ...baseRuntime,
+    cfg: {
+      memoryEngine: {
+        confidence: {
+          min: 0.22,
+        },
+      },
+    },
+  });
+
+  assert.equal(defaultResult.debug.min_confidence, 0.15);
+  assert.equal(overrideResult.debug.min_confidence, 0.22);
+});

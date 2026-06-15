@@ -1,0 +1,4 @@
+.memory-console.log
+memory-engine.sqlite
+memory-engine.sqlite-wal
+memory-engine.sqlite-shm

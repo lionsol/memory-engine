@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
 import { inferCategoryFromPath } from "../lib/category-inference.js";
+import { gateThresholdForCategory } from "../lib/memory-confidence.js";
 
 test("hybrid-search inferCategoryFromPath stays consistent with shared rules", async () => {
   const { inferCategoryFromPath: inferHybridCategoryFromPath } = await import("../lib/recall/hybrid-search.js");
@@ -46,4 +47,20 @@ test("console memory normalization uses the shared path rules for external memor
   });
   assert.equal(normalized.category, "raw_log");
   assert.equal(normalized.confidence_mode, "external");
+});
+
+test("gateThresholdForCategory uses unified configurable defaults", () => {
+  const rawLogThreshold = gateThresholdForCategory("raw_log");
+  const episodicThreshold = gateThresholdForCategory("episodic");
+  const customThreshold = gateThresholdForCategory("raw_log", null, {
+    confidence: {
+      gateThresholdByCategory: {
+        raw_log: { final_score_min: 0.11 },
+      },
+    },
+  });
+
+  assert.equal(rawLogThreshold.final_score_min, 0.05);
+  assert.equal(episodicThreshold.final_score_min, 0.02);
+  assert.equal(customThreshold.final_score_min, 0.11);
 });
