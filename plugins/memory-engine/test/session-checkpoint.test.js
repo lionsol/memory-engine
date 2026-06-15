@@ -5,7 +5,7 @@ import { tmpdir } from "os";
 import { resolve } from "path";
 import { detectOpenClawRuntime } from "./helpers/openclaw-runtime.js";
 import { buildSmartAddFingerprint } from "../smart-add-fingerprint.js";
-import { runMemoryIndexSyncCli } from "../session-checkpoint.js";
+import { runMemoryIndexSync, runMemoryIndexSyncCli } from "../session-checkpoint.js";
 
 const OPENCLAW_RUNTIME = await detectOpenClawRuntime();
 let appendSmartAdd = null;
@@ -38,7 +38,7 @@ test("readSmartAddFingerprints reads fingerprint comments", { skip: SKIP_IF_NO_O
   assert.equal(fingerprints.has("abcdef1234567890"), true);
 });
 
-test("appendSmartAdd dedupes by fingerprint before writing", { skip: SKIP_IF_NO_OPENCLAW }, () => {
+test("appendSmartAdd dedupes by fingerprint before writing", { skip: SKIP_IF_NO_OPENCLAW }, async () => {
   const dir = makeTmpDir();
   const filePath = resolve(dir, "2026-05-26.md");
   const payload = {
@@ -51,15 +51,15 @@ test("appendSmartAdd dedupes by fingerprint before writing", { skip: SKIP_IF_NO_
     fingerprint: "1111222233334444",
   };
 
-  const first = appendSmartAdd(payload);
-  const second = appendSmartAdd({ ...payload, entryId: "20260526T000001_raw_log" });
+  const first = await appendSmartAdd(payload);
+  const second = await appendSmartAdd({ ...payload, entryId: "20260526T000001_raw_log" });
 
   assert.equal(first.appended, true);
   assert.equal(second.appended, false);
   assert.equal(second.reason, "fingerprint");
 });
 
-test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exists", { skip: SKIP_IF_NO_OPENCLAW }, () => {
+test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exists", { skip: SKIP_IF_NO_OPENCLAW }, async () => {
   const dir = makeTmpDir();
   const filePath = resolve(dir, "2026-05-26.md");
   writeFileSync(filePath, [
@@ -73,7 +73,7 @@ test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exist
     "",
   ].join("\n"));
 
-  const result = appendSmartAdd({
+  const result = await appendSmartAdd({
     fileDir: dir,
     filePath,
     entryId: "20260526T000002_raw_log",
@@ -87,6 +87,57 @@ test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exist
   assert.equal(result.reason, "legacy-text");
   const content = readFileSync(filePath, "utf8");
   assert.equal((content.match(/## /g) || []).length, 1);
+});
+
+test("appendSmartAdd prefers injected async syncRunner over CLI fallback", { skip: SKIP_IF_NO_OPENCLAW }, async () => {
+  const dir = makeTmpDir();
+  const filePath = resolve(dir, "2026-05-26.md");
+  let syncRunnerCalls = 0;
+  let cliCalls = 0;
+
+  const result = await appendSmartAdd({
+    fileDir: dir,
+    filePath,
+    entryId: "20260526T000003_raw_log",
+    category: "raw_log",
+    isProtected: false,
+    text: "runner-backed sync",
+    fingerprint: "ddddccccbbbbaaaa",
+    syncCli: true,
+    syncRunner: async ({ force, quiet }) => {
+      syncRunnerCalls += 1;
+      return { ok: true, mode: "in-process", force, quiet };
+    },
+    syncCliRunner: () => {
+      cliCalls += 1;
+      return { ok: true, mode: "cli" };
+    },
+  });
+
+  assert.equal(result.appended, true);
+  assert.equal(result.sync?.ok, true);
+  assert.equal(result.sync?.mode, "in-process");
+  assert.equal(syncRunnerCalls, 1);
+  assert.equal(cliCalls, 0);
+});
+
+test("runMemoryIndexSync falls back to CLI only when in-process runner is unavailable", async () => {
+  let cliCalls = 0;
+  const result = await runMemoryIndexSync({
+    force: true,
+    quiet: true,
+    loadRunner: async () => ({}),
+    syncCliRunner: ({ force, quiet }) => {
+      cliCalls += 1;
+      return { ok: true, mode: "cli-fallback", force, quiet };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, "cli-fallback");
+  assert.equal(result.fallback_from, "in-process");
+  assert.equal(cliCalls, 1);
+  assert.match(String(result.in_process_error || ""), /not available/i);
 });
 
 test("buildSmartAddFingerprint normalizes LF and CRLF equivalently", () => {

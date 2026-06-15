@@ -18,7 +18,7 @@ import {
   WORKSPACE,
   getSharedMemoryManager,
 } from "./memory-manager-runtime.js";
-import { ensureEngineWritable, withEngineDb } from "./lib/db/engine-db.js";
+import { ensureEngineWritable, withEngineDb, withEngineDbSession } from "./lib/db/engine-db.js";
 import { getMemoryEngineConfig } from "./lib/config/runtime.js";
 import { getSmartAddTimeZone } from "./lib/config/helpers.js";
 import { insertMemoryEvent } from "./lib/db/events.js";
@@ -60,9 +60,13 @@ const {
   readyTimeoutMs: DEFAULT_LANCEDB_READY_TIMEOUT_MS,
 });
 
-function withDb(fn) {
-  return withEngineDb(fn, { readonly: false });
+function withDb(fn, options = {}) {
+  return withEngineDb(fn, { readonly: false, ...options });
 }
+
+withDb.scoped = function scopedWithDb(run) {
+  return withEngineDbSession(session => run((fn, options = {}) => withDb(fn, { ...options, session })));
+};
 
 function recordMemoryEvent(event) {
   if (!memoryStorageReady) return;
@@ -271,7 +275,7 @@ export default definePluginEntry({
               rejection_reason: gate?.reason || null,
               rejected_reason: gate?.rejected_reason || gate?.reason || null,
               matched_key_classes: Array.isArray(gate?.matched_key_classes) ? gate.matched_key_classes : [],
-              threshold_used: gateThresholdForCategory(category, gate?.min_coverage),
+              threshold_used: gateThresholdForCategory(category, gate?.min_coverage, api.config || null),
               category,
               final_score: finalScore,
             };
@@ -376,7 +380,7 @@ export default definePluginEntry({
             const id = String(r.id || "").slice(0, 16);
             const decision = gateDecisionById.get(id);
             const category = String(r.category || decision?.category || "raw_log").toLowerCase();
-            const thresholdUsed = decision?.threshold_used || gateThresholdForCategory(category, null);
+            const thresholdUsed = decision?.threshold_used || gateThresholdForCategory(category, null, api.config || null);
             const finalScoreRaw = Number(r.final_score ?? r.finalScore ?? r.rrf_score ?? decision?.final_score ?? 0);
             const finalScore = Number.isFinite(finalScoreRaw) ? Number(finalScoreRaw.toFixed(6)) : 0;
             recordMemoryEvent({

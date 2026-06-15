@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { fileURLToPath } from "node:url";
 import { dateStrInTimeZone } from "../date-utils.js";
 import { tableExists } from "../lib/db/schema.js";
 import { getSmartAddTimeZone } from "../lib/config/helpers.js";
@@ -38,14 +39,11 @@ function printUsage() {
   console.log("Usage: node scripts/sync-memory-index.js [--force]");
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.help) {
-    printUsage();
-    process.exit(0);
-  }
-
-  const managerResult = await getSharedMemoryManager({ purpose: "cli", allowImplicit: false });
+export async function runSyncMemoryIndex({
+  force = false,
+  getSharedMemoryManagerImpl = getSharedMemoryManager,
+} = {}) {
+  const managerResult = await getSharedMemoryManagerImpl({ purpose: "cli", allowImplicit: false });
   if (!managerResult.manager) {
     throw new Error(managerResult.error || "memory manager unavailable");
   }
@@ -64,7 +62,7 @@ async function main() {
     const before = beforeResult.value;
     const dirtyBefore = Boolean(statusBefore?.dirty);
 
-    const syncPayload = { reason: "cli-sync", ...(args.force ? { force: true } : {}) };
+    const syncPayload = { reason: "cli-sync", ...(force ? { force: true } : {}) };
     const syncResult = await manager.sync(syncPayload);
 
     const statusAfter = typeof manager.status === "function" ? manager.status() : null;
@@ -86,7 +84,7 @@ async function main() {
 
     const output = {
       reason: "cli-sync",
-      force: args.force,
+      force,
       memory_root: memoryRoot,
       db_path: dbPath,
       db_error_before: beforeResult.error,
@@ -106,13 +104,28 @@ async function main() {
       today_chunk_error: todayChunkResult.error,
     };
 
-    console.log(JSON.stringify(output, null, 2));
+    return output;
   } finally {
     await manager.close?.();
   }
 }
 
-main().catch(error => {
-  console.error(`[sync-memory-index] ${String(error?.message || error)}`);
-  process.exit(1);
-});
+export async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
+  if (args.help) {
+    printUsage();
+    return 0;
+  }
+  const output = await runSyncMemoryIndex({ force: args.force });
+  console.log(JSON.stringify(output, null, 2));
+  return 0;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().then((code) => {
+    process.exit(code);
+  }).catch(error => {
+    console.error(`[sync-memory-index] ${String(error?.message || error)}`);
+    process.exit(1);
+  });
+}
