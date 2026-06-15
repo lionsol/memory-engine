@@ -1032,3 +1032,31 @@ skipped 5 为既有条件跳过测试：
 
 - 3 个测试依赖完整 OpenClaw runtime，当前环境报 ERR_MODULE_NOT_FOUND 时跳过。
 - 2 个 index sync 集成测试需要显式设置 OPENCLAW_RUN_MEMORY_SYNC_TEST=1 才会运行。
+
+  # 更新日志
+
+## 2026-06-15
+
+### 修复
+
+- 修复 `hybrid-search` 中 `LIMIT ${...}` 字符串插值的反模式，改为 SQLite 绑定参数。
+- 移除 `hybrid-search` 中多个裸 `catch {}`，降级路径现在会记录 debug 字段并输出一次性 warning。
+- 移除已禁用但仍对外暴露的 `image_vision` 工具，并从 `openclaw.plugin.json` 的 `contracts.tools` 中删除。
+- 清理 autoRecall hook 中大量默认 `console.log` 调试噪声，保留结构化 `memory_events` 记录。
+- 修复 `resolvePrefixes` 前缀匹配不确定问题，现在只匹配未归档记忆，并按更新时间、命中数、ID 稳定排序。
+- 修复 `batchReinforce` 会强化已归档记忆的问题；引用强化现在只作用于未归档项，并会清除 stale `conflict_flag`。
+- 降低 `detect-conflicts` 误判率：冲突检测现在会比较关联 chunk 文本/路径的 token 重叠，不再只靠同分类、置信度差和命中差。
+- 优化 `withEngineDb` 热路径开销，新增 session/scoped DB 复用能力，`hybridSearch` 单次检索内可复用连接并在结束后关闭。
+- 优化 `smart-add` 索引同步路径，正常工具调用优先走 async/in-process runner，避免 `spawnSync` 阻塞工具线程；CLI fallback 保留。
+- 统一配置默认值来源，集中管理 `archive.threshold`、`confidence.min` 和分类 gate threshold，兼容旧的 `archiveThreshold` 配置。
+- 治理插件目录运行时产物，新增 `.gitignore` 规则忽略 `.memory-console.log` 和 `memory-engine.sqlite` 等本地生成文件。
+- 更新 checkpoint 抽取的 LLM fallback 顺序，优先使用 DeepSeek，SiliconFlow 作为 fallback。
+
+### 新增测试
+
+- 新增 review regression 测试，覆盖 SQL 参数化、死工具移除、autoRecall 日志降噪、前缀解析、强化归档项、冲突误判等问题。
+- 新增 DB session 复用测试，验证 scoped session 内连接复用和关闭行为。
+- 新增 smart-add async sync runner 相关测试。
+- 新增配置默认值漂移检测，确保 JS defaults 与 `openclaw.plugin.json` 保持一致。
+- 新增 runtime path 测试，防止 engine DB 或 console DB 路径回退到插件项目根。
+
