@@ -1033,8 +1033,6 @@ skipped 5 为既有条件跳过测试：
 - 3 个测试依赖完整 OpenClaw runtime，当前环境报 ERR_MODULE_NOT_FOUND 时跳过。
 - 2 个 index sync 集成测试需要显式设置 OPENCLAW_RUN_MEMORY_SYNC_TEST=1 才会运行。
 
-  # 更新日志
-
 ## 2026-06-15
 
 ### 修复
