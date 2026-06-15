@@ -293,7 +293,6 @@ export default definePluginEntry({
             ...(result?.debug || {}),
             ...gateDebug,
           };
-          console.log(`[memory-engine] autoRecall: prompt="${prompt.slice(0,60)}" hits=${hits} topK=${autoRecallTopK}`);
           const debugInfo = result?.debug || {};
           const postRerankCount = Array.isArray(debugInfo.post_rerank_topK) ? debugInfo.post_rerank_topK.length : 0;
           recordMemoryEvent({
@@ -303,44 +302,6 @@ export default definePluginEntry({
             source: "autoRecall",
             metadata_json: buildAutoRecallDebugMetadata(prompt, result),
           });
-          console.log(
-            `[memory-engine] autoRecall.debug query original="${String(debugInfo.query_original || "").slice(0, 160)}" normalized="${String(debugInfo.query_normalized || "").slice(0, 160)}" fts_final="${String(debugInfo.fts_query_final || "").slice(0, 160)}" vector_query="${String(debugInfo.vector_query || "").slice(0, 160)}"`
-          );
-          console.log(
-            `[memory-engine] autoRecall.debug strict_count=${debugInfo.strict_count ?? 0} fallback_count=${debugInfo.fallback_count ?? 0} candidate_counts_before_filtering=${JSON.stringify(debugInfo.candidate_counts_before_filtering || {})} fallbacks=${JSON.stringify(debugInfo.fallbacks_triggered || [])} gate_before=${debugInfo.candidate_count_before_gate ?? hits} gate_after=${debugInfo.candidate_count_after_gate ?? hits} rejected=${Array.isArray(debugInfo.rejected_candidates) ? debugInfo.rejected_candidates.length : 0}`
-          );
-          if (Array.isArray(debugInfo.post_rerank_topK) && debugInfo.post_rerank_topK.length > 0) {
-            console.log(`[memory-engine] autoRecall.debug post_rerank_topK=${JSON.stringify(debugInfo.post_rerank_topK)}`);
-          }
-          console.log(`[memory-engine] autoRecall.debug channels=${JSON.stringify(result?.channel_sizes || {})} source_breakdown=${JSON.stringify(debugInfo.source_breakdown || {})} category_breakdown=${JSON.stringify(debugInfo.category_breakdown || {})} sync=${JSON.stringify(debugInfo.sync || {})}`);
-          if (Array.isArray(debugInfo.pre_rerank_top)) {
-            console.log(`[memory-engine] autoRecall.debug pre_rerank_top=${JSON.stringify(debugInfo.pre_rerank_top)}`);
-          }
-          if (Array.isArray(debugInfo.post_rerank_top)) {
-            console.log(`[memory-engine] autoRecall.debug post_rerank_top=${JSON.stringify(debugInfo.post_rerank_top)}`);
-          }
-          if (hits > 0) {
-            console.log(`[memory-engine] autoRecall.debug query="${prompt.slice(0, 160)}" candidates=${result.results.map(r => r.id).join(",")}`);
-            result.results.slice(0, 5).forEach((r, i) => {
-              const id = String(r.id || "").slice(0, 16);
-              const c = r.category || "?";
-              const conf = r.confidence ?? r.confidence_realtime ?? "?";
-              const confMode = r.confidence_mode || "managed";
-              const sourceType = r.source_type || "memory-engine-managed";
-              const externalBadge = Boolean(r.external_badge);
-              const decayEligible = Boolean(r.decay_eligible);
-              const archiveEligible = Boolean(r.archive_eligible);
-              const finalScore = r.final_score ?? r.rrf_score ?? "?";
-              const rrfScore = r.rrf_score ?? "?";
-              const semanticScore = r.semantic_score ?? r.similarity ?? 0;
-              const recencyBoost = r.recency_boost ?? 0;
-              const categoryBoost = r.category_boost ?? 0;
-              const confidenceBoost = r.confidence_boost ?? 0;
-              const externalBoost = r.external_boost ?? 0;
-              const createdAt = r.created_at ? new Date(r.created_at * 1000).toISOString() : "n/a";
-              console.log(`  #${i+1} [${id}] finalScore=${finalScore} semanticScore=${semanticScore} rrfScore=${rrfScore} recencyBoost=${recencyBoost} categoryBoost=${categoryBoost} confidenceBoost=${confidenceBoost} externalBoost=${externalBoost} cat=${c} conf=${conf} confidenceMode=${confMode} sourceType=${sourceType} externalBadge=${externalBadge} decayEligible=${decayEligible} archiveEligible=${archiveEligible} createdAt=${createdAt} preview="${(r.text||"").slice(0,100)}"`);
-            });
-          }
           const sessionIdForEvents = resolveHookSessionId(event, ctx);
           result.results.slice(0, Math.max(3, autoRecallTopK)).forEach((r, i) => {
             const id = String(r.id || "").slice(0, 16);
@@ -391,11 +352,7 @@ export default definePluginEntry({
           }
           const gateDecisions = Array.isArray(debugInfo.gate_decisions) ? debugInfo.gate_decisions : [];
           const gateDecisionById = new Map(gateDecisions.map(item => [String(item?.id || ""), item]));
-          console.log(`[memory-engine] AUTO_RECALL_GATE_ACTIVE trace_id=${traceId} total_candidates=${gateDecisions.length} gated_injected=${Math.min(gatedResults.length, autoRecallTopK)}`);
           gateDecisions.forEach(item => {
-            console.log(
-              `[memory-engine] autoRecall.gate decision id=${String(item?.id || "")} injected=${Boolean(item?.injected)} rejection_reason=${item?.rejection_reason || "none"} rejected_reason=${item?.rejected_reason || "none"} matched_key_classes=${JSON.stringify(item?.matched_key_classes || [])} threshold_used=${JSON.stringify(item?.threshold_used || null)} category=${String(item?.category || "raw_log")} final_score=${Number(item?.final_score ?? 0)}`
-            );
             recordMemoryEvent({
               event_type: "auto_recall_debug",
               session_id: sessionIdForEvents,
@@ -536,7 +493,6 @@ export default definePluginEntry({
         "每次 `cite` 让记忆更牢固（hit+1, conf+0.1, 半衰期延长）。",
         MEMORY_SUPPLEMENT_BOUNDARY_END,
       ];
-      console.log(`[memory-engine] supplement.injected memory_count=${injected.length} preview="${supplement.slice(0, 4).join(" | ").slice(0, 180)}"`);
       return supplement;
     });
 
@@ -618,36 +574,6 @@ export default definePluginEntry({
       execute: executeMemoryEngineAction,
     });
 
-    // Image Vision tool — 识别图片内容
-    api.registerTool({
-      name: "image_vision",
-      label: "图片识别",
-      description: "识别图片中的物体、场景、人物、动作等非文字内容。调用 Qwen3-VL-32B-Instruct (SiliconFlow)。传入图片路径和可选问句。",
-      parameters: {
-        type: "object",
-        properties: {
-          image_path: {
-            type: "string",
-            description: "图片文件路径（绝对路径或相对于工作区的路径）",
-          },
-          question: {
-            type: "string",
-            description: "问句，如省略则默认让模型描述图片内容",
-          },
-        },
-        required: ["image_path"],
-      },
-      async execute(_id, params) {
-        try {
-          const imagePath = String(params?.image_path || "");
-          const result = imagePath
-            ? `image_vision disabled for local dev install: ${imagePath}`
-            : "image_vision disabled for local dev install";
-          return { content: [{ type: "text", text: result.trim() }] };
-        } catch (e) {
-          return { content: [{ type: "text", text: `图片识别失败: ${e.message}` }] };
-        }
-      },
-    });
+
   },
 });

@@ -92,14 +92,17 @@ export function batchReinforce(db, ids, nowSec) {
     "UPDATE memory_confidence SET",
     "hit_count = hit_count + 1,",
     "confidence = MIN(1.0, confidence + 0.1),",
+    "conflict_flag = 0,",
     "last_confidence_update = ?",
     "WHERE chunk_id = ?",
+    "AND is_archived = 0",
   ].join(" "));
   const txn = db.transaction(() => {
     let count = 0;
     for (const id of ids) {
-      stmt.run(nowSec, id);
-      if (stmt.changes > 0) count++;
+      const result = stmt.run(nowSec, id);
+      const changes = Number(result?.changes ?? stmt.changes ?? 0);
+      if (changes > 0) count++;
     }
     return count;
   });
@@ -110,7 +113,11 @@ export function resolvePrefixes(db, prefixes) {
   const results = [];
   for (const pf of prefixes) {
     const rows = db.prepare([
-      "SELECT chunk_id FROM memory_confidence WHERE chunk_id LIKE ? || '%' LIMIT 1",
+      "SELECT chunk_id FROM memory_confidence",
+      "WHERE chunk_id LIKE ? || '%'",
+      "AND is_archived = 0",
+      "ORDER BY last_confidence_update DESC, hit_count DESC, chunk_id ASC",
+      "LIMIT 1",
     ].join(" ")).all(pf);
     if (rows.length > 0) results.push(rows[0].chunk_id);
   }

@@ -415,6 +415,7 @@ function computeLexicalConfidence(fusedLexical = []) {
 }
 
 const warnedVectorChannelFailures = new Set();
+const warnedHybridSearchFailures = new Set();
 
 function warnVectorChannelOnce(message, error = null) {
   const key = String(message || "unknown");
@@ -422,6 +423,14 @@ function warnVectorChannelOnce(message, error = null) {
   warnedVectorChannelFailures.add(key);
   const detail = error?.message ? `: ${error.message}` : "";
   console.warn(`[memory-engine] hybridSearch vector channel unavailable (${message})${detail}`);
+}
+
+function warnHybridSearchOnce(message, error = null) {
+  const key = String(message || "unknown");
+  if (warnedHybridSearchFailures.has(key)) return;
+  warnedHybridSearchFailures.add(key);
+  const detail = error?.message ? `: ${error.message}` : "";
+  console.warn(`[memory-engine] hybridSearch channel degraded (${message})${detail}`);
 }
 
 function toDebugErrorMessage(error) {
@@ -575,9 +584,9 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
               AND mc.kg_data != ''
               AND (${where})
             ORDER BY c.updated_at DESC
-            LIMIT ${ftsTopK}
+            LIMIT ?
           `;
-          return db.prepare(sql).all(...likePatterns);
+          return db.prepare(sql).all(...likePatterns, ftsTopK);
         });
         candidateCounts.kg_raw = kgRows.length;
         const scoredKg = uniqueById(
@@ -598,7 +607,10 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
         if (scoredKg.length > 0) channels.kg = scoredKg;
       }
     }
-  } catch {}
+  } catch (e) {
+    debug.kg_error = toDebugErrorMessage(e);
+    warnHybridSearchOnce("kg_search_error", e);
+  }
 
   let ftsIsEmpty = true;
   try {
@@ -618,9 +630,9 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
         WHERE chunks_fts MATCH ?
           AND COALESCE(mc.is_archived, 0) = 0
         ORDER BY bm25(chunks_fts, 0)
-        LIMIT ${ftsTopK}
+        LIMIT ?
       `;
-      const strictRows = withDb(db => db.prepare(ftsSelectSql).all(normalizedQuery));
+      const strictRows = withDb(db => db.prepare(ftsSelectSql).all(normalizedQuery, ftsTopK));
       candidateCounts.fts_raw_primary = strictRows.length;
       debug.strict_count = strictRows.length;
       if (strictRows.length > 0) {
@@ -639,7 +651,7 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
         );
         candidateCounts.fts_raw_final = channels.fts.length;
       } else if (fallbackFtsQuery && fallbackFtsQuery !== normalizedQuery) {
-        const fallbackRows = withDb(db => db.prepare(ftsSelectSql).all(fallbackFtsQuery));
+        const fallbackRows = withDb(db => db.prepare(ftsSelectSql).all(fallbackFtsQuery, ftsTopK));
         debug.fallback_count = fallbackRows.length;
         debug.fts_query_final = fallbackFtsQuery;
         if (fallbackRows.length > 0) {
@@ -668,7 +680,10 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
         candidateCounts.fts_raw_final = 0;
       }
     }
-  } catch {}
+  } catch (e) {
+    debug.fts_error = toDebugErrorMessage(e);
+    warnHybridSearchOnce("fts_search_error", e);
+  }
 
   const lexicalChannels = {};
   if (Array.isArray(channels.kg) && channels.kg.length > 0) lexicalChannels.kg = channels.kg;
@@ -880,9 +895,9 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
             WHERE COALESCE(mc.is_archived, 0) = 0
               AND (${where})
             ORDER BY c.updated_at DESC
-            LIMIT ${likeTopK}
+            LIMIT ?
           `;
-          const params = likePatterns.flatMap(pattern => [pattern, pattern]);
+          const params = [...likePatterns.flatMap(pattern => [pattern, pattern]), likeTopK];
           return db.prepare(sql).all(...params);
         });
         candidateCounts.like_raw = likeRows.length;
@@ -903,7 +918,10 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
           );
         }
       }
-    } catch {}
+    } catch (e) {
+      debug.like_error = toDebugErrorMessage(e);
+      warnHybridSearchOnce("like_search_error", e);
+    }
   }
 
   try {
@@ -919,8 +937,8 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
       WHERE COALESCE(mc.is_archived, 0) = 0
         AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
       ORDER BY c.updated_at DESC
-      LIMIT ${recentTopK}
-    `).all());
+      LIMIT ?
+    `).all(recentTopK));
     candidateCounts.recent_raw = recentRows.length;
     const scoredRecent = uniqueById(
       recentRows
@@ -952,7 +970,10 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
       .slice(0, recentRerankTopK);
     candidateCounts.episode_raw = episodeRows.length;
     if (episodeRows.length > 0) channels.episode = episodeRows;
-  } catch {}
+  } catch (e) {
+    debug.recent_error = toDebugErrorMessage(e);
+    warnHybridSearchOnce("recent_search_error", e);
+  }
 
   if (ftsIsEmpty) {
     if (candidateCounts.like_raw === 0 && Array.isArray(channels.vector) && channels.vector.length > 0) {
@@ -971,8 +992,8 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
         WHERE COALESCE(mc.is_archived, 0) = 0
           AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
         ORDER BY c.updated_at DESC
-        LIMIT ${recentFallbackTopK}
-      `).all());
+        LIMIT ?
+      `).all(recentFallbackTopK));
       candidateCounts.recent_fallback_raw = recentFallbackRows.length;
       if (recentFallbackRows.length > 0) {
         debug.fallbacks_triggered.push("recent_episodic");
@@ -992,7 +1013,10 @@ export async function hybridSearch(text, { topK = 5 } = {}, runtime = {}) {
             .filter(filterForRerank)
         );
       }
-    } catch {}
+    } catch (e) {
+      debug.recent_fallback_error = toDebugErrorMessage(e);
+      warnHybridSearchOnce("recent_fallback_search_error", e);
+    }
   }
 
   const { names, fused } = fuseChannels(channels, { rrfK, nowSec, rankingConfig });
