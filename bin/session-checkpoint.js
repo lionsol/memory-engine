@@ -544,37 +544,47 @@ function quickHealthCheck(provider) {
   });
 }
 
+function quickDSHealthCheck() {
+  if (!getDSKey()) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(false), 10000);
+    llmComplete("回复 OK 即可", null, { provider: "deepseek", model: "deepseek-chat", maxTokens: 10, timeoutMs: 10000 })
+      .then(() => { clearTimeout(timeout); resolve(true); })
+      .catch(() => { clearTimeout(timeout); resolve(false); });
+  });
+}
+
 async function llmNightlyExtract(combinedText) {
   const trimmed = combinedText.substring(0, 45000);
 
-  // Try primary: SiliconFlow DeepSeek-V3.2
-  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM (SiliconFlow DeepSeek-V3.2, 120s timeout)...`);
+  // Primary: DeepSeek V4 Flash (deepseek.com)
+  console.log(`[checkpoint] Sending ${trimmed.length} chars to LLM (DeepSeek V4 Flash, 120s timeout)...`);
   let result;
   try {
     result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {
+      provider: "deepseek",
+      model: "deepseek-chat",
       temperature: 0.1,
       maxTokens: 8192,
       timeoutMs: 120000,
     });
   } catch (e) {
-    console.warn(`[checkpoint] SiliconFlow primary failed: ${e.message}`);
+    console.warn(`[checkpoint] DeepSeek V4 Flash failed: ${e.message}`);
 
-    // Fallback: try deepseek.com DeepSeek V4 Flash
-    if (!getDSKey()) {
-      console.warn("[checkpoint] DeepSeek API key not configured — skipping fallback");
+    // Fallback: try SiliconFlow
+    if (!getSFKey()) {
+      console.warn("[checkpoint] SiliconFlow API key not configured — skipping fallback");
       return { smart_memories: [], episode_summary: "", configs: [], error: "llm超时" };
     }
 
-    console.log(`[checkpoint] Falling back to deepseek.com (DeepSeek V4 Flash, 120s timeout)...`);
+    console.log(`[checkpoint] Falling back to SiliconFlow (DeepSeek-V3.2, 120s timeout)...`);
     try {
       result = await llmComplete(NIGHTLY_PROMPT + trimmed, null, {
-        provider: "deepseek",
-        model: "deepseek-chat",
         temperature: 0.1,
         maxTokens: 8192,
         timeoutMs: 120000,
       });
-      console.log("[checkpoint] Fallback succeeded via deepseek.com");
+      console.log("[checkpoint] Fallback succeeded via SiliconFlow");
     } catch (e2) {
       console.error(`[checkpoint] Fallback also failed: ${e2.message}`);
       return { smart_memories: [], episode_summary: "", configs: [], error: "llm超时" };
