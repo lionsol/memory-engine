@@ -1,3 +1,69 @@
+## 2026-06-16
+
+### 仓库结构
+
+- 完成 `memory-engine` 仓库根迁移：新 git root 固定为 `~/.openclaw/workspace/plugins/memory-engine/`。
+- 将原本散落在 workspace 根目录的项目文件集中到插件仓库内，包括 `docs/`、`skills/`、`test/`、`bin/`、README、schema、service 文件和调参文档。
+- 将 workspace 根级运维脚本迁移到 `bin/`，避免和插件内部 `scripts/` 混淆。
+- 更新文档、测试、skill、CLI 帮助文本中的旧路径引用：
+ - `plugins/memory-engine/...` → 新仓库根路径
+ - `scripts/...` → `bin/...`
+ - `tests/...` → `test/...`
+ - `openclaw plugins install ./plugins/memory-engine --force` → `openclaw plugins install . --force`
+- 重写 `.gitignore` 为新仓库根适配的黑名单策略，并新增 `.env.example`。
+
+### 修复
+
+- 修复 `session-checkpoint.js` 的 SQLite 打开方式：
+ - core `main.sqlite` 使用 safer open options。
+ - 增加 `fileMustExist` / readonly 语义。
+ - 为 core DB 与 engine DB 设置 `busy_timeout=5000`，降低并发访问时的锁冲突风险。
+- 修复 `memory-engine-cli.js` 仍默认连接 OpenClaw core DB `~/.openclaw/memory/main.sqlite` 的遗留问题。
+- CLI 默认 DB 改为隔离后的 engine DB：`~/.openclaw/memory/memory-engine/memory-engine.sqlite`。
+- CLI DB 路径解析优先级调整为：
+ 1. `--db`
+ 2. `MEMORY_ENGINE_DB_PATH`
+ 3. `MEMORY_ENGINE_DB`
+ 4. 默认 engine DB 路径
+- 修复 CLI `status/search` 因 `memory_confidence` 表位于 engine DB 而不是 core DB 导致的失败。
+- CLI 现在区分三种 DB 访问模式：
+ - `withEngineDb()`：访问 engine DB。
+ - `withCoreDb()`：只读访问 OpenClaw core DB。
+ - `withBothDbs()`：连接 engine DB，并 attach core DB 用于跨库搜索。
+- 为 CLI 的 `withBothDbs()` 增加 core DB 写保护：
+ - 新增 `isWriteSql(sql)`、`writeTargetIsCore(sql)`、`patchWriteGuards(db)`。
+ - 在 attach core DB 后立即 patch `db.prepare` / `db.exec`。
+ - 阻止 CLI 对 `core.*` 表执行写操作。
+ - 误写 core DB 时抛出：`writes to OpenClaw core DB are blocked in memory-engine CLI`。
+
+### 工具与测试
+
+- 新增 `test/memory-engine-cli.test.js`，覆盖 CLI DB 路径解析与 DB 访问行为。
+- 将 3 个未跟踪但属于 memory-engine 的项目脚本纳入新仓库：
+ - `bin/backfill-lancedb.js`
+ - `bin/benchmark-scale.js`
+ - `bin/memory-benchmark.js`
+- 更新 `static-check` 扫描范围，适配新仓库根与 `bin/` 目录。
+- 更新 `sync-memory-index`、`smart-add`、`nightly-maintenance` 等脚本中的路径定位逻辑，减少对旧 workspace 层级的依赖。
+
+### 验证
+
+- `npm run check` 通过：86 files。
+- `npm test` 通过：148 tests，142 pass，6 skip，0 fail。
+- `node bin/memory-engine-cli.js --help` 正常输出用法。
+- `node bin/memory-engine-cli.js status` 正常返回 engine DB 状态。
+- `node bin/memory-engine-cli.js search "memory-engine"` 正常返回搜索结果。
+- `openclaw plugins install . --force` 成功。
+- Gateway 重启后确认：
+ - `memory-engine` 插件正常加载。
+ - autoRecall hook 注册成功。
+ - LanceDB 初始化成功。
+ - hot reload 后 autoRecall 可重新注册。
+
+### 标签
+
+- `v0.8.3-relocate-stable`：仓库根迁移完成后的稳定点。
+- `v0.8.4-cli-core-guard`：CLI 使用隔离 engine DB，并阻止误写 OpenClaw core DB。
 ﻿
 
 # OpenClaw 记忆系统 架构与开发文档 (LanceDB + SQLite 双引擎)
