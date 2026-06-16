@@ -74,8 +74,9 @@ function getDSBaseUrl() {
 // ── DB helpers ──
 
 function withDb(fn) {
-  const db = new Database(DB_PATH, { readonly: false });
+  const db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
   try {
+    db.pragma("busy_timeout = 5000");
     return fn(db);
   } finally {
     db.close();
@@ -91,6 +92,7 @@ const ME_DB_PATH = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.s
 function withMeDb(fn, options = {}) {
   const db = new Database(ME_DB_PATH, { readonly: options.readonly || false });
   try {
+    db.pragma("busy_timeout = 5000");
     // Use 'chunks_db' alias (not 'main' — that's reserved for the primary DB in SQLite)
     db.exec(`ATTACH DATABASE '${DB_PATH.replace(/'/g, "''")}' AS chunks_db`);
     return fn(db);
