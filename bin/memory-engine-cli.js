@@ -12,23 +12,39 @@
  *   - 状态统计
  *
  * 用法：
- *   node bin/memory-engine-cli.js add <text> [--category <cat>]
- *   node bin/memory-engine-cli.js search <query> [--top-k <n>]
- *   node bin/memory-engine-cli.js status
- *   node bin/memory-engine-cli.js reinforce <chunk-id>
+ *   node bin/memory-engine-cli.js [--db <path>] add <text> [--category <cat>]
+ *   node bin/memory-engine-cli.js [--db <path>] search <query> [--top-k <n>]
+ *   node bin/memory-engine-cli.js [--db <path>] status
+ *   node bin/memory-engine-cli.js [--db <path>] reinforce <chunk-id>
  */
 
 const https = require('node:https');
 const lancedb = require('@lancedb/lancedb');
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
-const { resolve } = require('path');
+const { resolve, dirname } = require('path');
 const { homedir } = require('os');
 const { readFileSync, appendFileSync, existsSync, mkdirSync } = require('fs');
 
-// ── Paths ──
+// ── DB Paths ──
 const HOME = homedir();
-const DB_PATH = resolve(HOME, '.openclaw/memory/main.sqlite');
+const RAW_ARGS = process.argv.slice(2);
+
+function parseDbFlag(args) {
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--db' && i + 1 < args.length) return resolve(args[i + 1]);
+    if (args[i].startsWith('--db=')) return resolve(args[i].substring(5));
+  }
+  return null;
+}
+
+const CLI_DB_PATH = parseDbFlag(RAW_ARGS);
+const CORE_DB_PATH = process.env.MEMORY_ENGINE_CORE_DB || resolve(HOME, '.openclaw/memory/main.sqlite');
+const ENGINE_DB_PATH = CLI_DB_PATH
+  || process.env.MEMORY_ENGINE_DB_PATH
+  || process.env.MEMORY_ENGINE_DB
+  || resolve(HOME, '.openclaw/memory/memory-engine/memory-engine.sqlite');
+const ENGINE_DB_DIR = dirname(ENGINE_DB_PATH);
 const LANCEDB_PATH = resolve(HOME, '.openclaw/memory/lancedb');
 const WORKSPACE = resolve(HOME, '.openclaw/workspace');
 const SMART_ADD_DIR = resolve(WORKSPACE, 'memory/smart-add');
@@ -93,8 +109,51 @@ const CATEGORY_PARAMS = {
   user_identity: { conf: 0.95, tau: 365.0 },
 };
 
-function withDb(fn) {
-  const db = new Database(DB_PATH, { readonly: false });
+// ── DB access helpers ──
+
+/** Open engine DB (owns memory_confidence, memory_events etc.) */
+function withEngineDb(fn) {
+  if (!existsSync(ENGINE_DB_PATH)) {
+    throw new Error(
+      `Memory-engine DB not found at ${ENGINE_DB_PATH}\n` +
+      `Run plugin once or initialize/sync memory-engine first.\n` +
+      `Override: MEMORY_ENGINE_DB_PATH=<path> or --db <path>`
+    );
+  }
+  const db = new Database(ENGINE_DB_PATH, { readonly: false, fileMustExist: true });
+  db.pragma('busy_timeout = 5000');
+  try { return fn(db); } finally { db.close(); }
+}
+
+/** Open engine DB with core DB attached (for cross-DB queries like chunks + memory_confidence) */
+function withBothDbs(fn) {
+  if (!existsSync(ENGINE_DB_PATH)) {
+    throw new Error(
+      `Memory-engine DB not found at ${ENGINE_DB_PATH}\n` +
+      `Run plugin once or initialize/sync memory-engine first.\n` +
+      `Override: MEMORY_ENGINE_DB_PATH=<path> or --db <path>`
+    );
+  }
+  if (!existsSync(CORE_DB_PATH)) {
+    throw new Error(
+      `OpenClaw core DB not found at ${CORE_DB_PATH}\n` +
+      `Make sure OpenClaw gateway has been started at least once.\n` +
+      `Override: MEMORY_ENGINE_CORE_DB=<path>`
+    );
+  }
+  mkdirSync(ENGINE_DB_DIR, { recursive: true });
+  const db = new Database(ENGINE_DB_PATH, { readonly: false, fileMustExist: true });
+  db.pragma('busy_timeout = 5000');
+  db.exec(`ATTACH DATABASE '${String(CORE_DB_PATH).replace(/'/g, "''")}' AS core`);
+  try { return fn(db); } finally { db.close(); }
+}
+
+/** Open core DB read-only (for standalone core-table queries) */
+function withCoreDb(fn) {
+  if (!existsSync(CORE_DB_PATH)) {
+    throw new Error(`OpenClaw core DB not found at ${CORE_DB_PATH}`);
+  }
+  const db = new Database(CORE_DB_PATH, { readonly: true, fileMustExist: true });
   try { return fn(db); } finally { db.close(); }
 }
 
@@ -114,11 +173,11 @@ async function cmdAdd(text, explicitCategory) {
   appendFileSync(filePath, header ? entry : `\n${entry}`);
   console.log(`📝 smart-add: ${cat} | ${text.slice(0, 60)}`);
 
-  // Write confidence
+  // Write confidence to engine DB
   const params = CATEGORY_PARAMS[cat] || CATEGORY_PARAMS.raw_log;
   const nowSec = Math.floor(Date.now() / 1000);
   const chunkId = crypto.randomUUID();
-  withDb(db => {
+  withEngineDb(db => {
     db.prepare(`INSERT OR IGNORE INTO memory_confidence
       (chunk_id, initial_confidence, confidence, last_confidence_update,
        base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
@@ -164,12 +223,18 @@ async function cmdSearch(query, topK) {
     } catch (e) {}
   }
 
-  // Join with SQLite metadata
+  // Join with engine DB metadata (memory_confidence)
   const metaMap = new Map();
-  withDb(db => {
-    const rows = db.prepare('SELECT chunk_id, confidence, last_confidence_update, base_tau, hit_count, is_protected, category, conflict_flag FROM memory_confidence').all();
-    for (const r of rows) metaMap.set(r.chunk_id, r);
-  });
+  try {
+    withEngineDb(db => {
+      const rows = db.prepare(
+        'SELECT chunk_id, confidence, last_confidence_update, base_tau, hit_count, is_protected, category, conflict_flag FROM memory_confidence'
+      ).all();
+      for (const r of rows) metaMap.set(r.chunk_id, r);
+    });
+  } catch (e) {
+    // Engine DB might not exist; proceed without metadata
+  }
 
   // Score LanceDB results
   for (const l of lanceHits) {
@@ -184,20 +249,20 @@ async function cmdSearch(query, topK) {
     results.push({ id: l.id.slice(0, 16), text: (l.text || '').slice(0, 200), category: meta.category, similarity: sim, confidence: conf, source: 'lance' });
   }
 
-  // Channel 2: FTS5
+  // Channel 2: FTS5 (core chunks + engine confidence, via ATTACH)
   try {
-    withDb(db => {
+    withBothDbs(db => {
       const safeQ = query.replace(/[^\w\s]/g, ' ').trim();
       if (safeQ) {
         const fts = db.prepare(`
-          SELECT c.id, substr(c.text,1,200) as text, c.text as full,
+          SELECT c.id, substr(c.text,1,200) as text,
             COALESCE(mc.confidence,0.5) as confidence, mc.last_confidence_update,
             COALESCE(mc.base_tau,7.0) as base_tau, COALESCE(mc.is_protected,0) as is_protected,
             COALESCE(mc.category,'raw_log') as category
-          FROM chunks_fts f JOIN chunks c ON c.id = f.id
+          FROM core.chunks_fts f JOIN core.chunks c ON c.id = f.id
           LEFT JOIN memory_confidence mc ON c.id = mc.chunk_id
-          WHERE chunks_fts MATCH ? AND COALESCE(mc.is_archived,0) = 0
-          ORDER BY bm25(chunks_fts,0) LIMIT 20
+          WHERE core.chunks_fts MATCH ? AND COALESCE(mc.is_archived,0) = 0
+          ORDER BY bm25(core.chunks_fts,0) LIMIT 20
         `).all(safeQ);
         const seen = new Set(results.map(r => r.id));
         for (const f of fts) {
@@ -252,7 +317,7 @@ async function cmdSearch(query, topK) {
 
 // ── Status ──
 function cmdStatus() {
-  withDb(db => {
+  withEngineDb(db => {
     const total = db.prepare('SELECT COUNT(*) as c FROM memory_confidence').get();
     const byCat = db.prepare('SELECT category, COUNT(*) as c FROM memory_confidence WHERE is_archived=0 GROUP BY category').all();
     const archived = db.prepare('SELECT COUNT(*) as c FROM memory_confidence WHERE is_archived=1').get();
@@ -260,6 +325,7 @@ function cmdStatus() {
     const conflicted = db.prepare('SELECT COUNT(*) as c FROM memory_confidence WHERE conflict_flag=1').get();
 
     console.log(`📊 Memory Engine Status`);
+    console.log(`   Engine DB: ${ENGINE_DB_PATH}`);
     console.log(`   Total confidence: ${total.c}`);
     console.log(`   Archived: ${archived.c} | Protected: ${protected.c} | Conflicted: ${conflicted.c}`);
     console.log(`   By category:`);
@@ -269,20 +335,28 @@ function cmdStatus() {
 
 // ── Main ──
 async function main() {
-  const args = process.argv.slice(2);
-  const cmd = args[0];
+  // Filter out --db flag and its value from subcommand args
+  const raw = process.argv.slice(2);
+  const filtered = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === '--db' && i + 1 < raw.length) { i++; continue; }
+    if (raw[i].startsWith('--db=')) continue;
+    filtered.push(raw[i]);
+  }
+  const cmd = filtered[0];
+  const rest = filtered.slice(1);
 
   if (cmd === 'add') {
-    const text = args.slice(1).filter(a => !a.startsWith('--')).join(' ');
-    const catIdx = args.indexOf('--category');
-    const explicitCat = catIdx >= 0 ? args[catIdx + 1] : null;
+    const text = rest.filter(a => !a.startsWith('--')).join(' ');
+    const catIdx = rest.indexOf('--category');
+    const explicitCat = catIdx >= 0 ? rest[catIdx + 1] : null;
     if (!text) { console.error('Usage: node memory-engine-cli.js add <text> [--category <cat>]'); process.exit(1); }
     await cmdAdd(text, explicitCat);
   } else if (cmd === 'search') {
     // Strip the --top-k argument from query
-    const kIdx = args.indexOf('--top-k');
-    const topK = kIdx >= 0 ? parseInt(args[kIdx + 1]) : 5;
-    const query = args.slice(1).filter((a, i) => {
+    const kIdx = rest.indexOf('--top-k');
+    const topK = kIdx >= 0 ? parseInt(rest[kIdx + 1]) : 5;
+    const query = rest.filter((a, i) => {
       if (a.startsWith('--')) return false;
       if (kIdx >= 0 && (i === kIdx || i === kIdx + 1)) return false;
       return true;
@@ -291,14 +365,30 @@ async function main() {
     await cmdSearch(query, topK);
   } else if (cmd === 'status') {
     cmdStatus();
+  } else if (cmd === 'help' || cmd === '-h' || cmd === '--help') {
+    showHelp();
   } else {
     console.error(`Unknown command: ${cmd}`);
-    console.error('Usage:');
-    console.error('  node bin/memory-engine-cli.js add <text> [--category <cat>]');
-    console.error('  node bin/memory-engine-cli.js search <query> [--top-k <n>]');
-    console.error('  node bin/memory-engine-cli.js status');
+    showHelp();
     process.exit(1);
   }
+}
+
+function showHelp() {
+  console.error('Usage:');
+  console.error('  node bin/memory-engine-cli.js [--db <path>] add <text> [--category <cat>]');
+  console.error('  node bin/memory-engine-cli.js [--db <path>] search <query> [--top-k <n>]');
+  console.error('  node bin/memory-engine-cli.js [--db <path>] status');
+  console.error('');
+  console.error('Options:');
+  console.error('  --db <path>  Override engine DB path (default: ~/.openclaw/memory/memory-engine/memory-engine.sqlite)');
+  console.error('  --top-k <n>  Number of search results (default: 5)');
+  console.error('  --category   Explicit category for add command');
+  console.error('');
+  console.error('Environment:');
+  console.error('  MEMORY_ENGINE_DB_PATH  Override engine DB path');
+  console.error('  MEMORY_ENGINE_DB       Override engine DB path (fallback)');
+  console.error('  MEMORY_ENGINE_CORE_DB  Override OpenClaw core DB path');
 }
 
 main().catch(e => { console.error('❌', e.message); process.exit(1); });
