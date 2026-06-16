@@ -7,7 +7,7 @@ import { WORKSPACE } from "./memory-manager-runtime.js";
 
 const SMART_ADD_FINGERPRINT_RE = /<!--\s*smart-add-fingerprint:\s*([a-f0-9]{8,64})\s*-->/gi;
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-const SYNC_MEMORY_INDEX_SCRIPT = resolve(MODULE_DIR, "scripts/sync-memory-index.js");
+const SYNC_MEMORY_INDEX_SCRIPT = resolve(MODULE_DIR, "bin/sync-memory-index.js");
 
 function normalizeText(value) {
   return String(value || "").replace(/\r\n/g, "\n").trim();
@@ -77,15 +77,16 @@ function normalizeSyncResult(result, defaults = {}) {
 export async function runMemoryIndexSync({
   force = true,
   quiet = true,
-  loadRunner = () => import("./scripts/sync-memory-index.js"),
+  loadRunner = () => import("./bin/sync-memory-index.js"),
   syncCliRunner = runMemoryIndexSyncCli,
 } = {}) {
   try {
     const mod = await loadRunner();
-    if (typeof mod?.runSyncMemoryIndex !== "function") {
+    const runSyncMemoryIndex = mod?.runSyncMemoryIndex || mod?.default?.runSyncMemoryIndex;
+    if (typeof runSyncMemoryIndex !== "function") {
       throw new Error("runSyncMemoryIndex is not available");
     }
-    const result = await mod.runSyncMemoryIndex({ force });
+    const result = await runSyncMemoryIndex({ force });
     return normalizeSyncResult(result, { ok: true, mode: "in-process" });
   } catch (error) {
     const cliResult = syncCliRunner({

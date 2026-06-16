@@ -3,10 +3,10 @@
  * Memory Engine v1.0 — Test Suite
  * 
  * Tests: calculateTau, calcRealtimeConf, hybrid scoring, category routing.
- * Run: node tests/memory-engine.test.js
+ * Run: node test/memory-engine.test.js
  */
 
-const path = require('path');
+import path from 'node:path';
 
 // ===================== Shared Constants =====================
 const TAU_MAX = 365.0;
@@ -229,10 +229,10 @@ if (failed > 0) {
 // These require a running database and are skipped unless --integration is passed
 if (process.argv.includes('--integration')) {
   console.log('\n=== Integration Tests ===');
-  const Database = require('better-sqlite3');
   const dbPath = path.resolve(process.env.HOME || '/home/lionsol', '.openclaw/memory/main.sqlite');
   
   try {
+    const { default: Database } = await import('better-sqlite3');
     const db = new Database(dbPath);
     const totalChunks = db.prepare('SELECT COUNT(*) as c FROM chunks').get().c;
     assert(totalChunks > 0, `Database should have chunks (found ${totalChunks})`);

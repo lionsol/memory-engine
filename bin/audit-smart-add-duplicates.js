@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import { buildSmartAddFingerprint } from "../smart-add-fingerprint.js";
-import { readFileSync, writeFileSync } from "fs";
-import { resolve } from "path";
+const { readFileSync, writeFileSync } = require("fs");
+const { resolve } = require("path");
 
 function printUsage() {
-  console.error("Usage: node scripts/audit-smart-add-duplicates.js <smart-add.md> [--fix]");
+  console.error("Usage: node bin/audit-smart-add-duplicates.js <smart-add.md> [--fix]");
 }
 
 function lineNumberAt(content, index) {
@@ -15,7 +14,7 @@ function lineNumberAt(content, index) {
   return line;
 }
 
-function parseEntries(content) {
+function parseEntries(content, buildSmartAddFingerprint) {
   const headingRe = /^##\s+.+$/gm;
   const headings = [];
   let m;
@@ -72,7 +71,8 @@ function formatGroup(group) {
   return lines.join("\n");
 }
 
-function main() {
+async function main() {
+  const { buildSmartAddFingerprint } = await import("../smart-add-fingerprint.js");
   const args = process.argv.slice(2);
   const fix = args.includes("--fix");
   const fileArg = args.find(a => !a.startsWith("--"));
@@ -84,7 +84,7 @@ function main() {
 
   const filePath = resolve(process.cwd(), fileArg);
   const content = readFileSync(filePath, "utf8");
-  const entries = parseEntries(content);
+  const entries = parseEntries(content, buildSmartAddFingerprint);
 
   const groups = new Map();
   for (const entry of entries) {
@@ -131,4 +131,7 @@ function main() {
   console.log(`\nApplied --fix: removed ${removeRanges.length} duplicate entr${removeRanges.length === 1 ? "y" : "ies"}.`);
 }
 
-main();
+main().catch((error) => {
+  console.error(String(error?.message || error));
+  process.exit(1);
+});

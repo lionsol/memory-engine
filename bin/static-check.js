@@ -1,10 +1,9 @@
-import { readdirSync, statSync } from "node:fs";
-import path, { resolve } from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+const { readdirSync } = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
-const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = resolve(SCRIPT_DIR, "..");
+const SCRIPT_DIR = __dirname;
+const PROJECT_ROOT = path.resolve(SCRIPT_DIR, "..");
 const ROOT_JS_INCLUDE = new Set([
   "index.js",
   "auto-recall.js",
@@ -15,13 +14,13 @@ const ROOT_JS_INCLUDE = new Set([
   "smart-add-fingerprint.js",
   "smart-add.js",
 ]);
-const RECURSIVE_DIRS = ["lib", "console", "scripts", "test"];
+const RECURSIVE_DIRS = ["lib", "console", "bin", "test"];
 const SKIP_DIRS = new Set(["node_modules", ".git"]);
 
 function collectDirectRootJsFiles(rootDir) {
   return readdirSync(rootDir, { withFileTypes: true })
     .filter(entry => entry.isFile() && entry.name.endsWith(".js") && ROOT_JS_INCLUDE.has(entry.name))
-    .map(entry => resolve(rootDir, entry.name));
+    .map(entry => path.resolve(rootDir, entry.name));
 }
 
 function collectJsFilesRecursive(dir) {
@@ -29,24 +28,24 @@ function collectJsFilesRecursive(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       if (SKIP_DIRS.has(entry.name)) continue;
-      files.push(...collectJsFilesRecursive(resolve(dir, entry.name)));
+      files.push(...collectJsFilesRecursive(path.resolve(dir, entry.name)));
       continue;
     }
     if (!entry.isFile() || !entry.name.endsWith(".js")) continue;
-    files.push(resolve(dir, entry.name));
+    files.push(path.resolve(dir, entry.name));
   }
   return files;
 }
 
-export function collectProjectJsFiles(projectRoot = PROJECT_ROOT) {
+function collectProjectJsFiles(projectRoot = PROJECT_ROOT) {
   const allFiles = [
     ...collectDirectRootJsFiles(projectRoot),
-    ...RECURSIVE_DIRS.flatMap(dir => collectJsFilesRecursive(resolve(projectRoot, dir))),
+    ...RECURSIVE_DIRS.flatMap(dir => collectJsFilesRecursive(path.resolve(projectRoot, dir))),
   ];
   return [...new Set(allFiles)].sort((a, b) => a.localeCompare(b));
 }
 
-export function runStaticCheck(projectRoot = PROJECT_ROOT) {
+function runStaticCheck(projectRoot = PROJECT_ROOT) {
   const files = collectProjectJsFiles(projectRoot);
   const failures = [];
 
@@ -68,9 +67,7 @@ export function runStaticCheck(projectRoot = PROJECT_ROOT) {
   return { files, failures };
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-
-if (isMain) {
+if (require.main === module) {
   const { files, failures } = runStaticCheck();
   if (failures.length === 0) {
     console.log(`static check passed: ${files.length} files`);
@@ -86,3 +83,8 @@ if (isMain) {
   }
   process.exit(1);
 }
+
+module.exports = {
+  collectProjectJsFiles,
+  runStaticCheck,
+};

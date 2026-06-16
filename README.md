@@ -122,7 +122,6 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 ---
 
 
-- **Task classifier** — `scripts/task-classifier.js` 按输入关键词路由 coding / default 任务
-
+- **Task classifier** — `bin/task-classifier.js` 按输入关键词路由 coding / default 任务
 
 

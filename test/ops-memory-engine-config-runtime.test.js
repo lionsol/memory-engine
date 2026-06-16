@@ -1,9 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 
-const helperPath = resolve(process.cwd(), "../../scripts/lib/memory-engine-config-runtime.js");
-const helperModule = await import(helperPath);
+const helperPath = new URL("../bin/lib/memory-engine-config-runtime.js", import.meta.url);
+const helperModule = await import(helperPath.href);
 const getSmartAddTimeZoneRuntime =
   helperModule.getSmartAddTimeZoneRuntime
   || helperModule.default?.getSmartAddTimeZoneRuntime;

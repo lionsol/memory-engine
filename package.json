@@ -14,9 +14,9 @@
     "better-sqlite3": "^11.10.0"
   },
   "scripts": {
-    "check": "node scripts/static-check.js",
+    "check": "node bin/static-check.js",
     "test": "node --test",
     "console": "node console/cli.js",
-    "sync-index": "node scripts/sync-memory-index.js --force"
+    "sync-index": "node bin/sync-memory-index.js --force"
   }
 }

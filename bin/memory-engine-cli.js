@@ -12,10 +12,10 @@
  *   - 状态统计
  *
  * 用法：
- *   node scripts/memory-engine-cli.js add <text> [--category <cat>]
- *   node scripts/memory-engine-cli.js search <query> [--top-k <n>]
- *   node scripts/memory-engine-cli.js status
- *   node scripts/memory-engine-cli.js reinforce <chunk-id>
+ *   node bin/memory-engine-cli.js add <text> [--category <cat>]
+ *   node bin/memory-engine-cli.js search <query> [--top-k <n>]
+ *   node bin/memory-engine-cli.js status
+ *   node bin/memory-engine-cli.js reinforce <chunk-id>
  */
 
 const https = require('node:https');
@@ -294,9 +294,9 @@ async function main() {
   } else {
     console.error(`Unknown command: ${cmd}`);
     console.error('Usage:');
-    console.error('  node scripts/memory-engine-cli.js add <text> [--category <cat>]');
-    console.error('  node scripts/memory-engine-cli.js search <query> [--top-k <n>]');
-    console.error('  node scripts/memory-engine-cli.js status');
+    console.error('  node bin/memory-engine-cli.js add <text> [--category <cat>]');
+    console.error('  node bin/memory-engine-cli.js search <query> [--top-k <n>]');
+    console.error('  node bin/memory-engine-cli.js status');
     process.exit(1);
   }
 }

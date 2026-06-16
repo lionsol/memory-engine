@@ -6,12 +6,13 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const HOME = process.env.HOME || '/home/lionsol';
 const DB_PATH = path.resolve(HOME, '.openclaw/memory/main.sqlite');
 const WORKSPACE = path.resolve(HOME, '.openclaw/workspace');
 const KG_PATH = path.join(WORKSPACE, 'knowledge-graph.json');
+const MEMORY_ENGINE_CLI = path.join(__dirname, 'memory-engine.js');
 
 const CONFLICT_THRESHOLD = 0.15; // min rtConf to flag a conflict pair
 const CONFIG = { CONFLICT_PENALTY: 0.5 };
@@ -205,7 +206,7 @@ function jaccardSimilarity(a, b) {
 function runArchive() {
   console.log('--- STEP 2: archive ---');
   try {
-    const output = execSync('node scripts/memory-engine.js archive', {
+    const output = execFileSync('node', [MEMORY_ENGINE_CLI, 'archive'], {
       cwd: WORKSPACE, encoding: 'utf-8', timeout: 30000
     });
     const parsed = JSON.parse(output.trim());
@@ -298,7 +299,7 @@ function kgBridge() {
 function showStatus() {
   console.log('--- STEP 4: status ---');
   try {
-    const output = execSync('node scripts/memory-engine.js status', {
+    const output = execFileSync('node', [MEMORY_ENGINE_CLI, 'status'], {
       cwd: WORKSPACE, encoding: 'utf-8', timeout: 15000
     });
     const parsed = JSON.parse(output.trim());

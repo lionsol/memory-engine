@@ -1,4 +1,44 @@
-.memory-console.log
-memory-engine.sqlite
-memory-engine.sqlite-wal
-memory-engine.sqlite-shm
+# Dependencies
+node_modules/
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Databases / runtime data
+*.db
+*.db-shm
+*.db-wal
+/data/
+/memory/
+/knowledge-graph.json
+.codegraph/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Build / coverage
+*.tar.gz
+*.tgz
+dist/
+coverage/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Runtime context artifacts
+.understand-anything/
+*-context.md
+*-context.json
+actions.md

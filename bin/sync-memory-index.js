@@ -1,17 +1,34 @@
-import Database from "better-sqlite3";
-import { fileURLToPath } from "node:url";
-import { dateStrInTimeZone } from "../date-utils.js";
-import { tableExists } from "../lib/db/schema.js";
-import { getSmartAddTimeZone } from "../lib/config/helpers.js";
-import { collectIndexedFiles, readIndexedPathState } from "../lib/sync/index-sync.js";
-import {
-  CORE_DB_PATH,
-  INDEX_SYNC_WATCH_DIRS,
-  WORKSPACE,
-  getSharedMemoryManager,
-} from "../memory-manager-runtime.js";
+const Database = require("better-sqlite3");
 
-function withDb(fn, dbPath = CORE_DB_PATH) {
+async function loadRuntimeDeps() {
+  const [
+    { dateStrInTimeZone },
+    { tableExists },
+    { getSmartAddTimeZone },
+    { collectIndexedFiles, readIndexedPathState },
+    runtime,
+  ] = await Promise.all([
+    import("../date-utils.js"),
+    import("../lib/db/schema.js"),
+    import("../lib/config/helpers.js"),
+    import("../lib/sync/index-sync.js"),
+    import("../memory-manager-runtime.js"),
+  ]);
+
+  return {
+    dateStrInTimeZone,
+    tableExists,
+    getSmartAddTimeZone,
+    collectIndexedFiles,
+    readIndexedPathState,
+    CORE_DB_PATH: runtime.CORE_DB_PATH,
+    INDEX_SYNC_WATCH_DIRS: runtime.INDEX_SYNC_WATCH_DIRS,
+    WORKSPACE: runtime.WORKSPACE,
+    getSharedMemoryManager: runtime.getSharedMemoryManager,
+  };
+}
+
+function withDb(fn, dbPath) {
   const db = new Database(dbPath, { readonly: true });
   try {
     return fn(db);
@@ -20,7 +37,7 @@ function withDb(fn, dbPath = CORE_DB_PATH) {
   }
 }
 
-function safeWithDb(fn, dbPath = CORE_DB_PATH, fallbackValue = null) {
+function safeWithDb(fn, dbPath, fallbackValue = null) {
   try {
     return { value: withDb(fn, dbPath), error: null };
   } catch (error) {
@@ -36,14 +53,26 @@ function parseArgs(argv) {
 }
 
 function printUsage() {
-  console.log("Usage: node scripts/sync-memory-index.js [--force]");
+  console.log("Usage: node bin/sync-memory-index.js [--force]");
 }
 
-export async function runSyncMemoryIndex({
+async function runSyncMemoryIndex({
   force = false,
-  getSharedMemoryManagerImpl = getSharedMemoryManager,
+  getSharedMemoryManagerImpl = null,
 } = {}) {
-  const managerResult = await getSharedMemoryManagerImpl({ purpose: "cli", allowImplicit: false });
+  const {
+    dateStrInTimeZone,
+    tableExists,
+    getSmartAddTimeZone,
+    collectIndexedFiles,
+    readIndexedPathState,
+    CORE_DB_PATH,
+    INDEX_SYNC_WATCH_DIRS,
+    WORKSPACE,
+    getSharedMemoryManager,
+  } = await loadRuntimeDeps();
+  const getSharedMemoryManagerImplResolved = getSharedMemoryManagerImpl || getSharedMemoryManager;
+  const managerResult = await getSharedMemoryManagerImplResolved({ purpose: "cli", allowImplicit: false });
   if (!managerResult.manager) {
     throw new Error(managerResult.error || "memory manager unavailable");
   }
@@ -110,7 +139,7 @@ export async function runSyncMemoryIndex({
   }
 }
 
-export async function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (args.help) {
     printUsage();
@@ -121,7 +150,7 @@ export async function main(argv = process.argv.slice(2)) {
   return 0;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (require.main === module) {
   main().then((code) => {
     process.exit(code);
   }).catch(error => {
@@ -129,3 +158,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(1);
   });
 }
+
+module.exports = {
+  runSyncMemoryIndex,
+  main,
+};

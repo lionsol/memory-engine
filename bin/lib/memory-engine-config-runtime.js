@@ -34,8 +34,6 @@ async function loadGetMemoryEngineConfig() {
     const moduleCandidates = [
       resolve(__dirname, "../../lib/config/helpers.js"),
       resolve(__dirname, "../../lib/config/runtime.js"),
-      resolve(__dirname, "../../plugins/memory-engine/lib/config/helpers.js"),
-      resolve(__dirname, "../../plugins/memory-engine/lib/config/runtime.js"),
     ];
 
     for (const modulePath of moduleCandidates) {

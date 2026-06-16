@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const checkpoint = require("../../../scripts/session-checkpoint.js");
+const checkpoint = require("../bin/session-checkpoint.js");
 
 test("nightly checkpoint uses targetDate for episode id/file/metadata and keeps generatedAt separate", () => {
   const generatedAt = "2026-05-28T19:30:00.000Z"; // 2026-05-29 03:30 Asia/Shanghai

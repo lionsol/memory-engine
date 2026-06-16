@@ -21,7 +21,7 @@ Confidence + time-decay system with parallel storage and multi-channel RRF searc
 - **写入路径**：写文件 → `openclaw memory index`（生成向量 + FTS5）→ 写入 `memory_confidence`
 - **Embedding**: Qwen/Qwen3-Embedding-4B via SiliconFlow
 - **Search**: 双通道并行（向量 + FTS5）→ RRF 融合（≥2通道, k=60）
-- **Script**: `scripts/memory-engine.js`
+- **Script**: `bin/memory-engine.js`
 
 ## Category Routing
 
@@ -37,25 +37,25 @@ Confidence + time-decay system with parallel storage and multi-channel RRF searc
 
 ### Add Memory (recommended)
 ```bash
-node scripts/memory-engine.js add "用户偏好使用中文交流" --category preference
-node scripts/memory-engine.js add "Sol是开发者" --category user_identity --protected
+node bin/memory-engine.js add "用户偏好使用中文交流" --category preference
+node bin/memory-engine.js add "Sol是开发者" --category user_identity --protected
 ```
 Writes to `memory/smart-add/YYYY-MM-DD.md` → reindex → writes confidence.
 
 ### Search by Confidence
 ```bash
-node scripts/memory-engine.js search "用户偏好" --top-k 5
+node bin/memory-engine.js search "用户偏好" --top-k 5
 ```
 
 ### Update (e.g., after LLM citation)
 ```bash
-node scripts/memory-engine.js update <chunk-id-prefix> --hit
-node scripts/memory-engine.js update <chunk-id-prefix> --category preference
+node bin/memory-engine.js update <chunk-id-prefix> --hit
+node bin/memory-engine.js update <chunk-id-prefix> --category preference
 ```
 
 ### Archive / Diagnose / Status
 ```bash
-node scripts/memory-engine.js archive
-node scripts/memory-engine.js diagnose
-node scripts/memory-engine.js status
+node bin/memory-engine.js archive
+node bin/memory-engine.js diagnose
+node bin/memory-engine.js status
 ```
