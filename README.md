@@ -1,4 +1,4 @@
-# OpenClaw Memory System v0.8
+# OpenClaw Memory System v0.8.4
 
 > **存算分离 · 惰性衰减 · 实证强化 · 自动召回**
 > 为 AI Agent 构建的 SQLite 增强型长期记忆系统，具备置信度生命周期管理、知识图谱双轨融合与混合门控检索。
