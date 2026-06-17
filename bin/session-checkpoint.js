@@ -19,18 +19,68 @@ const zlib = require("node:zlib");
 
 // Paths
 const HOME = homedir();
-const DB_PATH = resolve(HOME, ".openclaw/memory/main.sqlite");
-const WORKSPACE = resolve(HOME, ".openclaw/workspace");
-const SESSIONS_DIR = resolve(HOME, ".openclaw/agents/main/sessions");
+const DEFAULT_CORE_DB_PATH = resolve(HOME, ".openclaw/memory/main.sqlite");
+const DEFAULT_WORKSPACE = resolve(HOME, ".openclaw/workspace");
+const DEFAULT_SESSIONS_DIR = resolve(HOME, ".openclaw/agents/main/sessions");
 const SMART_ADD_DIR = "memory/smart-add";
-const CONFIG_JSON = resolve(HOME, ".openclaw/openclaw.json");
+const DEFAULT_CONFIG_JSON = resolve(HOME, ".openclaw/openclaw.json");
 const EPISODES_DIR = "memory/episodes";
+const DEFAULT_ME_DB_PATH = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
+const DEFAULT_TIME_ZONE = "Asia/Shanghai";
+let runtimeOverrides = null;
+const configCache = new Map();
 
-// Config cache
-let config = null;
+function getRuntime() {
+  const overrides = runtimeOverrides || {};
+  const workspaceDir = overrides.workspaceDir || process.env.MEMORY_ENGINE_WORKSPACE_DIR || DEFAULT_WORKSPACE;
+  const memoryDir = overrides.memoryDir || process.env.MEMORY_ENGINE_MEMORY_DIR || resolve(workspaceDir, "memory");
+  const coreDbPath = overrides.coreDbPath
+    || process.env.MEMORY_ENGINE_CORE_DB_PATH
+    || process.env.MEMORY_ENGINE_CORE_DB
+    || DEFAULT_CORE_DB_PATH;
+  const engineDbPath = overrides.engineDbPath
+    || process.env.MEMORY_ENGINE_DB_PATH
+    || process.env.MEMORY_ENGINE_DB
+    || DEFAULT_ME_DB_PATH;
+
+  return {
+    workspaceDir,
+    memoryDir,
+    smartAddDir: overrides.smartAddDir || resolve(memoryDir, "smart-add"),
+    episodesDir: overrides.episodesDir || resolve(memoryDir, "episodes"),
+    sessionsDir: overrides.sessionsDir || process.env.MEMORY_ENGINE_SESSIONS_DIR || DEFAULT_SESSIONS_DIR,
+    coreDbPath,
+    engineDbPath,
+    configJsonPath: overrides.configJsonPath || process.env.OPENCLAW_CONFIG_PATH || DEFAULT_CONFIG_JSON,
+    timeZone: overrides.timeZone || process.env.MEMORY_ENGINE_TIME_ZONE || DEFAULT_TIME_ZONE,
+    now: overrides.now || (() => Date.now()),
+    llmNightlyExtract: overrides.llmNightlyExtract || llmNightlyExtract,
+    readYesterdayRawLogs: overrides.readYesterdayRawLogs || readYesterdayRawLogs,
+    repairOrphanVectors: overrides.repairOrphanVectors || repairOrphanVectors,
+    resolveConfigConflicts: overrides.resolveConfigConflicts || resolveConfigConflicts,
+  };
+}
+
+async function withRuntime(overrides, fn) {
+  const prev = runtimeOverrides;
+  runtimeOverrides = { ...(prev || {}), ...(overrides || {}) };
+  try {
+    return await fn();
+  } finally {
+    runtimeOverrides = prev;
+  }
+}
+
+function currentIsoString() {
+  return new Date(getRuntime().now()).toISOString();
+}
+
 function getConfig() {
-  if (!config) config = JSON.parse(readFileSync(CONFIG_JSON, "utf-8"));
-  return config;
+  const { configJsonPath } = getRuntime();
+  if (!configCache.has(configJsonPath)) {
+    configCache.set(configJsonPath, JSON.parse(readFileSync(configJsonPath, "utf-8")));
+  }
+  return configCache.get(configJsonPath);
 }
 
 function getSFKey() {
@@ -52,7 +102,7 @@ function getSFBaseUrl() {
 function getDSKey() {
   // Read from secure file first, then openclaw.json, then env var
   try {
-    const keyPath = resolve(WORKSPACE, "../credentials/deepseek-api-key");
+    const keyPath = resolve(getRuntime().workspaceDir, "../credentials/deepseek-api-key");
     const key = readFileSync(keyPath, "utf-8").trim();
     if (key) return key;
   } catch (e) { /* file not found */ }
@@ -74,7 +124,7 @@ function getDSBaseUrl() {
 // ── DB helpers ──
 
 function withDb(fn) {
-  const db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
+  const db = new Database(getRuntime().coreDbPath, { readonly: true, fileMustExist: true });
   try {
     db.pragma("busy_timeout = 5000");
     return fn(db);
@@ -87,22 +137,42 @@ function withDb(fn) {
  * Open memory-engine.sqlite with main.sqlite ATTACHed as 'main' schema.
  * Use this for all memory_confidence operations.
  */
-const ME_DB_PATH = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
-
 function withMeDb(fn, options = {}) {
-  const db = new Database(ME_DB_PATH, { readonly: options.readonly || false });
+  const db = new Database(getRuntime().engineDbPath, { readonly: options.readonly || false });
   try {
     db.pragma("busy_timeout = 5000");
+    if (!options.readonly) ensureCheckpointTables(db);
     // Use 'chunks_db' alias (not 'main' — that's reserved for the primary DB in SQLite)
-    db.exec(`ATTACH DATABASE '${DB_PATH.replace(/'/g, "''")}' AS chunks_db`);
+    db.exec(`ATTACH DATABASE '${getRuntime().coreDbPath.replace(/'/g, "''")}' AS chunks_db`);
     return fn(db);
   } finally {
     db.close();
   }
 }
 
+function ensureCheckpointTables(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_confidence (
+      chunk_id TEXT PRIMARY KEY,
+      initial_confidence REAL NOT NULL DEFAULT 0.5,
+      confidence REAL NOT NULL DEFAULT 0.5,
+      last_confidence_update INTEGER,
+      base_tau REAL NOT NULL DEFAULT 7.0,
+      hit_count INTEGER NOT NULL DEFAULT 0,
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      is_protected INTEGER NOT NULL DEFAULT 0,
+      conflict_flag INTEGER NOT NULL DEFAULT 0,
+      category TEXT NOT NULL DEFAULT 'raw_log',
+      kg_data TEXT
+    )
+  `);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_mc_archived ON memory_confidence(is_archived)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_mc_category ON memory_confidence(category)");
+}
+
 function todayDateStr() {
-  return dateStringInTimeZone(Date.now(), "Asia/Shanghai");
+  const rt = getRuntime();
+  return dateStringInTimeZone(rt.now(), rt.timeZone);
 }
 
 /**
@@ -110,7 +180,8 @@ function todayDateStr() {
  * The script runs at 03:55 CST to process the previous day's data.
  */
 function yesterdayDateStr(now = null) {
-  const businessToday = dateStringInTimeZone(now || Date.now(), "Asia/Shanghai");
+  const rt = getRuntime();
+  const businessToday = dateStringInTimeZone(now || rt.now(), rt.timeZone);
   return shiftDateString(businessToday, -1);
 }
 
@@ -154,8 +225,10 @@ function shiftDateString(dateStr, days) {
 }
 
 function buildNightlyEntryId({ targetDate, category = "episodic", generatedAt = null } = {}) {
-  const businessTargetDate = targetDate || yesterdayDateStr(generatedAt || Date.now());
-  const p = parseDatePartsInTimeZone(generatedAt || Date.now(), "Asia/Shanghai");
+  const rt = getRuntime();
+  const effectiveGeneratedAt = generatedAt || rt.now();
+  const businessTargetDate = targetDate || yesterdayDateStr(effectiveGeneratedAt);
+  const p = parseDatePartsInTimeZone(effectiveGeneratedAt, rt.timeZone);
   return `${businessTargetDate}_${category}_nightly_generated_${p.hour}${p.minute}${p.second}`;
 }
 
@@ -252,7 +325,7 @@ function readYesterdayRawLogs() {
   const logs = [];
 
   // Source 1: smart-add file — ALL entries are notes, not conversations
-  const smartAddPath = resolve(WORKSPACE, SMART_ADD_DIR, `${yesterday}.md`);
+  const smartAddPath = resolve(getRuntime().smartAddDir, `${yesterday}.md`);
   if (existsSync(smartAddPath)) {
     const content = readFileSync(smartAddPath, "utf-8");
     const entries = parseSmartAddEntries(content);
@@ -271,7 +344,7 @@ function readYesterdayRawLogs() {
   // Source 2: raw_log from memory-engine confidence DB (these are real conversation data)
   // memory-engine.sqlite has memory_confidence, main.sqlite has chunks — ATTACHed via withMeDb
   try {
-    if (existsSync(ME_DB_PATH)) {
+    if (existsSync(getRuntime().engineDbPath)) {
       withMeDb((meDb) => {
         const rows = meDb
           .prepare(
@@ -295,10 +368,10 @@ function readYesterdayRawLogs() {
 
   // Source 3: .jsonl.reset.* files from archived sessions (lost due to session reset)
   try {
-    if (existsSync(SESSIONS_DIR)) {
-      const resetFiles = readdirSync(SESSIONS_DIR).filter(f => f.includes(".jsonl.reset."));
+    if (existsSync(getRuntime().sessionsDir)) {
+      const resetFiles = readdirSync(getRuntime().sessionsDir).filter(f => f.includes(".jsonl.reset."));
       for (const file of resetFiles) {
-        const filePath = resolve(SESSIONS_DIR, file);
+        const filePath = resolve(getRuntime().sessionsDir, file);
         const resetContent = readFileSync(filePath, "utf-8");
         const lines = resetContent.split("\n").filter(Boolean);
         for (const line of lines) {
@@ -399,16 +472,19 @@ function mapToCategory(type) {
  */
 function appendSmartAdd(text, category, opts = {}) {
   const today = todayDateStr();
-  const fileDir = resolve(WORKSPACE, SMART_ADD_DIR);
+  const fileDir = getRuntime().smartAddDir;
   const filePath = resolve(fileDir, `${today}.md`);
   mkdirSync(fileDir, { recursive: true });
   const fingerprint = smartAddFingerprint({ category, raw: text, kg_data: opts.kg_data });
   const existing = readSmartAddFingerprints(today);
   if (existing.has(fingerprint)) return null;
 
-  const now = new Date();
-  const ts = now.toISOString().replace(/[:.]/g, "").slice(0, 15);
-  const entryId = `${ts}_${category}_nightly`;
+  const generatedAt = opts.generatedAt || getRuntime().now();
+  const entryId = opts.entryId || buildNightlyEntryId({
+    targetDate: opts.targetDate || yesterdayDateStr(generatedAt),
+    category,
+    generatedAt,
+  });
   const entry = `<!-- smart-add-fingerprint: ${fingerprint} -->\n## ${entryId}\n\nCategory: ${category}${opts.protected ? " | Protected" : ""}${opts.kg_data ? `\n\nkg_data: ${opts.kg_data}` : ""}\n\n${text.trim()}\n\n`;
 
   const header = !existsSync(filePath) ? "# Smart Added Memory\n\n" : "";
@@ -443,7 +519,7 @@ function parseNodeProperties(text) {
 }
 
 function readSmartAddFingerprints(date = todayDateStr()) {
-  const filePath = resolve(WORKSPACE, SMART_ADD_DIR, `${date}.md`);
+  const filePath = resolve(getRuntime().smartAddDir, `${date}.md`);
   if (!existsSync(filePath)) return new Set();
   const content = readFileSync(filePath, "utf-8");
   const fpCommentRe = /<!--\s*smart-add-fingerprint:\s*([a-f0-9]{8,64})\s*-->/gi;
@@ -608,6 +684,7 @@ async function llmNightlyExtract(combinedText) {
  */
 async function nightlyCheckpoint(rawLogs) {
   const episodeDate = yesterdayDateStr();
+  const generatedAt = currentIsoString();
 
   if (rawLogs.length === 0) {
     console.log("[checkpoint] No raw logs found — nothing to extract.");
@@ -643,7 +720,14 @@ async function nightlyCheckpoint(rawLogs) {
   console.log(`[checkpoint] Conversation entries: ${conversationLogs.length}, Total entries: ${allLogs.length}`);
 
   // ── Single LLM call ──
-  const extracted = await llmNightlyExtract(combinedText);
+  let extracted;
+  try {
+    extracted = await getRuntime().llmNightlyExtract(combinedText);
+  } catch (error) {
+    console.error(`[checkpoint] LLM extraction failed: ${error.message}`);
+    writeLLMTimeoutEpisode(episodeDate);
+    return { memories: 0, episode: false, configs: 0, timeout: true, error: error.message };
+  }
 
   // ── Timeout guard: llm超时 → write marker episode and exit early ──
   if (extracted.error === "llm超时") {
@@ -667,7 +751,10 @@ async function nightlyCheckpoint(rawLogs) {
     const cat = mapToCategory(item.type);
     const stableText = String(item.text || "").trim();
     if (!stableText) continue;
-    const entryId = appendSmartAdd(item.text, cat);
+    const entryId = appendSmartAdd(item.text, cat, {
+      targetDate: episodeDate,
+      generatedAt,
+    });
     if (!entryId) {
       console.log(`  ↳ Skipped (duplicate/fingerprint): ${stableText.slice(0, 60)}`);
       continue;
@@ -681,11 +768,20 @@ async function nightlyCheckpoint(rawLogs) {
   let episodeWritten = false;
   if (extracted.episode_summary && extracted.episode_summary.trim()) {
     const episodeText = extracted.episode_summary.trim();
-    const kgData = JSON.stringify({
+    const kgData = mergeKgData(JSON.stringify({
       episode_of: rawLogs.map(r => r.chunk_id || '').filter(Boolean),
-      date: episodeDate
+      date: episodeDate,
+    }), {
+      date: episodeDate,
+      generatedAt,
+      source_type: "checkpoint_llm",
+      targetDate: episodeDate,
     });
-    const entryId = appendSmartAdd(episodeText, 'episodic', { kg_data: kgData });
+    const entryId = appendSmartAdd(episodeText, 'episodic', {
+      kg_data: kgData,
+      targetDate: episodeDate,
+      generatedAt,
+    });
     if (entryId) {
       try { writeConfidence(entryId, episodeText, 'episodic'); } catch (e) {}
     } else {
@@ -714,11 +810,16 @@ async function nightlyCheckpoint(rawLogs) {
 
     if (episodeWritten) {
       // Write to memory/episodes/
-      const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+      const episodeDir = getRuntime().episodesDir;
       const episodePath = resolve(episodeDir, `${episodeDate}.md`);
       mkdirSync(episodeDir, { recursive: true });
       writeFileSync(episodePath, [
         `# Episode: ${episodeDate}`,
+        "",
+        `targetDate: ${episodeDate}`,
+        `generatedAt: ${generatedAt}`,
+        "category: episodic",
+        "source_type: checkpoint_llm",
         "",
         episodeText,
         "",
@@ -727,12 +828,12 @@ async function nightlyCheckpoint(rawLogs) {
           : "",
         "",
         "---",
-        `_Generated at ${new Date().toISOString()}_`,
+        `_Generated at ${generatedAt}_`,
         "",
       ].join("\n"));
 
       // Append to daily memory file
-      const dailyDir = resolve(WORKSPACE, "memory");
+      const dailyDir = getRuntime().memoryDir;
       const dailyPath = resolve(dailyDir, `${episodeDate}.md`);
       mkdirSync(dailyDir, { recursive: true });
       if (!existsSync(dailyPath)) {
@@ -754,7 +855,10 @@ async function nightlyCheckpoint(rawLogs) {
     if (!cfg.key || !cfg.value) continue;
 
     const text = `配置：${cfg.key} = ${cfg.value}（来源：${cfg.context || 'checkpoint'}）`;
-    const entryId = appendSmartAdd(text, 'preference');
+    const entryId = appendSmartAdd(text, 'preference', {
+      targetDate: episodeDate,
+      generatedAt,
+    });
     if (!entryId) {
       console.log(`  ↳ Skipped config (duplicate/fingerprint): ${cfg.key}`);
       continue;
@@ -764,24 +868,37 @@ async function nightlyCheckpoint(rawLogs) {
   }
   console.log(`[checkpoint] Wrote ${cfgWritten} config(s)`);
 
-  return { memories: memWritten, episode: episodeWritten, configs: cfgWritten };
+  return {
+    memories: memWritten,
+    episode: episodeWritten,
+    configs: cfgWritten,
+    targetDate: episodeDate,
+    generatedAt,
+    source_type: "checkpoint_llm",
+    category: "episodic",
+  };
 }
 
 function writeEmptyEpisode(today) {
-  const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+  const episodeDir = getRuntime().episodesDir;
   const episodePath = resolve(episodeDir, `${today}.md`);
   mkdirSync(episodeDir, { recursive: true });
   if (!existsSync(episodePath)) {
-    writeFileSync(episodePath, `# Episode: ${today}\n\n（无今日内容）\n\n---\n_Generated at ${new Date().toISOString()}_\n`);
+    writeFileSync(episodePath, `# Episode: ${today}\n\ntargetDate: ${today}\ngeneratedAt: ${currentIsoString()}\ncategory: episodic\nsource_type: checkpoint_llm\n\n（无今日内容）\n\n---\n_Generated at ${currentIsoString()}_\n`);
   }
 }
 
 function writeIncompleteEpisode(today, noteCount) {
-  const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+  const episodeDir = getRuntime().episodesDir;
   const episodePath = resolve(episodeDir, `${today}.md`);
   mkdirSync(episodeDir, { recursive: true });
   writeFileSync(episodePath, [
     `# Episode: ${today}`,
+    "",
+    `targetDate: ${today}`,
+    `generatedAt: ${currentIsoString()}`,
+    "category: episodic",
+    "source_type: checkpoint_llm",
     "",
     "⚠️ **数据不完整 — 当日无有效对话记录**",
     "",
@@ -794,17 +911,17 @@ function writeIncompleteEpisode(today, noteCount) {
     "- checkpoint 运行时间早于对话发生时间",
     "",
     "---",
-    `_Generated at ${new Date().toISOString()}_`,
+    `_Generated at ${currentIsoString()}_`,
     "",
   ].join("\n"));
   console.log(`[checkpoint] Incomplete-data episode marker written for ${today} (${noteCount} notes, 0 conversations)`);
 }
 
 function writeLLMTimeoutEpisode(today) {
-  const episodeDir = resolve(WORKSPACE, EPISODES_DIR);
+  const episodeDir = getRuntime().episodesDir;
   const episodePath = resolve(episodeDir, `${today}.md`);
   mkdirSync(episodeDir, { recursive: true });
-  writeFileSync(episodePath, `# Episode: ${today}\n\n⚠️ llm超时 — 当日日志未处理（SiliconFlow + DeepSeek 均不可用）\n\n---\n_Generated at ${new Date().toISOString()}_\n`);
+  writeFileSync(episodePath, `# Episode: ${today}\n\ntargetDate: ${today}\ngeneratedAt: ${currentIsoString()}\ncategory: episodic\nsource_type: checkpoint_llm\n\n⚠️ llm超时 — 当日日志未处理（SiliconFlow + DeepSeek 均不可用）\n\n---\n_Generated at ${currentIsoString()}_\n`);
   console.log("[checkpoint] LLM timeout episode marker written");
 }
 
@@ -930,7 +1047,7 @@ async function repairOrphanVectors() {
   let repaired = 0;
   try {
     const lancedb = require('@lancedb/lancedb');
-    const LANCEDB_PATH = resolve(HOME, '.openclaw/memory/lancedb');
+    const LANCEDB_PATH = resolve(getRuntime().memoryDir, 'lancedb');
 
     // Get all SQLite confidence chunk IDs (from memory-engine.sqlite)
     const sqliteIds = withMeDb(db => {
@@ -1042,17 +1159,17 @@ async function main() {
 
   try {
     // Step 1: Gather raw logs
-    const rawLogs = readYesterdayRawLogs();
+    const rawLogs = getRuntime().readYesterdayRawLogs();
     console.log(`[checkpoint] Found ${rawLogs.length} raw log entries (yesterday: ${yesterdayDateStr()})`);
 
     // Step 2: Unified nightly checkpoint (1 LLM call → 3 outputs)
     const result = await nightlyCheckpoint(rawLogs);
 
     // Step 2.5: Repair orphan vectors (SQLite has, LanceDB missing)
-    const repaired = await repairOrphanVectors();
+    const repaired = await getRuntime().repairOrphanVectors();
 
     // Step 3: Resolve config conflicts (existing logic, kept)
-    const conflicts = resolveConfigConflicts();
+    const conflicts = getRuntime().resolveConfigConflicts();
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     if (result.timeout) {
@@ -1072,8 +1189,24 @@ if (require.main === module) {
   main();
 }
 
+function inspectBusyTimeouts() {
+  const busy = {};
+  withDb((db) => {
+    busy.core = Number(db.pragma("busy_timeout", { simple: true }));
+  });
+  withMeDb((db) => {
+    busy.engine = Number(db.pragma("busy_timeout", { simple: true }));
+    busy.attachedCore = Number(db.prepare("PRAGMA chunks_db.busy_timeout").pluck().get());
+  }, { readonly: true });
+  return busy;
+}
+
 module.exports = {
+  inspectBusyTimeouts,
+  main,
   yesterdayDateStr,
   buildNightlyEntryId,
   mergeKgData,
+  nightlyCheckpoint,
+  withRuntime,
 };

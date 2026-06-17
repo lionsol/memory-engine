@@ -1,3 +1,18 @@
+## 2026-06-17
+
+- 将 core DB 写保护抽出为 `lib/db/core-write-guard.*`，由 CLI 与 engine DB 复用；新增 `test/core-write-guard.test.js` 覆盖 core 表写入拦截、engine 表写入放行，以及大小写、空白、SQL 注释前缀等边界场景。
+-  `bin/session-checkpoint.js` 新增集成测试覆盖，使用临时 workspace、临时 core DB、临时 engine DB 与 mock LLM，避免访问真实 `~/.openclaw/memory` 或真实工作区。
+- 盖 nightly checkpoint 关键路径：
+
+  - aw log 不足时跳过 LLM，并写入 incomplete marker，避免生成幻觉摘要；
+  - 定时钟与 `Asia/Shanghai` 时区，验证 `targetDate` / `generatedAt` 语义稳定；
+  - ore DB 只读、engine DB 可写；
+  - ore / engine / attached core 的 `busy_timeout=5000`；
+  - 常 raw log 下写入 episode 与 smart-add 文件；
+  - LM 失败时写入明确 failure marker，不写伪造摘要。
+-为 `session-checkpoint` 增加最小可测试性注入点，包括临时路径、时区、时钟、LLM、raw log reader、repair/conflict handler；保留 `if (require.main === module) main()` 的直接执行行为。
+
+
 ## 2026-06-16
 
 ### 仓库结构
