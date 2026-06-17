@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const { resolve, dirname } = require('path');
 const { homedir } = require('os');
 const { readFileSync, appendFileSync, existsSync, mkdirSync } = require('fs');
+const { patchWriteGuards } = require('../lib/db/core-write-guard.cjs');
 
 // ── DB Paths ──
 const HOME = homedir();
@@ -125,32 +126,6 @@ function withEngineDb(fn) {
   try { return fn(db); } finally { db.close(); }
 }
 
-// Core DB write guard (same pattern as lib/db/engine-db.js)
-function isWriteSql(sql) {
-  return /^(insert|update|delete|replace|alter|drop|create|vacuum|reindex|truncate)\b/i.test(String(sql || '').trim());
-}
-function writeTargetIsCore(sql) {
-  const n = String(sql || '').toLowerCase().replace(/\s+/g, ' ');
-  return /^insert\s+(or\s+\w+\s+)?into\s+core\./.test(n)
-    || /^update\s+core\./.test(n)
-    || /^delete\s+from\s+core\./.test(n)
-    || /^replace\s+into\s+core\./.test(n)
-    || /^alter\s+table\s+core\./.test(n)
-    || /^drop\s+table\s+core\./.test(n)
-    || /^create\s+(virtual\s+)?table\s+core\./.test(n);
-}
-function assertNoCoreWrites(sql) {
-  if (!isWriteSql(sql)) return;
-  if (!writeTargetIsCore(sql)) return;
-  throw new Error('writes to OpenClaw core DB are blocked in memory-engine CLI');
-}
-function patchWriteGuards(db) {
-  const rawPrepare = db.prepare.bind(db);
-  const rawExec = db.exec.bind(db);
-  db.prepare = (sql) => { assertNoCoreWrites(sql); return rawPrepare(sql); };
-  db.exec = (sql) => { assertNoCoreWrites(sql); return rawExec(sql); };
-}
-
 /** Open engine DB with core DB attached read-only (for cross-DB queries like chunks + memory_confidence) */
 function withBothDbs(fn) {
   if (!existsSync(ENGINE_DB_PATH)) {
@@ -171,7 +146,7 @@ function withBothDbs(fn) {
   const db = new Database(ENGINE_DB_PATH, { readonly: false, fileMustExist: true });
   db.pragma('busy_timeout = 5000');
   db.exec(`ATTACH DATABASE '${String(CORE_DB_PATH).replace(/'/g, "''")}' AS core`);
-  patchWriteGuards(db);
+  patchWriteGuards(db, { message: 'writes to OpenClaw core DB are blocked in memory-engine CLI' });
   try { return fn(db); } finally { db.close(); }
 }
 
