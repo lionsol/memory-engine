@@ -11,65 +11,18 @@
 
 const https = require("node:https");
 const crypto = require("node:crypto");
-const { homedir } = require("node:os");
 const { resolve } = require("node:path");
 const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, readdirSync } = require("node:fs");
 const Database = require("better-sqlite3");
 const zlib = require("node:zlib");
+const checkpointDate = require("../lib/checkpoint/date");
+const { getRuntime, withRuntime } = require("../lib/checkpoint/runtime");
+const runtimeRegistry = require("../lib/checkpoint/runtime");
 
 // Paths
-const HOME = homedir();
-const DEFAULT_CORE_DB_PATH = resolve(HOME, ".openclaw/memory/main.sqlite");
-const DEFAULT_WORKSPACE = resolve(HOME, ".openclaw/workspace");
-const DEFAULT_SESSIONS_DIR = resolve(HOME, ".openclaw/agents/main/sessions");
 const SMART_ADD_DIR = "memory/smart-add";
-const DEFAULT_CONFIG_JSON = resolve(HOME, ".openclaw/openclaw.json");
 const EPISODES_DIR = "memory/episodes";
-const DEFAULT_ME_DB_PATH = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
-const DEFAULT_TIME_ZONE = "Asia/Shanghai";
-let runtimeOverrides = null;
 const configCache = new Map();
-
-function getRuntime() {
-  const overrides = runtimeOverrides || {};
-  const workspaceDir = overrides.workspaceDir || process.env.MEMORY_ENGINE_WORKSPACE_DIR || DEFAULT_WORKSPACE;
-  const memoryDir = overrides.memoryDir || process.env.MEMORY_ENGINE_MEMORY_DIR || resolve(workspaceDir, "memory");
-  const coreDbPath = overrides.coreDbPath
-    || process.env.MEMORY_ENGINE_CORE_DB_PATH
-    || process.env.MEMORY_ENGINE_CORE_DB
-    || DEFAULT_CORE_DB_PATH;
-  const engineDbPath = overrides.engineDbPath
-    || process.env.MEMORY_ENGINE_DB_PATH
-    || process.env.MEMORY_ENGINE_DB
-    || DEFAULT_ME_DB_PATH;
-
-  return {
-    workspaceDir,
-    memoryDir,
-    smartAddDir: overrides.smartAddDir || resolve(memoryDir, "smart-add"),
-    episodesDir: overrides.episodesDir || resolve(memoryDir, "episodes"),
-    sessionsDir: overrides.sessionsDir || process.env.MEMORY_ENGINE_SESSIONS_DIR || DEFAULT_SESSIONS_DIR,
-    coreDbPath,
-    engineDbPath,
-    configJsonPath: overrides.configJsonPath || process.env.OPENCLAW_CONFIG_PATH || DEFAULT_CONFIG_JSON,
-    timeZone: overrides.timeZone || process.env.MEMORY_ENGINE_TIME_ZONE || DEFAULT_TIME_ZONE,
-    now: overrides.now || (() => Date.now()),
-    llmNightlyExtract: overrides.llmNightlyExtract || llmNightlyExtract,
-    readYesterdayRawLogs: overrides.readYesterdayRawLogs || readYesterdayRawLogs,
-    repairOrphanVectors: overrides.repairOrphanVectors || repairOrphanVectors,
-    resolveConfigConflicts: overrides.resolveConfigConflicts || resolveConfigConflicts,
-  };
-}
-
-async function withRuntime(overrides, fn) {
-  const prev = runtimeOverrides;
-  runtimeOverrides = { ...(prev || {}), ...(overrides || {}) };
-  try {
-    return await fn();
-  } finally {
-    runtimeOverrides = prev;
-  }
-}
 
 function currentIsoString() {
   return new Date(getRuntime().now()).toISOString();
@@ -172,7 +125,7 @@ function ensureCheckpointTables(db) {
 
 function todayDateStr() {
   const rt = getRuntime();
-  return dateStringInTimeZone(rt.now(), rt.timeZone);
+  return checkpointDate.todayDateStr(rt.now(), rt.timeZone);
 }
 
 /**
@@ -181,55 +134,17 @@ function todayDateStr() {
  */
 function yesterdayDateStr(now = null) {
   const rt = getRuntime();
-  const businessToday = dateStringInTimeZone(now || rt.now(), rt.timeZone);
-  return shiftDateString(businessToday, -1);
-}
-
-function parseDatePartsInTimeZone(dateInput, timeZone = "Asia/Shanghai") {
-  const date = dateInput ? new Date(dateInput) : new Date();
-  if (Number.isNaN(date.getTime())) {
-    return parseDatePartsInTimeZone(new Date(), timeZone);
-  }
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  const map = Object.fromEntries(parts.filter(p => p.type !== "literal").map(p => [p.type, p.value]));
-  return {
-    year: map.year,
-    month: map.month,
-    day: map.day,
-    hour: map.hour,
-    minute: map.minute,
-    second: map.second,
-  };
-}
-
-function dateStringInTimeZone(dateInput, timeZone = "Asia/Shanghai") {
-  const p = parseDatePartsInTimeZone(dateInput, timeZone);
-  return `${p.year}-${p.month}-${p.day}`;
-}
-
-function shiftDateString(dateStr, days) {
-  const [y, m, d] = String(dateStr || "").split("-").map(n => Number(n));
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return dateStr;
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + (Number(days) || 0));
-  return dt.toISOString().slice(0, 10);
+  return checkpointDate.yesterdayDateStr(now || rt.now(), rt.timeZone);
 }
 
 function buildNightlyEntryId({ targetDate, category = "episodic", generatedAt = null } = {}) {
   const rt = getRuntime();
-  const effectiveGeneratedAt = generatedAt || rt.now();
-  const businessTargetDate = targetDate || yesterdayDateStr(effectiveGeneratedAt);
-  const p = parseDatePartsInTimeZone(effectiveGeneratedAt, rt.timeZone);
-  return `${businessTargetDate}_${category}_nightly_generated_${p.hour}${p.minute}${p.second}`;
+  return checkpointDate.buildNightlyEntryId({
+    targetDate,
+    category,
+    generatedAt: generatedAt || rt.now(),
+    timeZone: rt.timeZone,
+  });
 }
 
 function mergeKgData(existingKgData, patch = {}) {
@@ -1184,6 +1099,13 @@ async function main() {
     process.exit(1);
   }
 }
+
+runtimeRegistry.installRuntimeFallbacks({
+  llmNightlyExtract,
+  readYesterdayRawLogs,
+  repairOrphanVectors,
+  resolveConfigConflicts,
+});
 
 if (require.main === module) {
   main();
