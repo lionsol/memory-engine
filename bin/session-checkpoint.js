@@ -17,9 +17,11 @@ const checkpointDate = require("../lib/checkpoint/date");
 const checkpointConfig = require("../lib/checkpoint/config");
 const checkpointDb = require("../lib/checkpoint/db");
 const checkpointLlm = require("../lib/checkpoint/llm");
+const checkpointRawLog = require("../lib/checkpoint/raw-log");
 const { getRuntime, withRuntime } = require("../lib/checkpoint/runtime");
 const runtimeRegistry = require("../lib/checkpoint/runtime");
 const { withDb, withMeDb, inspectBusyTimeouts } = checkpointDb;
+const { parseSmartAddEntries } = checkpointRawLog;
 
 // Paths
 const SMART_ADD_DIR = "memory/smart-add";
@@ -73,136 +75,6 @@ function mergeKgData(existingKgData, patch = {}) {
 }
 
 // ── Read today's raw content ──
-
-function readYesterdayRawLogs() {
-  const yesterday = yesterdayDateStr();
-  const logs = [];
-
-  // Source 1: smart-add file — ALL entries are notes, not conversations
-  const smartAddPath = resolve(getRuntime().smartAddDir, `${yesterday}.md`);
-  if (existsSync(smartAddPath)) {
-    const content = readFileSync(smartAddPath, "utf-8");
-    const entries = parseSmartAddEntries(content);
-    for (const parsed of entries) {
-      const cat = parsed.category || inferCategoryFromEntry(parsed.raw || parsed.text);
-      const body = parsed.text || parsed.raw || "";
-      if (!body.trim()) continue;
-      logs.push({
-        category: cat,
-        text: body,
-        source: "note",  // smart-add entries are always notes, never conversation
-      });
-    }
-  }
-
-  // Source 2: raw_log from memory-engine confidence DB (these are real conversation data)
-  // memory-engine.sqlite has memory_confidence, main.sqlite has chunks — ATTACHed via withMeDb
-  try {
-    if (existsSync(getRuntime().engineDbPath)) {
-      withMeDb((meDb) => {
-        const rows = meDb
-          .prepare(
-            `SELECT c.text, mc.category
-             FROM chunks_db.chunks c
-             JOIN memory_confidence mc ON c.id = mc.chunk_id
-             WHERE mc.category = 'raw_log'
-             ORDER BY c.updated_at DESC
-             LIMIT 100`
-          )
-          .all();
-
-        for (const row of rows) {
-          logs.push({ category: "raw_log", text: row.text, source: 'conversation' });
-        }
-      }, { readonly: true });
-    }
-  } catch (e) {
-    console.error("[checkpoint] DB read warning:", e.message);
-  }
-
-  // Source 3: .jsonl.reset.* files from archived sessions (lost due to session reset)
-  try {
-    if (existsSync(getRuntime().sessionsDir)) {
-      const resetFiles = readdirSync(getRuntime().sessionsDir).filter(f => f.includes(".jsonl.reset."));
-      for (const file of resetFiles) {
-        const filePath = resolve(getRuntime().sessionsDir, file);
-        const resetContent = readFileSync(filePath, "utf-8");
-        const lines = resetContent.split("\n").filter(Boolean);
-        for (const line of lines) {
-          try {
-            const entry = JSON.parse(line);
-            if (entry.type === "message" && entry.message) {
-              const msg = entry.message;
-              const role = msg.role || "";
-              const content = msg.content || "";
-              if (role === "user" && typeof content === "string" && content.length > 3) {
-                logs.push({ category: "raw_log", text: `**User:** ${content}`, source: "conversation" });
-              } else if (role === "assistant") {
-                let text = "";
-                if (typeof content === "string") text = content;
-                else if (Array.isArray(content)) {
-                  text = content
-                    .filter(x => x && x.type === "text" && x.text)
-                    .map(x => x.text)
-                    .join(" ");
-                }
-                if (text.length > 5) {
-                  logs.push({ category: "raw_log", text: `**Assistant:** ${text}`, source: "conversation" });
-                }
-              }
-            }
-          } catch (e) {
-            // skip malformed lines
-          }
-        }
-      }
-      if (resetFiles.length > 0) {
-        console.log(`[checkpoint] Scanned ${resetFiles.length} reset session files, extracted additional raw_log entries`);
-      }
-    }
-  } catch (e) {
-    console.error("[checkpoint] Reset file scan warning:", e.message);
-  }
-
-  return logs;
-}
-
-function inferCategoryFromEntry(text) {
-  const raw = String(text || "");
-  if (/^KG_concept_/mi.test(raw)) return "kg_node";
-  if (/^Node:\s*/mi.test(raw) && /^Properties:\s*/mi.test(raw)) return "kg_node";
-  return "raw_log";
-}
-
-function parseSmartAddEntries(content) {
-  const normalized = String(content || "").replace(/\r\n/g, "\n");
-  const blockRe = /(?:<!--\s*smart-add-fingerprint:\s*[a-f0-9]{8,64}\s*-->\s*\n)?##\s+[\s\S]*?(?=\n(?:<!--\s*smart-add-fingerprint:\s*[a-f0-9]{8,64}\s*-->\s*\n)?##\s+|$)/gi;
-  const blocks = (normalized.match(blockRe) || []).map((b) => b.trim());
-
-  const entries = [];
-  for (const block of blocks) {
-    const lines = block.split("\n");
-    if (lines.length === 0) continue;
-    const entryId = String(lines[0] || "").replace(/^##\s*/, "").trim();
-    const categoryLine = lines.find((line) => /^\s*Category:\s*/i.test(line));
-    const category = categoryLine
-      ? String(categoryLine.replace(/^\s*Category:\s*/i, "").split("|")[0] || "").trim()
-      : null;
-    const text = lines
-      .filter((line) =>
-        !/^\s*Category:\s*/i.test(line)
-        && !/^\s*kg_data:\s*/i.test(line)
-        && !/^\s*##\s*/.test(line)
-        && !/^\s*<!--\s*smart-add-fingerprint:\s*[a-f0-9]{8,64}\s*-->\s*$/i.test(line)
-      )
-      .join("\n")
-      .trim();
-
-    if (!text) continue;
-    entries.push({ entryId, category, text, raw: block });
-  }
-  return entries;
-}
 
 // ── Unified Nightly Smart Extraction ──
 
@@ -836,7 +708,7 @@ async function main() {
 
 runtimeRegistry.installRuntimeFallbacks({
   llmNightlyExtract: checkpointLlm.llmNightlyExtract,
-  readYesterdayRawLogs,
+  readYesterdayRawLogs: checkpointRawLog.readYesterdayRawLogs,
   repairOrphanVectors,
   resolveConfigConflicts,
 });
