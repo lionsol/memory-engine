@@ -16,62 +16,16 @@ const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, read
 const Database = require("better-sqlite3");
 const zlib = require("node:zlib");
 const checkpointDate = require("../lib/checkpoint/date");
+const checkpointConfig = require("../lib/checkpoint/config");
 const { getRuntime, withRuntime } = require("../lib/checkpoint/runtime");
 const runtimeRegistry = require("../lib/checkpoint/runtime");
 
 // Paths
 const SMART_ADD_DIR = "memory/smart-add";
 const EPISODES_DIR = "memory/episodes";
-const configCache = new Map();
 
 function currentIsoString() {
   return new Date(getRuntime().now()).toISOString();
-}
-
-function getConfig() {
-  const { configJsonPath } = getRuntime();
-  if (!configCache.has(configJsonPath)) {
-    configCache.set(configJsonPath, JSON.parse(readFileSync(configJsonPath, "utf-8")));
-  }
-  return configCache.get(configJsonPath);
-}
-
-function getSFKey() {
-  try {
-    return getConfig().models?.providers?.siliconflow?.apiKey || "";
-  } catch (e) {
-    return "";
-  }
-}
-
-function getSFBaseUrl() {
-  try {
-    return getConfig().models?.providers?.siliconflow?.baseUrl || "https://api.siliconflow.cn/v1";
-  } catch (e) {
-    return "https://api.siliconflow.cn/v1";
-  }
-}
-
-function getDSKey() {
-  // Read from secure file first, then openclaw.json, then env var
-  try {
-    const keyPath = resolve(getRuntime().workspaceDir, "../credentials/deepseek-api-key");
-    const key = readFileSync(keyPath, "utf-8").trim();
-    if (key) return key;
-  } catch (e) { /* file not found */ }
-  try {
-    return getConfig().models?.providers?.deepseek?.apiKey || process.env.DEEPSEEK_API_KEY || "";
-  } catch (e) {
-    return "";
-  }
-}
-
-function getDSBaseUrl() {
-  try {
-    return getConfig().models?.providers?.deepseek?.baseUrl || "https://api.deepseek.com";
-  } catch (e) {
-    return "https://api.deepseek.com";
-  }
 }
 
 // ── DB helpers ──
@@ -170,8 +124,8 @@ function mergeKgData(existingKgData, patch = {}) {
 
 function llmComplete(prompt, systemPrompt, options = {}) {
   const { provider = "siliconflow" } = options;
-  const keyFn = provider === "deepseek" ? getDSKey : getSFKey;
-  const baseFn = provider === "deepseek" ? getDSBaseUrl : getSFBaseUrl;
+  const keyFn = provider === "deepseek" ? checkpointConfig.getDSKey : checkpointConfig.getSFKey;
+  const baseFn = provider === "deepseek" ? checkpointConfig.getDSBaseUrl : checkpointConfig.getSFBaseUrl;
   const defaultModel = provider === "deepseek" ? "deepseek-chat" : "deepseek-ai/DeepSeek-V3.2";
 
   return new Promise((resolve, reject) => {
@@ -526,7 +480,7 @@ JSON:`;
  * Returns true if reachable, false if timeout/error.
  */
 function quickHealthCheck(provider) {
-  const keyFn = provider === "deepseek" ? getDSKey : getSFKey;
+  const keyFn = provider === "deepseek" ? checkpointConfig.getDSKey : checkpointConfig.getSFKey;
   if (!keyFn()) return false;
 
   return new Promise((resolve) => {
@@ -538,7 +492,7 @@ function quickHealthCheck(provider) {
 }
 
 function quickDSHealthCheck() {
-  if (!getDSKey()) return Promise.resolve(false);
+  if (!checkpointConfig.getDSKey()) return Promise.resolve(false);
   return new Promise((resolve) => {
     const timeout = setTimeout(() => resolve(false), 10000);
     llmComplete("回复 OK 即可", null, { provider: "deepseek", model: "deepseek-chat", maxTokens: 10, timeoutMs: 10000 })
@@ -565,7 +519,7 @@ async function llmNightlyExtract(combinedText) {
     console.warn(`[checkpoint] DeepSeek V4 Flash failed: ${e.message}`);
 
     // Fallback: try SiliconFlow
-    if (!getSFKey()) {
+    if (!checkpointConfig.getSFKey()) {
       console.warn("[checkpoint] SiliconFlow API key not configured — skipping fallback");
       return { smart_memories: [], episode_summary: "", configs: [], error: "llm超时" };
     }
@@ -1019,7 +973,7 @@ async function repairOrphanVectors() {
 
           // Use embedding API directly
           const https = require('node:https');
-          const key = getSFKey();
+          const key = checkpointConfig.getSFKey();
           if (!key) continue;
 
           const embBody = JSON.stringify({
@@ -1027,7 +981,7 @@ async function repairOrphanVectors() {
             input: text.slice(0, 8000),
           });
           const embResult = await new Promise((res, rej) => {
-            const url = new URL('/v1/embeddings', getSFBaseUrl());
+            const url = new URL('/v1/embeddings', checkpointConfig.getSFBaseUrl());
             const req = https.request(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
