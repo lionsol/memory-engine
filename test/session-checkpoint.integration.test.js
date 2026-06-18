@@ -104,11 +104,96 @@ test("session checkpoint skips summary on note-only logs and never calls LLM", a
 
     assert.equal(llmCalls, 0);
     assert.equal(result.skipped, true);
+    assert.equal(result.reason, "no_conversation_data");
     assert.equal(result.episode, false);
     assert.match(episode, /数据不完整|incomplete/i);
     assert.match(episode, /跳过 LLM 摘要生成/);
     assert.doesNotMatch(episode, /should not happen/);
     assert.ok(episodePath.startsWith(fixture.root));
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("session checkpoint with no raw logs never calls LLM", async () => {
+  const fixture = createFixture();
+  let llmCalls = 0;
+
+  try {
+    const result = await checkpoint.withRuntime({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      workspaceDir: fixture.workspaceDir,
+      memoryDir: fixture.memoryDir,
+      sessionsDir: fixture.sessionsDir,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse(fixture.now),
+      llmNightlyExtract: async () => {
+        llmCalls += 1;
+        return { episode_summary: "should not happen", smart_memories: [], configs: [] };
+      },
+    }, () => checkpoint.nightlyCheckpoint([]));
+
+    assert.equal(llmCalls, 0);
+    assert.deepEqual(result, { memories: 0, episode: false, configs: 0 });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("session checkpoint with all-empty logs never calls LLM", async () => {
+  const fixture = createFixture();
+  let llmCalls = 0;
+
+  try {
+    const result = await checkpoint.withRuntime({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      workspaceDir: fixture.workspaceDir,
+      memoryDir: fixture.memoryDir,
+      sessionsDir: fixture.sessionsDir,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse(fixture.now),
+      llmNightlyExtract: async () => {
+        llmCalls += 1;
+        return { episode_summary: "should not happen", smart_memories: [], configs: [] };
+      },
+    }, () => checkpoint.nightlyCheckpoint([
+      { category: "raw_log", text: "   ", source: "conversation" },
+      { category: "preference", text: "\n", source: "note" },
+    ]));
+
+    assert.equal(llmCalls, 0);
+    assert.deepEqual(result, { memories: 0, episode: false, configs: 0 });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("session checkpoint with conversation logs calls LLM", async () => {
+  const fixture = createFixture();
+  let llmCalls = 0;
+
+  try {
+    await checkpoint.withRuntime({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      workspaceDir: fixture.workspaceDir,
+      memoryDir: fixture.memoryDir,
+      sessionsDir: fixture.sessionsDir,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse(fixture.now),
+      llmNightlyExtract: async () => {
+        llmCalls += 1;
+        return { episode_summary: "summary", smart_memories: [], configs: [] };
+      },
+      repairOrphanVectors: async () => 0,
+      resolveConfigConflicts: () => 0,
+    }, () => checkpoint.nightlyCheckpoint([
+      { chunk_id: "conv-1", category: "raw_log", text: "**User:** summarize today", source: "conversation" },
+    ]));
+
+    assert.equal(llmCalls, 1);
   } finally {
     fixture.cleanup();
   }
