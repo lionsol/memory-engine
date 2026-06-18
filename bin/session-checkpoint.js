@@ -16,6 +16,7 @@ const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, read
 const checkpointDate = require("../lib/checkpoint/date");
 const checkpointConfig = require("../lib/checkpoint/config");
 const checkpointCompleteness = require("../lib/checkpoint/completeness");
+const { writeConfidence } = require("../lib/checkpoint/confidence-writer");
 const checkpointDb = require("../lib/checkpoint/db");
 const checkpointEpisodeWriter = require("../lib/checkpoint/episode-writer");
 const checkpointLlm = require("../lib/checkpoint/llm");
@@ -367,42 +368,6 @@ async function nightlyCheckpoint(rawLogs) {
     source_type: "checkpoint_llm",
     category: "episodic",
   };
-}
-
-function writeConfidence(entryId, text, category) {
-  const nowSec = Math.floor(Date.now() / 1000);
-  const catParams = {
-    preference: { conf: 0.8, tau: 90.0 },
-    episodic: { conf: 0.7, tau: 30.0 },
-    user_identity: { conf: 0.95, tau: 365.0 },
-    kg_node: { conf: 0.85, tau: 90.0 },
-    temporary: { conf: 0.4, tau: 2.0 },
-    raw_log: { conf: 0.5, tau: 7.0 },
-  };
-  const params = catParams[category] || { conf: 0.5, tau: 7.0 };
-  // Find matching chunk in main.sqlite (chunks table)
-  const fileRel = `memory/smart-add/${todayDateStr()}.md`;
-  const chunkId = withDb((db) => {
-    const row = db.prepare(`
-      SELECT id FROM chunks
-      WHERE path = ?
-      ORDER BY updated_at DESC LIMIT 1
-    `).get(fileRel);
-    return row ? row.id : null;
-  });
-
-  if (chunkId) {
-    // Write confidence to memory-engine.sqlite
-    withMeDb((db) => {
-      db.prepare(`
-        INSERT OR REPLACE INTO memory_confidence
-        (chunk_id, initial_confidence, confidence, last_confidence_update,
-         base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
-        VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)
-      `).run(chunkId, params.conf, params.conf, nowSec, params.tau, category);
-    });
-    console.log(`[checkpoint] Confidence written: ${category} conf=${params.conf} tau=${params.tau}`);
-  }
 }
 
 // ── 配置冲突自动标记 ──
