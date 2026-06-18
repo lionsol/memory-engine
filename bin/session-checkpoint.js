@@ -15,6 +15,7 @@ const { resolve } = require("node:path");
 const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, readdirSync } = require("node:fs");
 const checkpointDate = require("../lib/checkpoint/date");
 const checkpointConfig = require("../lib/checkpoint/config");
+const checkpointCompleteness = require("../lib/checkpoint/completeness");
 const checkpointDb = require("../lib/checkpoint/db");
 const checkpointLlm = require("../lib/checkpoint/llm");
 const checkpointRawLog = require("../lib/checkpoint/raw-log");
@@ -206,39 +207,30 @@ function isDuplicate(text, category = "raw_log") {
 async function nightlyCheckpoint(rawLogs) {
   const episodeDate = yesterdayDateStr();
   const generatedAt = currentIsoString();
+  const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
+  const conversationLogs = assessment.conversationLogs;
+  const allLogs = assessment.allLogs;
+  const combinedText = assessment.combinedText;
 
-  if (rawLogs.length === 0) {
+  if (assessment.status === "no_raw_logs") {
     console.log("[checkpoint] No raw logs found — nothing to extract.");
     writeEmptyEpisode(episodeDate);
     return { memories: 0, episode: false, configs: 0 };
   }
 
-  // Split rawLogs into conversation data (for episode summary) and all data (for config extraction)
-  const conversationLogs = rawLogs
-    .filter(l => l.text && l.text.trim() && l.source === 'conversation');
-  const allLogs = rawLogs
-    .filter(l => l.text && l.text.trim());
-
-  // Use ALL data for the LLM call (it can distinguish types per the prompt instructions)
-  const combinedText = allLogs
-    .map(l => l.text.trim())
-    .join("\n---\n");
-
-  if (!combinedText.trim()) {
+  if (assessment.status === "all_logs_empty") {
     console.log("[checkpoint] All logs empty — nothing to extract.");
     writeEmptyEpisode(episodeDate);
     return { memories: 0, episode: false, configs: 0 };
   }
 
-  // Guard: no real conversation data → skip LLM call entirely, write incomplete marker
-  if (conversationLogs.length === 0) {
-    console.log(`[checkpoint] No conversation logs found (${allLogs.length} note entries only) — marking as incomplete, skipping LLM.`);
-    writeIncompleteEpisode(episodeDate, allLogs.length);
-    return { memories: 0, episode: false, configs: 0, skipped: true };
+  if (assessment.status === "no_conversation") {
+    console.log(`[checkpoint] No conversation logs found (${assessment.allCount} note entries only) — marking as incomplete, skipping LLM.`);
+    writeIncompleteEpisode(episodeDate, assessment.allCount);
+    return { memories: 0, episode: false, configs: 0, skipped: true, reason: "no_conversation_data" };
   }
 
-  // Log the data mix for debugging
-  console.log(`[checkpoint] Conversation entries: ${conversationLogs.length}, Total entries: ${allLogs.length}`);
+  console.log(`[checkpoint] Conversation entries: ${assessment.conversationCount}, Total entries: ${assessment.allCount}`);
 
   // ── Single LLM call ──
   let extracted;
