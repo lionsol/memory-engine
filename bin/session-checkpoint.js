@@ -13,12 +13,13 @@ const https = require("node:https");
 const crypto = require("node:crypto");
 const { resolve } = require("node:path");
 const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, readdirSync } = require("node:fs");
-const Database = require("better-sqlite3");
 const checkpointDate = require("../lib/checkpoint/date");
 const checkpointConfig = require("../lib/checkpoint/config");
+const checkpointDb = require("../lib/checkpoint/db");
 const checkpointLlm = require("../lib/checkpoint/llm");
 const { getRuntime, withRuntime } = require("../lib/checkpoint/runtime");
 const runtimeRegistry = require("../lib/checkpoint/runtime");
+const { withDb, withMeDb, inspectBusyTimeouts } = checkpointDb;
 
 // Paths
 const SMART_ADD_DIR = "memory/smart-add";
@@ -26,55 +27,6 @@ const EPISODES_DIR = "memory/episodes";
 
 function currentIsoString() {
   return new Date(getRuntime().now()).toISOString();
-}
-
-// ── DB helpers ──
-
-function withDb(fn) {
-  const db = new Database(getRuntime().coreDbPath, { readonly: true, fileMustExist: true });
-  try {
-    db.pragma("busy_timeout = 5000");
-    return fn(db);
-  } finally {
-    db.close();
-  }
-}
-
-/**
- * Open memory-engine.sqlite with main.sqlite ATTACHed as 'main' schema.
- * Use this for all memory_confidence operations.
- */
-function withMeDb(fn, options = {}) {
-  const db = new Database(getRuntime().engineDbPath, { readonly: options.readonly || false });
-  try {
-    db.pragma("busy_timeout = 5000");
-    if (!options.readonly) ensureCheckpointTables(db);
-    // Use 'chunks_db' alias (not 'main' — that's reserved for the primary DB in SQLite)
-    db.exec(`ATTACH DATABASE '${getRuntime().coreDbPath.replace(/'/g, "''")}' AS chunks_db`);
-    return fn(db);
-  } finally {
-    db.close();
-  }
-}
-
-function ensureCheckpointTables(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS memory_confidence (
-      chunk_id TEXT PRIMARY KEY,
-      initial_confidence REAL NOT NULL DEFAULT 0.5,
-      confidence REAL NOT NULL DEFAULT 0.5,
-      last_confidence_update INTEGER,
-      base_tau REAL NOT NULL DEFAULT 7.0,
-      hit_count INTEGER NOT NULL DEFAULT 0,
-      is_archived INTEGER NOT NULL DEFAULT 0,
-      is_protected INTEGER NOT NULL DEFAULT 0,
-      conflict_flag INTEGER NOT NULL DEFAULT 0,
-      category TEXT NOT NULL DEFAULT 'raw_log',
-      kg_data TEXT
-    )
-  `);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_mc_archived ON memory_confidence(is_archived)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_mc_category ON memory_confidence(category)");
 }
 
 function todayDateStr() {
@@ -891,18 +843,6 @@ runtimeRegistry.installRuntimeFallbacks({
 
 if (require.main === module) {
   main();
-}
-
-function inspectBusyTimeouts() {
-  const busy = {};
-  withDb((db) => {
-    busy.core = Number(db.pragma("busy_timeout", { simple: true }));
-  });
-  withMeDb((db) => {
-    busy.engine = Number(db.pragma("busy_timeout", { simple: true }));
-    busy.attachedCore = Number(db.prepare("PRAGMA chunks_db.busy_timeout").pluck().get());
-  }, { readonly: true });
-  return busy;
 }
 
 module.exports = {
