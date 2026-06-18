@@ -42,7 +42,9 @@ function summarizeSpawnResult(result) {
 function skipIfSpawnBlocked(t, result) {
   if (result?.error?.code === "EPERM") {
     t.skip(`sandbox blocks child_process spawnSync: ${JSON.stringify(summarizeSpawnResult(result))}`);
+    return true;
   }
+  return false;
 }
 
 // ── Path resolution tests (unit: check default without env vars) ──
@@ -56,7 +58,7 @@ test("CLI default DB path resolves to engine DB (not core main.sqlite)", (t) => 
   delete env.MEMORY_ENGINE_CORE_DB;
 
   const result = runCli(["status"], { env });
-  skipIfSpawnBlocked(t, result);
+  if (skipIfSpawnBlocked(t, result)) return;
   const { status, stderr } = result;
 
   // Should output the engine DB path, not core DB path
@@ -73,7 +75,7 @@ test("MEMORY_ENGINE_DB_PATH env var overrides default engine DB path", (t) => {
   delete env.MEMORY_ENGINE_CORE_DB;
 
   const result = runCli(["status"], { env });
-  skipIfSpawnBlocked(t, result);
+  if (skipIfSpawnBlocked(t, result)) return;
   const { stdout, stderr } = result;
 
   // Should try to open the custom path
@@ -93,7 +95,7 @@ test("--db flag overrides default and env var engine DB path", (t) => {
   delete env.MEMORY_ENGINE_CORE_DB;
 
   const result = runCli(["--db", flagPath, "status"], { env });
-  skipIfSpawnBlocked(t, result);
+  if (skipIfSpawnBlocked(t, result)) return;
   const { stdout, stderr } = result;
 
   const output = stdout + stderr;
@@ -107,7 +109,7 @@ test("--db flag overrides default and env var engine DB path", (t) => {
 
 test("CLI status command succeeds with real engine DB", (t) => {
   const result = runCli(["status"]);
-  skipIfSpawnBlocked(t, result);
+  if (skipIfSpawnBlocked(t, result)) return;
   const { status, stdout, stderr } = result;
 
   if (status !== 0) {
@@ -130,7 +132,7 @@ test("CLI search command works with real DB", (t) => {
   const result = runCli(["search", "memory_engine", "--top-k", "2"], {
     timeout: 30000,
   });
-  skipIfSpawnBlocked(t, result);
+  if (skipIfSpawnBlocked(t, result)) return;
   const { status, stdout, stderr } = result;
 
   const output = stdout + stderr;
@@ -150,7 +152,7 @@ test("CLI --help shows --db option and env var info", (t) => {
   const result = runCli(["--help"], {
     timeout: 5000,
   });
-  skipIfSpawnBlocked(t, result);
+  if (skipIfSpawnBlocked(t, result)) return;
   const { stdout, stderr } = result;
 
   const output = stdout + stderr;
@@ -162,7 +164,7 @@ test("CLI help exits with code 0", (t) => {
   const result = runCli(["help"], {
     timeout: 5000,
   });
-  skipIfSpawnBlocked(t, result);
+  if (skipIfSpawnBlocked(t, result)) return;
   const { status } = result;
 
   // help is a valid subcommand now
