@@ -16,6 +16,7 @@ const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, read
 const checkpointDate = require("../lib/checkpoint/date");
 const checkpointConfig = require("../lib/checkpoint/config");
 const checkpointCompleteness = require("../lib/checkpoint/completeness");
+const { resolveConfigConflicts } = require("../lib/checkpoint/conflict-resolver");
 const { writeConfidence } = require("../lib/checkpoint/confidence-writer");
 const checkpointDb = require("../lib/checkpoint/db");
 const checkpointEpisodeWriter = require("../lib/checkpoint/episode-writer");
@@ -371,84 +372,6 @@ async function nightlyCheckpoint(rawLogs) {
 }
 
 // ── 配置冲突自动标记 ──
-
-function extractConfigKey(text) {
-  // 匹配 "配置：<key> = <value>（来源：...）"
-  const match = text.match(/配置[：:]\s*(\S[^=\n]*?)\s*[=:=]\s*\S/);
-  if (match) return match[1].trim().toLowerCase();
-  // 回退：匹配 "<key> = <value>" 或 "<key>: <value>"
-  const fallback = text.match(/^\s*(\S[\w\-\/]+)\s*[=:=]\s*\S/);
-  if (fallback) return fallback[1].trim().toLowerCase();
-  return null;
-}
-
-function resolveConfigConflicts() {
-  console.log("[checkpoint] Resolving config conflicts...");
-  let flagged = 0;
-
-  withMeDb((db) => {
-    // 读取所有 preference 和非 archived 的条目 (memory_confidence in memory-engine.sqlite, chunks in ATTACHed main.sqlite)
-    const rows = db.prepare([
-      "SELECT mc.chunk_id, c.text, mc.last_confidence_update, mc.conflict_flag",
-      "FROM memory_confidence mc",
-      "JOIN chunks_db.chunks c ON c.id = mc.chunk_id",
-      "WHERE mc.category = 'preference'",
-      "AND mc.is_archived = 0",
-      "ORDER BY mc.last_confidence_update DESC",
-    ].join(" ")).all();
-
-    // 按配置 key 分组
-    const groups = {};
-    for (const row of rows) {
-      const key = extractConfigKey(row.text || "");
-      if (!key) continue;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push({
-        chunk_id: row.chunk_id,
-        text: (row.text || "").slice(0, 80),
-        updated: row.last_confidence_update || 0,
-        already_flagged: row.conflict_flag === 1,
-      });
-    }
-
-    const updateStmt = db.prepare("UPDATE memory_confidence SET conflict_flag = 1 WHERE chunk_id = ?");
-    const unflagStmt = db.prepare("UPDATE memory_confidence SET conflict_flag = 0 WHERE chunk_id = ?");
-
-    for (const [key, entries] of Object.entries(groups)) {
-      if (entries.length <= 1) {
-        // 只有一条，确保没有误标记
-        if (entries[0].already_flagged) {
-          unflagStmt.run(entries[0].chunk_id);
-          console.log(`  ↳ 解除冲突标记: ${key}（唯一条目）`);
-        }
-        continue;
-      }
-
-      // 按更新时间降序排列，第一条是最新的
-      entries.sort((a, b) => b.updated - a.updated);
-      const newest = entries[0];
-
-      // 如果最新条目已被标记冲突，先解除
-      if (newest.already_flagged) {
-        unflagStmt.run(newest.chunk_id);
-        console.log(`  ↳ 解除最新条目冲突标记: ${key}`);
-      }
-
-      // 标记所有旧条目
-      for (let i = 1; i < entries.length; i++) {
-        const entry = entries[i];
-        if (!entry.already_flagged) {
-          updateStmt.run(entry.chunk_id);
-          flagged++;
-          console.log(`  ⚠️  冲突标记: ${key} | 旧: ${entry.text.slice(0, 50)} | 新: ${newest.text.slice(0, 50)}`);
-        }
-      }
-    }
-  });
-
-  console.log(`[checkpoint] Config conflict resolution: ${flagged} conflict(s) flagged`);
-  return flagged;
-}
 
 // ── Orphan vector repair ──
 
