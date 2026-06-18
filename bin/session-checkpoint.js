@@ -9,18 +9,14 @@
  *   3. 生成今日摘要（episode），供新 session 注入
  */
 
-const https = require("node:https");
-const { resolve } = require("node:path");
-const { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, readdirSync } = require("node:fs");
 const checkpointDate = require("../lib/checkpoint/date");
-const checkpointConfig = require("../lib/checkpoint/config");
 const checkpointCompleteness = require("../lib/checkpoint/completeness");
 const { resolveConfigConflicts } = require("../lib/checkpoint/conflict-resolver");
 const { writeConfidence } = require("../lib/checkpoint/confidence-writer");
-const checkpointDb = require("../lib/checkpoint/db");
-const checkpointEpisodeWriter = require("../lib/checkpoint/episode-writer");
+const { inspectBusyTimeouts } = require("../lib/checkpoint/db");
+const { writeEpisodeFiles } = require("../lib/checkpoint/episode-writer");
 const checkpointLlm = require("../lib/checkpoint/llm");
-const checkpointMarkers = require("../lib/checkpoint/markers");
+const { writeEmptyEpisode, writeIncompleteEpisode, writeLLMTimeoutEpisode } = require("../lib/checkpoint/markers");
 const { repairOrphanVectors } = require("../lib/checkpoint/orphan-repair");
 const checkpointRawLog = require("../lib/checkpoint/raw-log");
 const {
@@ -31,12 +27,6 @@ const {
 } = require("../lib/checkpoint/smart-add-writer");
 const { getRuntime, withRuntime } = require("../lib/checkpoint/runtime");
 const runtimeRegistry = require("../lib/checkpoint/runtime");
-const { withDb, withMeDb, inspectBusyTimeouts } = checkpointDb;
-const { writeEmptyEpisode, writeIncompleteEpisode, writeLLMTimeoutEpisode } = checkpointMarkers;
-
-// Paths
-const SMART_ADD_DIR = "memory/smart-add";
-const EPISODES_DIR = "memory/episodes";
 
 function currentIsoString() {
   return new Date(getRuntime().now()).toISOString();
@@ -210,7 +200,7 @@ async function nightlyCheckpoint(rawLogs) {
     }
 
     if (episodeWritten) {
-      checkpointEpisodeWriter.writeEpisodeFiles({
+      writeEpisodeFiles({
         episodeDate,
         generatedAt,
         episodeText,
@@ -301,6 +291,7 @@ if (require.main === module) {
   main();
 }
 
+// Public/legacy exports used by tests and external callers.
 module.exports = {
   inspectBusyTimeouts,
   main,
