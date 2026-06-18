@@ -1,3 +1,17 @@
+## 2026-06-18
+
+- 拆分 `lib/recall/hybrid-search.js`：
+  - 抽离 debug/warning helper
+  - 抽离 candidate normalization
+  - 抽离 lexical confidence helper
+  - 抽离 fusion/final scoring helper
+  - 抽离 KG/FTS/recent/vector retrieval channels
+- 保持 `hybridSearch()` 和 `inferCategoryFromPath` public API 不变。
+- 保持 SQL、召回通道、vector fallback、lexical confidence、warning-once、scoring weights、debug metadata 兼容。
+- 新增 hybrid normalize / lexical / fusion / channels 专项测试。
+- runtime smoke 通过，Console 正常，memory-engine 重启后无新增异常。
+
+
 ## 2026-06-17
 
 - 将 core DB 写保护抽出为 `lib/db/core-write-guard.*`，由 CLI 与 engine DB 复用；新增 `test/core-write-guard.test.js` 覆盖 core 表写入拦截、engine 表写入放行，以及大小写、空白、SQL 注释前缀等边界场景。
