@@ -1,5 +1,48 @@
 ## 2026-06-18
 
+### 重构
+
+- 完成 `bin/session-checkpoint.js` 行为保持拆分，将原本的大型 checkpoint 脚本拆为 `lib/checkpoint/*` 模块：
+  - `date.js`
+  - `runtime.js`
+  - `config.js`
+  - `llm.js`
+  - `db.js`
+  - `raw-log.js`
+  - `completeness.js`
+  - `markers.js`
+  - `episode-writer.js`
+  - `confidence-writer.js`
+  - `conflict-resolver.js`
+  - `orphan-repair.js`
+  - `smart-add-writer.js`
+
+- 保留 `bin/session-checkpoint.js` 作为 thin orchestrator / CLI entrypoint，继续负责：
+  - `nightlyCheckpoint()` 主编排
+  - `main()` CLI 流程
+  - runtime fallback 安装
+  - legacy/test compatibility exports
+
+- 为各 checkpoint 子模块补齐直接单元测试，锁定：
+  - raw-log 输入完整性门控
+  - marker episode 写入
+  - normal episode 文件写入
+  - confidence 写入
+  - config conflict resolution
+  - orphan vector repair
+  - smart-add append/dedup
+
+### 修复
+
+- 修复新建 smart-add daily 文件时未写入 `# Smart Added Memory` header 的历史问题。
+- 保持已有 smart-add 文件追加行为不重复写 header。
+
+### 验证
+
+- `npm test` 通过，0 fail。
+
+## 2026-06-18
+
 - 拆分 `lib/recall/hybrid-search.js`：
   - 抽离 debug/warning helper
   - 抽离 candidate normalization
