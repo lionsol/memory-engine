@@ -136,7 +136,7 @@ test("readSmartAddFingerprints includes legacy entry fingerprint", async () => {
   });
 });
 
-test("appendSmartAdd keeps current new-file entry format", async () => {
+test("appendSmartAdd writes header for new file and keeps entry format", async () => {
   const fixture = createFixture();
 
   await checkpoint.withRuntime({
@@ -154,11 +154,31 @@ test("appendSmartAdd keeps current new-file entry format", async () => {
   });
 
   const content = readFileSync(resolve(fixture.smartAddDir, "2026-06-18.md"), "utf8");
+  assert.match(content, /^# Smart Added Memory\n\n/);
   assert.match(content, /<!-- smart-add-fingerprint: [a-f0-9]{64} -->/);
   assert.match(content, /## entry_1/);
   assert.match(content, /Category: raw_log/);
   assert.match(content, /kg_data: \{"a":1\}/);
   assert.match(content, /hello world/);
+});
+
+test("appendSmartAdd does not repeat header for existing file", async () => {
+  const fixture = createFixture();
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    smartAddWriter.appendSmartAdd("hello world", "raw_log", { entryId: "entry_1" });
+    smartAddWriter.appendSmartAdd("another body", "preference", { entryId: "entry_2" });
+  });
+
+  const content = readFileSync(resolve(fixture.smartAddDir, "2026-06-18.md"), "utf8");
+  assert.equal((content.match(/^# Smart Added Memory$/gm) || []).length, 1);
+  assert.match(content, /\n<!-- smart-add-fingerprint: [a-f0-9]{64} -->\n## entry_2/);
 });
 
 test("appendSmartAdd returns null on fingerprint duplicate", async () => {
