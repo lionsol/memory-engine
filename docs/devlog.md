@@ -1,3 +1,14 @@
+## 2026-06-19
+
+### 修复
+
+- **`raw-log.js`** — checkpoint 读取 session 文件的过滤逻辑重写：
+  - 原来只读 `.jsonl.reset.*` 文件（49 个），漏掉已结束但未 reset 的 session（如 Dashboard session `aaff432b`）
+  - 现在统一读昨天修改过的所有 session 文件（`.reset.` + 过期 `.jsonl`），仅排除 trajectory 文件
+  - `.reset.` 文件用 mtime（原始最后修改时间）而非 reset 时间戳过滤，自然去重：同内容不会被连续两晚重复扫描
+  - `.jsonl` 文件仅在无对应 `.reset.` 版本且 mtime 为昨天时才纳入
+  - 从 49 → ~8 个文件（仅昨天相关），避免每晚扫描全部历史
+
 ## 2026-06-18
 
 ### 重构
