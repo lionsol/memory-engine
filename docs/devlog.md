@@ -1,5 +1,149 @@
 ## 2026-06-19
 
+### 新增
+
+* 新增 `memory-quality-eval` MVP，用于对 memory-engine 当前记忆库进行只读质量评估。
+* 新增 CLI：
+
+  * `node bin/memory-quality-eval.js`
+  * 支持 `--json`
+  * 支持 `--top <n>`
+  * 支持 `--include-stats-history`
+  * 支持 `--path-family <family>`
+  * 支持 `--category <category>`
+  * 支持 `--path-prefix <prefix>`
+  * 支持 `--include-archived`
+* 新增质量评估模块：
+
+  * `lib/quality/collect-quality-candidates.js`
+  * `lib/quality/event-prefix-join.js`
+  * `lib/quality/path-family.js`
+  * `lib/quality/quality-rules.js`
+  * `lib/quality/quality-score.js`
+  * `lib/quality/quality-report.js`
+  * `lib/quality/quality-types.js`
+* 新增记忆质量报告输出：
+
+  * `tmp/memory-quality/latest.md`
+  * `tmp/memory-quality/latest.json`
+* 新增 `docs/memory-quality-eval-mvp-v4.md`，记录 MVP v4 的设计边界、真实 schema 假设、collector 策略、评分规则和后续路线。
+* 新增 `memory:quality` npm script，用于运行记忆质量评估。
+
+### 功能
+
+* 实现 active memory candidates 的只读扫描。
+* 支持从 OpenClaw core DB `chunks` 与 memory-engine DB `memory_confidence` / `memory_events` 收集评估数据。
+* 支持基于真实 schema 的 event prefix join：
+
+  * `memory_events.memory_id` 为 16 位前缀。
+  * 与 `chunks.id.slice(0, 16)` 做前缀匹配。
+  * 输出 prefix matched / unmatched / ambiguous diagnostics。
+* 支持 path family 分类：
+
+  * `smart-add`
+  * `dreaming`
+  * `episodes`
+  * `projects`
+  * `daily-root`
+  * `memory-root`
+  * `memory-other`
+  * `stats-history`
+  * `non-memory`
+* 默认纳入 `MEMORY.md`。
+* 默认排除 `memory/stats-history.md`，避免统计生成物污染普通记忆质量评估。
+* 支持 deterministic quality flags：
+
+  * `missing_content`
+  * `content_empty`
+  * `content_too_short`
+  * `timestamp_pollution`
+  * `raw_log_leak`
+  * `debug_noise`
+  * `missing_category`
+  * `unknown_category`
+  * `category_path_mismatch`
+  * `duplicate_exact`
+  * `conflict_flagged`
+  * `too_generic`
+  * `chunks_without_confidence`
+  * `never_retrieved`
+  * `old_and_unused`
+* 支持 100 分制评分、A/B/C/D 分级、hard cap 与 suggested action。
+* 支持 duplicate exact group 报告。
+* 支持 Markdown 与 JSON 双格式报告。
+* 支持 DB health diagnostics：
+
+  * orphan confidence count
+  * truly missing orphan confidence count
+  * fake orphan confidence count
+  * chunks without confidence count
+  * confidence id length distribution
+  * orphan confidence month distribution
+  * event type distribution
+  * prefix join diagnostics
+  * path family distribution
+  * cite / reinforce sparse signal diagnostics
+
+### 修正与约束
+
+* 明确 `orphan_confidence` 只进入 diagnostics，不进入 per-memory score。
+* 确认当前 6704 条 orphan confidence 是历史遗留的 stale data，而不是 prefix / id format mismatch。
+* 明确 orphan confidence 后续应由单独 dry-run cleanup 脚本处理，不属于本 MVP。
+* 明确 `memory_cited` / `memory_reinforced` 当前信号过稀疏，不参与 per-memory scoring。
+* `never_retrieved` 与 `old_and_unused` 使用 age gate，避免误伤新记忆。
+* CLI 禁止 MVP 外危险参数：
+
+  * `--fix`
+  * `--archive`
+  * `--delete`
+  * `--write-db`
+  * `--llm-judge`
+
+### 验证
+
+* `npm test` 通过：53 tests passed, 0 failed。
+* 真实 DB live report 生成成功：
+
+  * Markdown report：约 49-51 KB
+  * JSON report：约 13 MB
+* 验证命令通过：
+
+  * `node bin/memory-quality-eval.js`
+  * `node bin/memory-quality-eval.js --json`
+  * `node bin/memory-quality-eval.js --include-stats-history`
+  * `node bin/memory-quality-eval.js --path-family <family>`
+* 验证结果：
+
+  * path family 包含 `dreaming` 与 `episodes`
+  * `stats-history` 默认 excluded
+  * `MEMORY.md` 默认 included
+  * orphan confidence 仅在 diagnostics
+  * `chunks_without_confidence` 进入 per-memory flags
+  * `event_prefix_ambiguous = 0`
+  * `latest.md` / `latest.json` 真实生成
+
+### 当前报告发现
+
+* 本次 live report 共评估 4470 条记忆，平均分 79.68。
+* 等级分布：
+
+  * A：2475
+  * B：1052
+  * C：443
+  * D：500
+* 3866 条记忆被至少一个 flag 标记。
+* Top issues：
+
+  * `never_retrieved`：2198
+  * `chunks_without_confidence`：1504
+  * `missing_category`：1504
+  * `duplicate_exact`：732
+  * `timestamp_pollution`：164
+  * `category_path_mismatch`：119
+* 发现 6704 条 orphan confidence，确认为 2026-06 集中产生的陈旧 confidence 数据，建议后续单独 dry-run cleanup。
+* 发现 smart-add 文件存在大量跨日重复，后续建议做 duplicate audit，而不是直接删除。
+## 2026-06-19
+
 ### 修复
 
 - **`raw-log.js`** — checkpoint 读取 session 文件的过滤逻辑重写：
