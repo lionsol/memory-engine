@@ -1,0 +1,873 @@
+{
+  "generated_at": "2026-06-20T15:04:01.584Z",
+  "mode": "read_only",
+  "summary": {
+    "timestamp_pollution_total": 154,
+    "default_scope_count": 56,
+    "all_scope_count": 154,
+    "lifecycle_owned_count": 56,
+    "core_owned_count": 0,
+    "generated_or_diagnostic_count": 98,
+    "legacy_or_manual_count": 0,
+    "unknown_count": 0,
+    "retrieved_count_total": 146,
+    "injected_count_total": 2,
+    "entries_ever_retrieved": 8,
+    "entries_ever_injected": 2,
+    "created_before_raw_log_fix": 149,
+    "created_after_raw_log_fix": 0,
+    "unknown_fix_window": 5
+  },
+  "breakdowns": {
+    "by_owner": [
+      {
+        "owner": "memory_engine_generated_or_diagnostic",
+        "count": 98,
+        "share": 0.6364
+      },
+      {
+        "owner": "memory_engine_lifecycle",
+        "count": 56,
+        "share": 0.3636
+      }
+    ],
+    "by_family": [
+      {
+        "family": "dreaming",
+        "count": 98,
+        "share": 0.6364
+      },
+      {
+        "family": "smart_add",
+        "count": 56,
+        "share": 0.3636
+      }
+    ],
+    "by_category": [
+      {
+        "category": "null",
+        "count": 98,
+        "share": 0.6364
+      },
+      {
+        "category": "raw_log",
+        "count": 53,
+        "share": 0.3442
+      },
+      {
+        "category": "episodic",
+        "count": 2,
+        "share": 0.013
+      },
+      {
+        "category": "preference",
+        "count": 1,
+        "share": 0.0065
+      }
+    ],
+    "by_path_prefix": [
+      {
+        "path_prefix": "memory/dreaming",
+        "count": 98,
+        "share": 0.6364
+      },
+      {
+        "path_prefix": "memory/smart-add",
+        "count": 56,
+        "share": 0.3636
+      }
+    ],
+    "by_created_day": [
+      {
+        "created_day": "2026-06-02",
+        "count": 53,
+        "share": 0.3442
+      },
+      {
+        "created_day": "2026-06-12",
+        "count": 10,
+        "share": 0.0649
+      },
+      {
+        "created_day": "2026-06-13",
+        "count": 10,
+        "share": 0.0649
+      },
+      {
+        "created_day": "2026-06-10",
+        "count": 7,
+        "share": 0.0455
+      },
+      {
+        "created_day": "2026-06-14",
+        "count": 7,
+        "share": 0.0455
+      },
+      {
+        "created_day": "2026-05-28",
+        "count": 6,
+        "share": 0.039
+      },
+      {
+        "created_day": "2026-06-04",
+        "count": 6,
+        "share": 0.039
+      },
+      {
+        "created_day": "2026-05-30",
+        "count": 5,
+        "share": 0.0325
+      },
+      {
+        "created_day": "2026-06-09",
+        "count": 5,
+        "share": 0.0325
+      },
+      {
+        "created_day": "2026-05-29",
+        "count": 4,
+        "share": 0.026
+      },
+      {
+        "created_day": "2026-05-31",
+        "count": 4,
+        "share": 0.026
+      },
+      {
+        "created_day": "2026-06-01",
+        "count": 4,
+        "share": 0.026
+      },
+      {
+        "created_day": "2026-06-06",
+        "count": 4,
+        "share": 0.026
+      },
+      {
+        "created_day": "2026-06-15",
+        "count": 4,
+        "share": 0.026
+      },
+      {
+        "created_day": "2026-05-22",
+        "count": 3,
+        "share": 0.0195
+      },
+      {
+        "created_day": "2026-06-03",
+        "count": 3,
+        "share": 0.0195
+      },
+      {
+        "created_day": "2026-06-05",
+        "count": 3,
+        "share": 0.0195
+      },
+      {
+        "created_day": "2026-05-23",
+        "count": 2,
+        "share": 0.013
+      },
+      {
+        "created_day": "2026-05-24",
+        "count": 2,
+        "share": 0.013
+      },
+      {
+        "created_day": "2026-05-25",
+        "count": 2,
+        "share": 0.013
+      },
+      {
+        "created_day": "2026-05-26",
+        "count": 2,
+        "share": 0.013
+      },
+      {
+        "created_day": "2026-05-27",
+        "count": 2,
+        "share": 0.013
+      },
+      {
+        "created_day": "2026-06-07",
+        "count": 2,
+        "share": 0.013
+      },
+      {
+        "created_day": "2026-06-08",
+        "count": 2,
+        "share": 0.013
+      },
+      {
+        "created_day": "2026-05-21",
+        "count": 1,
+        "share": 0.0065
+      },
+      {
+        "created_day": "2026-06-16",
+        "count": 1,
+        "share": 0.0065
+      }
+    ],
+    "by_detected_pattern": [
+      {
+        "detected_pattern": "spaced_datetime",
+        "count": 140,
+        "share": 0.9091
+      },
+      {
+        "detected_pattern": "iso_utc_datetime",
+        "count": 12,
+        "share": 0.0779
+      },
+      {
+        "detected_pattern": "bracketed_time_prefix",
+        "count": 2,
+        "share": 0.013
+      }
+    ],
+    "by_likely_source": [
+      {
+        "likely_source": "generated_artifact",
+        "count": 89,
+        "share": 0.5779
+      },
+      {
+        "likely_source": "smart_add_writer",
+        "count": 31,
+        "share": 0.2013
+      },
+      {
+        "likely_source": "checkpoint_input",
+        "count": 19,
+        "share": 0.1234
+      },
+      {
+        "likely_source": "healthcheck_note",
+        "count": 6,
+        "share": 0.039
+      },
+      {
+        "likely_source": "session_event_formatter",
+        "count": 5,
+        "share": 0.0325
+      },
+      {
+        "likely_source": "autoRecall_trace",
+        "count": 4,
+        "share": 0.026
+      }
+    ]
+  },
+  "samples": {
+    "default_scope_examples": [
+      {
+        "chunk_id": "071c6d121f3884767f791c94cd4e15849df58cbbbf012008bc002b2b63313297",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:33",
+        "content_preview": "[2026-05-09 16:21:33][ERROR] Failed to load model \"qwen3.6-27b\". Error: Operation canceled. [2026-05-09 16:21:45][INFO][qwen3.6-27b-claude-opus-reasoning-disti…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "session_event_formatter",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "0961b57845f04978edb9097a82f306333b09427843b0f15e138bba57d220ab43",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:12",
+        "content_preview": "\"id\": \"qwen3.5-27b-claude-4.6-opus-reasoning-distilled\", \"object\": \"model\", \"owned_by\": \"organization_owner\" }, { \"id\": \"qwen3.5-27b\", \"object\": \"model\", \"owne…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "0a3a6e43b986c9aa604c78f360a4677510347f1250a9260190372f22a6894b57",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:51",
+        "content_preview": "[2026-05-09 16:21:51][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 0.0% [2026-05-09 16:21:51][INFO][qwen3.6-27b-claude-opus-rea…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "session_event_formatter",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "0bafd688678f71e68aac9b8983b6ccabcd1bb8ef8bd7a2071d9fdb121603b6e7",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:19:24",
+        "content_preview": "[2026-05-09 16:19:24][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 27.4% [2026-05-09 16:19:24][INFO][qwen3.6-27b-claude-opus-re…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "24ebf28c9d636c06e9998b7b5843dad51f1e70384f37bab9c24b476bbfabd975",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:19:35",
+        "content_preview": "[2026-05-09 16:19:35][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 100.0% [2026-05-09 16:19:35][INFO][qwen3.6-27b-claude-opus-r…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "2757862c279a21e03310082414de30c3979005a27141b90667256b789066493d",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:20:58",
+        "content_preview": "[2026-05-09 16:20:58][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 100.0% [2026-05-09 16:20:59][INFO][qwen3.6-27b-claude-opus-r…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "378297da5fd220c2fa421461da692783f86696bfe27d93ba4e607f42c82c0648",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:01",
+        "content_preview": "[2026-05-09 16:21:01][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 100.0% [2026-05-09 16:21:03][INFO][qwen3.6-27b-claude-opus-r…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "391e2cc47074fc1e81e64f2a9f57cdb44777612f6e48cc6383b5977c0443ea35",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:05",
+        "content_preview": "[2026-05-09 16:21:05][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Streaming response... [2026-05-09 16:21:05][INFO][qwen3.6-27b-claude-opus-reasoning-dist…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "459fc37352f30d7cc70ac2b202d5aed7e2ac19186566833fa899dd1037011747",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:09",
+        "content_preview": "[2026-05-09 16:21:09][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 98.0% [2026-05-09 16:21:09][INFO][qwen3.6-27b-claude-opus-re…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "45b6098cd408af2d573d2376654954d37448ef17ecaaa289fff446f8fb04826a",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:19:19",
+        "content_preview": "**Assistant:** 好，我查了一下你的配置。情况是这样的： **当前模型：** `qwen3.6-27b-claude-opus-reasoning-distill`（本地 LM Studio） **LM Studio 地址：** `192.168.10.42:12345` 我刚才直接测了 LM Studi…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "checkpoint_input",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      }
+    ],
+    "recent_examples": [],
+    "retrieved_examples": [
+      {
+        "chunk_id": "7389b6f74d554d1124e8e3b70317a0abb7c2c34bb74a75d1ee96e9eb000ef3b4",
+        "path": "memory/smart-add/2026-05-30.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:05.346Z",
+        "updated_at": "2026-06-15T14:38:27.658Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-05-30T19:30:03.691Z",
+        "content_preview": "knowledge-graph-memory：技能，来源clawhub，作者jpengcheng523-netizen，用于长期图记忆与概念漂移 <!-- smart-add-fingerprint: 7033c8bc18a7b0f93c8177574be7b227f177982263da34076402aae29f…",
+        "retrieved_count": 56,
+        "injected_count": 1,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "be426adc760d89201939a037613532462d008cad59419458a40b37685a529a0b",
+        "path": "memory/smart-add/2026-05-30.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:05.346Z",
+        "updated_at": "2026-06-15T14:38:27.658Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-05-30T19:30:03.691Z",
+        "content_preview": "用户偏好直接高效的沟通方式，需要明确的时间惯例和反馈风格设定 <!-- smart-add-fingerprint: fe3564b3179968c885094ef7555d649e89c835bfb8152de391d5c66cf9419036 --> ## 2026-05-30_episodic_nightly_…",
+        "retrieved_count": 56,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "d10888043ff4518f0270607a0f6dd20bb459b68c92e0bda16b79af98d4a81bdf",
+        "path": "memory/smart-add/2026-06-02.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:04.903Z",
+        "updated_at": "2026-06-15T14:38:32.331Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-26 09:08:20",
+        "content_preview": "- Conversation Summary: 03:57 — session-checkpoint（超时）; 04:00 — 另一个 cron - 04:00 — 记忆统计 (cron): Archive: 0/70 归档，64 条零命中; 触发记录: passive=45, kg=18, llm=3, activ…",
+        "retrieved_count": 27,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "b87697dbe340738621563f62c06c5c220aa1e88c2370c6e6351a4ce520f4c2b8",
+        "path": "memory/smart-add/2026-06-04.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-04T19:30:09.687Z",
+        "updated_at": "2026-06-15T14:38:43.705Z",
+        "detected_pattern": "bracketed_time_prefix",
+        "matched_text": "[01:19:52]",
+        "content_preview": "**12:14** — 切到 gpt-5.4，也没出回复 **12:27** — 切回 DeepSeek，依然不出 **12:39** — 再切 gpt-5.4，还是没回复 **整条 session 没有任何一条 assistant 的 response 产出过。** 10MB 的 trajectory 装的全是你重…",
+        "retrieved_count": 2,
+        "injected_count": 1,
+        "likely_source": "checkpoint_input",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "dba4dce0f61adb3244c94aa47225a585fbd58a14a76b5c1ed86af54acdb1a1eb",
+        "path": "memory/smart-add/2026-05-26.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:06.064Z",
+        "updated_at": "2026-06-15T14:38:17.411Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-23 18:50:06",
+        "content_preview": "- 04:00 — 记忆统计 (cron): **memory-engine 5.20 不兼容** [待办] — OpenClaw 5.20+ 限制 `global:` 类型插件的 `api.registerTool()`，`memory_engine` 和 `image_vision` 不会暴露给 agent。短期…",
+        "retrieved_count": 2,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "78f9d59cab24b34de20f72a45c363c354193a7f58d00229c100d79d4b01551bd",
+        "path": "memory/smart-add/2026-06-02.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:04.903Z",
+        "updated_at": "2026-06-15T14:38:32.331Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-26 09:08:20",
+        "content_preview": "- 04:00 — 记忆统计 (cron): **api.registerTool() 限制** [教训] — OpenClaw 2026.5.20+ 不再将 `api.registerTool()` 注册的工具暴露给 agent 会话工具列表，这是插件 SDK 的设计限制，非配置可解。memory-engine 当…",
+        "retrieved_count": 1,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "7fe78bb9374efcffbc9bf733fe5c5a418b103124d25878fdf08a66aa20545099",
+        "path": "memory/smart-add/2026-06-04.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-04T19:30:09.687Z",
+        "updated_at": "2026-06-15T14:38:43.705Z",
+        "detected_pattern": "bracketed_time_prefix",
+        "matched_text": "[04:22:56]",
+        "content_preview": "[04:22:56] ASST: 已经关掉了... [04:24:03] ASST: 不影响 Codex CLI 本身... [04:24:48] ASST: 已重启 ✅ agentmemory... [07:12:38] ASST: 6月3日的日志和摘要都正常 ✅ ... [07:18:26] ASST: 不会丢.…",
+        "retrieved_count": 1,
+        "injected_count": 0,
+        "likely_source": "checkpoint_input",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "5477be28afb0e24d49fd56dd95ed545aeb0e9397917bad8d0350cbb5f0d6c2a8",
+        "path": "memory/smart-add/2026-06-11.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-12T02:44:03.942Z",
+        "updated_at": "2026-06-15T14:38:54.416Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-06-04 22:08:43",
+        "content_preview": "- 03:30 Session Checkpoint: session-checkpoint cron 运行; `memory_confidence` 表不存在，checkpoint 部分失败（已知问题，不影响 episode marker 写入）; 8 条纯笔记条目，无对话日志，episode marker 已写;…",
+        "retrieved_count": 1,
+        "injected_count": 0,
+        "likely_source": "healthcheck_note",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "false_positive_rule_review"
+      }
+    ],
+    "injected_examples": [
+      {
+        "chunk_id": "7389b6f74d554d1124e8e3b70317a0abb7c2c34bb74a75d1ee96e9eb000ef3b4",
+        "path": "memory/smart-add/2026-05-30.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:05.346Z",
+        "updated_at": "2026-06-15T14:38:27.658Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-05-30T19:30:03.691Z",
+        "content_preview": "knowledge-graph-memory：技能，来源clawhub，作者jpengcheng523-netizen，用于长期图记忆与概念漂移 <!-- smart-add-fingerprint: 7033c8bc18a7b0f93c8177574be7b227f177982263da34076402aae29f…",
+        "retrieved_count": 56,
+        "injected_count": 1,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "b87697dbe340738621563f62c06c5c220aa1e88c2370c6e6351a4ce520f4c2b8",
+        "path": "memory/smart-add/2026-06-04.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-04T19:30:09.687Z",
+        "updated_at": "2026-06-15T14:38:43.705Z",
+        "detected_pattern": "bracketed_time_prefix",
+        "matched_text": "[01:19:52]",
+        "content_preview": "**12:14** — 切到 gpt-5.4，也没出回复 **12:27** — 切回 DeepSeek，依然不出 **12:39** — 再切 gpt-5.4，还是没回复 **整条 session 没有任何一条 assistant 的 response 产出过。** 10MB 的 trajectory 装的全是你重…",
+        "retrieved_count": 2,
+        "injected_count": 1,
+        "likely_source": "checkpoint_input",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      }
+    ],
+    "top_path_examples": [
+      {
+        "chunk_id": "32b13cdae69be0d4c440c751cc4a9b817394d15600e24ef14d611fbadd233c6a",
+        "path": "memory/dreaming/light/2026-05-22.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-21T19:00:02.273Z",
+        "updated_at": "2026-06-15T14:36:13.376Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-19 09:57:48",
+        "content_preview": "- Candidate: 配置记忆: legal-doc-tool = Obsidian（法律文书系统方案选择 Obsidian）; current-model = DeepSeek V4 Flash（2026-05-13 会话中确认当前运行模型）; session-dm-scope = per-channel-pe…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "bf07b0085295684612e30b6874f84e083fda765adb468f872f40fbaf25db2bdf",
+        "path": "memory/dreaming/light/2026-05-23.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-22T19:00:01.778Z",
+        "updated_at": "2026-06-15T14:36:14.541Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-22 09:03:35",
+        "content_preview": "# Light Sleep - Candidate: Session: 2026-05-22 09:03:35 GMT+8: **Session Key**: agent:main:main; **Session ID**: 1fa5dd3c-b366-43dc-a8d8-e16ce165440a; **Source…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "c98d37c74606b76d8a4607d48cb2d6541d12d96820de1d9df6877044a3b84ce6",
+        "path": "memory/dreaming/light/2026-05-23.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-22T19:00:01.778Z",
+        "updated_at": "2026-06-15T14:36:14.541Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-19 09:57:48",
+        "content_preview": "- Candidate: User: Write a dream diary entry from these memory fragments: - 今日主要推进记忆系统升级与法律文书系统两个项目。记忆系统方面，确认Active Memory Plugin与Memory-Wiki均已内置，推荐先启用Active M…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "cdbb1c31277cbb0f2fd3d270db5b8a0705f8f7c616ce99b5b36432e97a795e1f",
+        "path": "memory/dreaming/light/2026-05-23.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-22T19:00:01.778Z",
+        "updated_at": "2026-06-15T14:36:14.541Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-19 09:57:48",
+        "content_preview": "- Candidate: User: scripts/duty-reminder.sh（值班提醒脚本路径，每天早上9点运行）; stock-analysis-skill = stock-analysis@6.2.0（安装的股票分析技能版本） - Session: 2026-05-19 09:57:48 GMT+8: …",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "5a8cb53d68402a9ad3386dcb67e5bf5625434e986c459a968854630361cf1ead",
+        "path": "memory/dreaming/light/2026-05-24.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-23T19:00:03.306Z",
+        "updated_at": "2026-06-15T14:36:17.118Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-22 09:03:35",
+        "content_preview": "# Light Sleep - Candidate: Session: 2026-05-22 09:03:35 GMT+8: **Session Key**: agent:main:main; **Session ID**: 1fa5dd3c-b366-43dc-a8d8-e16ce165440a; **Source…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "90c317144b8072b6e2c3712a002464e467cfb2502a9fbab9d57e8220057f4249",
+        "path": "memory/dreaming/light/2026-05-24.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-23T19:00:03.306Z",
+        "updated_at": "2026-06-15T14:36:17.118Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-23 18:50:06",
+        "content_preview": "- Candidate: 04:00 — 记忆统计 (cron): **memory-engine 5.20 不兼容** [待办] — OpenClaw 5.20+ 限制 `global:` 类型插件的 `api.registerTool()`，`memory_engine` 和 `image_vision` 不会暴…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "05ba01806ca32db8081de49d37c3459e96aa75ee6b4e6278ced149eed5e88bc4",
+        "path": "memory/dreaming/light/2026-05-25.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-24T19:00:03.104Z",
+        "updated_at": "2026-06-15T14:36:17.709Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-22 09:03:35",
+        "content_preview": "# Light Sleep - Candidate: Session: 2026-05-22 09:03:35 GMT+8: **Session Key**: agent:main:main; **Session ID**: 1fa5dd3c-b366-43dc-a8d8-e16ce165440a; **Source…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "faac578d6592d8a7e22effcf01f8b6dee3d87b9be3abb237bb36cc342468e943",
+        "path": "memory/dreaming/light/2026-05-25.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-24T19:00:03.104Z",
+        "updated_at": "2026-06-15T14:36:17.709Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-23 18:50:06",
+        "content_preview": "- Candidate: 04:00 — 记忆统计 (cron): **memory-engine 5.20 不兼容** [待办] — OpenClaw 5.20+ 限制 `global:` 类型插件的 `api.registerTool()`，`memory_engine` 和 `image_vision` 不会暴…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "7bc713f3d510cf36b09f7c124f14e6a58f0cc6c9261b306dd5f321c67e04e530",
+        "path": "memory/dreaming/light/2026-05-26.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-25T19:00:02.740Z",
+        "updated_at": "2026-06-15T14:36:19.069Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-23 18:50:06",
+        "content_preview": "- evidence: memory/2026-05-23.md:10-11 - recalls: 0 - status: staged - Candidate: Session: 2026-05-23 18:50:06 GMT+8: **Session Key**: agent:main:main; **Sessi…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "dcd98fb3bc69fb44e00fdb8a94f8ae21690f3d5f1951e6130e8cac3b2c0c7322",
+        "path": "memory/dreaming/light/2026-05-26.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-25T19:00:02.740Z",
+        "updated_at": "2026-06-15T14:36:19.069Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-23 18:50:06",
+        "content_preview": "# Light Sleep - Candidate: 04:00 — 记忆统计 (cron): Archive: 0/70 归档，64 条零命中; 触发记录: passive=45, kg=18, llm=3, active=4; Rescue: 2 受保护, 3 episodes - confidence: 0.6…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      }
+    ]
+  },
+  "hypotheses": [
+    {
+      "id": "dominant_source_family",
+      "confidence": "medium",
+      "summary": "timestamp pollution is currently dominated by generated_artifact within dreaming paths",
+      "evidence": [
+        "top likely_source=generated_artifact count=89",
+        "top family=dreaming count=98"
+      ]
+    },
+    {
+      "id": "mostly_historical_residue",
+      "confidence": "medium",
+      "summary": "no entries fall after the post-fix bucket boundary, suggesting timestamp pollution is mostly historical residue in the current snapshot",
+      "evidence": [
+        "created_before_raw_log_fix=149",
+        "unknown_fix_window=5",
+        "created_after_raw_log_fix=0"
+      ]
+    },
+    {
+      "id": "retrieval_impact_present",
+      "confidence": "medium",
+      "summary": "timestamp-polluted memories are not purely dormant historical residue because some have retrieval/injection usage",
+      "evidence": [
+        "entries_ever_retrieved=8",
+        "entries_ever_injected=2"
+      ]
+    }
+  ]
+}
