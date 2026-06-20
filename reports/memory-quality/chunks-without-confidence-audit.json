@@ -1,0 +1,1207 @@
+{
+  "generated_at": "2026-06-20T11:12:02.158Z",
+  "mode": "read_only",
+  "db_paths": {
+    "engine": "/home/lionsol/.openclaw/memory/memory-engine/memory-engine.sqlite",
+    "core": "/home/lionsol/.openclaw/memory/main.sqlite"
+  },
+  "counts": {
+    "chunks_without_confidence": 1504,
+    "missing_category": 1504,
+    "intersection_count": 1504,
+    "only_without_confidence": 0,
+    "only_missing_category": 0
+  },
+  "breakdowns": {
+    "by_path_prefix": [
+      {
+        "path_prefix": "memory/dreaming/light",
+        "count": 1238,
+        "share": 0.8231
+      },
+      {
+        "path_prefix": "memory/dreaming/rem",
+        "count": 68,
+        "share": 0.0452
+      },
+      {
+        "path_prefix": "memory/2026-05-25.md",
+        "count": 34,
+        "share": 0.0226
+      },
+      {
+        "path_prefix": "memory/dreaming/deep",
+        "count": 32,
+        "share": 0.0213
+      },
+      {
+        "path_prefix": "memory/2026-05-24.md",
+        "count": 30,
+        "share": 0.0199
+      },
+      {
+        "path_prefix": "MEMORY.md",
+        "count": 15,
+        "share": 0.01
+      },
+      {
+        "path_prefix": "memory/2026-05-22-0903.md",
+        "count": 11,
+        "share": 0.0073
+      },
+      {
+        "path_prefix": "memory/2026-05-10-2037.md",
+        "count": 8,
+        "share": 0.0053
+      },
+      {
+        "path_prefix": "memory/2026-05-17.md",
+        "count": 6,
+        "share": 0.004
+      },
+      {
+        "path_prefix": "memory/2026-05-19-0957.md",
+        "count": 6,
+        "share": 0.004
+      },
+      {
+        "path_prefix": "memory/projects",
+        "count": 5,
+        "share": 0.0033
+      },
+      {
+        "path_prefix": "memory/2026-05-18-1249.md",
+        "count": 4,
+        "share": 0.0027
+      },
+      {
+        "path_prefix": "memory/2026-05-26-0908.md",
+        "count": 4,
+        "share": 0.0027
+      },
+      {
+        "path_prefix": "memory/2026-05-31.md",
+        "count": 4,
+        "share": 0.0027
+      },
+      {
+        "path_prefix": "memory/2026-06-07-1025.md",
+        "count": 4,
+        "share": 0.0027
+      },
+      {
+        "path_prefix": "memory/2026-05-23-1850.md",
+        "count": 3,
+        "share": 0.002
+      },
+      {
+        "path_prefix": "memory/2026-06-04-2208.md",
+        "count": 3,
+        "share": 0.002
+      },
+      {
+        "path_prefix": "memory/2026-05-19.md",
+        "count": 2,
+        "share": 0.0013
+      },
+      {
+        "path_prefix": "memory/2026-06-01.md",
+        "count": 2,
+        "share": 0.0013
+      },
+      {
+        "path_prefix": "memory/2026-06-10-2239.md",
+        "count": 2,
+        "share": 0.0013
+      },
+      {
+        "path_prefix": "memory/2026-05-11.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-12.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-13.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-18.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-22.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-23.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-26.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-27.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-28.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-29.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-05-30.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-02.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-03.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-04.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-05.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-06.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-08.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-09.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-11.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-13.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/2026-06-14.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/daily.md",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "path_prefix": "memory/raw_log",
+        "count": 1,
+        "share": 0.0007
+      }
+    ],
+    "by_family": [
+      {
+        "family": "dreaming",
+        "count": 1338,
+        "share": 0.8896
+      },
+      {
+        "family": "daily_memory",
+        "count": 144,
+        "share": 0.0957
+      },
+      {
+        "family": "curated_memory",
+        "count": 15,
+        "share": 0.01
+      },
+      {
+        "family": "project",
+        "count": 5,
+        "share": 0.0033
+      },
+      {
+        "family": "raw_log",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "family": "unknown",
+        "count": 1,
+        "share": 0.0007
+      }
+    ],
+    "by_quality_scope_owner": [
+      {
+        "owner": "memory_engine_generated_or_diagnostic",
+        "count": 1338,
+        "share": 0.8896
+      },
+      {
+        "owner": "openclaw_core",
+        "count": 159,
+        "share": 0.1057
+      },
+      {
+        "owner": "memory_engine_legacy_or_manual",
+        "count": 5,
+        "share": 0.0033
+      },
+      {
+        "owner": "raw_or_legacy",
+        "count": 1,
+        "share": 0.0007
+      },
+      {
+        "owner": "unknown",
+        "count": 1,
+        "share": 0.0007
+      }
+    ],
+    "by_source_type": [
+      {
+        "source_type": "memory",
+        "count": 1504,
+        "share": 1
+      }
+    ],
+    "by_category": [
+      {
+        "category": "null",
+        "count": 1504,
+        "share": 1
+      }
+    ],
+    "by_memory_engine_managed_status": [
+      {
+        "status": "generated_artifact_outside_lifecycle",
+        "count": 1338,
+        "share": 0.8896
+      },
+      {
+        "status": "memory_file_outside_lifecycle",
+        "count": 165,
+        "share": 0.1097
+      },
+      {
+        "status": "unknown_outside_lifecycle",
+        "count": 1,
+        "share": 0.0007
+      }
+    ],
+    "by_created_month": [
+      {
+        "created_month": "2026-05",
+        "count": 835,
+        "share": 0.5552
+      },
+      {
+        "created_month": "2026-06",
+        "count": 669,
+        "share": 0.4448
+      }
+    ]
+  },
+  "dreaming": {
+    "count": 1338,
+    "share": 0.8896,
+    "path_examples": [
+      "memory/dreaming/deep/2026-05-15.md",
+      "memory/dreaming/deep/2026-05-16.md",
+      "memory/dreaming/deep/2026-05-17.md",
+      "memory/dreaming/deep/2026-05-18.md",
+      "memory/dreaming/deep/2026-05-19.md",
+      "memory/dreaming/deep/2026-05-20.md",
+      "memory/dreaming/deep/2026-05-21.md",
+      "memory/dreaming/deep/2026-05-22.md",
+      "memory/dreaming/deep/2026-05-23.md",
+      "memory/dreaming/deep/2026-05-24.md"
+    ],
+    "source_type_breakdown": [
+      {
+        "source_type": "memory",
+        "count": 1338,
+        "share": 1
+      }
+    ],
+    "retrieval_usage": {
+      "retrieved_count_total": 29,
+      "injected_count_total": 1,
+      "chunks_ever_retrieved": 14,
+      "chunks_ever_injected": 1
+    }
+  },
+  "samples": {
+    "top_path_prefixes": [
+      {
+        "path_prefix": "memory/dreaming/light",
+        "count": 1238,
+        "share": 0.8231
+      },
+      {
+        "path_prefix": "memory/dreaming/rem",
+        "count": 68,
+        "share": 0.0452
+      },
+      {
+        "path_prefix": "memory/2026-05-25.md",
+        "count": 34,
+        "share": 0.0226
+      },
+      {
+        "path_prefix": "memory/dreaming/deep",
+        "count": 32,
+        "share": 0.0213
+      },
+      {
+        "path_prefix": "memory/2026-05-24.md",
+        "count": 30,
+        "share": 0.0199
+      },
+      {
+        "path_prefix": "MEMORY.md",
+        "count": 15,
+        "share": 0.01
+      },
+      {
+        "path_prefix": "memory/2026-05-22-0903.md",
+        "count": 11,
+        "share": 0.0073
+      },
+      {
+        "path_prefix": "memory/2026-05-10-2037.md",
+        "count": 8,
+        "share": 0.0053
+      },
+      {
+        "path_prefix": "memory/2026-05-17.md",
+        "count": 6,
+        "share": 0.004
+      },
+      {
+        "path_prefix": "memory/2026-05-19-0957.md",
+        "count": 6,
+        "share": 0.004
+      }
+    ],
+    "dreaming_examples": [
+      {
+        "chunk_id": "70c8879d5df4cba4510d42413894a13fe5c765d7c8357355f28ca291bfa96770",
+        "path": "memory/dreaming/deep/2026-05-15.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-14T19:00:05.207Z",
+        "updated_at": "2026-06-15T14:35:56.942Z",
+        "content_hash": "18a09def6ec01155a274182903abf0c52f5176bce53efa9181511ff6c664fed4",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 0 candidate(s) for durable promotion. - Promoted 0 candidate(s) in…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "d1e7ff1a0a3ea188f2ee5d3a6daddfe107c11d3c01d7ddd73d36809237bfe2ca",
+        "path": "memory/dreaming/deep/2026-05-16.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-15T19:00:05.312Z",
+        "updated_at": "2026-06-15T14:35:57.135Z",
+        "content_hash": "18a09def6ec01155a274182903abf0c52f5176bce53efa9181511ff6c664fed4",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 0 candidate(s) for durable promotion. - Promoted 0 candidate(s) in…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "36f8aabbbf4ff03f3af5fd4553ebadb3a4a1267e268ace7bcf5e3eac10144786",
+        "path": "memory/dreaming/deep/2026-05-17.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-16T19:00:04.408Z",
+        "updated_at": "2026-06-15T14:35:56.970Z",
+        "content_hash": "18a09def6ec01155a274182903abf0c52f5176bce53efa9181511ff6c664fed4",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 0 candidate(s) for durable promotion. - Promoted 0 candidate(s) in…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "fb06edb23d129ca1a36c30d42a0539fa1c50da24b62f68aaedeea9444131455a",
+        "path": "memory/dreaming/deep/2026-05-18.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-17T19:00:06.697Z",
+        "updated_at": "2026-06-15T14:35:57.342Z",
+        "content_hash": "b4c2d9ae5ddd8d709416e330d41997f522ad3ed78217879b56ef90e1b6f26a05",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 7 candidate(s) for durable promotion. - Promoted 0 candidate(s) in…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "82823c9a28e60c779acf5ca14f056cecb5ba764b6ca138cb9a4c2f63dc407b83",
+        "path": "memory/dreaming/deep/2026-05-19.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-18T19:00:07.792Z",
+        "updated_at": "2026-06-15T14:35:57.313Z",
+        "content_hash": "15a9dca3f9ad5cc78fb7e92a56a2ca6f025c2881e544059c09e9d875aa2e6846",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 10 candidate(s) for durable promotion. - Promoted 0 candidate(s) i…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "a3af2d5b4e02cefbc30abeba879c846bf84956b8d28698008e1a137bb5704d85",
+        "path": "memory/dreaming/deep/2026-05-20.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-19T19:00:06.582Z",
+        "updated_at": "2026-06-15T14:35:57.328Z",
+        "content_hash": "15a9dca3f9ad5cc78fb7e92a56a2ca6f025c2881e544059c09e9d875aa2e6846",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 10 candidate(s) for durable promotion. - Promoted 0 candidate(s) i…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "e56aa1e48e3ad294925d4df61bd4ffb6e8e05704b957f5b2d2a1d9a52aae5f93",
+        "path": "memory/dreaming/deep/2026-05-21.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-20T19:00:06.451Z",
+        "updated_at": "2026-06-15T14:35:57.516Z",
+        "content_hash": "15a9dca3f9ad5cc78fb7e92a56a2ca6f025c2881e544059c09e9d875aa2e6846",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 10 candidate(s) for durable promotion. - Promoted 0 candidate(s) i…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "79e28488abb9dcfacd89e76db0771fa21baf359c23806d1dc64aab6085e17269",
+        "path": "memory/dreaming/deep/2026-05-22.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-21T19:00:09.890Z",
+        "updated_at": "2026-06-15T14:35:58.445Z",
+        "content_hash": "c065a22539b47893839caed43e186cc05e1996a96529ba1b0558a1b703547364",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 10 candidate(s) for durable promotion. - Promoted 2 candidate(s) i…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "2e5ad1155aafb3ee86dc25f70103ed4d941fe46eeade466d9d21fa849b7c081b",
+        "path": "memory/dreaming/deep/2026-05-23.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-22T19:00:07.632Z",
+        "updated_at": "2026-06-15T14:35:57.373Z",
+        "content_hash": "15a9dca3f9ad5cc78fb7e92a56a2ca6f025c2881e544059c09e9d875aa2e6846",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 10 candidate(s) for durable promotion. - Promoted 0 candidate(s) i…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "e6c2a86abed44d8903f6d61ccf9a2a4f304b4e8985b23e5561e3c4e8ba083421",
+        "path": "memory/dreaming/deep/2026-05-24.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-23T19:00:11.724Z",
+        "updated_at": "2026-06-15T14:35:57.773Z",
+        "content_hash": "c065a22539b47893839caed43e186cc05e1996a96529ba1b0558a1b703547364",
+        "content_preview": "# Deep Sleep - Repaired recall artifacts: rewrote recall store. - Ranked 10 candidate(s) for durable promotion. - Promoted 2 candidate(s) i…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      }
+    ],
+    "non_dreaming_examples": [
+      {
+        "chunk_id": "39cba396351ec8b91ac4a874ef87923606f49e2003fd43a4fda64fd8e41f59e9",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "9ec4efe7df347cebc1bb8d1a7ac3dbfd5ebe94398c7547069dbc66dc903d842c",
+        "content_preview": "# MEMORY.md — EDi's Long-Term Memory ## 值班提醒系统 (Duty Schedule) - **2026-05-31 更新新规则:** 每月一张表，4人轮流值班（Sol → 郭兵 → 朱建新 → 麻卫东） - **规则:** 每天一人，周末…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "4b972dbc88fd4198a8e9846a4e8893881f1eba4895a1f2eb8f7b177fc591a35c",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "49b3c9410ff6ab43ba07cfafdb2c32301daac19a4fa21a41bbc317f3e666cb02",
+        "content_preview": "- 今天围绕OpenCode Go API接入展开核心对话，经历了从手动配置provider到发现OpenClaw原生支持opencode插件的曲折过程。最终通过修改openclaw.json，在models.providers.opencode下添加模型定义（deepseek…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "53258ebf576cc8f9d413cf8fd342b2b4a1e504d4a67c743b2c3a29b01b5e78f9",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "78c553ea7767b026e84bc3bce184dc6fd2cfd9c49e619dabc5637f5fa1e31413",
+        "content_preview": "```json \"config\": { \"autoRecall\": { \"enabled\": true, \"topK\": 3, \"timeoutMs\": 8000 } } ``` - **改动人：** Codex 那边做的，没动原有 `memory_engine action=…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "74956f6441156797a3a6a74fa84ccf927a6369ab28df15807e0abdbdaff696ec",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "f2912cba85e5fe8d5ac71b44819b9777db8b1de8c1ffe11d4630e5edc759f5fc",
+        "content_preview": "- | 位置 | 旧名 | 新名 | |------|------|------| | `extensions/memory-engine/` | `session-checkpoint.js` | `smart-add.js` ✅ | | `workspace/plugins…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "789bae2824b2b9c6dadf38358fbd2b487db04a1b8487bada391e7d3cfa629910",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "646309120efeb89dca97d020599b5f082c96cbe295def1a109d926b975f6c003",
+        "content_preview": "- **指令来源**：Sol 在 WebChat 中要求\"说话的口吻女性化一些\" ## WebChat 消息上限补丁 (2026-05-22) - **问题:** Control UI WebChat 前端硬编码最多显示 200 条消息（`chat-*.js` 中 `Math.…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "78bae9e1651cec013504e5f30044bc46fa5625d574215342a05ee90990e200d2",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "8f45db3661639514983021c6b82628e2e1ab771cf082ac030673f278b9f325ff",
+        "content_preview": "- 今天围绕OpenCode Go API接入展开核心对话，经历了从手动配置provider到发现OpenClaw原生支持opencode插件的曲折过程。最终通过修改openclaw.json，在models.providers.opencode下添加模型定义（deepseek…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "7a815ceed700efe97e9dbf040c98d8d5fad6b8e81ae57d1014fbcd92b10e8c54",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "35674183d470aa6210077de824a08416fc042d9404b645a889cc6672f66b2d3e",
+        "content_preview": "<!-- openclaw-memory-promotion:memory:memory/2026-05-27.md:5:5 --> - 修复 daily episode / smart-add 日期计算的时区错位问题： [score=0.916 recalls=0 avg=0…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "7d9f3433b7a408b9cdde6a3fce4eb306a63eb3b9ff634bdbd25f037e7fe22727",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "98130fccb120eef7876328ed688653872360d0a36224e3964503164fe5ea251f",
+        "content_preview": "- ❌ 分类缺失 → raw_log 匹配配置规则时自动升级 preference - ❌ 终检缺失 → cron 脚本 `session-checkpoint.js` 每天 03:55 扫描 raw_log，LLM 提取未落盘配置 - ❌ 摘要缺失 → 每日 episode …",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "8ca1448426c6358b355777ecee1e76ab5a83c9f2513bb7ac41786bd1fff98761",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "f6fe8d1e975b622908cd40d2b7400072a7ee83c54468342b726d83b12c45d946",
+        "content_preview": "- `dist/chat-zFy9Y_4Y.js` → 后端默认上限 200→500（`typeof limit === \"number\" ? limit : 500`） - `dist/control-ui/assets/index-BtIuF4zW.js` → 前端请求上限…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "980b1b6a91a1168266d48f9cda740692d019460411e6ce4d7604997c3b798015",
+        "path": "MEMORY.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "curated_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "MEMORY.md is core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-06-14T19:00:14.712Z",
+        "updated_at": "2026-06-15T14:35:50.696Z",
+        "content_hash": "7e6a713d2ef86642640d1713a7d0240819d4e3a1e9a707d4acb575300a6e6d4a",
+        "content_preview": "<!-- openclaw-memory-promotion:memory:memory/2026-06-01.md:13:13 --> - 新增 `writeIncompleteEpisode()` 函数，输出含可能原因说明。 [score=0.909 recalls=0 a…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      }
+    ],
+    "retrieved_examples": [
+      {
+        "chunk_id": "bc448c9484c3371d8dbca11856e95f3742b85200a508d92dde6d38c035f06a56",
+        "path": "memory/dreaming/light/2026-05-20.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-19T19:00:01.833Z",
+        "updated_at": "2026-06-15T14:36:10.531Z",
+        "content_hash": "351fc87c096d7a8ad29eda32da55ef60c58304a7e1f6826a0ad0a740cca55afa",
+        "content_preview": "- Candidate: Assistant: 端口转发删掉后 `127.0.0.1:18789` 当然访问不了，因为那是 Windows 本机回环地址，不会自动透传 WSL。 但在 Windows 浏览器里直接访问 **WSL2 的 IP** 是可以的： ``` http:/…",
+        "retrieved_count": 1,
+        "injected_count": 1,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "fd7e7df64d41537dc197897a6c85ee15848887bdb0d4d374c26c8eacc725f5cd",
+        "path": "memory/dreaming/light/2026-05-19.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-18T19:00:01.688Z",
+        "updated_at": "2026-06-15T14:36:08.308Z",
+        "content_hash": "f4ea58c59b24fab1d0069a2ab62360d7f02788e467ccf46bb12ed69292e2173c",
+        "content_preview": "- Candidate: Assistant: 搞定了 ⚡ 用你昨晚克隆的声音说了段中文问候。 <audio src=\"/tmp/tts_morning.wav\" controls>你的浏览器不支持 audio 标签</audio> （内容是：\"早上好 Sol，今天周一，你值班…",
+        "retrieved_count": 5,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "9d95899bcc36314259e3339eefaf23d1ca0f8db92818f645c7553d42b0055f57",
+        "path": "memory/dreaming/light/2026-05-22.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-21T19:00:02.273Z",
+        "updated_at": "2026-06-15T14:36:13.376Z",
+        "content_hash": "2e88338830a551867b3401629c74b6354a7e356b90905d6ec37c3f007360364c",
+        "content_preview": "- Candidate: Assistant: 西安天气：☀️ 晴，20°C（体感 20°C），东北风 13km/h，湿度 73%。好天气，不冷不热，适合出门。 记下了，以后查天气用西安。 - confidence: 0.58 - evidence: memory/.dream…",
+        "retrieved_count": 5,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "973176483855e8a9a0936be710ec8f98ab6d48a9006366c0d78d42acd5bc0ce4",
+        "path": "memory/dreaming/light/2026-05-19.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-18T19:00:01.688Z",
+        "updated_at": "2026-06-15T14:36:08.308Z",
+        "content_hash": "66ae9ab1f570ce5026aa1e9a3be22dfe56e135ae379a0f6d115cdffd5f2e9e07",
+        "content_preview": "- Candidate: Assistant: 它们是最新装的——今晚 23:22~23:23，就你在问语音克隆前几分钟刚装上的。 现在你装了两个跟语音相关的 skill： 1. **`tts`**（23:22） 2. **`characteristic-voice`**（23…",
+        "retrieved_count": 4,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "0239a0c0301d660ceabcec1e4b16d5c4b2309de88f7645dbf27e7bd7036a3298",
+        "path": "memory/dreaming/light/2026-05-18.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-17T19:00:01.777Z",
+        "updated_at": "2026-06-15T14:36:06.527Z",
+        "content_hash": "c756370da8ef2a2fade4f1dd4edc88de5578e6e2f17d09faf76cbad3797d0049",
+        "content_preview": "- Candidate: Assistant: 搞定。改动： - 新增**需求收集模板** — 模糊输入时不必猜，直接一条消息把所有决策点列完 - 强调**一次列完不逐个追问** — 用户一次性回复，直接开干 - 保留原有优先级和长内容分批策略 - confidence: 0.…",
+        "retrieved_count": 3,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "e6d5434d31f0fd520aab6152c84b15d1beecd1c6edaffdf1e61910730a723ecd",
+        "path": "memory/2026-05-18-1249.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "daily memory files are core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-18T04:49:27.500Z",
+        "updated_at": "2026-06-15T14:35:50.176Z",
+        "content_hash": "df4618557895aa994cb684101c3cfa8860819ee24a1c392bd67e62ff22b37064",
+        "content_preview": "今天生成的摘要 → 明天你睁眼时自动注入。 如果你想马上测，最快的方式是手动创建一份昨天的 episode 文件： assistant: 好了，现在去点 **「+ New session」** 开新 session，你会看到系统提示里自动多了这些： ``` [受保护记忆] — …",
+        "retrieved_count": 2,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "162f57cc4dc95b8e44b2fe28af788f2cad54554ba2119e361618b1b7541a43db",
+        "path": "memory/2026-05-23-1850.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": true,
+        "reason": "daily memory files are core-owned memory that may be retrieval-visible without memory-engine confidence ownership",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "memory_file_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-23T10:50:06.372Z",
+        "updated_at": "2026-06-15T14:35:51.283Z",
+        "content_hash": "a9e737c23fd340bc436b28368e4bfc68e61da711044bffc90eca7a2cde67a729",
+        "content_preview": "OpenAI 在大陆被墙，模型推理调用也得走代理。不过 Codex 集成应该已经在 OpenClaw 配置里处理了路由，不需要你手动设。 你要验证的话可以现在问我点什么让我用 GPT-5.5 跑一下，看看延迟和返回速度就知道了。 user: [Sat 2026-05-23 18…",
+        "retrieved_count": 2,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed memory markdown outside the current smart-add/episodes confidence lifecycle"
+      },
+      {
+        "chunk_id": "a63ed522e99533ddf91cd3c0a5e43877d262359e099fbfc2457ab5e395051caf",
+        "path": "memory/dreaming/light/2026-05-17.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-16T19:00:01.302Z",
+        "updated_at": "2026-06-15T14:36:05.641Z",
+        "content_hash": "9777574386b6c09502b2ef4aabeced08879d41b71928b37def7a9435f8d614d6",
+        "content_preview": "- Candidate: Assistant: 停掉之前把后续步骤说清楚： 1. 我断线后，你在终端跑： ```bash openclaw update --tag 2026.5.12 --yes ``` 2. 升级完成后： ```bash openclaw gateway s…",
+        "retrieved_count": 2,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "7babd930e2b5c2019ecbd37eecbceb61dbde3ed3923f5d49fa3d81ae7dc8dc1e",
+        "path": "memory/dreaming/light/2026-05-23.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-22T19:00:01.778Z",
+        "updated_at": "2026-06-15T14:36:14.541Z",
+        "content_hash": "d60e33b4be4e2baecf19e15a5a680c0f75c06840a93d932912bf81a66ec69c70",
+        "content_preview": "- recalls: 0 - status: staged - Candidate: Assistant: 早 ⚡ 今天周五，五月二十二。 西安这会儿天气怎么样？要不要看看今天的日程或提醒？ - confidence: 0.58 - evidence: memory/.drea…",
+        "retrieved_count": 2,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      },
+      {
+        "chunk_id": "82c0609408fec1ac45c66aa0c5d204ea958ab4bdcf525ff49a7bd8a14012eff5",
+        "path": "memory/dreaming/light/2026-05-16.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-15T19:00:01.428Z",
+        "updated_at": "2026-06-15T14:36:04.540Z",
+        "content_hash": "1b88388d75ee812d60a4ecbf2a39f4dc0fe6c9666515077712a605ca70bc05a0",
+        "content_preview": "- Candidate: Assistant: ### Step 4: `status` ✅ | 类别 | 数量 | 平均置信度 | |------|------|-----------| | raw_log | 46 | 0.5000 | | preference | 1 |…",
+        "retrieved_count": 1,
+        "injected_count": 0,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      }
+    ],
+    "injected_examples": [
+      {
+        "chunk_id": "bc448c9484c3371d8dbca11856e95f3742b85200a508d92dde6d38c035f06a56",
+        "path": "memory/dreaming/light/2026-05-20.md",
+        "source_type": "memory",
+        "category": null,
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "expected_confidence": false,
+        "default_quality_score_scope": false,
+        "diagnostic_scope": true,
+        "retrieval_visible": false,
+        "reason": "dreaming output is generated or diagnostic memory, not part of the current confidence lifecycle",
+        "memory_engine_managed": false,
+        "memory_engine_managed_status": "generated_artifact_outside_lifecycle",
+        "has_confidence": false,
+        "has_category": false,
+        "created_at": "2026-05-19T19:00:01.833Z",
+        "updated_at": "2026-06-15T14:36:10.531Z",
+        "content_hash": "351fc87c096d7a8ad29eda32da55ef60c58304a7e1f6826a0ad0a740cca55afa",
+        "content_preview": "- Candidate: Assistant: 端口转发删掉后 `127.0.0.1:18789` 当然访问不了，因为那是 Windows 本机回环地址，不会自动透传 WSL。 但在 Windows 浏览器里直接访问 **WSL2 的 IP** 是可以的： ``` http:/…",
+        "retrieved_count": 1,
+        "injected_count": 1,
+        "likely_root_cause": "core indexed dreaming markdown, but confidence lifecycle backfill only covers smart-add and episodes"
+      }
+    ]
+  },
+  "root_cause_hypotheses": [
+    {
+      "id": "index_sync_backfill_scope_gap",
+      "confidence": "high",
+      "summary": "The missing rows align with paths that are indexed by core but excluded from the current confidence backfill scope.",
+      "evidence": [
+        "intersection_count=1504 with only_without_confidence=0 and only_missing_category=0",
+        "default missing set is dominated by dreaming (1338 rows, share=0.8896)",
+        "lib/index-sync-runtime.js backfills only memory/smart-add/% and memory/episodes/%",
+        "memory-manager-runtime.js only watches memory/smart-add and memory/episodes for sync backfill"
+      ]
+    },
+    {
+      "id": "not_orphan_confidence_or_historical_leftover",
+      "confidence": "high",
+      "summary": "These are live indexed chunks with matching core file records, not orphan confidence leftovers.",
+      "evidence": [
+        "all sampled rows exist in core.chunks and core.files with source=memory",
+        "missing rows have has_confidence=false rather than stale confidence rows",
+        "quality diagnostics already show orphan confidence count at zero in the current DB"
+      ]
+    },
+    {
+      "id": "dreaming_and_other_memory_files_never_entered_lifecycle",
+      "confidence": "medium",
+      "summary": "The current missing set suggests dreaming, daily-memory, curated-memory, project, and raw-log paths were never wired into confidence creation.",
+      "evidence": [
+        "dreaming=1338",
+        "daily_memory=144",
+        "curated_memory=15",
+        "project=5",
+        "raw_log=1",
+        "unknown=1"
+      ]
+    }
+  ]
+}
