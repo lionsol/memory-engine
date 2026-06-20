@@ -1,0 +1,1001 @@
+{
+  "generated_at": "2026-06-20T14:50:18.057Z",
+  "mode": "read_only",
+  "summary": {
+    "timestamp_pollution_total": 164,
+    "default_scope_count": 57,
+    "all_scope_count": 164,
+    "lifecycle_owned_count": 57,
+    "core_owned_count": 9,
+    "generated_or_diagnostic_count": 98,
+    "legacy_or_manual_count": 0,
+    "unknown_count": 0,
+    "retrieved_count_total": 156,
+    "injected_count_total": 4,
+    "entries_ever_retrieved": 9,
+    "entries_ever_injected": 3,
+    "created_before_raw_log_fix": 159,
+    "created_after_raw_log_fix": 0,
+    "unknown_fix_window": 5
+  },
+  "breakdowns": {
+    "by_owner": [
+      {
+        "owner": "memory_engine_generated_or_diagnostic",
+        "count": 98,
+        "share": 0.5976
+      },
+      {
+        "owner": "memory_engine_lifecycle",
+        "count": 57,
+        "share": 0.3476
+      },
+      {
+        "owner": "openclaw_core",
+        "count": 9,
+        "share": 0.0549
+      }
+    ],
+    "by_family": [
+      {
+        "family": "dreaming",
+        "count": 98,
+        "share": 0.5976
+      },
+      {
+        "family": "smart_add",
+        "count": 56,
+        "share": 0.3415
+      },
+      {
+        "family": "daily_memory",
+        "count": 9,
+        "share": 0.0549
+      },
+      {
+        "family": "episode",
+        "count": 1,
+        "share": 0.0061
+      }
+    ],
+    "by_category": [
+      {
+        "category": "null",
+        "count": 107,
+        "share": 0.6524
+      },
+      {
+        "category": "raw_log",
+        "count": 53,
+        "share": 0.3232
+      },
+      {
+        "category": "episodic",
+        "count": 3,
+        "share": 0.0183
+      },
+      {
+        "category": "preference",
+        "count": 1,
+        "share": 0.0061
+      }
+    ],
+    "by_path_prefix": [
+      {
+        "path_prefix": "memory/dreaming",
+        "count": 98,
+        "share": 0.5976
+      },
+      {
+        "path_prefix": "memory/smart-add",
+        "count": 56,
+        "share": 0.3415
+      },
+      {
+        "path_prefix": "memory/2026-05-10-2037.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/2026-05-18-1249.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/2026-05-19-0957.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/2026-05-22-0903.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/2026-05-23-1850.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/2026-05-26-0908.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/2026-06-04-2208.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/2026-06-07-1025.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/2026-06-10-2239.md",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "path_prefix": "memory/episodes",
+        "count": 1,
+        "share": 0.0061
+      }
+    ],
+    "by_created_day": [
+      {
+        "created_day": "2026-06-02",
+        "count": 53,
+        "share": 0.3232
+      },
+      {
+        "created_day": "2026-06-12",
+        "count": 10,
+        "share": 0.061
+      },
+      {
+        "created_day": "2026-06-13",
+        "count": 10,
+        "share": 0.061
+      },
+      {
+        "created_day": "2026-06-10",
+        "count": 8,
+        "share": 0.0488
+      },
+      {
+        "created_day": "2026-06-04",
+        "count": 7,
+        "share": 0.0427
+      },
+      {
+        "created_day": "2026-06-14",
+        "count": 7,
+        "share": 0.0427
+      },
+      {
+        "created_day": "2026-05-28",
+        "count": 6,
+        "share": 0.0366
+      },
+      {
+        "created_day": "2026-05-30",
+        "count": 5,
+        "share": 0.0305
+      },
+      {
+        "created_day": "2026-06-01",
+        "count": 5,
+        "share": 0.0305
+      },
+      {
+        "created_day": "2026-06-09",
+        "count": 5,
+        "share": 0.0305
+      },
+      {
+        "created_day": "2026-05-22",
+        "count": 4,
+        "share": 0.0244
+      },
+      {
+        "created_day": "2026-05-29",
+        "count": 4,
+        "share": 0.0244
+      },
+      {
+        "created_day": "2026-05-31",
+        "count": 4,
+        "share": 0.0244
+      },
+      {
+        "created_day": "2026-06-06",
+        "count": 4,
+        "share": 0.0244
+      },
+      {
+        "created_day": "2026-06-15",
+        "count": 4,
+        "share": 0.0244
+      },
+      {
+        "created_day": "2026-05-23",
+        "count": 3,
+        "share": 0.0183
+      },
+      {
+        "created_day": "2026-05-26",
+        "count": 3,
+        "share": 0.0183
+      },
+      {
+        "created_day": "2026-06-03",
+        "count": 3,
+        "share": 0.0183
+      },
+      {
+        "created_day": "2026-06-05",
+        "count": 3,
+        "share": 0.0183
+      },
+      {
+        "created_day": "2026-06-07",
+        "count": 3,
+        "share": 0.0183
+      },
+      {
+        "created_day": "2026-05-24",
+        "count": 2,
+        "share": 0.0122
+      },
+      {
+        "created_day": "2026-05-25",
+        "count": 2,
+        "share": 0.0122
+      },
+      {
+        "created_day": "2026-05-27",
+        "count": 2,
+        "share": 0.0122
+      },
+      {
+        "created_day": "2026-06-08",
+        "count": 2,
+        "share": 0.0122
+      },
+      {
+        "created_day": "2026-05-10",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "created_day": "2026-05-18",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "created_day": "2026-05-19",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "created_day": "2026-05-21",
+        "count": 1,
+        "share": 0.0061
+      },
+      {
+        "created_day": "2026-06-16",
+        "count": 1,
+        "share": 0.0061
+      }
+    ],
+    "by_detected_pattern": [
+      {
+        "detected_pattern": "spaced_datetime",
+        "count": 149,
+        "share": 0.9085
+      },
+      {
+        "detected_pattern": "iso_utc_datetime",
+        "count": 13,
+        "share": 0.0793
+      },
+      {
+        "detected_pattern": "bracketed_time_prefix",
+        "count": 2,
+        "share": 0.0122
+      }
+    ],
+    "by_likely_source": [
+      {
+        "likely_source": "generated_artifact",
+        "count": 89,
+        "share": 0.5427
+      },
+      {
+        "likely_source": "smart_add_writer",
+        "count": 31,
+        "share": 0.189
+      },
+      {
+        "likely_source": "checkpoint_input",
+        "count": 19,
+        "share": 0.1159
+      },
+      {
+        "likely_source": "raw_log_parser",
+        "count": 8,
+        "share": 0.0488
+      },
+      {
+        "likely_source": "healthcheck_note",
+        "count": 7,
+        "share": 0.0427
+      },
+      {
+        "likely_source": "session_event_formatter",
+        "count": 5,
+        "share": 0.0305
+      },
+      {
+        "likely_source": "autoRecall_trace",
+        "count": 4,
+        "share": 0.0244
+      },
+      {
+        "likely_source": "unknown",
+        "count": 1,
+        "share": 0.0061
+      }
+    ]
+  },
+  "samples": {
+    "default_scope_examples": [
+      {
+        "chunk_id": "02b2b189933438a0258b487ccae6a9f82cc2099a0b44ce71aaeaeaafc24ba7ce",
+        "path": "memory/episodes/2026-05-31.md",
+        "family": "episode",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-01T00:50:32.987Z",
+        "updated_at": "2026-06-15T14:36:55.977Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-06-01T08:50:00.000Z",
+        "content_preview": "- **版本标记不一致** — changelog 停在 v1.7，package.json 仍为 1.0.0，后变更为 0.8.2 ## P2 观测阶段 - 已进入观测驱动阶段，P2 调参指南（由 Sol 在 6/1 补录）已保存至 `memory/projects/memory-engine-p2.md` - 指…",
+        "retrieved_count": 10,
+        "injected_count": 2,
+        "likely_source": "unknown",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "071c6d121f3884767f791c94cd4e15849df58cbbbf012008bc002b2b63313297",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:33",
+        "content_preview": "[2026-05-09 16:21:33][ERROR] Failed to load model \"qwen3.6-27b\". Error: Operation canceled. [2026-05-09 16:21:45][INFO][qwen3.6-27b-claude-opus-reasoning-disti…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "session_event_formatter",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "0961b57845f04978edb9097a82f306333b09427843b0f15e138bba57d220ab43",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:12",
+        "content_preview": "\"id\": \"qwen3.5-27b-claude-4.6-opus-reasoning-distilled\", \"object\": \"model\", \"owned_by\": \"organization_owner\" }, { \"id\": \"qwen3.5-27b\", \"object\": \"model\", \"owne…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "0a3a6e43b986c9aa604c78f360a4677510347f1250a9260190372f22a6894b57",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:51",
+        "content_preview": "[2026-05-09 16:21:51][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 0.0% [2026-05-09 16:21:51][INFO][qwen3.6-27b-claude-opus-rea…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "session_event_formatter",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "0bafd688678f71e68aac9b8983b6ccabcd1bb8ef8bd7a2071d9fdb121603b6e7",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:19:24",
+        "content_preview": "[2026-05-09 16:19:24][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 27.4% [2026-05-09 16:19:24][INFO][qwen3.6-27b-claude-opus-re…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "24ebf28c9d636c06e9998b7b5843dad51f1e70384f37bab9c24b476bbfabd975",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:19:35",
+        "content_preview": "[2026-05-09 16:19:35][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 100.0% [2026-05-09 16:19:35][INFO][qwen3.6-27b-claude-opus-r…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "2757862c279a21e03310082414de30c3979005a27141b90667256b789066493d",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:20:58",
+        "content_preview": "[2026-05-09 16:20:58][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 100.0% [2026-05-09 16:20:59][INFO][qwen3.6-27b-claude-opus-r…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "378297da5fd220c2fa421461da692783f86696bfe27d93ba4e607f42c82c0648",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:01",
+        "content_preview": "[2026-05-09 16:21:01][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 100.0% [2026-05-09 16:21:03][INFO][qwen3.6-27b-claude-opus-r…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "391e2cc47074fc1e81e64f2a9f57cdb44777612f6e48cc6383b5977c0443ea35",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:05",
+        "content_preview": "[2026-05-09 16:21:05][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Streaming response... [2026-05-09 16:21:05][INFO][qwen3.6-27b-claude-opus-reasoning-dist…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "459fc37352f30d7cc70ac2b202d5aed7e2ac19186566833fa899dd1037011747",
+        "path": "memory/smart-add/2026-05-09.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:11.191Z",
+        "updated_at": "2026-06-15T14:37:19.347Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-09 16:21:09",
+        "content_preview": "[2026-05-09 16:21:09][INFO][qwen3.6-27b-claude-opus-reasoning-distill] Prompt processing progress: 98.0% [2026-05-09 16:21:09][INFO][qwen3.6-27b-claude-opus-re…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "medium",
+        "recommended_action": "historical_cleanup_candidate"
+      }
+    ],
+    "recent_examples": [],
+    "retrieved_examples": [
+      {
+        "chunk_id": "7389b6f74d554d1124e8e3b70317a0abb7c2c34bb74a75d1ee96e9eb000ef3b4",
+        "path": "memory/smart-add/2026-05-30.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:05.346Z",
+        "updated_at": "2026-06-15T14:38:27.658Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-05-30T19:30:03.691Z",
+        "content_preview": "knowledge-graph-memory：技能，来源clawhub，作者jpengcheng523-netizen，用于长期图记忆与概念漂移 <!-- smart-add-fingerprint: 7033c8bc18a7b0f93c8177574be7b227f177982263da34076402aae29f…",
+        "retrieved_count": 56,
+        "injected_count": 1,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "be426adc760d89201939a037613532462d008cad59419458a40b37685a529a0b",
+        "path": "memory/smart-add/2026-05-30.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:05.346Z",
+        "updated_at": "2026-06-15T14:38:27.658Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-05-30T19:30:03.691Z",
+        "content_preview": "用户偏好直接高效的沟通方式，需要明确的时间惯例和反馈风格设定 <!-- smart-add-fingerprint: fe3564b3179968c885094ef7555d649e89c835bfb8152de391d5c66cf9419036 --> ## 2026-05-30_episodic_nightly_…",
+        "retrieved_count": 56,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "d10888043ff4518f0270607a0f6dd20bb459b68c92e0bda16b79af98d4a81bdf",
+        "path": "memory/smart-add/2026-06-02.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:04.903Z",
+        "updated_at": "2026-06-15T14:38:32.331Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-26 09:08:20",
+        "content_preview": "- Conversation Summary: 03:57 — session-checkpoint（超时）; 04:00 — 另一个 cron - 04:00 — 记忆统计 (cron): Archive: 0/70 归档，64 条零命中; 触发记录: passive=45, kg=18, llm=3, activ…",
+        "retrieved_count": 27,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "02b2b189933438a0258b487ccae6a9f82cc2099a0b44ce71aaeaeaafc24ba7ce",
+        "path": "memory/episodes/2026-05-31.md",
+        "family": "episode",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-01T00:50:32.987Z",
+        "updated_at": "2026-06-15T14:36:55.977Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-06-01T08:50:00.000Z",
+        "content_preview": "- **版本标记不一致** — changelog 停在 v1.7，package.json 仍为 1.0.0，后变更为 0.8.2 ## P2 观测阶段 - 已进入观测驱动阶段，P2 调参指南（由 Sol 在 6/1 补录）已保存至 `memory/projects/memory-engine-p2.md` - 指…",
+        "retrieved_count": 10,
+        "injected_count": 2,
+        "likely_source": "unknown",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "b87697dbe340738621563f62c06c5c220aa1e88c2370c6e6351a4ce520f4c2b8",
+        "path": "memory/smart-add/2026-06-04.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-04T19:30:09.687Z",
+        "updated_at": "2026-06-15T14:38:43.705Z",
+        "detected_pattern": "bracketed_time_prefix",
+        "matched_text": "[01:19:52]",
+        "content_preview": "**12:14** — 切到 gpt-5.4，也没出回复 **12:27** — 切回 DeepSeek，依然不出 **12:39** — 再切 gpt-5.4，还是没回复 **整条 session 没有任何一条 assistant 的 response 产出过。** 10MB 的 trajectory 装的全是你重…",
+        "retrieved_count": 2,
+        "injected_count": 1,
+        "likely_source": "checkpoint_input",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "dba4dce0f61adb3244c94aa47225a585fbd58a14a76b5c1ed86af54acdb1a1eb",
+        "path": "memory/smart-add/2026-05-26.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:06.064Z",
+        "updated_at": "2026-06-15T14:38:17.411Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-23 18:50:06",
+        "content_preview": "- 04:00 — 记忆统计 (cron): **memory-engine 5.20 不兼容** [待办] — OpenClaw 5.20+ 限制 `global:` 类型插件的 `api.registerTool()`，`memory_engine` 和 `image_vision` 不会暴露给 agent。短期…",
+        "retrieved_count": 2,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "78f9d59cab24b34de20f72a45c363c354193a7f58d00229c100d79d4b01551bd",
+        "path": "memory/smart-add/2026-06-02.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:04.903Z",
+        "updated_at": "2026-06-15T14:38:32.331Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-26 09:08:20",
+        "content_preview": "- 04:00 — 记忆统计 (cron): **api.registerTool() 限制** [教训] — OpenClaw 2026.5.20+ 不再将 `api.registerTool()` 注册的工具暴露给 agent 会话工具列表，这是插件 SDK 的设计限制，非配置可解。memory-engine 当…",
+        "retrieved_count": 1,
+        "injected_count": 0,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "7fe78bb9374efcffbc9bf733fe5c5a418b103124d25878fdf08a66aa20545099",
+        "path": "memory/smart-add/2026-06-04.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-04T19:30:09.687Z",
+        "updated_at": "2026-06-15T14:38:43.705Z",
+        "detected_pattern": "bracketed_time_prefix",
+        "matched_text": "[04:22:56]",
+        "content_preview": "[04:22:56] ASST: 已经关掉了... [04:24:03] ASST: 不影响 Codex CLI 本身... [04:24:48] ASST: 已重启 ✅ agentmemory... [07:12:38] ASST: 6月3日的日志和摘要都正常 ✅ ... [07:18:26] ASST: 不会丢.…",
+        "retrieved_count": 1,
+        "injected_count": 0,
+        "likely_source": "checkpoint_input",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "5477be28afb0e24d49fd56dd95ed545aeb0e9397917bad8d0350cbb5f0d6c2a8",
+        "path": "memory/smart-add/2026-06-11.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-12T02:44:03.942Z",
+        "updated_at": "2026-06-15T14:38:54.416Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-06-04 22:08:43",
+        "content_preview": "- 03:30 Session Checkpoint: session-checkpoint cron 运行; `memory_confidence` 表不存在，checkpoint 部分失败（已知问题，不影响 episode marker 写入）; 8 条纯笔记条目，无对话日志，episode marker 已写;…",
+        "retrieved_count": 1,
+        "injected_count": 0,
+        "likely_source": "healthcheck_note",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "false_positive_rule_review"
+      }
+    ],
+    "injected_examples": [
+      {
+        "chunk_id": "02b2b189933438a0258b487ccae6a9f82cc2099a0b44ce71aaeaeaafc24ba7ce",
+        "path": "memory/episodes/2026-05-31.md",
+        "family": "episode",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-01T00:50:32.987Z",
+        "updated_at": "2026-06-15T14:36:55.977Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-06-01T08:50:00.000Z",
+        "content_preview": "- **版本标记不一致** — changelog 停在 v1.7，package.json 仍为 1.0.0，后变更为 0.8.2 ## P2 观测阶段 - 已进入观测驱动阶段，P2 调参指南（由 Sol 在 6/1 补录）已保存至 `memory/projects/memory-engine-p2.md` - 指…",
+        "retrieved_count": 10,
+        "injected_count": 2,
+        "likely_source": "unknown",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "7389b6f74d554d1124e8e3b70317a0abb7c2c34bb74a75d1ee96e9eb000ef3b4",
+        "path": "memory/smart-add/2026-05-30.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "episodic",
+        "source_type": "memory",
+        "created_at": "2026-06-02T19:30:05.346Z",
+        "updated_at": "2026-06-15T14:38:27.658Z",
+        "detected_pattern": "iso_utc_datetime",
+        "matched_text": "2026-05-30T19:30:03.691Z",
+        "content_preview": "knowledge-graph-memory：技能，来源clawhub，作者jpengcheng523-netizen，用于长期图记忆与概念漂移 <!-- smart-add-fingerprint: 7033c8bc18a7b0f93c8177574be7b227f177982263da34076402aae29f…",
+        "retrieved_count": 56,
+        "injected_count": 1,
+        "likely_source": "smart_add_writer",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      },
+      {
+        "chunk_id": "b87697dbe340738621563f62c06c5c220aa1e88c2370c6e6351a4ce520f4c2b8",
+        "path": "memory/smart-add/2026-06-04.md",
+        "family": "smart_add",
+        "owner": "memory_engine_lifecycle",
+        "category": "raw_log",
+        "source_type": "memory",
+        "created_at": "2026-06-04T19:30:09.687Z",
+        "updated_at": "2026-06-15T14:38:43.705Z",
+        "detected_pattern": "bracketed_time_prefix",
+        "matched_text": "[01:19:52]",
+        "content_preview": "**12:14** — 切到 gpt-5.4，也没出回复 **12:27** — 切回 DeepSeek，依然不出 **12:39** — 再切 gpt-5.4，还是没回复 **整条 session 没有任何一条 assistant 的 response 产出过。** 10MB 的 trajectory 装的全是你重…",
+        "retrieved_count": 2,
+        "injected_count": 1,
+        "likely_source": "checkpoint_input",
+        "is_recent_after_fix": false,
+        "risk_level": "high",
+        "recommended_action": "historical_cleanup_candidate"
+      }
+    ],
+    "top_path_examples": [
+      {
+        "chunk_id": "0a85ea851dff46d67c5648890e361693481d6d3a3d4e9e08df6fb930e9ae61ec",
+        "path": "memory/2026-05-10-2037.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-10T12:37:27.261Z",
+        "updated_at": "2026-06-15T14:35:49.812Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-10 20:37:27",
+        "content_preview": "# Session: 2026-05-10 20:37:27 GMT+8 - **Session Key**: agent:main:main - **Session ID**: 1bb99e21-43bf-4e87-b3d5-4088efb2fd70 - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "raw_log_parser",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "36296501b5ca77214093ca96dd1274c05bf0dca0d092ecf46c8826b38c8ffbe8",
+        "path": "memory/2026-05-18-1249.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-18T04:49:27.500Z",
+        "updated_at": "2026-06-15T14:35:50.176Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-18 12:49:27",
+        "content_preview": "# Session: 2026-05-18 12:49:27 GMT+8 - **Session Key**: agent:main:main - **Session ID**: 02c2c35e-f3b0-45cc-aa25-c44d3cca95c0 - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "raw_log_parser",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "85b2d985641c6fa309dfb9f341aef0438a317e3e64de1a63fa61fbf26451a407",
+        "path": "memory/2026-05-19-0957.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-19T01:57:48.648Z",
+        "updated_at": "2026-06-15T14:35:51.154Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-19 09:57:48",
+        "content_preview": "# Session: 2026-05-19 09:57:48 GMT+8 - **Session Key**: agent:main:main - **Session ID**: a7297f05-a0e7-4d77-a990-e189211d96a8 - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "raw_log_parser",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "b4bb2829584ecde7c43970ef83a70f70b5a24549f79d1b5dfadd03961f5c1db3",
+        "path": "memory/2026-05-22-0903.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-22T01:03:35.957Z",
+        "updated_at": "2026-06-15T14:35:51.443Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-22 09:03:35",
+        "content_preview": "# Session: 2026-05-22 09:03:35 GMT+8 - **Session Key**: agent:main:main - **Session ID**: 1fa5dd3c-b366-43dc-a8d8-e16ce165440a - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "raw_log_parser",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "5d4ae95ac3ce20991fb33e61fa3db745edd1d906c34bc8c242c53fcd69359244",
+        "path": "memory/2026-05-23-1850.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-23T10:50:06.372Z",
+        "updated_at": "2026-06-15T14:35:51.283Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-23 18:50:06",
+        "content_preview": "# Session: 2026-05-23 18:50:06 GMT+8 - **Session Key**: agent:main:main - **Session ID**: b409807f-6d5a-42bc-8ff5-95ea27ba9fdf - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "raw_log_parser",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "e992c8bef5ddd746092331b2eb741433d902de7a2316010dc038a1d445b19547",
+        "path": "memory/2026-05-26-0908.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-26T01:08:20.875Z",
+        "updated_at": "2026-06-15T14:35:52.115Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-26 09:08:20",
+        "content_preview": "# Session: 2026-05-26 09:08:20 GMT+8 - **Session Key**: agent:main:main - **Session ID**: 806bb525-bd72-4397-925f-cf0331942723 - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "raw_log_parser",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "8ad958ccf78722b47c6377b8e5a9665d06d1d417974d0d48539712ec9675a017",
+        "path": "memory/2026-06-04-2208.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-06-04T14:08:43.260Z",
+        "updated_at": "2026-06-15T14:35:54.603Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-06-04 22:08:43",
+        "content_preview": "# Session: 2026-06-04 22:08:43 GMT+8 - **Session Key**: agent:main:main - **Session ID**: 74d2a995-7984-4b45-ae0a-3f3e660c84f8 - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "raw_log_parser",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "15a632247c87c20fb0ca47916e57d4eafd8d55dd455230b16974701019c8670a",
+        "path": "memory/2026-06-07-1025.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-06-07T02:25:23.488Z",
+        "updated_at": "2026-06-15T14:35:55.572Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-06-07 10:25:23",
+        "content_preview": "# Session: 2026-06-07 10:25:23 GMT+8 - **Session Key**: agent:main:main - **Session ID**: 8e7a057a-b2dd-4dc7-92af-00804ece61b5 - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "raw_log_parser",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "beef68577dd737ab04c3183ac75a9258818823a115ed67e52efeb2630bda00af",
+        "path": "memory/2026-06-10-2239.md",
+        "family": "daily_memory",
+        "owner": "openclaw_core",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-06-10T14:39:07.339Z",
+        "updated_at": "2026-06-15T14:35:56.045Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-06-10 22:39:07",
+        "content_preview": "# Session: 2026-06-10 22:39:07 GMT+8 - **Session Key**: agent:main:main - **Session ID**: 020f645b-16b3-4eaf-84e7-0aed85f12886 - **Source**: webchat ## Convers…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "healthcheck_note",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "false_positive_rule_review"
+      },
+      {
+        "chunk_id": "32b13cdae69be0d4c440c751cc4a9b817394d15600e24ef14d611fbadd233c6a",
+        "path": "memory/dreaming/light/2026-05-22.md",
+        "family": "dreaming",
+        "owner": "memory_engine_generated_or_diagnostic",
+        "category": null,
+        "source_type": "memory",
+        "created_at": "2026-05-21T19:00:02.273Z",
+        "updated_at": "2026-06-15T14:36:13.376Z",
+        "detected_pattern": "spaced_datetime",
+        "matched_text": "2026-05-19 09:57:48",
+        "content_preview": "- Candidate: 配置记忆: legal-doc-tool = Obsidian（法律文书系统方案选择 Obsidian）; current-model = DeepSeek V4 Flash（2026-05-13 会话中确认当前运行模型）; session-dm-scope = per-channel-pe…",
+        "retrieved_count": 0,
+        "injected_count": 0,
+        "likely_source": "generated_artifact",
+        "is_recent_after_fix": false,
+        "risk_level": "low",
+        "recommended_action": "historical_cleanup_candidate"
+      }
+    ]
+  },
+  "hypotheses": [
+    {
+      "id": "dominant_source_family",
+      "confidence": "medium",
+      "summary": "timestamp pollution is currently dominated by generated_artifact within dreaming paths",
+      "evidence": [
+        "top likely_source=generated_artifact count=89",
+        "top family=dreaming count=98"
+      ]
+    },
+    {
+      "id": "mostly_historical_residue",
+      "confidence": "medium",
+      "summary": "no entries fall after the post-fix bucket boundary, suggesting timestamp pollution is mostly historical residue in the current snapshot",
+      "evidence": [
+        "created_before_raw_log_fix=159",
+        "unknown_fix_window=5",
+        "created_after_raw_log_fix=0"
+      ]
+    },
+    {
+      "id": "retrieval_impact_present",
+      "confidence": "medium",
+      "summary": "timestamp-polluted memories are not purely dormant historical residue because some have retrieval/injection usage",
+      "evidence": [
+        "entries_ever_retrieved=9",
+        "entries_ever_injected=3"
+      ]
+    }
+  ]
+}
