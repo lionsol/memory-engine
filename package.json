@@ -17,6 +17,7 @@
     "check": "node bin/static-check.js",
     "test": "node --test",
     "memory:quality": "node bin/memory-quality-eval.js",
+    "memory:cleanup-orphan-confidence": "node bin/cleanup-orphan-confidence.js",
     "console": "node console/cli.js",
     "sync-index": "node bin/sync-memory-index.js --force"
   }
