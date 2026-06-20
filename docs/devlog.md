@@ -147,11 +147,21 @@
 ### 修复
 
 - **`raw-log.js`** — checkpoint 读取 session 文件的过滤逻辑重写：
-  - 原来只读 `.jsonl.reset.*` 文件（49 个），漏掉已结束但未 reset 的 session（如 Dashboard session `aaff432b`）
-  - 现在统一读昨天修改过的所有 session 文件（`.reset.` + 过期 `.jsonl`），仅排除 trajectory 文件
-  - `.reset.` 文件用 mtime（原始最后修改时间）而非 reset 时间戳过滤，自然去重：同内容不会被连续两晚重复扫描
-  - `.jsonl` 文件仅在无对应 `.reset.` 版本且 mtime 为昨天时才纳入
-  - 从 49 → ~8 个文件（仅昨天相关），避免每晚扫描全部历史
+  - 不再只读取 `.jsonl.reset.*` 文件，避免漏掉已结束但未 reset 的 session。
+  - 现在读取昨天修改过的 `.reset.*` 与过期 `.jsonl` session 文件，并排除 trajectory 文件。
+  - `.reset.*` 文件按 mtime 过滤，而不是 reset 时间戳，避免历史 reset 文件被每晚重复扫描。
+  - `.jsonl` 文件仅在没有对应 `.reset.*` 且 mtime 属于昨天时纳入。
+  - 修复 Dashboard session `aaff432b` 这类已结束但未 reset 的 session 被漏读的问题。
+  - 将 nightly checkpoint 扫描范围从历史 reset 文件缩小到昨日相关 session 文件，减少重复扫描与历史噪声。
+
+### 测试
+
+- 补充 `checkpoint-raw-log` 测试，覆盖：
+  - `.reset.*` mtime 过滤。
+  - stale `.jsonl` fallback。
+  - `.jsonl` 有对应 `.reset.*` 时不重复纳入。
+  - trajectory 文件排除。
+  - 已结束但未 reset 的 session 纳入 checkpoint 输入。
 
 ## 2026-06-18
 
@@ -1350,4 +1360,3 @@ skipped 5 为既有条件跳过测试：
 - 新增 smart-add async sync runner 相关测试。
 - 新增配置默认值漂移检测，确保 JS defaults 与 `openclaw.plugin.json` 保持一致。
 - 新增 runtime path 测试，防止 engine DB 或 console DB 路径回退到插件项目根。
-
