@@ -180,6 +180,73 @@
   * `category_path_mismatch`：119
 * 发现 6704 条 orphan confidence，确认为 2026-06 集中产生的陈旧 confidence 数据，建议后续单独 dry-run cleanup。
 * 发现 smart-add 文件存在大量跨日重复，后续建议做 duplicate audit，而不是直接删除。
+
+
+## 2026-06-20
+
+### v0.8.5-memory-quality-eval
+
+完成 memory quality evaluation MVP，并发布 `v0.8.5-memory-quality-eval`。
+
+新增内容：
+
+* 新增 `bin/memory-quality-eval.js`，用于生成只读 memory quality 诊断报告。
+* 新增 Markdown / JSON 报告输出：
+
+  * `tmp/memory-quality/latest.md`
+  * `tmp/memory-quality/latest.json`
+* 默认 scope 为 `active-memory`。
+* 引入 path family 分类：
+
+  * `smart-add`
+  * `dreaming`
+  * `episodes`
+  * `projects`
+  * `daily-root`
+  * `memory-root`
+  * `memory-other`
+  * `stats-history`
+  * `non-memory`
+* 默认排除 `stats-history` path family。
+* 支持基于 `core.chunks`、`memory_confidence`、`memory_events` 的质量诊断。
+* 修正 `memory_events.memory_id` 与 `chunks.id` 的 16 字符 prefix join 逻辑。
+* 新增质量 flags / diagnostics：
+
+  * `never_retrieved`
+  * `chunks_without_confidence`
+  * `missing_category`
+  * `duplicate_exact`
+  * `timestamp_pollution`
+  * `category_path_mismatch`
+  * `orphan_confidence`
+* orphan confidence 在本阶段仅作为 diagnostics 输出，不进入 per-memory score，也不执行清理。
+* 新增 `tmp/memory-quality/` gitignore，避免报告产物污染工作区。
+
+验证结果：
+
+* `npm test` 通过。
+* `node bin/memory-quality-eval.js --top 20` 真实库运行通过。
+* live report evaluated memories: 4582。
+* average score: 80.07。
+* grade distribution:
+
+  * A: 2577
+  * B: 1052
+  * C: 453
+  * D: 500
+* top flags:
+
+  * `never_retrieved`: 2198
+  * `chunks_without_confidence`: 1504
+  * `missing_category`: 1504
+  * `duplicate_exact`: 742
+
+后续拆分：
+
+* `orphan_confidence = 6704` 被确认为 stale confidence rows，后续在 `v0.8.6-orphan-confidence-cleanup` 单独处理。
+* `chunks_without_confidence = 1504` 是另一类问题，后续需要单独排查 confidence 生成 / 补全路径。
+
+
 ## 2026-06-19
 
 ### 修复
