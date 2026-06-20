@@ -19,6 +19,8 @@
 - `non-lifecycle recall warning = 16 retrieved / 1 injected`
 - `memory/daily.md` source file was deleted as a stray miswritten workspace artifact
 - natural core index prune did not occur in this run
+- `sync-memory-index.js` no longer hard-fails on a missing local `openclaw` package
+- current environment still does not naturally prune the stale `memory/daily.md` core index row
 
 ## Unknown In Default Scope
 
@@ -137,6 +139,44 @@ Interpretation:
 - no category backfill
 - the residual `unknown=1` is now best explained as stale core index state, not a live source file
 
+## P2E Sync CLI Dependency / Stale Prune Audit
+
+What changed:
+
+- `memory-manager-runtime.js` now normalizes the missing-harness dependency into a clear runtime error instead of surfacing the raw package-import exception.
+- `bin/sync-memory-index.js` now falls back to the sanctioned `openclaw memory index --agent main --force` path when the local `openclaw/plugin-sdk` runtime package is unavailable.
+- no direct SQL delete was added
+- no core write guard was weakened
+- no new `memory/daily.md` classifier was introduced
+
+Verification:
+
+- `node bin/sync-memory-index.js --force` now runs and returns JSON instead of crashing at import/manager resolution time.
+- observed output:
+  - `manager_error = openclaw runtime package unavailable; sync-memory-index requires the OpenClaw harness runtime or the openclaw plugin SDK package`
+  - `sync_result.delegated = true`
+  - `sync_result.via = openclaw memory index`
+- direct manual check of the sanctioned path:
+  - command: `openclaw memory index --agent main --force --verbose`
+  - observed terminal output included: `Memory search disabled.`
+
+Stale core index status:
+
+- before delegated sync:
+  - `core.files WHERE path='memory/daily.md' = 1`
+  - `core.chunks WHERE path='memory/daily.md' = 1`
+- after delegated sync:
+  - `core.files WHERE path='memory/daily.md' = 1`
+  - `core.chunks WHERE path='memory/daily.md' = 1`
+
+Conclusion:
+
+- the original CLI dependency problem was real: the wrapper path was coupled to a harness-only Node package
+- the wrapper is now decoupled enough to use the sanctioned OpenClaw CLI path when that package is absent
+- stale prune still did not happen in this environment
+- the blocking reason is no longer the raw missing-package exception
+- the remaining backlog is that the available OpenClaw index path is effectively no-op here because `Memory search disabled.`
+
 ## Safety Verification
 
 - `quality-scope.js` is only referenced from:
@@ -151,4 +191,8 @@ Interpretation:
 - P2 orphan-confidence cleanup remains valid.
 - The remaining `1504` issue is now split correctly into diagnostic ownership buckets.
 - The default quality score now reflects lifecycle-owned quality expectations instead of penalizing broad indexed memory that memory-engine does not own.
-- After deleting the only live unknown source file, `default scope` is still not zero solely because the current environment could not run the existing sync command to prune stale core index state.
+- After deleting the only live unknown source file, `default scope` is still not zero solely because the stale core index row remains.
+- The sync wrapper issue is fixed, but current OpenClaw runtime state still leaves index prune as external backlog:
+  - `default scope missing confidence = 1`
+  - `lifecycle-owned missing confidence = 0`
+  - `all indexed missing confidence = 1504`

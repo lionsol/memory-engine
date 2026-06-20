@@ -80,3 +80,36 @@ test("createIndexSyncRuntime returns fresh without calling manager when unchange
   assert.equal(managerCalls, 1);
   assert.equal(syncCalls, 1);
 });
+
+test("createIndexSyncRuntime only inspects currently scanned watch paths", async () => {
+  const readPathLists = [];
+  const syncIndexIfNeeded = createIndexSyncRuntime({
+    memoryRoot: "/workspace",
+    watchDirs: ["memory/smart-add"],
+    withDb: fn => fn({}),
+    getSharedMemoryManager: async () => ({
+      manager: {
+        status() {
+          return { dirty: false };
+        },
+        async sync() {},
+      },
+    }),
+    collectIndexedFiles: () => [{ relPath: "memory/smart-add/2026-06-08.md", mtimeMs: 100 }],
+    readIndexedPathState: (_db, pathList) => {
+      readPathLists.push([...pathList]);
+      return {
+        paths: [...pathList],
+        updatedAt: Object.fromEntries(pathList.map(path => [path, 1])),
+      };
+    },
+    backfillConfidenceForIndexedChunks: () => ({ scanned: 0, inserted: 0 }),
+  });
+
+  await syncIndexIfNeeded("test");
+
+  assert.deepEqual(readPathLists, [
+    ["memory/smart-add/2026-06-08.md"],
+    ["memory/smart-add/2026-06-08.md"],
+  ]);
+});

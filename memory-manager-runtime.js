@@ -14,9 +14,23 @@ export const INDEX_SYNC_WATCH_DIRS = ["memory/smart-add", "memory/episodes"];
 
 export const DEFAULT_AGENT_ID = process.env.OPENCLAW_AGENT_ID || "main";
 export const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || resolve(HOME_DIR, ".openclaw/openclaw.json");
+export const OPENCLAW_MEMORY_RUNTIME_SPECIFIER = "openclaw/plugin-sdk/memory-core-engine-runtime";
+
+function normalizeRuntimeImportError(error) {
+  const message = String(error?.message || error || "");
+  const missingPackage = error?.code === "ERR_MODULE_NOT_FOUND"
+    || /Cannot find package 'openclaw' imported from/i.test(message);
+  if (missingPackage) {
+    return [
+      "openclaw runtime package unavailable",
+      "sync-memory-index requires the OpenClaw harness runtime or the openclaw plugin SDK package",
+    ].join("; ");
+  }
+  return message || "openclaw memory-core-engine-runtime unavailable";
+}
 
 async function resolveMemorySearchManager() {
-  const mod = await import("openclaw/plugin-sdk/memory-core-engine-runtime");
+  const mod = await import(OPENCLAW_MEMORY_RUNTIME_SPECIFIER);
   if (typeof mod?.getMemorySearchManager !== "function") {
     throw new Error("openclaw memory-core-engine-runtime unavailable");
   }
@@ -51,7 +65,7 @@ export async function getSharedMemoryManager({ purpose, cfg, agentId, allowImpli
       cfg: null,
       agentId: null,
       configPath: null,
-      error: String(error?.message || error) || "memory manager unavailable",
+      error: normalizeRuntimeImportError(error),
     };
   }
 

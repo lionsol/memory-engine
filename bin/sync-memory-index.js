@@ -1,4 +1,5 @@
 const Database = require("better-sqlite3");
+const { execFileSync } = require("node:child_process");
 
 async function loadRuntimeDeps() {
   const [
@@ -56,9 +57,61 @@ function printUsage() {
   console.log("Usage: node bin/sync-memory-index.js [--force]");
 }
 
+function runOpenClawMemoryIndexCli({
+  force = false,
+  execFileSyncImpl = execFileSync,
+  openClawCommand = "openclaw",
+  agentId = process.env.OPENCLAW_AGENT_ID || "main",
+} = {}) {
+  const args = ["memory", "index", "--agent", agentId];
+  if (force) args.push("--force");
+
+  try {
+    const stdout = String(execFileSyncImpl(openClawCommand, args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }) || "");
+    if (/Memory search disabled\./i.test(stdout)) {
+      return {
+        ok: false,
+        delegated_to: `${openClawCommand} ${args.join(" ")}`,
+        stdout,
+        stderr: "",
+        error: "OpenClaw memory index is unavailable because memory search is disabled",
+      };
+    }
+    return {
+      ok: true,
+      delegated_to: `${openClawCommand} ${args.join(" ")}`,
+      stdout,
+      stderr: "",
+    };
+  } catch (error) {
+    const stdout = String(error?.stdout || "");
+    const stderr = String(error?.stderr || "");
+    if (/Memory search disabled\./i.test(`${stdout}\n${stderr}`)) {
+      return {
+        ok: false,
+        delegated_to: `${openClawCommand} ${args.join(" ")}`,
+        stdout,
+        stderr,
+        error: "OpenClaw memory index is unavailable because memory search is disabled",
+      };
+    }
+    return {
+      ok: false,
+      delegated_to: `${openClawCommand} ${args.join(" ")}`,
+      stdout,
+      stderr,
+      error: stderr.trim() || stdout.trim() || String(error?.message || error),
+    };
+  }
+}
+
 async function runSyncMemoryIndex({
   force = false,
   getSharedMemoryManagerImpl = null,
+  openClawCliSyncImpl = null,
 } = {}) {
   const {
     dateStrInTimeZone,
@@ -73,28 +126,45 @@ async function runSyncMemoryIndex({
   } = await loadRuntimeDeps();
   const getSharedMemoryManagerImplResolved = getSharedMemoryManagerImpl || getSharedMemoryManager;
   const managerResult = await getSharedMemoryManagerImplResolved({ purpose: "cli", allowImplicit: false });
-  if (!managerResult.manager) {
-    throw new Error(managerResult.error || "memory manager unavailable");
-  }
-
+  const manager = managerResult.manager || null;
   const smartAddTimeZone = getSmartAddTimeZone(managerResult.cfg || null);
+  const statusBefore = manager && typeof manager.status === "function" ? manager.status() : null;
+  const memoryRoot = statusBefore?.workspaceDir || WORKSPACE;
+  const dbPathBefore = statusBefore?.dbPath || CORE_DB_PATH;
+  const scannedFiles = collectIndexedFiles(memoryRoot, INDEX_SYNC_WATCH_DIRS);
+  const scannedPaths = scannedFiles.map(file => file.relPath);
+  const beforeResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPathBefore, { paths: [], updatedAt: {} });
+  const before = beforeResult.value;
+  const dirtyBefore = Boolean(statusBefore?.dirty);
+  const openClawCliSync = openClawCliSyncImpl || runOpenClawMemoryIndexCli;
 
-  const manager = managerResult.manager;
   try {
-    const statusBefore = typeof manager.status === "function" ? manager.status() : null;
-    const memoryRoot = statusBefore?.workspaceDir || WORKSPACE;
-    const dbPathBefore = statusBefore?.dbPath || CORE_DB_PATH;
-    const scannedFiles = collectIndexedFiles(memoryRoot, INDEX_SYNC_WATCH_DIRS);
-    const scannedPaths = scannedFiles.map(file => file.relPath);
+    let syncResult = null;
+    let statusAfter = statusBefore;
 
-    const beforeResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPathBefore, { paths: [], updatedAt: {} });
-    const before = beforeResult.value;
-    const dirtyBefore = Boolean(statusBefore?.dirty);
+    if (manager) {
+      const syncPayload = { reason: "cli-sync", ...(force ? { force: true } : {}) };
+      syncResult = await manager.sync(syncPayload);
+      statusAfter = typeof manager.status === "function" ? manager.status() : null;
+    } else {
+      const delegated = await openClawCliSync({ force });
+      if (!delegated?.ok) {
+        const errorParts = [
+          managerResult.error || "memory manager unavailable",
+          delegated?.error ? `fallback openclaw memory index failed: ${delegated.error}` : null,
+        ].filter(Boolean);
+        throw new Error(errorParts.join("; "));
+      }
+      syncResult = {
+        delegated: true,
+        via: "openclaw memory index",
+        delegated_to: delegated.delegated_to,
+        stdout: delegated.stdout,
+        stderr: delegated.stderr,
+      };
+      statusAfter = null;
+    }
 
-    const syncPayload = { reason: "cli-sync", ...(force ? { force: true } : {}) };
-    const syncResult = await manager.sync(syncPayload);
-
-    const statusAfter = typeof manager.status === "function" ? manager.status() : null;
     const dbPath = statusAfter?.dbPath || statusBefore?.dbPath || CORE_DB_PATH;
     const afterResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPath, { paths: [], updatedAt: {} });
     const after = afterResult.value;
@@ -126,6 +196,7 @@ async function runSyncMemoryIndex({
         skipped: skippedCount,
       },
       manager_status: statusAfter || null,
+      manager_error: manager ? null : (managerResult.error || null),
       sync_result: syncResult ?? null,
       today_smart_add_path: todayRelPath,
       today_chunk_exists: todayChunkCount > 0,
@@ -135,7 +206,7 @@ async function runSyncMemoryIndex({
 
     return output;
   } finally {
-    await manager.close?.();
+    await manager?.close?.();
   }
 }
 
@@ -162,4 +233,5 @@ if (require.main === module) {
 module.exports = {
   runSyncMemoryIndex,
   main,
+  runOpenClawMemoryIndexCli,
 };
