@@ -37,6 +37,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Generated reports
+tmp/memory-quality/
+
 # Runtime context artifacts
 .understand-anything/
 *-context.md
