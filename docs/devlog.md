@@ -1,5 +1,141 @@
 ## 2026-06-20
 
+### Memory Quality Evaluation 收尾
+
+* 完成 `chunks_without_confidence / missing_category` 的根因审计与 ownership-aware quality scope 修正。
+
+  * 原始现象：`chunks_without_confidence = 1504`，`missing_category = 1504`，两者为同一 chunk 集合。
+  * 审计后确认：`memory_engine_lifecycle` 范围内缺失 confidence 的数量为 `0`。
+  * 将质量评估 scope 拆分为 lifecycle-owned、OpenClaw core-owned、generated/diagnostic、legacy/manual、unknown/stale indexed records。
+  * 默认质量分不再惩罚 memory-engine 不拥有 lifecycle 的 indexed memory。
+  * 默认评分口径变化：
+
+    * `total_evaluated: 4582 -> 3079`
+    * `average_score: 80.07 -> 89.92`
+  * `--scope all` 仍保留全量 indexed diagnostics，不隐藏历史债务。
+
+* 确认 `memory/daily.md` 为历史误写孤本。
+
+  * 源文件已删除。
+  * core index 中仍残留 stale `core.files/core.chunks` 记录。
+  * 根因是 OpenClaw main agent 配置 `memorySearch.enabled: false` 会同时关闭 runtime recall 和 index maintenance，导致 `openclaw memory index --agent main --force` 返回 `Memory search disabled.`，无法自然 prune。
+  * 该问题已记录为 OpenClaw core 配置语义耦合问题，不在 memory-engine 中手写 DB 修复。
+
+* 修正 `sync-memory-index.js` CLI 依赖边界。
+
+  * 避免本地缺少 OpenClaw harness-only package 时直接 import-time hard fail。
+  * 在缺少本地 runtime manager 时，降级走 sanctioned `openclaw memory index --agent main --force` 路径。
+  * 未添加 direct SQL delete，未弱化 core write guard。
+
+### Smart-add Duplicate Audit
+
+* 新增 lifecycle-owned smart-add exact duplicate 只读审计。
+
+  * 保留旧的单文件 fingerprint audit 兼容模式。
+  * 新增 ownership-aware duplicate audit 报告：
+
+    * `reports/memory-quality/smart-add-duplicate-audit.json`
+    * `reports/memory-quality/smart-add-duplicate-audit.md`
+    * `reports/memory-quality/p3-smart-add-duplicate-summary.md`
+  * 审计结果：
+
+    * lifecycle-owned smart-add duplicate groups: `127`
+    * duplicate entries: `299`
+    * cleanup eligible: `7 groups / 19 entries`
+    * retrieved duplicate groups: `37`
+    * injected duplicate groups: `18`
+    * mixed_or_unclear: `83`
+    * unsafe_to_cleanup: `37`
+  * 结论：smart-add duplicate 不是可直接批量删除的问题，大多数重复需要保留语义判断或因 retrieval/injection 触碰而不安全。
+  * 本阶段未执行 cleanup、未写 DB、未改 recall、未改 quality score、未接 Console。
+
+### Timestamp Pollution Audit
+
+* 新增 timestamp pollution 只读审计。
+
+  * 新增：
+
+    * `bin/audit-timestamp-pollution.js`
+    * `lib/quality/timestamp-pollution.js`
+    * `lib/quality/timestamp-pollution-audit.js`
+    * `reports/memory-quality/timestamp-pollution-audit.{json,md}`
+    * `reports/memory-quality/p4-timestamp-pollution-summary.md`
+  * live audit 初始结果：
+
+    * all scope: `164`
+    * default scope: `57`
+    * generated/diagnostic: `98`
+    * lifecycle-owned: `57`
+    * core-owned: `9`
+    * after-fix newly created pollution: `0`
+
+* 收窄 timestamp pollution detector 的 false positive。
+
+  * 现在会忽略正常 session/date/generated footer 模式，例如：
+
+    * `# Session: ...`
+    * `generatedAt: ...`
+    * `_Generated at ..._`
+    * 普通 markdown 日期标题
+  * 仍继续标记 raw log 风格和 smart-add 内容中的嵌入式操作时间戳，例如：
+
+    * `[2026-05-09 16:21:33][ERROR]...`
+    * smart-add fact 中夹带 ISO operational timestamp
+  * refinement 后结果：
+
+    * all scope: `164 -> 154`
+    * default scope: `57 -> 56`
+    * core-owned: `9 -> 0`
+    * episode: `1 -> 0`
+  * 剩余污染为：
+
+    * dreaming generated diagnostics: `98`
+    * historical smart-add residue: `56`
+  * 结论：没有证据表明当前 post-fix pipeline 仍在持续生成 timestamp pollution；历史 cleanup 暂缓。
+
+### Reports / Tests
+
+* 新增并更新多份 memory quality 报告：
+
+  * `p2-ownership-scope-summary.md`
+  * `smart-add-duplicate-audit.{json,md}`
+  * `p3-smart-add-duplicate-summary.md`
+  * `timestamp-pollution-audit.{json,md}`
+  * `p4-timestamp-pollution-summary.md`
+
+* 测试全部通过：
+
+  * ownership scope / chunks-without-confidence tests
+  * smart-add duplicate audit tests
+  * timestamp pollution audit tests
+  * full `node --test`
+
+### Tags / Branches
+
+* `v0.8.7-quality-ownership-scope`
+
+  * 捕获 P2 ownership-aware quality scope merge 状态。
+* `fix/smart-add-duplicate-audit`
+
+  * 已完成 P3 smart-add duplicate audit。
+* `fix/timestamp-pollution-audit`
+
+  * 已完成 P4 timestamp pollution audit 与 detector refinement，待 merge/tag。
+
+### 后续
+
+* 不建议立即做 smart-add duplicate cleanup。
+
+  * 当前 cleanup-eligible 仅 `7 groups / 19 entries`，收益较小，且已有大量重复被 retrieval/injection 触碰。
+* 不建议立即做 timestamp pollution historical cleanup。
+
+  * 当前没有 post-fix 新增污染证据，剩余主要是历史 residue。
+* 下一步建议让 quality eval 稳定运行几天，再决定是否接 Console 或做 guarded historical cleanup。
+
+
+
+## 2026-06-20
+
 ### 清理
 
 - 已在真实 engine DB 上执行 orphan confidence cleanup apply。
