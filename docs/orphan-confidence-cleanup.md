@@ -99,6 +99,8 @@ node bin/cleanup-orphan-confidence.js
 - `--sample-limit <n>`
 - `--engine-db <path>`
 - `--core-db <path>`
+- `--apply`
+- `--confirm-delete-orphan-confidence`
 
 支持环境变量：
 
@@ -107,7 +109,6 @@ node bin/cleanup-orphan-confidence.js
 
 拒绝参数：
 
-- `--apply`
 - `--delete`
 - `--write-db`
 - `--force`
@@ -116,6 +117,8 @@ node bin/cleanup-orphan-confidence.js
 
 - `tmp/memory-quality/orphan-confidence-cleanup-dry-run.md`
 - `tmp/memory-quality/orphan-confidence-cleanup-dry-run.json`
+- `tmp/memory-quality/orphan-confidence-cleanup-apply.md`
+- `tmp/memory-quality/orphan-confidence-cleanup-apply.json`
 
 ## Apply Safety Protocol
 
@@ -230,10 +233,11 @@ node bin/cleanup-orphan-confidence.js
 
 ### Current Status
 
-- 当前版本仍然只有 `dry-run`。
+- 当前版本默认仍然是 `dry-run`。
+- 当前 CLI 已支持 `--apply`，但必须同时传入：
+  - `--confirm-delete-orphan-confidence`
 - 当前 CLI 继续拒绝：
-  - `--apply`
   - `--delete`
   - `--write-db`
   - `--force`
-- 本文档只是下一步实现 `--apply` 的安全协议，不代表该功能已经存在。
+- apply 只能删除 orphan `memory_confidence` rows，不删除 core/chunks/events/files/vector data。

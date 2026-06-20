@@ -2,16 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CLI_PATH = resolve(REPO_ROOT, "bin/cleanup-orphan-confidence.js");
-const REPORT_JSON_PATH = resolve(REPO_ROOT, "tmp/memory-quality/orphan-confidence-cleanup-dry-run.json");
-const REPORT_MD_PATH = resolve(REPO_ROOT, "tmp/memory-quality/orphan-confidence-cleanup-dry-run.md");
-
 function createFixture() {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-orphan-cleanup-"));
   const corePath = resolve(root, "core.sqlite");
@@ -97,26 +94,35 @@ async function importCleanupModule(tag) {
 }
 
 function cleanupReports() {
-  rmSync(REPORT_JSON_PATH, { force: true });
-  rmSync(REPORT_MD_PATH, { force: true });
 }
 
-function runCli(args = [], envOverrides = {}) {
+function createCliRunContext() {
+  const cwd = mkdtempSync(resolve(tmpdir(), "memory-engine-orphan-cli-"));
+  return {
+    cwd,
+    dryRunJsonPath: resolve(cwd, "tmp/memory-quality/orphan-confidence-cleanup-dry-run.json"),
+    dryRunMdPath: resolve(cwd, "tmp/memory-quality/orphan-confidence-cleanup-dry-run.md"),
+    applyJsonPath: resolve(cwd, "tmp/memory-quality/orphan-confidence-cleanup-apply.json"),
+    applyMdPath: resolve(cwd, "tmp/memory-quality/orphan-confidence-cleanup-apply.md"),
+  };
+}
+
+function runCli(args = [], envOverrides = {}, cwd = REPO_ROOT) {
   const env = {
     ...process.env,
     ...envOverrides,
   };
   return execFileSync("node", [CLI_PATH, ...args], {
-    cwd: REPO_ROOT,
+    cwd,
     env,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
-function runCliExpectError(args = [], envOverrides = {}) {
+function runCliExpectError(args = [], envOverrides = {}, cwd = REPO_ROOT) {
   try {
-    runCli(args, envOverrides);
+    runCli(args, envOverrides, cwd);
     assert.fail("expected CLI to fail");
   } catch (error) {
     return {
@@ -227,17 +233,18 @@ test("CLI --help prints usage and dry-run notes", () => {
   const stdout = runCli(["--help"]);
   assert.match(stdout, /Usage:/);
   assert.match(stdout, /--sample-limit <n>/);
-  assert.match(stdout, /Current version only supports dry-run/);
+  assert.match(stdout, /--apply/);
+  assert.match(stdout, /--confirm-delete-orphan-confidence/);
 });
 
 test("CLI default dry-run uses fixture DB from env and writes reports", () => {
   const fixture = createFixture();
-  cleanupReports();
+  const cliCtx = createCliRunContext();
 
   const stdout = runCli([], {
     ENGINE_DB_PATH: fixture.enginePath,
     CORE_DB_PATH: fixture.corePath,
-  });
+  }, cliCtx.cwd);
 
   assert.match(stdout, /mode: dry-run/);
   assert.match(stdout, /confidence total count: 4/);
@@ -246,11 +253,11 @@ test("CLI default dry-run uses fixture DB from env and writes reports", () => {
   assert.match(stdout, /would delete count: 2/);
   assert.match(stdout, /orphan ratio: 0.5/);
   assert.match(stdout, /event prefix seen count: 1/);
-  assert.equal(existsSync(REPORT_MD_PATH), true);
-  assert.equal(existsSync(REPORT_JSON_PATH), true);
+  assert.equal(existsSync(cliCtx.dryRunMdPath), true);
+  assert.equal(existsSync(cliCtx.dryRunJsonPath), true);
 
-  const markdown = readFileSync(REPORT_MD_PATH, "utf8");
-  const json = JSON.parse(readFileSync(REPORT_JSON_PATH, "utf8"));
+  const markdown = readFileSync(cliCtx.dryRunMdPath, "utf8");
+  const json = JSON.parse(readFileSync(cliCtx.dryRunJsonPath, "utf8"));
   assert.match(markdown, /# Orphan Confidence Cleanup Dry Run/);
   assert.match(markdown, /## Summary/);
   assert.match(markdown, /## Safety/);
@@ -260,45 +267,46 @@ test("CLI default dry-run uses fixture DB from env and writes reports", () => {
 
 test("CLI --json prints JSON summary", () => {
   const fixture = createFixture();
-  cleanupReports();
+  const cliCtx = createCliRunContext();
 
   const stdout = runCli(["--json"], {
     ENGINE_DB_PATH: fixture.enginePath,
     CORE_DB_PATH: fixture.corePath,
-  });
+  }, cliCtx.cwd);
   const summary = JSON.parse(stdout);
 
   assert.equal(summary.mode, "dry-run");
   assert.equal(summary.confidence_total_count, 4);
   assert.equal(summary.orphan_confidence_count, 2);
-  assert.equal(summary.report_output_paths.json, REPORT_JSON_PATH);
-  assert.equal(summary.report_output_paths.markdown, REPORT_MD_PATH);
+  assert.equal(summary.report_output_paths.json, cliCtx.dryRunJsonPath);
+  assert.equal(summary.report_output_paths.markdown, cliCtx.dryRunMdPath);
 });
 
 test("CLI --sample-limit trims sample orphan ids in written JSON report", () => {
   const fixture = createFixture();
-  cleanupReports();
+  const cliCtx = createCliRunContext();
 
   runCli(["--sample-limit", "1"], {
     ENGINE_DB_PATH: fixture.enginePath,
     CORE_DB_PATH: fixture.corePath,
-  });
+  }, cliCtx.cwd);
 
-  const json = JSON.parse(readFileSync(REPORT_JSON_PATH, "utf8"));
+  const json = JSON.parse(readFileSync(cliCtx.dryRunJsonPath, "utf8"));
   assert.deepEqual(json.sample_orphan_chunk_ids, ["orphan-2026-06-a"]);
 });
 
 test("CLI rejects --apply with dry-run only error", () => {
   const error = runCliExpectError(["--apply"]);
   assert.equal(error.status, 1);
-  assert.match(error.stderr, /Current version only supports dry-run/);
-  assert.match(error.stderr, /Real deletion must be implemented later, reviewed separately, and shipped in a separate commit/);
+  assert.match(error.stderr, /refusing to execute --apply without --confirm-delete-orphan-confidence/);
+  assert.match(error.stderr, /Run dry-run first and review the report before apply/);
 });
 
 test("CLI rejects --delete with dry-run only error", () => {
   const error = runCliExpectError(["--delete"]);
   assert.equal(error.status, 1);
-  assert.match(error.stderr, /Current version only supports dry-run/);
+  assert.match(error.stderr, /Unsupported flag: --delete/);
+  assert.match(error.stderr, /This command defaults to dry-run/);
 });
 
 test("CLI missing DB error includes resolved paths and existence diagnostics", () => {
@@ -319,4 +327,148 @@ test("CLI missing DB error includes resolved paths and existence diagnostics", (
   assert.match(error.stderr, /engine DB parent directory exists\?: false/);
   assert.match(error.stderr, /core DB parent directory exists\?: false/);
   assert.match(error.stderr, /original error:/);
+});
+
+test("confirm without --apply stays in dry-run and does not write DB", () => {
+  const fixture = createFixture();
+  const cliCtx = createCliRunContext();
+
+  const stdout = runCli(["--confirm-delete-orphan-confidence"], {
+    ENGINE_DB_PATH: fixture.enginePath,
+    CORE_DB_PATH: fixture.corePath,
+  }, cliCtx.cwd);
+  assert.match(stdout, /mode: dry-run/);
+
+  const engineDb = new Database(fixture.enginePath, { readonly: true });
+  try {
+    const count = engineDb.prepare("SELECT COUNT(*) AS c FROM memory_confidence").get()?.c;
+    assert.equal(count, 4);
+  } finally {
+    engineDb.close();
+  }
+});
+
+test("apply creates backup and deletes only orphan confidence", () => {
+  const fixture = createFixture();
+  const cliCtx = createCliRunContext();
+
+  const stdout = runCli([
+    "--apply",
+    "--confirm-delete-orphan-confidence",
+  ], {
+    ENGINE_DB_PATH: fixture.enginePath,
+    CORE_DB_PATH: fixture.corePath,
+  }, cliCtx.cwd);
+
+  assert.match(stdout, /mode: apply/);
+  assert.match(stdout, /deleted count: 2/);
+  assert.match(stdout, /remaining orphan confidence count: 0/);
+  assert.equal(existsSync(cliCtx.applyJsonPath), true);
+  assert.equal(existsSync(cliCtx.applyMdPath), true);
+
+  const json = JSON.parse(readFileSync(cliCtx.applyJsonPath, "utf8"));
+  const markdown = readFileSync(cliCtx.applyMdPath, "utf8");
+  assert.equal(json.mode, "apply");
+  assert.equal(json.before_orphan_confidence_count, 2);
+  assert.equal(json.precomputed_would_delete_count, 2);
+  assert.equal(json.deleted_count, 2);
+  assert.equal(json.remaining_orphan_confidence_count, 0);
+  assert.equal(typeof json.backup_path, "string");
+  assert.equal(existsSync(json.backup_path), true);
+  assert.match(markdown, /# Orphan Confidence Cleanup Apply Report/);
+  assert.match(markdown, /## Backup/);
+  assert.match(markdown, /## Deleted Rows/);
+  assert.match(markdown, /## Remaining Orphans/);
+  assert.match(markdown, /## Safety/);
+  assert.match(markdown, /node bin\/memory-quality-eval.js --top 20/);
+
+  const engineDb = new Database(fixture.enginePath, { readonly: true });
+  try {
+    const confidenceRows = engineDb.prepare("SELECT chunk_id FROM memory_confidence ORDER BY chunk_id ASC").all();
+    const eventsCount = engineDb.prepare("SELECT COUNT(*) AS c FROM memory_events").get()?.c;
+    assert.deepEqual(confidenceRows.map((row) => row.chunk_id), ["chunk-live-1", "chunk-live-2"]);
+    assert.equal(eventsCount, 1);
+  } finally {
+    engineDb.close();
+  }
+
+  const coreDb = new Database(fixture.corePath, { readonly: true });
+  try {
+    const chunkCount = coreDb.prepare("SELECT COUNT(*) AS c FROM chunks").get()?.c;
+    assert.equal(chunkCount, 2);
+  } finally {
+    coreDb.close();
+  }
+});
+
+test("apply backup failure aborts delete", () => {
+  const fixture = createFixture();
+  const backupsBlocker = resolve(dirname(fixture.enginePath), "backups");
+  writeFileSync(backupsBlocker, "not-a-directory");
+
+  const error = runCliExpectError([
+    "--apply",
+    "--confirm-delete-orphan-confidence",
+  ], {
+    ENGINE_DB_PATH: fixture.enginePath,
+    CORE_DB_PATH: fixture.corePath,
+  });
+
+  assert.equal(error.status, 1);
+  assert.match(error.stderr, /orphan-confidence cleanup apply failed/);
+  assert.match(error.stderr, /original error:/);
+
+  const engineDb = new Database(fixture.enginePath, { readonly: true });
+  try {
+    const count = engineDb.prepare("SELECT COUNT(*) AS c FROM memory_confidence").get()?.c;
+    assert.equal(count, 4);
+  } finally {
+    engineDb.close();
+  }
+});
+
+test("apply transaction rolls back if delete phase throws", async () => {
+  const fixture = createFixture();
+  const originalPrepare = Database.prototype.prepare;
+
+  Database.prototype.prepare = function patchedPrepare(sql, ...args) {
+    const stmt = originalPrepare.call(this, sql, ...args);
+    if (/DELETE FROM memory_confidence/i.test(String(sql))) {
+      return {
+        ...stmt,
+        run(...runArgs) {
+          const result = stmt.run(...runArgs);
+          throw new Error(`forced delete failure after ${result?.changes || 0} changes`);
+        },
+      };
+    }
+    return stmt;
+  };
+
+  try {
+    const { applyOrphanConfidenceCleanup } = await importCleanupModule(`rollback-${Date.now()}`);
+    assert.throws(
+      () => applyOrphanConfidenceCleanup({
+        engineDbPath: fixture.enginePath,
+        coreDbPath: fixture.corePath,
+      }),
+      /forced delete failure/,
+    );
+  } finally {
+    Database.prototype.prepare = originalPrepare;
+  }
+
+  const engineDb = new Database(fixture.enginePath, { readonly: true });
+  try {
+    const count = engineDb.prepare("SELECT COUNT(*) AS c FROM memory_confidence").get()?.c;
+    const orphanCount = engineDb.prepare(`
+      SELECT COUNT(*) AS c
+      FROM memory_confidence
+      WHERE chunk_id IN ('orphan-2026-06-a', '1234567890abcdef-stale')
+    `).get()?.c;
+    assert.equal(count, 4);
+    assert.equal(orphanCount, 2);
+  } finally {
+    engineDb.close();
+  }
 });

@@ -7,9 +7,7 @@ const { homedir } = require("node:os");
 const DEFAULT_ENGINE_DB_PATH = resolve(homedir(), ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_CORE_DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
 const OUTPUT_DIR = resolve(process.cwd(), "tmp/memory-quality");
-const OUTPUT_JSON_PATH = resolve(OUTPUT_DIR, "orphan-confidence-cleanup-dry-run.json");
-const OUTPUT_MD_PATH = resolve(OUTPUT_DIR, "orphan-confidence-cleanup-dry-run.md");
-const FORBIDDEN_FLAGS = new Set(["--apply", "--delete", "--write-db", "--force"]);
+const FORBIDDEN_FLAGS = new Set(["--delete", "--write-db", "--force"]);
 
 function printHelp() {
   writeStdout(`Orphan Confidence Cleanup Dry Run
@@ -23,17 +21,21 @@ Options:
   --sample-limit <n>         Limit sample orphan chunk ids (default: 50)
   --engine-db <path>         Override engine DB path
   --core-db <path>           Override core DB path
+  --apply                    Execute orphan confidence cleanup against the engine DB
+  --confirm-delete-orphan-confidence
+                             Required with --apply
 
 Environment:
   ENGINE_DB_PATH             Engine DB path override
   CORE_DB_PATH               Core DB path override
 
 Refused:
-  --apply --delete --write-db --force
+  --delete --write-db --force
 
 Notes:
-  - Current version only supports dry-run
-  - No DB writes, no deletes, no network, no LLM
+  - Default mode is dry-run
+  - --apply requires --confirm-delete-orphan-confidence
+  - No network, no LLM
   - Reports are written to tmp/memory-quality/
 `);
 }
@@ -67,6 +69,8 @@ function parseArgs(argv = []) {
   const options = {
     help: false,
     json: false,
+    apply: false,
+    confirmDeleteOrphanConfidence: false,
     sampleLimit: 50,
     engineDbPath: null,
     coreDbPath: null,
@@ -76,9 +80,9 @@ function parseArgs(argv = []) {
     const arg = args[i];
     if (FORBIDDEN_FLAGS.has(arg)) {
       throw new Error(
-        `unsupported flag: ${arg}\n` +
-        `Current version only supports dry-run.\n` +
-        `Real deletion must be implemented later, reviewed separately, and shipped in a separate commit.`,
+        `Unsupported flag: ${arg}. ` +
+        `This command defaults to dry-run. ` +
+        `Write mode is only available with --apply --confirm-delete-orphan-confidence.`,
       );
     }
     if (arg === "--help" || arg === "help") {
@@ -87,6 +91,14 @@ function parseArgs(argv = []) {
     }
     if (arg === "--json") {
       options.json = true;
+      continue;
+    }
+    if (arg === "--apply") {
+      options.apply = true;
+      continue;
+    }
+    if (arg === "--confirm-delete-orphan-confidence") {
+      options.confirmDeleteOrphanConfidence = true;
       continue;
     }
     if (arg === "--sample-limit") {
@@ -121,9 +133,12 @@ function resolveDbPaths(options = {}) {
   };
 }
 
-function buildMissingDbError({ engineDbPath, coreDbPath, originalError }) {
+function buildOperationError({ modeLabel, engineDbPath, coreDbPath, originalError }) {
+  const missingEither = !existsSync(engineDbPath) || !existsSync(coreDbPath);
   return [
-    "orphan-confidence cleanup dry-run could not open configured DB files.",
+    missingEither
+      ? `orphan-confidence cleanup ${modeLabel} could not open configured DB files.`
+      : `orphan-confidence cleanup ${modeLabel} failed.`,
     `resolved engine DB path: ${engineDbPath}`,
     `resolved core DB path: ${coreDbPath}`,
     `engine DB exists?: ${existsSync(engineDbPath)}`,
@@ -134,10 +149,40 @@ function buildMissingDbError({ engineDbPath, coreDbPath, originalError }) {
   ].join("\n");
 }
 
-function buildStdoutSummary(result) {
+function outputPathsForMode(mode) {
+  if (mode === "apply") {
+    return {
+      markdown: resolve(OUTPUT_DIR, "orphan-confidence-cleanup-apply.md"),
+      json: resolve(OUTPUT_DIR, "orphan-confidence-cleanup-apply.json"),
+    };
+  }
+  return {
+    markdown: resolve(OUTPUT_DIR, "orphan-confidence-cleanup-dry-run.md"),
+    json: resolve(OUTPUT_DIR, "orphan-confidence-cleanup-dry-run.json"),
+  };
+}
+
+function buildStdoutSummary(result, reportOutputPaths) {
   const topMonths = Object.entries(result.month_distribution || {})
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, 5);
+
+  if (result.mode === "apply") {
+    return {
+      mode: result.mode,
+      engine_db_path: result.engine_db_path,
+      core_db_path: result.core_db_path,
+      before_orphan_confidence_count: result.before_orphan_confidence_count,
+      precomputed_would_delete_count: result.precomputed_would_delete_count,
+      deleted_count: result.deleted_count,
+      remaining_orphan_confidence_count: result.remaining_orphan_confidence_count,
+      event_prefix_seen_count: result.event_prefix_seen_count,
+      top_month_distribution: Object.fromEntries(topMonths),
+      backup_path: result.backup_path,
+      report_output_paths: reportOutputPaths,
+      warning: result.warning,
+    };
+  }
 
   return {
     mode: result.mode,
@@ -150,14 +195,31 @@ function buildStdoutSummary(result) {
     orphan_ratio: result.orphan_ratio,
     event_prefix_seen_count: result.event_prefix_seen_count,
     top_month_distribution: Object.fromEntries(topMonths),
-    report_output_paths: {
-      markdown: OUTPUT_MD_PATH,
-      json: OUTPUT_JSON_PATH,
-    },
+    report_output_paths: reportOutputPaths,
   };
 }
 
 function printTextSummary(summary) {
+  if (summary.mode === "apply") {
+    writeStdout([
+      "Orphan Confidence Cleanup Apply",
+      `mode: ${summary.mode}`,
+      `engine DB path: ${summary.engine_db_path}`,
+      `core DB path: ${summary.core_db_path}`,
+      `before orphan confidence count: ${summary.before_orphan_confidence_count}`,
+      `precomputed would delete count: ${summary.precomputed_would_delete_count}`,
+      `deleted count: ${summary.deleted_count}`,
+      `remaining orphan confidence count: ${summary.remaining_orphan_confidence_count}`,
+      `event prefix seen count: ${summary.event_prefix_seen_count}`,
+      `top month distribution: ${JSON.stringify(summary.top_month_distribution)}`,
+      `backup path: ${summary.backup_path}`,
+      `report markdown: ${summary.report_output_paths.markdown}`,
+      `report json: ${summary.report_output_paths.json}`,
+      summary.warning ? `warning: ${summary.warning}` : "warning: none",
+    ].join("\n"));
+    return;
+  }
+
   writeStdout([
     "Orphan Confidence Cleanup Dry Run",
     `mode: ${summary.mode}`,
@@ -175,7 +237,7 @@ function printTextSummary(summary) {
   ].join("\n"));
 }
 
-function buildMarkdownReport(result) {
+function buildDryRunMarkdownReport(result) {
   return [
     "# Orphan Confidence Cleanup Dry Run",
     "",
@@ -229,19 +291,71 @@ function buildMarkdownReport(result) {
   ].join("\n");
 }
 
+function buildApplyMarkdownReport(result) {
+  return [
+    "# Orphan Confidence Cleanup Apply Report",
+    "",
+    "## Summary",
+    "",
+    `- mode: ${result.mode}`,
+    `- started_at: ${result.started_at}`,
+    `- finished_at: ${result.finished_at}`,
+    `- engine_db_path: ${result.engine_db_path}`,
+    `- core_db_path: ${result.core_db_path}`,
+    `- before_orphan_confidence_count: ${result.before_orphan_confidence_count}`,
+    `- precomputed_would_delete_count: ${result.precomputed_would_delete_count}`,
+    `- deleted_count: ${result.deleted_count}`,
+    `- remaining_orphan_confidence_count: ${result.remaining_orphan_confidence_count}`,
+    `- warning: ${result.warning || "none"}`,
+    "",
+    "## Backup",
+    "",
+    `- backup_path: ${result.backup_path}`,
+    "",
+    "## Deleted Rows",
+    "",
+    "```json",
+    JSON.stringify(result.sample_orphan_chunk_ids, null, 2),
+    "```",
+    "",
+    "## Remaining Orphans",
+    "",
+    `- remaining_orphan_confidence_count: ${result.remaining_orphan_confidence_count}`,
+    "",
+    "## Safety",
+    "",
+    "- 仅删除 `memory_confidence` 中确认 orphan 的 rows。",
+    "- 没有删除 `core.chunks`。",
+    "- 没有删除 `memory_events`。",
+    "- 没有删除 memory files 或 vector data。",
+    "",
+    "## Next Steps",
+    "",
+    "- Run `node bin/memory-quality-eval.js --top 20` to verify orphan diagnostics dropped as expected.",
+    "",
+  ].join("\n");
+}
+
 function writeReports(result) {
+  const outputPaths = outputPathsForMode(result.mode);
   mkdirSync(OUTPUT_DIR, { recursive: true });
-  writeFileSync(OUTPUT_JSON_PATH, `${JSON.stringify(result, null, 2)}\n`);
-  writeFileSync(OUTPUT_MD_PATH, `${buildMarkdownReport(result)}\n`);
+  writeFileSync(outputPaths.json, `${JSON.stringify(result, null, 2)}\n`);
+  writeFileSync(
+    outputPaths.markdown,
+    `${result.mode === "apply" ? buildApplyMarkdownReport(result) : buildDryRunMarkdownReport(result)}\n`,
+  );
   return {
-    jsonPath: OUTPUT_JSON_PATH,
-    markdownPath: OUTPUT_MD_PATH,
+    jsonPath: outputPaths.json,
+    markdownPath: outputPaths.markdown,
   };
 }
 
 async function loadCleanupModule() {
   const mod = await import("../lib/quality/orphan-confidence-cleanup.js");
-  return mod.collectOrphanConfidenceDryRun;
+  return {
+    collectOrphanConfidenceDryRun: mod.collectOrphanConfidenceDryRun,
+    applyOrphanConfidenceCleanup: mod.applyOrphanConfidenceCleanup,
+  };
 }
 
 async function runCleanupOrphanConfidenceCli(argv = process.argv.slice(2)) {
@@ -251,17 +365,37 @@ async function runCleanupOrphanConfidenceCli(argv = process.argv.slice(2)) {
     return { ok: true, code: 0, help: true };
   }
 
-  const collectOrphanConfidenceDryRun = await loadCleanupModule();
+  if (options.apply && !options.confirmDeleteOrphanConfidence) {
+    throw new Error(
+      "refusing to execute --apply without --confirm-delete-orphan-confidence\n" +
+      "Current version requires explicit confirmation before writing DB.\n" +
+      "Run dry-run first and review the report before apply.",
+    );
+  }
+
+  const {
+    collectOrphanConfidenceDryRun,
+    applyOrphanConfidenceCleanup,
+  } = await loadCleanupModule();
   const { engineDbPath, coreDbPath } = resolveDbPaths(options);
   let result;
   try {
-    result = collectOrphanConfidenceDryRun({
-      engineDbPath,
-      coreDbPath,
-      sampleLimit: options.sampleLimit,
-    });
+    if (options.apply) {
+      result = applyOrphanConfidenceCleanup({
+        engineDbPath,
+        coreDbPath,
+        sampleLimit: options.sampleLimit,
+      });
+    } else {
+      result = collectOrphanConfidenceDryRun({
+        engineDbPath,
+        coreDbPath,
+        sampleLimit: options.sampleLimit,
+      });
+    }
   } catch (error) {
-    throw new Error(buildMissingDbError({
+    throw new Error(buildOperationError({
+      modeLabel: options.apply ? "apply" : "dry-run",
       engineDbPath,
       coreDbPath,
       originalError: error,
@@ -269,11 +403,10 @@ async function runCleanupOrphanConfidenceCli(argv = process.argv.slice(2)) {
   }
 
   const reportPaths = writeReports(result);
-  const summary = buildStdoutSummary(result);
-  summary.report_output_paths = {
+  const summary = buildStdoutSummary(result, {
     markdown: reportPaths.markdownPath,
     json: reportPaths.jsonPath,
-  };
+  });
 
   if (options.json) {
     writeStdout(JSON.stringify(summary, null, 2));
