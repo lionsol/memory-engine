@@ -194,6 +194,11 @@ function ensureRequiredDiagnostics(diagnostics) {
     "orphan_confidence_event_prefix_seen_count",
     "sample_orphan_confidence_ids",
     "chunks_without_confidence_count",
+    "chunks_without_confidence_lifecycle_owned_count",
+    "chunks_without_confidence_core_owned_count",
+    "chunks_without_confidence_generated_diagnostic_count",
+    "chunks_without_confidence_legacy_manual_count",
+    "chunks_without_confidence_unknown_count",
     "confidence_id_length_distribution",
     "event_type_distribution",
     "chunk_prefix_unique_count",
@@ -204,6 +209,9 @@ function ensureRequiredDiagnostics(diagnostics) {
     "event_prefix_ambiguous_count",
     "cite_signal_sparse",
     "path_family_distribution",
+    "quality_scope_family_distribution",
+    "quality_scope_owner_distribution",
+    "non_lifecycle_recall_warnings",
   ];
   const missing = requiredKeys.filter(key => !(key in (diagnostics || {})));
   if (missing.length > 0) {
@@ -237,6 +245,7 @@ function buildStdoutSummary(report, outputPaths, topLimit) {
     output_paths: outputPaths,
     orphan_diagnostics_count: report.diagnostics.exact_orphan_confidence_count,
     chunks_without_confidence_count: report.diagnostics.chunks_without_confidence_count,
+    lifecycle_owned_chunks_without_confidence_count: report.diagnostics.chunks_without_confidence_lifecycle_owned_count,
   };
 }
 
@@ -251,6 +260,7 @@ function printTextSummary(summary) {
   console.log(`top flags: ${topFlags}`);
   console.log(`orphan diagnostics count: ${summary.orphan_diagnostics_count}`);
   console.log(`chunks_without_confidence count: ${summary.chunks_without_confidence_count}`);
+  console.log(`lifecycle-owned chunks_without_confidence count: ${summary.lifecycle_owned_chunks_without_confidence_count}`);
   console.log(`output json: ${summary.output_paths.latest_json}`);
   console.log(`output md: ${summary.output_paths.latest_md}`);
 }

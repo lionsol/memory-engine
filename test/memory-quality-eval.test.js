@@ -16,6 +16,10 @@ import {
   isActiveMemoryPath,
   isDefaultIncludedPathFamily,
 } from "../lib/quality/path-family.js";
+import {
+  classifyQualityScope,
+  getQualityScopeFamily,
+} from "../lib/quality/quality-scope.js";
 import { attachEventStatsByPrefix } from "../lib/quality/event-prefix-join.js";
 import {
   evaluateDuplicateFlags,
@@ -354,6 +358,7 @@ function makeScoredFixtureItems() {
   ];
 
   return rawItems.map(item => {
+    const qualityScope = classifyQualityScope(item.path);
     const evaluated = evaluateQualityFlags(item, {
       nowSec: 1719000000,
       duplicateFlags,
@@ -361,10 +366,64 @@ function makeScoredFixtureItems() {
     const scored = scoreQualityItem(evaluated.flags, item);
     return {
       ...item,
+      quality_scope_family: qualityScope.family,
+      quality_scope_owner: qualityScope.owner,
+      expected_confidence: qualityScope.expected_confidence,
+      default_quality_score_scope: qualityScope.default_quality_score_scope,
+      diagnostic_scope: qualityScope.diagnostic_scope,
+      retrieval_visible: qualityScope.retrieval_visible,
+      quality_scope_reason: qualityScope.reason,
       ...evaluated,
       ...scored,
     };
   });
+}
+
+function makeOwnershipDiagnosticsFixture() {
+  return {
+    chunks_count: 4,
+    memory_confidence_count: 3,
+    memory_events_count: 2,
+    exact_orphan_confidence_count: 1,
+    truly_missing_orphan_confidence_count: 1,
+    fake_orphan_confidence_count: 0,
+    orphan_confidence_month_distribution: { "2026-06": 1 },
+    orphan_confidence_event_prefix_seen_count: 0,
+    sample_orphan_confidence_ids: ["orph-1"],
+    chunks_without_confidence_count: 1,
+    chunks_without_confidence_lifecycle_owned_count: 1,
+    chunks_without_confidence_core_owned_count: 0,
+    chunks_without_confidence_generated_diagnostic_count: 0,
+    chunks_without_confidence_legacy_manual_count: 0,
+    chunks_without_confidence_unknown_count: 0,
+    confidence_id_length_distribution: { "16": 1, "18": 2 },
+    event_type_distribution: { memory_candidate_retrieved: 1, memory_injected: 1 },
+    chunk_prefix_unique_count: 4,
+    chunk_prefix_ambiguous_count: 0,
+    event_prefix_total_distinct: 2,
+    event_prefix_matched_count: 1,
+    event_prefix_unmatched_count: 1,
+    event_prefix_ambiguous_count: 0,
+    cite_signal_sparse: { retrieved_signal_count: 1, cite_signal_count: 1, sparse: true },
+    path_family_distribution: { projects: 1, "smart-add": 3 },
+    quality_scope_family_distribution: { project: 1, smart_add: 3 },
+    quality_scope_owner_distribution: { memory_engine_lifecycle: 3, memory_engine_legacy_or_manual: 1 },
+    non_lifecycle_recall_warnings: {
+      non_lifecycle_retrieved_count: 1,
+      non_lifecycle_injected_count: 1,
+      examples: [
+        {
+          id: "good-1",
+          path: "memory/projects/roadmap.md",
+          owner: "memory_engine_legacy_or_manual",
+          family: "project",
+          retrieved_count: 2,
+          injected_count: 1,
+          reason: "project memory files look legacy or manual relative to the current confidence lifecycle",
+        },
+      ],
+    },
+  };
 }
 
 test("quality types export stable MVP v4 constants", () => {
@@ -397,10 +456,35 @@ test("getPathFamily classifies managed memory paths", () => {
   assert.equal(getPathFamily("memory/smart-add/2026-06-18.md"), "smart-add");
 });
 
-test("dreaming and episodes are included in default active-memory scope", () => {
-  assert.equal(isDefaultIncludedPathFamily("dreaming"), true);
+test("ownership-aware quality scope classifies initial ownership rules", () => {
+  assert.equal(getQualityScopeFamily("memory/dreaming/foo.md"), "dreaming");
+  assert.equal(getQualityScopeFamily("memory/episodes/2026-06-18.md"), "episode");
+  assert.equal(getQualityScopeFamily("memory/2026-06-18.md"), "daily_memory");
+  assert.equal(getQualityScopeFamily("MEMORY.md"), "curated_memory");
+  assert.equal(getQualityScopeFamily("memory/projects/a.md"), "project");
+  assert.equal(getQualityScopeFamily("memory/raw_log/a.md"), "raw_log");
+  assert.equal(getQualityScopeFamily("memory/custom/a.md"), "unknown");
+
+  assert.deepEqual(classifyQualityScope("memory/smart-add/2026-06-18.md"), {
+    family: "smart_add",
+    owner: "memory_engine_lifecycle",
+    expected_confidence: true,
+    default_quality_score_scope: true,
+    diagnostic_scope: true,
+    retrieval_visible: true,
+    reason: "smart-add chunks are lifecycle-owned by memory-engine and should carry confidence metadata",
+  });
+  assert.equal(classifyQualityScope("memory/dreaming/foo.md").default_quality_score_scope, false);
+  assert.equal(classifyQualityScope("MEMORY.md").owner, "openclaw_core");
+  assert.equal(classifyQualityScope("memory/2026-06-18.md").retrieval_visible, true);
+  assert.equal(classifyQualityScope("memory/custom/a.md").owner, "unknown");
+  assert.equal(classifyQualityScope("memory/custom/a.md").expected_confidence, true);
+});
+
+test("default active-memory scope is ownership-aware and excludes dreaming", () => {
+  assert.equal(isDefaultIncludedPathFamily("dreaming"), false);
   assert.equal(isDefaultIncludedPathFamily("episodes"), true);
-  assert.equal(isActiveMemoryPath("memory/dreaming/foo.md"), true);
+  assert.equal(isActiveMemoryPath("memory/dreaming/foo.md"), false);
   assert.equal(isActiveMemoryPath("memory/episodes/2026-06-18.md"), true);
 });
 
@@ -411,11 +495,11 @@ test("stats-history is excluded from default active-memory scope", () => {
   assert.equal(isActiveMemoryPath("memory/stats-history.md"), false);
 });
 
-test("MEMORY.md is classified as memory-root and included by default", () => {
+test("MEMORY.md is classified as memory-root and excluded from default score scope", () => {
   const family = getPathFamily("MEMORY.md");
   assert.equal(family, "memory-root");
-  assert.equal(isDefaultIncludedPathFamily(family), true);
-  assert.equal(isActiveMemoryPath("MEMORY.md"), true);
+  assert.equal(isDefaultIncludedPathFamily(family), false);
+  assert.equal(isActiveMemoryPath("MEMORY.md"), false);
 });
 
 test("unknown paths fall back to non-memory and stay excluded", () => {
@@ -538,34 +622,35 @@ test("collectQualityCandidates reads chunks and confidence in readonly mode with
     const result = collectQualityCandidates();
 
     assert.equal(result.scope, "active-memory");
-    assert.equal(result.candidates.length, 3);
+    assert.equal(result.candidates.length, 1);
 
     const byId = new Map(result.candidates.map(candidate => [candidate.id, candidate]));
-    assert.equal(byId.has("aaaaaaaaaaaaaaaa-1"), true);
+    assert.equal(byId.has("aaaaaaaaaaaaaaaa-1"), false);
     assert.equal(byId.has("bbbbbbbbbbbbbbbb-1"), true);
-    assert.equal(byId.has("dddddddddddddddd-1"), true);
+    assert.equal(byId.has("dddddddddddddddd-1"), false);
     assert.equal(byId.has("cccccccccccccccc-1"), false);
     assert.equal(byId.has("eeeeeeeeeeeeeeee-1"), false);
 
-    assert.equal(byId.get("aaaaaaaaaaaaaaaa-1").has_confidence_record, true);
     assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").has_confidence_record, false);
     assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").path_family, "smart-add");
-    assert.equal(byId.get("dddddddddddddddd-1").path_family, "memory-root");
+    assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").quality_scope_family, "smart_add");
+    assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").quality_scope_owner, "memory_engine_lifecycle");
+    assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").expected_confidence, true);
+    assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").default_quality_score_scope, true);
 
-    assert.equal(byId.get("aaaaaaaaaaaaaaaa-1").retrieved_count, 1);
-    assert.equal(byId.get("aaaaaaaaaaaaaaaa-1").injected_count, 1);
-    assert.equal(byId.get("aaaaaaaaaaaaaaaa-1").event_prefix_matched, true);
     assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").retrieved_count, 0);
 
-    assert.equal(result.diagnostics.chunks_count, 3);
+    assert.equal(result.diagnostics.chunks_count, 1);
     assert.equal(result.diagnostics.memory_confidence_count, 5);
     assert.equal(result.diagnostics.memory_events_count, 3);
     assert.equal(result.diagnostics.chunks_without_confidence_count, 1);
-    assert.equal(result.diagnostics.path_family_distribution["memory-root"], 1);
-    assert.equal(result.diagnostics.path_family_distribution["dreaming"], 1);
     assert.equal(result.diagnostics.path_family_distribution["smart-add"], 1);
-    assert.equal(result.diagnostics.event_prefix_matched_count, 1);
-    assert.equal(result.diagnostics.event_prefix_unmatched_count, 1);
+    assert.equal(result.diagnostics.quality_scope_family_distribution.smart_add, 1);
+    assert.equal(result.diagnostics.quality_scope_owner_distribution.memory_engine_lifecycle, 1);
+    assert.equal(result.diagnostics.chunks_without_confidence_lifecycle_owned_count, 1);
+    assert.equal(result.diagnostics.chunks_without_confidence_core_owned_count, 0);
+    assert.equal(result.diagnostics.event_prefix_matched_count, 0);
+    assert.equal(result.diagnostics.event_prefix_unmatched_count, 2);
     assert.equal(result.diagnostics.event_prefix_ambiguous_count, 0);
   } finally {
     if (oldCore === undefined) delete process.env.MEMORY_ENGINE_CORE_DB;
@@ -587,6 +672,7 @@ test("collectQualityCandidates can include stats-history and archived entries wh
     const result = collectQualityCandidates({
       includeArchived: true,
       includeStatsHistory: true,
+      scope: "all",
     });
 
     const ids = new Set(result.candidates.map(candidate => candidate.id));
@@ -617,7 +703,11 @@ test("collectQualityCandidates supports episodes path-family filter", async () =
 
     assert.equal(result.candidates.length, 1);
     assert.equal(result.candidates[0].path_family, "dreaming");
+    assert.equal(result.candidates[0].default_quality_score_scope, false);
+    assert.equal(result.candidates[0].quality_scope_owner, "memory_engine_generated_or_diagnostic");
     assert.equal(result.diagnostics.path_family_distribution["dreaming"], 1);
+    assert.equal(result.diagnostics.non_lifecycle_recall_warnings.non_lifecycle_retrieved_count, 1);
+    assert.equal(result.diagnostics.non_lifecycle_recall_warnings.non_lifecycle_injected_count, 1);
   } finally {
     if (oldCore === undefined) delete process.env.MEMORY_ENGINE_CORE_DB;
     else process.env.MEMORY_ENGINE_CORE_DB = oldCore;
@@ -865,28 +955,7 @@ test("scoreQualityItem suggested_action follows deterministic remediation priori
 
 test("buildQualityReport returns stable JSON-ready fields and duplicate groups", () => {
   const items = makeScoredFixtureItems();
-  const diagnostics = {
-    chunks_count: 4,
-    memory_confidence_count: 3,
-    memory_events_count: 2,
-    exact_orphan_confidence_count: 1,
-    truly_missing_orphan_confidence_count: 1,
-    fake_orphan_confidence_count: 0,
-    orphan_confidence_month_distribution: { "2026-06": 1 },
-    orphan_confidence_event_prefix_seen_count: 0,
-    sample_orphan_confidence_ids: ["orph-1"],
-    chunks_without_confidence_count: 1,
-    confidence_id_length_distribution: { "16": 1, "18": 2 },
-    event_type_distribution: { memory_candidate_retrieved: 1, memory_injected: 1 },
-    chunk_prefix_unique_count: 4,
-    chunk_prefix_ambiguous_count: 0,
-    event_prefix_total_distinct: 2,
-    event_prefix_matched_count: 1,
-    event_prefix_unmatched_count: 1,
-    event_prefix_ambiguous_count: 0,
-    cite_signal_sparse: { retrieved_signal_count: 1, cite_signal_count: 1, sparse: true },
-    path_family_distribution: { projects: 1, "smart-add": 3 },
-  };
+  const diagnostics = makeOwnershipDiagnosticsFixture();
 
   const report = buildQualityReport({
     items,
@@ -912,34 +981,14 @@ test("buildQualityReport returns stable JSON-ready fields and duplicate groups",
   assert.equal(report.groups.duplicates[0].suggested_action, "dedupe_candidate");
   assert.equal(report.breakdowns.by_category.project.count, 1);
   assert.equal(report.breakdowns.by_path_family["smart-add"].count, 3);
+  assert.equal(report.breakdowns.by_quality_scope_owner.memory_engine_lifecycle.count, 3);
   assert.equal(report.breakdowns.by_source.fixture.count, 4);
 });
 
 test("buildQualityReport markdown includes required sections and MVP notes", () => {
   const report = buildQualityReport({
     items: makeScoredFixtureItems(),
-    diagnostics: {
-      chunks_count: 4,
-      memory_confidence_count: 3,
-      memory_events_count: 2,
-      exact_orphan_confidence_count: 1,
-      truly_missing_orphan_confidence_count: 1,
-      fake_orphan_confidence_count: 0,
-      orphan_confidence_month_distribution: { "2026-06": 1 },
-      orphan_confidence_event_prefix_seen_count: 0,
-      sample_orphan_confidence_ids: ["orph-1"],
-      chunks_without_confidence_count: 1,
-      confidence_id_length_distribution: { "16": 1 },
-      event_type_distribution: { memory_candidate_retrieved: 1 },
-      chunk_prefix_unique_count: 4,
-      chunk_prefix_ambiguous_count: 0,
-      event_prefix_total_distinct: 2,
-      event_prefix_matched_count: 1,
-      event_prefix_unmatched_count: 1,
-      event_prefix_ambiguous_count: 0,
-      cite_signal_sparse: { sparse: true },
-      path_family_distribution: { projects: 1, "smart-add": 3 },
-    },
+    diagnostics: makeOwnershipDiagnosticsFixture(),
     options: {
       runId: "run-123",
       generatedAt: "2026-06-19T12:00:00.000Z",
@@ -959,6 +1008,8 @@ test("buildQualityReport markdown includes required sections and MVP notes", () 
   assert.equal(markdown.includes("## Worst Memories"), true);
   assert.equal(markdown.includes("## Duplicate Groups"), true);
   assert.equal(markdown.includes("## Category Breakdown"), true);
+  assert.equal(markdown.includes("## Ownership Breakdown"), true);
+  assert.equal(markdown.includes("## Ownership Warnings"), true);
   assert.equal(markdown.includes("## Recommended Next Actions"), true);
   assert.equal(markdown.includes("orphan confidence is confirmed stale data"), true);
   assert.equal(markdown.includes("orphan confidence diagnostics-only, not included in per-memory score"), true);
@@ -968,6 +1019,8 @@ test("buildQualityReport markdown includes required sections and MVP notes", () 
   assert.equal(markdown.includes("cited / reinforced signals are too sparse to enter per-memory scoring"), true);
   assert.equal(markdown.includes("age uses last_confidence_update or updated_at as an approximation"), true);
   assert.equal(markdown.includes("stats-history is excluded by default"), true);
+  assert.equal(markdown.includes("default quality score scope is ownership-aware"), true);
+  assert.equal(markdown.includes("retrieval visibility does not imply memory-engine confidence ownership"), true);
 });
 
 test("writeQualityReports writes latest and run-id files and creates output directory", () => {
@@ -975,28 +1028,7 @@ test("writeQualityReports writes latest and run-id files and creates output dire
   const outputDir = resolve(root, "nested/reports");
   const report = buildQualityReport({
     items: makeScoredFixtureItems(),
-    diagnostics: {
-      chunks_count: 4,
-      memory_confidence_count: 3,
-      memory_events_count: 2,
-      exact_orphan_confidence_count: 1,
-      truly_missing_orphan_confidence_count: 1,
-      fake_orphan_confidence_count: 0,
-      orphan_confidence_month_distribution: { "2026-06": 1 },
-      orphan_confidence_event_prefix_seen_count: 0,
-      sample_orphan_confidence_ids: ["orph-1"],
-      chunks_without_confidence_count: 1,
-      confidence_id_length_distribution: { "16": 1 },
-      event_type_distribution: { memory_candidate_retrieved: 1 },
-      chunk_prefix_unique_count: 4,
-      chunk_prefix_ambiguous_count: 0,
-      event_prefix_total_distinct: 2,
-      event_prefix_matched_count: 1,
-      event_prefix_unmatched_count: 1,
-      event_prefix_ambiguous_count: 0,
-      cite_signal_sparse: { sparse: true },
-      path_family_distribution: { projects: 1, "smart-add": 3 },
-    },
+    diagnostics: makeOwnershipDiagnosticsFixture(),
     options: {
       runId: "run-123",
       generatedAt: "2026-06-19T12:00:00.000Z",

@@ -177,7 +177,7 @@ test("family inference covers dreaming, smart-add, episodes, projects, daily, ME
   assert.equal(inferAuditFamily("memory/2026-06-18.md"), "daily_memory");
   assert.equal(inferAuditFamily("MEMORY.md"), "curated_memory");
   assert.equal(inferAuditFamily("memory/raw_log/run.md"), "raw_log");
-  assert.equal(inferAuditFamily("notes/random.md"), "unknown");
+  assert.equal(inferAuditFamily("memory/custom/random.md"), "unknown");
 });
 
 test("compareFlagSets confirms missing confidence and missing category are the same chunk set", async () => {
