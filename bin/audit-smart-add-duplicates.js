@@ -3,7 +3,13 @@ const { readFileSync, writeFileSync } = require("fs");
 const { resolve } = require("path");
 
 function printUsage() {
-  console.error("Usage: node bin/audit-smart-add-duplicates.js <smart-add.md> [--fix]");
+  console.error(`Usage:
+  node bin/audit-smart-add-duplicates.js <smart-add.md> [--fix]
+  node bin/audit-smart-add-duplicates.js [--json|--markdown] [--out <path>]
+
+Notes:
+  - Positional file mode preserves the legacy single-file fingerprint audit.
+  - Report mode is read-only and audits lifecycle-owned smart-add duplicate_exact groups by default.`);
 }
 
 function lineNumberAt(content, index) {
@@ -71,17 +77,65 @@ function formatGroup(group) {
   return lines.join("\n");
 }
 
-async function main() {
-  const { buildSmartAddFingerprint } = await import("../smart-add-fingerprint.js");
-  const args = process.argv.slice(2);
-  const fix = args.includes("--fix");
-  const fileArg = args.find(a => !a.startsWith("--"));
+function readFlagValue(args, index, flagName) {
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${flagName} expects a value`);
+  }
+  return value;
+}
 
-  if (!fileArg) {
-    printUsage();
-    process.exit(1);
+function parseAuditArgs(argv = []) {
+  const options = {
+    json: false,
+    markdown: false,
+    out: null,
+    help: false,
+    fileArg: null,
+    fix: false,
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--help" || arg === "help" || arg === "-h") {
+      options.help = true;
+      continue;
+    }
+    if (arg === "--fix") {
+      options.fix = true;
+      continue;
+    }
+    if (arg === "--json") {
+      options.json = true;
+      continue;
+    }
+    if (arg === "--markdown") {
+      options.markdown = true;
+      continue;
+    }
+    if (arg === "--out") {
+      options.out = readFlagValue(argv, i, "--out");
+      i += 1;
+      continue;
+    }
+    if (!arg.startsWith("--") && !options.fileArg) {
+      options.fileArg = arg;
+      continue;
+    }
+    throw new Error(`unknown argument: ${arg}`);
   }
 
+  if (options.json && options.markdown) {
+    throw new Error("choose exactly one output format: --json or --markdown");
+  }
+  if (!options.fileArg && !options.json && !options.markdown) {
+    options.json = true;
+  }
+  return options;
+}
+
+async function runLegacyFileAudit(fileArg, fix) {
+  const { buildSmartAddFingerprint } = await import("../smart-add-fingerprint.js");
   const filePath = resolve(process.cwd(), fileArg);
   const content = readFileSync(filePath, "utf8");
   const entries = parseEntries(content, buildSmartAddFingerprint);
@@ -131,7 +185,37 @@ async function main() {
   console.log(`\nApplied --fix: removed ${removeRanges.length} duplicate entr${removeRanges.length === 1 ? "y" : "ies"}.`);
 }
 
+async function main() {
+  const options = parseAuditArgs(process.argv.slice(2));
+  if (options.help) {
+    printUsage();
+    process.exit(0);
+  }
+
+  if (options.fileArg) {
+    await runLegacyFileAudit(options.fileArg, options.fix);
+    return;
+  }
+
+  const audit = await import("../lib/quality/smart-add-duplicate-audit.js");
+  const { writeAuditReport } = await import("../lib/quality/chunks-without-confidence-audit.js");
+  const report = audit.runSmartAddDuplicateAudit();
+  const output = options.markdown
+    ? audit.renderSmartAddDuplicateAuditMarkdown(report)
+    : JSON.stringify(report, null, 2);
+
+  if (options.out) {
+    writeAuditReport(output, options.out);
+  }
+  console.log(output);
+}
+
 main().catch((error) => {
   console.error(String(error?.message || error));
   process.exit(1);
 });
+
+module.exports = {
+  main,
+  parseAuditArgs,
+};
