@@ -3,7 +3,7 @@
 ## Scope
 
 - Branch: `fix/chunks-without-confidence-audit`
-- Purpose: P2C closure verification only
+- Purpose: P2 ownership-aware quality scope audit, closure verification, and stale index follow-up record
 - No lifecycle behavior changes
 - No recall filtering changes
 - No index sync changes
@@ -22,7 +22,7 @@
 - `sync-memory-index.js` no longer hard-fails on a missing local `openclaw` package
 - current environment still does not naturally prune the stale `memory/daily.md` core index row
 
-## Unknown In Default Scope
+## Residual Stale Default-Scope Record
 
 - `chunk_id`: `9e31c92ffb496582dbb40c2d16c19fdd9e8c6d098484f7fcd1a5810b2c929f7f`
 - `path`: `memory/daily.md`
@@ -32,6 +32,7 @@
 - `reason`: `unknown memory paths are suspicious and should stay in default quality scope until classified explicitly`
 - `expected_confidence`: `true`
 - `default_quality_score_scope`: `true`
+- These values are from the quality classifier's current treatment of unknown indexed memory paths. The source file has since been deleted, so this is now a stale index residue rather than a live unknown source.
 
 P2D status:
 
@@ -177,6 +178,20 @@ Conclusion:
 - the blocking reason is no longer the raw missing-package exception
 - the remaining backlog is that the available OpenClaw index path is effectively no-op here because `Memory search disabled.`
 
+Root cause of `Memory search disabled.`:
+
+- main agent config has `memorySearch.enabled: false`
+- this was intentionally disabled on 2026-06-13 to avoid duplicate memory-context injection between OpenClaw core memory search and memory-engine recall
+- OpenClaw core currently uses this same flag to gate `MemoryIndexManager` initialization
+- therefore disabling runtime memory search also disables index maintenance/prune
+- this prevents deleted memory files such as `memory/daily.md` from being naturally pruned from `core.files` / `core.chunks`
+
+Interpretation:
+
+- this is an OpenClaw core configuration-semantics issue
+- runtime recall/search and index maintenance are currently coupled under one flag
+- memory-engine should not patch around this by direct DB deletion or path-specific classifier rules
+
 ## Safety Verification
 
 - `quality-scope.js` is only referenced from:
@@ -188,7 +203,7 @@ Conclusion:
 
 ## Final P2 Position
 
-- P2 orphan-confidence cleanup remains valid.
+- P1 orphan-confidence cleanup remains valid and is unaffected by the P2 ownership-scope change.
 - The remaining `1504` issue is now split correctly into diagnostic ownership buckets.
 - The default quality score now reflects lifecycle-owned quality expectations instead of penalizing broad indexed memory that memory-engine does not own.
 - After deleting the only live unknown source file, `default scope` is still not zero solely because the stale core index row remains.
