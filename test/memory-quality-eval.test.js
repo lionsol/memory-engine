@@ -795,11 +795,27 @@ test("evaluateQualityFlags marks short, timestamp-polluted, raw-log, and debug-n
     category: "raw_log",
     has_confidence_record: true,
   }, { nowSec: 1719000000 });
+  const sessionHeading = evaluateQualityFlags({
+    id: "s5",
+    path: "memory/2026-06-18-2208.md",
+    text: "# Session: 2026-06-18 22:08:20 GMT+8\n\n## Conversation",
+    category: null,
+    has_confidence_record: true,
+  }, { nowSec: 1719000000 });
+  const episodeMetadata = evaluateQualityFlags({
+    id: "s6",
+    path: "memory/episodes/2026-06-18.md",
+    text: "# Episode: 2026-06-18\n\ngeneratedAt: 2026-06-19T12:00:00.000Z\n\n---\n_Generated at 2026-06-19T12:00:00.000Z_",
+    category: "episodic",
+    has_confidence_record: true,
+  }, { nowSec: 1719000000 });
 
   assert.equal(short.p0_flags.includes("content_too_short"), true);
   assert.equal(timestamped.p0_flags.includes("timestamp_pollution"), true);
   assert.equal(rawLog.p0_flags.includes("raw_log_leak"), true);
   assert.equal(debug.p0_flags.includes("debug_noise"), true);
+  assert.equal(sessionHeading.p0_flags.includes("timestamp_pollution"), false);
+  assert.equal(episodeMetadata.p0_flags.includes("timestamp_pollution"), false);
 });
 
 test("evaluateDuplicateFlags detects exact duplicates via normalized text", () => {

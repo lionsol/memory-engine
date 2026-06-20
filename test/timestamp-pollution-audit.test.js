@@ -1,9 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { createRequire } from "node:module";
 import { detectTimestampPollution } from "../lib/quality/timestamp-pollution.js";
+import { evaluateQualityFlags } from "../lib/quality/quality-rules.js";
+
+const require = createRequire(import.meta.url);
+const checkpoint = require("../bin/session-checkpoint.js");
+const checkpointEpisodeWriter = require("../lib/checkpoint/episode-writer.js");
+const smartAddWriter = require("../lib/checkpoint/smart-add-writer.js");
 
 async function importAuditModule(tag = Date.now()) {
   return import(`../lib/quality/timestamp-pollution-audit.js?ts=${tag}`);
+}
+
+function createCheckpointFixture() {
+  const root = mkdtempSync(resolve(tmpdir(), "memory-engine-timestamp-pollution-"));
+  const memoryDir = resolve(root, "memory");
+  const episodesDir = resolve(memoryDir, "episodes");
+  const smartAddDir = resolve(memoryDir, "smart-add");
+  mkdirSync(episodesDir, { recursive: true });
+  mkdirSync(smartAddDir, { recursive: true });
+  return { root, memoryDir, episodesDir, smartAddDir };
 }
 
 function buildCandidate(overrides = {}) {
@@ -36,9 +56,13 @@ test("detectTimestampPollution detects current regex patterns deterministically"
     detected: true,
     detected_pattern: "iso_utc_datetime",
     matched_text: "2026-06-18T10:01:02Z",
+    classification: "embedded_log_timestamp",
+    penalize: true,
+    reason: "timestamp is embedded in memory content rather than isolated as structured document metadata",
   });
   assert.equal(spaced.detected_pattern, "spaced_datetime");
   assert.equal(bracketed.detected_pattern, "bracketed_time_prefix");
+  assert.equal(bracketed.classification, "raw_log_operational_residue");
 });
 
 test("normal markdown date headings are not flagged as timestamp pollution", () => {
@@ -47,7 +71,82 @@ test("normal markdown date headings are not flagged as timestamp pollution", () 
     detected: false,
     detected_pattern: null,
     matched_text: null,
+    classification: null,
+    penalize: false,
+    reason: null,
   });
+});
+
+test("session headings and episode generatedAt metadata are not default timestamp pollution", () => {
+  const sessionHeading = detectTimestampPollution("# Session: 2026-05-10 20:37:27 GMT+8\n\n## Conversation");
+  const generatedField = detectTimestampPollution("generatedAt: 2026-06-18T01:23:45.000Z");
+  const generatedFooter = detectTimestampPollution("_Generated at 2026-06-18T01:23:45.000Z — 基于 6/1 复盘补录_");
+
+  assert.equal(sessionHeading.detected, false);
+  assert.equal(sessionHeading.classification, "normal_session_heading");
+  assert.equal(generatedField.detected, false);
+  assert.equal(generatedField.classification, "structured_generated_metadata");
+  assert.equal(generatedFooter.detected, false);
+  assert.equal(generatedFooter.classification, "structured_generated_metadata");
+});
+
+test("episode writer output keeps structured timestamps but is not default pollution", async () => {
+  const fixture = createCheckpointFixture();
+
+  await checkpoint.withRuntime({
+    episodesDir: fixture.episodesDir,
+    memoryDir: fixture.memoryDir,
+  }, async () => {
+    checkpointEpisodeWriter.writeEpisodeFiles({
+      episodeDate: "2026-06-17",
+      generatedAt: "2026-06-18T01:23:45.000Z",
+      episodeText: "episode summary body",
+      configs: [],
+    });
+  });
+
+  const content = readFileSync(resolve(fixture.episodesDir, "2026-06-17.md"), "utf8");
+  const detection = detectTimestampPollution(content);
+  const evaluated = evaluateQualityFlags({
+    id: "episode-1",
+    path: "memory/episodes/2026-06-17.md",
+    text: content,
+    category: "episodic",
+    has_confidence_record: true,
+  }, { nowSec: 1719000000 });
+
+  assert.equal(detection.detected, false);
+  assert.equal(detection.classification, "structured_generated_metadata");
+  assert.equal(evaluated.p0_flags.includes("timestamp_pollution"), false);
+});
+
+test("smart-add writer keeps clean facts clean but operational timestamps remain pollution", async () => {
+  const fixture = createCheckpointFixture();
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    memoryDir: fixture.memoryDir,
+    now: () => new Date("2026-06-18T01:23:45.000Z"),
+  }, async () => {
+    smartAddWriter.appendSmartAdd("clean user preference fact", "preference", {
+      entryId: "clean_entry",
+      targetDate: "2026-06-17",
+      generatedAt: "2026-06-18T01:23:45.000Z",
+    });
+    smartAddWriter.appendSmartAdd("[2026-05-09 16:21:33][ERROR] Failed to load model", "raw_log", {
+      entryId: "polluted_entry",
+      targetDate: "2026-06-17",
+      generatedAt: "2026-06-18T01:23:45.000Z",
+    });
+  });
+
+  const content = readFileSync(resolve(fixture.smartAddDir, "2026-06-18.md"), "utf8");
+  const cleanBlock = content.match(/## clean_entry[\s\S]*?(?=\n<!-- smart-add-fingerprint:|\s*$)/)?.[0] || "";
+  const pollutedBlock = content.match(/## polluted_entry[\s\S]*?(?=\n<!-- smart-add-fingerprint:|\s*$)/)?.[0] || "";
+
+  assert.equal(detectTimestampPollution(cleanBlock).detected, false);
+  assert.equal(detectTimestampPollution(pollutedBlock).detected, true);
+  assert.equal(detectTimestampPollution(pollutedBlock).classification, "raw_log_operational_residue");
 });
 
 test("likely source classification distinguishes raw-log, autoRecall, healthcheck, generated, and smart-add residue", async () => {

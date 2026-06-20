@@ -3,183 +3,191 @@
 ## Scope
 
 - Branch: `fix/timestamp-pollution-audit`
-- Mode: read-only audit only
-- No memory mutation
+- P4B mode: provenance verification, detector refinement, and fixture-level regression coverage only
 - No DB writes
-- No cleanup or backfill
+- No memory cleanup
+- No backfill
 - No recall behavior change
-- No quality score formula change beyond diagnostic reporting
-- No Console integration
+- No Console change
 
-## Current Count
+## Before / After
 
-- `timestamp_pollution_total = 164`
-- `default scope count = 57`
-- `all scope count = 164`
-- `lifecycle-owned count = 57`
-- `core-owned count = 9`
-- `generated_or_diagnostic count = 98`
-- `legacy_or_manual count = 0`
-- `unknown count = 0`
+P4A live baseline before detector refinement:
 
-Interpretation:
-
-- The current live issue is not confined to historical diagnostic-only material.
-- The majority is outside default quality scope under `dreaming`, but `57` lifecycle-owned entries still affect the default score population.
-
-## Breakdown
-
-### Owner
-
-- `memory_engine_generated_or_diagnostic = 98`
-- `memory_engine_lifecycle = 57`
-- `openclaw_core = 9`
-
-### Family
-
-- `dreaming = 98`
-- `smart_add = 56`
-- `daily_memory = 9`
-- `episode = 1`
-
-### Category
-
-- `null = 107`
-- `raw_log = 53`
-- `episodic = 3`
-- `preference = 1`
-
-### Dominant Paths
-
-- `memory/dreaming/* = 98`
-- `memory/smart-add/* = 56`
-- `memory/YYYY-MM-DD-HHMM.md = 9`
-- `memory/episodes/2026-05-31.md = 1`
-
-## Historical vs Current Pipeline
-
-- `created_before_raw_log_fix = 159`
-- `unknown_fix_window = 5`
-- `created_after_raw_log_fix = 0`
-
-Interpretation:
-
-- There is no evidence in this snapshot that the current post-fix pipeline is still generating new timestamp-polluted entries.
-- The population is overwhelmingly historical residue.
-- The remaining `5` ambiguous-window rows should be treated as "uncertain timing" rather than proof of a live regression.
-
-## Retrieval / Injection Impact
-
+- `all scope timestamp_pollution = 164`
+- `default scope timestamp_pollution = 57`
+- `generated_or_diagnostic = 98`
+- `lifecycle = 57`
+- `core = 9`
+- `family: dreaming=98, smart_add=56, daily_memory=9, episode=1`
 - `retrieved_count_total = 156`
 - `injected_count_total = 4`
 - `entries_ever_retrieved = 9`
 - `entries_ever_injected = 3`
 
-Interpretation:
+P4B live result after detector refinement:
 
-- Timestamp pollution is not purely dormant debt.
-- Some polluted chunks have already participated in recall and injection, so cleanup should remain deferred until source attribution and risk segmentation are tighter.
+- `all scope timestamp_pollution = 154`
+- `default scope timestamp_pollution = 56`
+- `generated_or_diagnostic = 98`
+- `lifecycle = 56`
+- `core = 0`
+- `family: dreaming=98, smart_add=56`
+- `retrieved_count_total = 146`
+- `injected_count_total = 2`
+- `entries_ever_retrieved = 8`
+- `entries_ever_injected = 2`
 
-## Likely Source Ranking
+Delta:
 
-- `generated_artifact = 89`
-- `smart_add_writer = 31`
-- `checkpoint_input = 19`
-- `raw_log_parser = 8`
-- `healthcheck_note = 7`
-- `session_event_formatter = 5`
-- `autoRecall_trace = 4`
-- `unknown = 1`
-
-Interpretation:
-
-- The largest bucket is `dreaming` generated material.
-- The default-scope impact is mostly lifecycle-owned `smart_add` residue carrying raw timestamps, log lines, or copied operational text.
-- Core daily session files contribute a small but notable false-positive-review bucket.
-
-## Top Examples
-
-### Lifecycle-owned / default-scope examples
-
-- `memory/smart-add/2026-05-09.md`
-  - category: `raw_log`
-  - matched pattern: `spaced_datetime`
-  - matched text: `2026-05-09 16:21:33`
-  - preview: `[2026-05-09 16:21:33][ERROR] Failed to load model ...`
-  - likely source: `session_event_formatter`
-  - retrieved/injected: `0 / 0`
-  - current reading: looks like historical raw operational output stored into smart-add content
-
-- `memory/smart-add/2026-05-30.md`
-  - category: `episodic`
-  - matched pattern: `iso_utc_datetime`
-  - matched text: `2026-05-30T19:30:03.691Z`
-  - preview: `knowledge-graph-memory... <!-- smart-add-fingerprint: ... --> ## 2026-05-30_episodic_nightly_...`
-  - likely source: `smart_add_writer`
-  - retrieved/injected: `56 / 1`
-  - current reading: historical smart-add content containing timestamp-bearing normalized note text, with real recall usage
-
-- `memory/episodes/2026-05-31.md`
-  - category: `episodic`
-  - matched pattern: `iso_utc_datetime`
-  - matched text: `2026-06-01T08:50:00.000Z`
-  - likely source: `unknown`
-  - retrieved/injected: `10 / 2`
-  - current reading: highest-risk lifecycle-owned sample because it is both default-scope and recall-visible
-
-### Core-owned false-positive-review examples
-
-- `memory/2026-05-10-2037.md`
-  - family: `daily_memory`
-  - matched text: `2026-05-10 20:37:27`
-  - preview: `# Session: 2026-05-10 20:37:27 GMT+8 ...`
-  - likely source: `raw_log_parser`
-  - recommended action: `false_positive_rule_review`
-  - current reading: this looks like structured session heading content, not necessarily harmful pollution
-
-- `memory/2026-05-18-1249.md`
-  - family: `daily_memory`
-  - matched text: `2026-05-18 12:49:27`
-  - preview: `# Session: 2026-05-18 12:49:27 GMT+8 ...`
-  - likely source: `raw_log_parser`
-  - recommended action: `false_positive_rule_review`
-
-## Recent-After-Fix Examples
-
-- None in the post-fix bucket.
+- `all scope`: `164 -> 154` (`-10`)
+- `default scope`: `57 -> 56` (`-1`)
+- `core-owned`: `9 -> 0`
+- `episode`: `1 -> 0`
 
 Interpretation:
 
-- The audit did not find any timestamp-polluted entries created after the current post-fix boundary.
-- That weakens the case for an urgent live pipeline regression fix in P4A itself.
+- The removed `10` were detector false positives, not cleaned data.
+- The reduction is fully explained by:
+  - `daily_memory session-heading false positives = 9`
+  - `episode structured generated footer false positive = 1`
 
-## Main Conclusions
+## Episode Provenance
 
-1. `timestamp_pollution = 164` is real in the broad indexed set, but it is mostly historical residue rather than proven current generation.
-2. The dominant source family is `dreaming`, which is ownership-wise diagnostic/generated and should be interpreted separately from lifecycle-owned quality debt.
-3. Default-score impact still exists because `57` lifecycle-owned entries are timestamp-polluted, mostly under `memory/smart-add/*`.
-4. A small core-owned bucket under `memory/YYYY-MM-DD-HHMM.md` looks like plausible detector false positives on session headings rather than harmful injected operational noise.
-5. Retrieval impact is limited but non-zero, so broad cleanup should remain deferred.
+Target sample:
 
-## Whether Source Fix Is Needed Now
+- `path = memory/episodes/2026-05-31.md`
+- previous matched timestamp = `2026-06-01T08:50:00.000Z`
+- previous retrieval/injection = `10 / 2`
 
-- Immediate historical cleanup is not justified yet.
-- A source fix may still be needed for the lifecycle-owned `smart_add` path if those entries came from older checkpoint/session formatting behavior that can still be reintroduced, but P4A does not show evidence of active new creation after the current fix boundary.
-- The detector itself likely needs review for core daily session headings, because those examples resemble structured metadata rather than contamination.
+Resolved provenance:
 
-## Why Historical Cleanup Is Deferred
+- The matched timestamp came from the footer line:
+  - `_Generated at 2026-06-01T08:50:00.000Z — 基于 6/1 复盘补录_`
+- This is structured checkpoint-style episode metadata, not a raw-log line.
+- The file also contains prose indicating retrospective补录 rather than copied event trace.
+- Current checkpoint episode writer and marker writers intentionally emit:
+  - `generatedAt: ...`
+  - `_Generated at ..._`
+- Therefore this sample is best explained as historical checkpoint/LLM-produced episode metadata, not raw-log summarizer pollution and not runtime recall trace.
 
-- This task is audit-only.
-- Some polluted entries were retrieved or injected, so deleting or rewriting them now would be behavior-affecting.
-- The current population mixes:
-  - generated diagnostic artifacts
-  - historical smart-add residue
-  - possible core-note false positives
-- That mix needs a narrower P4B decision before any cleanup action is safe.
+Conclusion:
 
-## Recommended P4B
+- Episode provenance is resolved enough for P4B.
+- It should no longer count as default timestamp pollution.
 
-- Confirm whether lifecycle-owned `smart_add` timestamp pollution can still be produced by the current checkpoint/session summarization path under a controlled fixture.
-- Review whether `daily_memory` session-heading matches should be excluded from timestamp-pollution flagging or downgraded to diagnostic-only.
-- Isolate the single `episode` / `unknown` lifecycle-owned sample for manual provenance tracing.
-- Keep historical cleanup deferred until the detector false-positive boundary and lifecycle-owned source path are both clearer.
+## Detector Refinement
+
+P4B changed the detector from "any timestamp match" to "timestamp match plus context classification".
+
+Now distinguished explicitly:
+
+1. `raw_log_operational_residue`
+   - still penalized
+   - examples:
+     - `[2026-05-09 16:21:33][ERROR] Failed to load model ...`
+     - `[04:22:56] ASST: ...`
+
+2. `embedded_log_timestamp`
+   - still penalized
+   - examples:
+     - ISO timestamps embedded in lifecycle-owned smart-add content
+     - operational summaries carrying copied timestamped payloads
+
+3. `normal_session_heading`
+   - not penalized
+   - example:
+     - `# Session: 2026-05-10 20:37:27 GMT+8`
+
+4. `structured_generated_metadata`
+   - not penalized
+   - examples:
+     - `generatedAt: 2026-06-18T01:23:45.000Z`
+     - `_Generated at 2026-06-18T01:23:45.000Z_`
+
+5. `normal_markdown_date_heading`
+   - not penalized
+   - example:
+     - `## 2026-06-08 会议纪要`
+
+Important boundary:
+
+- This refinement does not make lifecycle smart-add timestamps universally acceptable.
+- Embedded ISO timestamps inside smart-add content still count when they are part of copied operational or synthetic note payloads rather than isolated structural metadata.
+
+## Current Live Breakdown
+
+After refinement:
+
+- owner:
+  - `memory_engine_generated_or_diagnostic = 98`
+  - `memory_engine_lifecycle = 56`
+- family:
+  - `dreaming = 98`
+  - `smart_add = 56`
+- category:
+  - `null = 98`
+  - `raw_log = 53`
+  - `episodic = 2`
+  - `preference = 1`
+- likely source:
+  - `generated_artifact = 89`
+  - `smart_add_writer = 31`
+  - `checkpoint_input = 19`
+  - `healthcheck_note = 6`
+  - `session_event_formatter = 5`
+  - `autoRecall_trace = 4`
+
+## Historical Split
+
+After refinement:
+
+- `created_before_raw_log_fix = 149`
+- `unknown_fix_window = 5`
+- `created_after_raw_log_fix = 0`
+
+Conclusion:
+
+- There is still no evidence that the post-fix pipeline is actively creating new timestamp-polluted entries.
+- P4B strengthens the P4A conclusion that the live population is historical residue plus detector false positives, not a proven current regression.
+
+## Retrieval / Injection Impact
+
+After refinement:
+
+- `retrieved_count_total = 146`
+- `injected_count_total = 2`
+- `entries_ever_retrieved = 8`
+- `entries_ever_injected = 2`
+
+Interpretation:
+
+- The false-positive refinement removed one recall-visible episode sample.
+- The remaining polluted set still has real recall/injection usage, so historical cleanup remains unsafe to do blindly.
+
+## Fixture-Level Regression Coverage
+
+Added coverage proves:
+
+- normal session headings are not treated as default timestamp pollution
+- checkpoint episode writer output with structured `generatedAt` metadata is not treated as default timestamp pollution
+- clean smart-add writer output remains clean
+- smart-add content carrying operational timestamp residue still triggers timestamp pollution
+- lifecycle quality evaluation still flags genuine raw-log style timestamp payloads
+
+## Why Historical Cleanup Remains Deferred
+
+- This task did not mutate content or DB state.
+- The remaining `154` records are still a mixed population:
+  - generated dreaming artifacts
+  - lifecycle smart-add historical residue
+  - a small number of recall-visible polluted lifecycle entries
+- Cleanup still needs a separate decision with provenance-by-source and usage risk in hand.
+
+## Recommended P4B Outcome
+
+- Keep the detector refinement.
+- Treat the `daily_memory` session-heading bucket as resolved false positive noise for timestamp quality scoring.
+- Treat the single episode sample as resolved structured metadata rather than raw-log pollution.
+- Do not do broad source fixes or cleanup yet.
+- If there is a P4C, focus only on the remaining lifecycle-owned `smart_add` historical residue and the small recall-visible subset.
