@@ -1,3 +1,41 @@
+## 2026-06-20
+
+### 清理
+
+- 已在真实 engine DB 上执行 orphan confidence cleanup apply。
+- 清理对象仅为 `memory_confidence` 中确认 orphan 的 stale rows。
+- 本次 `confidence_total_count` 从 `9782` 降到 `3078`。
+- 本次共删除 `6704` 条 orphan `memory_confidence` rows。
+- 清理后：
+  - `orphan_confidence_count = 0`
+  - `would_delete_count = 0`
+  - `remaining_orphan_confidence_count = 0`
+  - `memory-quality-eval` 的 orphan diagnostics count = `0`
+
+### 边界
+
+- 没有清理 `core.chunks`。
+- 没有清理 `memory_events`。
+- 没有清理 memory files。
+- 没有清理 LanceDB / vector data。
+- 没有执行 `VACUUM`。
+
+### 备份
+
+- apply 前已自动创建 engine DB 备份：
+  - `memory-engine-before-orphan-confidence-cleanup-20260620T030551Z.sqlite`
+
+### 验证
+
+- 清理后重新运行 orphan confidence dry-run，确认 orphan 计数归零。
+- 清理后重新运行 `memory-quality-eval`，确认 orphan diagnostics count 归零。
+- 平均分约 `80.07`，与清理前基本不变；orphan confidence diagnostics 不参与 per-memory scoring。
+
+### 后续
+
+- `chunks_without_confidence = 1504` 仍然存在，且本次清理前后未变。
+- `chunks_without_confidence` 属于后续单独问题，不包含在本次 orphan confidence cleanup 范围内。
+
 ## 2026-06-19
 
 ### 新增
