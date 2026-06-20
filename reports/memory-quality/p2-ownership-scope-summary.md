@@ -17,6 +17,8 @@
 - `default scope missing confidence = 1`
 - `all indexed missing confidence = 1504`
 - `non-lifecycle recall warning = 16 retrieved / 1 injected`
+- `memory/daily.md` source file was deleted as a stray miswritten workspace artifact
+- natural core index prune did not occur in this run
 
 ## Unknown In Default Scope
 
@@ -28,6 +30,13 @@
 - `reason`: `unknown memory paths are suspicious and should stay in default quality scope until classified explicitly`
 - `expected_confidence`: `true`
 - `default_quality_score_scope`: `true`
+
+P2D status:
+
+- source file `/home/lionsol/.openclaw/workspace/memory/daily.md` has been deleted
+- core DB still contains stale index rows for `memory/daily.md`
+- `core.chunks` count for that path: `1`
+- `core.files` count for that path: `1`
 
 ## Score Scope Verification
 
@@ -48,6 +57,19 @@ Conclusion:
   - default scope owner distribution: `memory_engine_lifecycle = 3078`, `unknown = 1`
   - default scope missing-confidence count is `1`, and `lifecycle-owned missing confidence` is `0`
   - broad `--scope all` still reports the full `1504` diagnostic set
+
+P2D expected-vs-actual:
+
+- expected after delete + successful natural prune:
+  - `default scope missing confidence = 0`
+  - `all indexed missing confidence = 1503`
+- actual in this environment:
+  - `default scope missing confidence = 1`
+  - `all indexed missing confidence = 1504`
+
+Reason:
+
+- the source file is gone, but the current core index still retains a stale `memory/daily.md` row
 
 If score had remained `80.07`, that would have meant non-default-scope candidates were still contributing to default scoring. That is not what the live run shows.
 
@@ -94,6 +116,27 @@ Interpretation:
 - Backfilling these rows would convert an ownership/scope distinction into a data mutation without a product decision.
 - The task explicitly required audit and closure verification only, with no behavior repair.
 
+## P2D Delete / Prune Verification
+
+- `memory/daily.md` was confirmed as a `114` byte workspace file under `/home/lionsol/.openclaw/workspace/memory/`
+- it is not part of this repository and is not git-tracked here
+- repository search found no script or plugin references to that path
+- it was deleted directly from the workspace as a safe historical miswrite
+
+Existing natural-prune attempt:
+
+- command: `node bin/sync-memory-index.js --force`
+- result: failed before executing sync
+- error: `Cannot find package 'openclaw' imported from /home/lionsol/.openclaw/workspace/plugins/memory-engine/memory-manager-runtime.js`
+
+Interpretation:
+
+- no manual DB repair was applied
+- no manual `DELETE core.files/core.chunks`
+- no confidence backfill
+- no category backfill
+- the residual `unknown=1` is now best explained as stale core index state, not a live source file
+
 ## Safety Verification
 
 - `quality-scope.js` is only referenced from:
@@ -108,3 +151,4 @@ Interpretation:
 - P2 orphan-confidence cleanup remains valid.
 - The remaining `1504` issue is now split correctly into diagnostic ownership buckets.
 - The default quality score now reflects lifecycle-owned quality expectations instead of penalizing broad indexed memory that memory-engine does not own.
+- After deleting the only live unknown source file, `default scope` is still not zero solely because the current environment could not run the existing sync command to prune stale core index state.
