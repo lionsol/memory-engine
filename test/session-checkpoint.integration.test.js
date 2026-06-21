@@ -9,6 +9,32 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
 
+async function withStubbedCheckpointConfidence(writeConfidenceImpl, run) {
+  const checkpointPath = require.resolve("../bin/session-checkpoint.js");
+  const confidencePath = require.resolve("../lib/checkpoint/confidence-writer.js");
+  const originalCheckpoint = require.cache[checkpointPath];
+  const originalConfidence = require.cache[confidencePath];
+
+  delete require.cache[checkpointPath];
+  require.cache[confidencePath] = {
+    id: confidencePath,
+    filename: confidencePath,
+    loaded: true,
+    exports: { writeConfidence: writeConfidenceImpl },
+  };
+
+  const stubbedCheckpoint = require("../bin/session-checkpoint.js");
+
+  try {
+    return await run(stubbedCheckpoint);
+  } finally {
+    delete require.cache[checkpointPath];
+    delete require.cache[confidencePath];
+    if (originalCheckpoint) require.cache[checkpointPath] = originalCheckpoint;
+    if (originalConfidence) require.cache[confidencePath] = originalConfidence;
+  }
+}
+
 function createFixture({ now = "2026-06-16T17:30:00.000Z" } = {}) {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-checkpoint-"));
   const workspaceDir = resolve(root, "workspace");
@@ -293,6 +319,68 @@ test("session checkpoint records explicit failure when LLM throws and does not w
     assert.match(episode, /generatedAt: 2026-06-16T17:30:00.000Z/);
     assert.doesNotMatch(episode, /MOCK SUMMARY|summarize today/);
   } finally {
+    fixture.cleanup();
+  }
+});
+
+test("session checkpoint warns and continues when confidence writes fail", async () => {
+  const fixture = createFixture();
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.map(String).join(" "));
+
+  try {
+    let result;
+    await withStubbedCheckpointConfidence(() => {
+      throw new Error("confidence write exploded");
+    }, async (stubbedCheckpoint) => {
+      result = await stubbedCheckpoint.withRuntime({
+        coreDbPath: fixture.coreDbPath,
+        engineDbPath: fixture.engineDbPath,
+        workspaceDir: fixture.workspaceDir,
+        memoryDir: fixture.memoryDir,
+        sessionsDir: fixture.sessionsDir,
+        timeZone: "Asia/Shanghai",
+        now: () => Date.parse(fixture.now),
+        llmNightlyExtract: async () => ({
+          episode_summary: "MOCK SUMMARY: warning path",
+          smart_memories: [{ type: "user_preference", text: "User prefers concise warnings." }],
+          configs: [{ key: "theme", value: "solarized", context: "mock" }],
+        }),
+        repairOrphanVectors: async () => 0,
+        resolveConfigConflicts: () => 0,
+      }, () => stubbedCheckpoint.nightlyCheckpoint([
+        { chunk_id: "conv-1", category: "raw_log", text: "**User:** summarize today", source: "conversation" },
+      ]));
+    });
+
+    assert.equal(result.memories, 1);
+    assert.equal(result.episode, true);
+    assert.equal(result.configs, 1);
+    assert.equal(warnings.length, 3);
+
+    const smartMemoryWarning = warnings.find((line) => line.includes("section=smart_memory"));
+    const episodeWarning = warnings.find((line) => line.includes("section=episode_summary"));
+    const configWarning = warnings.find((line) => line.includes("section=config"));
+
+    assert.ok(smartMemoryWarning);
+    assert.match(smartMemoryWarning, /type=user_preference/);
+    assert.match(smartMemoryWarning, /entryId=\S+/);
+    assert.match(smartMemoryWarning, /category=raw_log/);
+    assert.match(smartMemoryWarning, /error=confidence write exploded/);
+
+    assert.ok(episodeWarning);
+    assert.match(episodeWarning, /entryId=\S+/);
+    assert.match(episodeWarning, /category=episodic/);
+    assert.match(episodeWarning, /error=confidence write exploded/);
+
+    assert.ok(configWarning);
+    assert.match(configWarning, /key=theme/);
+    assert.match(configWarning, /entryId=\S+/);
+    assert.match(configWarning, /category=preference/);
+    assert.match(configWarning, /error=confidence write exploded/);
+  } finally {
+    console.warn = originalWarn;
     fixture.cleanup();
   }
 });

@@ -75,6 +75,19 @@ function mergeKgData(existingKgData, patch = {}) {
   return JSON.stringify(base);
 }
 
+function warnConfidenceWriteFailure({ entryId, category, section, type, key, error }) {
+  const message = error && error.message ? error.message : String(error);
+  const fields = [
+    `section=${section || "unknown"}`,
+    type ? `type=${type}` : null,
+    key ? `key=${key}` : null,
+    `entryId=${entryId || "unknown"}`,
+    `category=${category || "unknown"}`,
+    `error=${message}`,
+  ].filter(Boolean);
+  console.warn(`[checkpoint] Confidence write failed: ${fields.join(" ")}`);
+}
+
 // ── Read today's raw content ──
 
 // ── Unified Nightly Smart Extraction ──
@@ -150,7 +163,17 @@ async function nightlyCheckpoint(rawLogs) {
       console.log(`  ↳ Skipped (duplicate/fingerprint): ${stableText.slice(0, 60)}`);
       continue;
     }
-    try { writeConfidence(entryId, item.text, cat); } catch (e) {}
+    try {
+      writeConfidence(entryId, item.text, cat);
+    } catch (e) {
+      warnConfidenceWriteFailure({
+        entryId,
+        category: cat,
+        section: "smart_memory",
+        type: item.type,
+        error: e,
+      });
+    }
     memWritten++;
   }
   console.log(`[checkpoint] Wrote ${memWritten} structured memory(-ies)`);
@@ -174,7 +197,16 @@ async function nightlyCheckpoint(rawLogs) {
       generatedAt,
     });
     if (entryId) {
-      try { writeConfidence(entryId, episodeText, 'episodic'); } catch (e) {}
+      try {
+        writeConfidence(entryId, episodeText, 'episodic');
+      } catch (e) {
+        warnConfidenceWriteFailure({
+          entryId,
+          category: "episodic",
+          section: "episode_summary",
+          error: e,
+        });
+      }
     } else {
       console.log("[checkpoint] Episode smart-add append skipped by fingerprint dedup");
     }
@@ -228,7 +260,17 @@ async function nightlyCheckpoint(rawLogs) {
       console.log(`  ↳ Skipped config (duplicate/fingerprint): ${cfg.key}`);
       continue;
     }
-    try { writeConfidence(entryId, text, 'preference'); } catch (e) {}
+    try {
+      writeConfidence(entryId, text, 'preference');
+    } catch (e) {
+      warnConfidenceWriteFailure({
+        entryId,
+        category: "preference",
+        section: "config",
+        key: cfg.key,
+        error: e,
+      });
+    }
     cfgWritten++;
   }
   console.log(`[checkpoint] Wrote ${cfgWritten} config(s)`);
