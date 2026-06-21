@@ -1,3 +1,94 @@
+## 2026-06-21
+
+### Checkpoint confidence warning hotfix
+
+Review 发现 `bin/session-checkpoint.js` 中仍有 3 处 `catch (e) {}` 静默吞掉 `writeConfidence` 失败。
+
+这类问题很危险，因为 nightly checkpoint 是无人值守 cron 路径。如果 memory 内容写入成功但 confidence 写入失败，第二天只会看到质量缺口，却没有失败上下文。
+
+已修复：
+
+* `writeConfidence` 失败不再 silent
+* checkpoint 流程仍然不中断
+* warning 中包含：
+
+  * `entryId`
+  * `category`
+  * `section`
+  * optional `type/key`
+  * error message
+
+同时清理了 `lib/quality/quality-score.js` 中 `getSuggestedAction(..., candidate)` 的死参数。
+
+相关 commit/tag：
+
+* `f222db9 fix(checkpoint): warn on confidence write failures`
+* `v0.8.10-checkpoint-confidence-warning`
+
+### Diagnostics repair policy
+
+补充 quality diagnostics repair policy 文档，明确质量诊断不是自动修复指令。
+
+文档化原则：
+
+* `orphan_confidence`
+
+  * 可 dry-run
+  * 可 guarded apply
+  * 必须 backup + explicit confirm
+* `chunks_without_confidence`
+
+  * ownership-aware diagnostic
+  * 不自动 backfill confidence/category
+* `duplicate_exact`
+
+  * audit-only
+  * 不自动 delete
+* `timestamp_pollution`
+
+  * source audit + false-positive refinement
+  * 不自动 rewrite historical memory content
+
+核心红线：
+
+* diagnostics 不等于 cleanup instruction
+* 自动修复必须有单独 guarded apply mode
+* 必须 dry-run、备份、明确确认
+* 禁止因为 report 中出现 flag 就直接改 DB 或重写 memory 内容
+
+相关 commit：
+
+* `e35098f docs(quality): document diagnostics repair policy`
+
+### 测试与最终状态
+
+最终状态：
+
+* `main` 与 `origin/main` 同步
+* 工作区 clean
+* tag 链完整：`v0.8.3` 到 `v0.8.10`
+* 测试全绿：
+
+  * `346 tests`
+  * `340 pass`
+  * `0 fail`
+  * `6 skipped`
+
+### 当前结论
+
+这一轮收尾后，memory quality evaluation 已经从“发现一堆质量问题”推进到“能解释问题属于谁、是否还在产生、是否允许修复”。
+
+关键结论：
+
+* lifecycle-owned missing confidence: `0`
+* timestamp pollution after-fix: `0`
+* smart-add duplicates 已审计，但不盲删
+* quality diagnostics 不再被误当成 cleanup 指令
+* checkpoint confidence 写入失败不再 silent
+
+下一步不建议继续清历史数据。更合理的方向是进入 quality eval stabilization，让这些 report 稳定跑几天，再决定是否接 Console、做 guarded cleanup，或推进 Recall Hint / 统计型 LTR。
+
+
 ## 2026-06-20
 
 ### Memory Quality Evaluation 收尾
