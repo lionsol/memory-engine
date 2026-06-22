@@ -1,3 +1,111 @@
+## 2026-06-22
+
+### OpenClaw memory contract compatibility
+
+完成 memory-engine 与新版 OpenClaw 内建记忆系统的兼容性审计与第一轮适配。
+
+本次审计确认：OpenClaw 当前记忆底座由 `memory-core` 提供，标准工具为 `memory_search` / `memory_get`；`active-memory` 是可选的召回编排层，不是 memory backend；`memory-wiki` 是旁路知识层。memory-engine 当前实现依赖 `memory-core` 的 `getMemorySearchManager` 作为 lexical 通道，因此现阶段不应接管 `plugins.slots.memory`，而应定位为 `memory-core` 之上的增强层。
+
+#### Decisions
+
+* 保持 `memory-core` 作为 OpenClaw 标准记忆底座。
+* memory-engine 暂不声明 `kind:"memory"`，不接管 memory slot。
+* memory-engine 不注册、不 shadow `memory_search` / `memory_get`。
+* `active-memory` 暂不启用，避免与 memory-engine autoRecall 形成双轨召回。
+* memory-engine 继续作为增强层提供 hybrid rerank、confidence、LanceDB/vector、质量评估与生命周期治理能力。
+
+#### Config compatibility fix
+
+清理 OpenClaw 配置中的误导项：
+
+* 移除 `tools.deny` 中的 `memory_search` / `memory_get`，恢复 memory-core 标准工具。
+* 移除 `plugins.slots.contextEngine="legacy"`，避免误认为 memory-engine 接管 context engine。
+* 移除 `plugins.slots`，让 OpenClaw 默认回退到 `memory-core`。
+* 保持 `memory-engine.enabled=true`。
+* 保持 `memory-engine.config.autoRecall.enabled=false`。
+* 保持 `active-memory` disabled。
+
+验证结果：
+
+* `memory-core` enabled，索引状态正常：246/246 files，4848 chunks，Dirty=no。
+* `memory-engine` enabled，工具为 `memory_engine`，autoRecall=false。
+* `memorySearch.enabled=true`。
+* `memory_search` / `memory_get` 不再被屏蔽。
+* 无 memory slot / models.json doctor error。
+* 剩余 warning 为已知无害的 plugin install metadata conflict：`acpx`, `codex`。
+
+#### Tool wrapper compatibility
+
+新增显式 memory-engine 工具面，降低 agent 使用成本，同时保持不抢占 OpenClaw 标准 memory tools：
+
+* 保留 `memory_engine` 作为 backward-compatible 管理型入口。
+* 新增 `memory_engine_search`，作为 existing hybrid search path 的薄 wrapper。
+* 新增 `memory_engine_get`，支持通过 engine id / id prefix 读取 memory，并在 chunk metadata 存在时返回 path 与 line_range。
+* `openclaw.plugin.json` 的 `contracts.tools` 与 runtime 注册保持一致。
+* 明确不注册 `memory_search` / `memory_get`，避免 shadow memory-core。
+
+相关文件：
+
+* `openclaw.plugin.json`
+* `index.js`
+* `lib/tools/memory-engine-actions.js`
+* `lib/tools/register-memory-engine-tools.js`
+* `test/memory-engine-tool-wrappers.test.js`
+* `test/review-findings.test.js`
+* `README.md`
+* `docs/openclaw-memory-contract-compat.md`
+
+#### Tests
+
+测试通过：
+
+* `find test -name '*.test.js' -print0 | xargs -0 node --test`
+* Result: 58 passed, 0 failed
+
+新增/覆盖测试点：
+
+* manifest 包含且仅包含 `memory_engine`, `memory_engine_search`, `memory_engine_get`。
+* runtime registration 与 manifest 对齐。
+* `memory_engine_search` 与原 `memory_engine action=search` 结果一致。
+* `memory_engine_get` 对 missing id 有清晰错误处理。
+* `memory_engine_get` 对 ambiguous id prefix 返回 multiple-match metadata，不会 silent pick first match。
+* memory-engine 不注册、不 shadow `memory_search` / `memory_get`。
+
+#### Notes
+
+Codex 环境中 `openclaw doctor` 与 `openclaw plugins inspect --runtime --json` 曾因 EROFS 无法写入 `~/.openclaw/state` / `~/.openclaw/logs` 而失败，属于环境限制，不是测试失败。后续 runtime-level 验证应在真实可写 OpenClaw 环境中执行。
+
+#### Current architecture baseline
+
+当前稳定基线：
+
+* `memory-core` = OpenClaw 标准记忆底座。
+* `memory-engine` = 增强检索 / confidence / 生命周期治理层。
+* `active-memory` = 暂不启用。
+* `memory-engine autoRecall` = 暂不启用。
+* `memory_engine_search` / `memory_engine_get` = memory-engine 显式工具面。
+* `memory_search` / `memory_get` = memory-core 标准工具，不拦截、不 shadow。
+
+#### Next
+
+下一步建议进入 P2：agent 工具使用策略与 smoke test。
+
+需要明确 edi / task-planner 何时使用：
+
+* `memory_search`：OpenClaw 原生记忆文件搜索。
+* `memory_get`：读取 OpenClaw 原生 source。
+* `memory_engine_search`：使用 memory-engine 增强检索能力。
+* `memory_engine_get`：读取 memory-engine 具体结果。
+* `memory_engine`：管理、状态、维护入口。
+
+暂缓：
+
+* 不做 `kind:"memory"` / slot owner 化。
+* 不启用 `active-memory`。
+* 不同时启用 active-memory 与 memory-engine autoRecall。
+* Recall Hint / 统计型 LTR 等新功能等工具契约稳定后再推进。
+
+
 ## 2026-06-21
 
 ### Checkpoint confidence warning hotfix
