@@ -4,7 +4,9 @@
   "description": "Enhanced memory with confidence scoring, time-decay, and lifecycle management.",
   "contracts": {
     "tools": [
-      "memory_engine"
+      "memory_engine",
+      "memory_engine_search",
+      "memory_engine_get"
     ]
   },
   "configSchema": {

@@ -121,7 +121,15 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 
 ---
 
+## OpenClaw 集成说明
+
+- `memory-core` 仍然是底层 substrate，负责 `MEMORY.md` / `memory/*.md` 索引与基础检索能力。
+- `memory-engine` 是 enhancement layer，在 `memory-core` 之上增加混合搜索重排、置信度生命周期和引用强化，不接管 OpenClaw 的 memory slot。
+- 面向 agent 的窄工具为 `memory_engine_search` 与 `memory_engine_get`；原有 `memory_engine` 保留以兼容既有调用。
+- `active-memory` 与 `memory-engine` 的 `autoRecall` 不应同时启用，除非显式做去重，否则会产生重复注入。
+
+---
+
 
 - **Task classifier** — `bin/task-classifier.js` 按输入关键词路由 coding / default 任务
-
 

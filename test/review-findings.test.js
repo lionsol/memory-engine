@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createMemoryEngineExecute } from "../lib/tools/memory-engine-actions.js";
 import { batchReinforce, resolvePrefixes } from "../lib/memory-confidence.js";
+import { MEMORY_ENGINE_TOOL_NAMES } from "../lib/tools/register-memory-engine-tools.js";
 
 test("hybrid search SQL uses bound LIMIT parameters and no silent catch blocks", () => {
   const source = readFileSync(new URL("../lib/recall/hybrid-search.js", import.meta.url), "utf8");
@@ -15,7 +16,7 @@ test("disabled image_vision tool is not advertised or registered", () => {
   const manifest = JSON.parse(readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"));
   const indexSource = readFileSync(new URL("../index.js", import.meta.url), "utf8");
 
-  assert.deepEqual(manifest.contracts.tools, ["memory_engine"]);
+  assert.deepEqual(manifest.contracts.tools, MEMORY_ENGINE_TOOL_NAMES);
   assert.equal(indexSource.includes('name: "image_vision"'), false);
 });
 
