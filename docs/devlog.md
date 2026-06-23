@@ -1,5 +1,199 @@
 ## 2026-06-23
 
+### P2: Agent memory tool strategy and smoke runbook
+
+完成 P2：agent 记忆工具使用策略与 smoke test 文档化。
+
+这一步没有改检索逻辑，也没有改 OpenClaw 配置。目标是把 P0/P1 之后形成的 memory contract 固化下来，避免 edi、task-planner 或未来 agent 误用工具、重复召回，或者把 memory-engine 错误升级成 memory slot owner。
+
+---
+
+## Background
+
+前面已经完成 OpenClaw memory contract compatibility：
+
+* `memory-core` 保持为 OpenClaw 标准记忆底座。
+* `memory_search` / `memory_get` 继续属于 `memory-core`。
+* `memory-engine` 保持为增强层，不接管 `plugins.slots.memory`。
+* `memory-engine` 不注册、不 shadow `memory_search` / `memory_get`。
+* `memory-engine` 暴露自己的增强工具：
+
+  * `memory_engine`
+  * `memory_engine_search`
+  * `memory_engine_get`
+* `active-memory` 暂不启用。
+* `memory-engine autoRecall` 暂不启用。
+
+P2 的目的就是把这些决策写成 agent-facing policy，并用静态测试防止文档和 manifest 漂移。
+
+---
+
+## Changes
+
+新增文档：
+
+* `docs/agent-memory-tool-strategy.md`
+* `docs/smoke-tests/openclaw-memory-tools.md`
+
+新增测试：
+
+* `test/agent-memory-tool-strategy.test.js`
+
+### Agent memory tool strategy
+
+新增 `docs/agent-memory-tool-strategy.md`，明确 agent 应该如何选择记忆工具。
+
+当前策略：
+
+| Scenario              | Tool                   |
+| --------------------- | ---------------------- |
+| 搜索 OpenClaw 原生记忆文件    | `memory_search`        |
+| 读取 OpenClaw 原生 source | `memory_get`           |
+| 使用 memory-engine 增强检索 | `memory_engine_search` |
+| 读取 memory-engine 搜索结果 | `memory_engine_get`    |
+| 管理、状态、维护、质量评估、冲突检测    | `memory_engine`        |
+
+关键约束：
+
+* `memory_search` / `memory_get` 保持属于 `memory-core`。
+* `memory_engine_search` / `memory_engine_get` 属于 `memory-engine`。
+* `memory_engine` 继续作为管理型 action router。
+* `memory-engine` 不作为 blind replacement 替代 `memory_search`。
+* 不为每个问题同时调用 `memory_search` 和 `memory_engine_search`。
+* 不启用 `active-memory` 与 `memory-engine autoRecall` 的双轨召回，除非后续实现 dedup。
+* `memory_engine_get` 遇到 ambiguous id prefix 时必须要求更长 id，不允许 silent pick first。
+
+### Runtime smoke runbook
+
+新增 `docs/smoke-tests/openclaw-memory-tools.md`，用于 edi 或人工在真实 OpenClaw 环境验证工具契约。
+
+Runbook 覆盖：
+
+* 配置前置条件。
+* `openclaw doctor`。
+* `openclaw plugins inspect memory-engine --runtime --json`。
+* 预期工具可见性。
+* memory-core 与 memory-engine 工具边界。
+* non-shadowing behavior。
+* manual behavior smoke cases。
+
+预期稳定状态：
+
+* `memory_search` / `memory_get` 由 memory-core 提供。
+* `memory_engine` / `memory_engine_search` / `memory_engine_get` 由 memory-engine 提供。
+* memory-engine 不注册 `memory_search` / `memory_get`。
+* `plugins.slots.memory` 不指向 memory-engine。
+* `active-memory` disabled。
+* `memory-engine autoRecall` disabled。
+* 无 duplicate recall injection。
+
+---
+
+## Tests
+
+新增静态测试，锁定文档与 manifest 的契约一致性。
+
+测试覆盖：
+
+* strategy doc exists。
+* smoke runbook exists。
+* docs state the memory-core vs memory-engine split。
+* docs state `memory_search` / `memory_get` stay with memory-core。
+* docs state `memory_engine_search` / `memory_engine_get` stay with memory-engine。
+* docs state `memory_engine` remains the management/action router。
+* docs warn against enabling `active-memory` and memory-engine `autoRecall` together without dedup。
+* docs include ambiguous id-prefix guidance for `memory_engine_get`。
+* manifest exposes only:
+
+  * `memory_engine`
+  * `memory_engine_search`
+  * `memory_engine_get`
+* manifest does not expose:
+
+  * `memory_search`
+  * `memory_get`
+
+Validation:
+
+```text
+find test -name '*.test.js' -print0 | xargs -0 node --test
+Passed: 59/59
+```
+
+Runtime smoke was attempted in Codex but could not complete because the environment was read-only:
+
+```text
+EROFS: read-only file system, chmod '/home/lionsol/.openclaw/state'
+```
+
+This is an environment limitation, not a code/test failure. The real runtime smoke should be run in the normal WSL OpenClaw environment.
+
+---
+
+## Decisions
+
+* P2 is documentation + contract validation only.
+* No retrieval behavior changed.
+* No plugin registration behavior changed.
+* No `kind:"memory"` added.
+* No `plugins.slots.memory` takeover.
+* No OpenClaw config changes.
+* No `active-memory` enablement.
+* No memory-engine `autoRecall` enablement.
+* No Recall Hint / LTR work in this step.
+
+---
+
+## Current baseline
+
+The current memory architecture remains:
+
+```text
+memory-core
+  ├─ owns OpenClaw standard memory slot
+  ├─ provides memory_search
+  └─ provides memory_get
+
+memory-engine
+  ├─ enhancement / governance layer
+  ├─ provides memory_engine
+  ├─ provides memory_engine_search
+  └─ provides memory_engine_get
+```
+
+Agent-facing rule:
+
+```text
+Use memory_search/memory_get for OpenClaw native memory.
+Use memory_engine_search/memory_engine_get for memory-engine enhanced retrieval.
+Use memory_engine for management and maintenance.
+Do not shadow memory-core tools.
+Do not run dual auto-recall paths without dedup.
+```
+
+---
+
+## Next
+
+Before starting P3, run the runtime smoke in the normal WSL environment:
+
+```bash
+openclaw doctor || true
+openclaw plugins inspect memory-engine --runtime --json || true
+```
+
+Then proceed to P3 only after the tool boundary is confirmed in runtime.
+
+Potential P3 direction:
+
+* Recall Hint。
+* Statistical LTR feature extraction。
+* Observation-only feature debug first, no ranking change initially.
+
+
+
+## 2026-06-23
+
 ### Memory-engine: OpenClaw memory contract compatibility + checkpoint input hardening
 
 今天完成两条关键稳定化工作：
