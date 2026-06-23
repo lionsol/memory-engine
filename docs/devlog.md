@@ -1,3 +1,292 @@
+## 2026-06-23
+
+### Memory-engine: OpenClaw memory contract compatibility + checkpoint input hardening
+
+今天完成两条关键稳定化工作：
+
+1. 明确 memory-engine 与 OpenClaw 内建记忆系统的边界。
+2. 修复 session-checkpoint 原始日志输入污染问题，避免 daily checkpoint 把跨天历史、工具输出和过长 transcript 混进长期记忆。
+
+---
+
+## 1. OpenClaw memory contract compatibility
+
+完成 OpenClaw 新版记忆契约审计，并调整 memory-engine 当前定位。
+
+### 结论
+
+当前 memory-engine 不应接管 OpenClaw `plugins.slots.memory`，而应作为 `memory-core` 之上的增强层运行。
+
+新的稳定基线：
+
+* `memory-core`：OpenClaw 标准记忆底座，提供 `memory_search` / `memory_get`。
+* `memory-engine`：增强检索、confidence、LanceDB/vector、质量评估、生命周期治理层。
+* `active-memory`：暂不启用，避免 blocking pre-reply 子代理与 memory-engine autoRecall 形成双轨召回。
+* `memory-engine autoRecall`：暂不启用。
+* `memory_search` / `memory_get`：不拦截、不 shadow。
+* `memory_engine_search` / `memory_engine_get`：memory-engine 显式增强工具面。
+
+### 配置修复
+
+修复 OpenClaw 配置中与记忆系统不一致的问题：
+
+* 移除 `tools.deny` 中的 `memory_search` / `memory_get`，恢复 memory-core 标准工具。
+* 移除 `plugins.slots.contextEngine="legacy"`，避免误认为 memory-engine 接管 context engine。
+* 移除 `plugins.slots`，让 OpenClaw 默认回退到 `memory-core`。
+* 保持 `memory-engine.enabled=true`。
+* 保持 `memory-engine.config.autoRecall.enabled=false`。
+* 保持 `active-memory` disabled。
+
+验证结果：
+
+* `memory-core` enabled，索引状态正常。
+* `memory-engine` enabled。
+* `memorySearch.enabled=true`。
+* `memory_search` / `memory_get` 不再被屏蔽。
+* 无 memory slot / models.json doctor error。
+* 剩余 warning 为已知无害的 plugin install metadata conflict：`acpx`, `codex`。
+
+### 工具面收敛
+
+新增 memory-engine 显式 wrapper tools：
+
+* 保留 `memory_engine`，保持 backward compatibility。
+* 新增 `memory_engine_search`，薄 wrapper 到现有 hybrid search path。
+* 新增 `memory_engine_get`，支持通过 engine id / id prefix 读取 memory，并返回 path / line_range metadata。
+* 明确不注册 `memory_search` / `memory_get`，避免 shadow OpenClaw 标准 memory tools。
+
+测试覆盖：
+
+* manifest 只包含 `memory_engine`, `memory_engine_search`, `memory_engine_get`。
+* runtime registration 与 manifest 对齐。
+* `memory_engine_search` 与原 `memory_engine action=search` 行为一致。
+* `memory_engine_get` 对 missing id 有清晰错误处理。
+* `memory_engine_get` 对 ambiguous id prefix 返回 multiple-match metadata，不 silent pick first。
+* memory-engine 不注册、不 shadow `memory_search` / `memory_get`。
+
+---
+
+## 2. Session-checkpoint raw-log input hardening
+
+修复 session-checkpoint 的 daily input pipeline。
+
+### 问题
+
+`readYesterdayRawLogs` 名义上读取“昨天”的 checkpoint 输入，但实际只有 smart-add source 按日期过滤：
+
+* Source 1：`memory/smart-add/{targetDate}.md`，正确按日期读取。
+* Source 2：DB raw_log，原来使用 `WHERE category='raw_log' LIMIT 100`，没有日期边界。
+* Source 3：`.jsonl.reset.*` transcript，原来扫描所有 reset 文件，没有日期边界。
+
+这会导致 daily checkpoint 混入：
+
+* 跨天历史对话。
+* reset transcript 中的大量工具调用结果。
+* 配置文件、doctor 输出、test 输出等大块文本。
+* 旧 assistant 答复和误答。
+* 多 session 重复内容。
+
+根因不是 LLM 摘要能力不足，而是 checkpoint 输入数据边界错误。
+
+### 修复
+
+将 checkpoint 输入收集改为 explicit `targetDate` path：
+
+* CLI 支持 `--target-date`。
+* CLI 支持 `--dry-run`。
+* DB raw_log 按 business-day range 过滤，并按时间排序。
+* reset/session transcript 只读取 targetDate 相关文件。
+* `.trajectory.*` 文件排除。
+* live `.jsonl` 如果存在 `.reset.*` counterpart，则避免重复读取。
+* DB / reset 重复内容 dedup，reset transcript 优先。
+* 保留 user / assistant 自然语言对话。
+* raw `toolResult` / `tool_output` / `role=tool` 不再进入 `combinedText`。
+* 非 message transcript records、thinking、tool-call implementation noise 不再进入 LLM 输入。
+* 白名单工具输出只允许压缩为 compact assistant-style summaries。
+* 增加 source/session/final input budgets，避免同日输入过大压垮 summarizer。
+
+当前预算：
+
+* `maxFinalCombinedChars=40000`
+* `toolSummaryChars=4000`
+
+### Dialogue-first checkpoint
+
+checkpoint 输入现在采用：
+
+```text
+targetDate-scoped sources
+→ dialogue-first extraction
+→ raw tool output suppression
+→ selected compact tool summaries
+→ dedup
+→ source/session/final budgets
+→ debug stats
+→ LLM summarization
+```
+
+不再采用原来的 raw-log 大杂烩模式。
+
+### Role inference cleanup
+
+修复 DB raw_log 中带 timestamp/session prefix 的 role 识别：
+
+```text
+[timestamp | session:...] **User:** ...
+[timestamp | session:...] **Assistant:** ...
+```
+
+现在会先剥离前缀，再识别 `**User:**` / `**Assistant:**`。
+
+保守策略：
+
+* 有明确 `**User:**` / `**Assistant:**` 证据：归类为 `user` / `assistant`。
+* 裸文本没有显式 role 证据：保留为 `metadata_header`。
+* 不通过语义猜测把裸文本强行归为 user，避免 silent misclassification。
+
+### Dry-run result
+
+对 `2026-06-22` dry-run：
+
+* `charsBeforeBudget=106504`
+* `charsAfterBudget=40000`
+* `budgetApplied=true`
+* `droppedByBudgetCount=151`
+
+预算后角色分布：
+
+| Role                   |  Chars | Notes                                                 |
+| ---------------------- | -----: | ----------------------------------------------------- |
+| note                   | 15,925 | smart-add notes                                       |
+| user                   | 12,466 | user dialogue                                         |
+| assistant              |  3,643 | assistant natural-language replies                    |
+| metadata_header        |  7,506 | historical DB raw_log bare text without role evidence |
+| assistant_summary      |      0 | none in this run                                      |
+| assistant_tool_summary |      0 | no whitelisted tool summaries present in this run     |
+
+`metadata_header` 已审计：
+
+* 不包含 raw tool output。
+* 不包含配置文件原文。
+* 不包含 doctor/test 输出。
+* 不包含 trajectory。
+* 不包含 thinking。
+* 主要是历史 DB raw_log 中缺少 role prefix 的真实对话文本。
+
+保留为 `metadata_header` 是有意设计，避免把无法机器验证 role 的历史裸文本误标成 user。
+
+### Tests
+
+新增/覆盖测试：
+
+* DB raw_log outside targetDate 被排除。
+* reset transcript outside targetDate 被排除。
+* raw tool output 不进入 `combinedText`。
+* targetDate user/assistant dialogue 被保留。
+* DB/reset duplicate content 只保留一份。
+* large tool output 不主导最终输入。
+* explicit `targetDate` 语义覆盖旧 implicit “yesterday” 行为。
+* full tool output absent。
+* compact test summary retained。
+* compact doctor summary retained。
+* large config-style output dropped。
+* user/assistant dialogue retained。
+* tool summaries stay within budget。
+* timestamp-prefixed `**User:**` DB row classified as user。
+* timestamp-prefixed `**Assistant:**` DB row classified as assistant。
+* bare text remains `metadata_header`。
+* long summary-like text is not misclassified as user。
+
+验证通过：
+
+```text
+find test -name '*.test.js' -print0 | xargs -0 node --test
+node bin/session-checkpoint.js --dry-run --target-date 2026-06-22
+```
+
+---
+
+## Files changed
+
+Compatibility wrapper work:
+
+* `openclaw.plugin.json`
+* `index.js`
+* `lib/tools/memory-engine-actions.js`
+* `lib/tools/register-memory-engine-tools.js`
+* `test/memory-engine-tool-wrappers.test.js`
+* `test/review-findings.test.js`
+* `README.md`
+* `docs/openclaw-memory-contract-compat.md`
+
+Checkpoint hardening:
+
+* `bin/session-checkpoint.js`
+* `lib/checkpoint/raw-log.js`
+* `lib/checkpoint/runtime.js`
+* `test/checkpoint-raw-log.test.js`
+
+---
+
+## Decisions
+
+* memory-engine 当前不做 `kind:"memory"`。
+* memory-engine 当前不接管 `plugins.slots.memory`。
+* memory-engine 不注册 `memory_search` / `memory_get`。
+* memory-core 继续作为 OpenClaw 标准记忆底座。
+* memory-engine 作为增强层提供更强检索、置信度和生命周期治理。
+* active-memory 暂不启用。
+* memory-engine autoRecall 暂不启用。
+* checkpoint 输入必须是 dialogue-first，而不是 raw-log-first。
+* raw toolResult 永不直接进入 checkpoint LLM 输入。
+* 历史裸文本 raw_log 不人工猜 role，不强行回填。
+
+---
+
+## Current status
+
+已完成并 push：
+
+* OpenClaw memory contract compatibility baseline。
+* memory-engine explicit search/get wrapper tools。
+* session-checkpoint raw-log input hardening。
+* dialogue-first checkpoint input。
+* input budget。
+* metadata_header 审计与 role inference cleanup。
+
+当前稳定基线：
+
+```text
+memory-core = OpenClaw standard memory substrate
+memory-engine = enhancement / governance layer
+active-memory = off
+memory-engine autoRecall = off
+checkpoint = targetDate-scoped + dialogue-first + budgeted
+```
+
+---
+
+## Next
+
+下一步建议进入 P2：agent 工具使用策略与 smoke test。
+
+需要明确 edi / task-planner 何时使用：
+
+* `memory_search`：OpenClaw 原生记忆文件搜索。
+* `memory_get`：读取 OpenClaw 原生 source。
+* `memory_engine_search`：使用 memory-engine 增强检索能力。
+* `memory_engine_get`：读取 memory-engine 具体结果。
+* `memory_engine`：管理、状态、维护入口。
+
+暂缓：
+
+* 不做 memory slot owner 化。
+* 不启用 active-memory。
+* 不同时启用 active-memory 与 memory-engine autoRecall。
+* Recall Hint / 统计型 LTR 等新功能等工具契约稳定后再推进。
+
+
+
 ## 2026-06-22
 
 ### OpenClaw memory contract compatibility
