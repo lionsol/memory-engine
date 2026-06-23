@@ -46,6 +46,31 @@ function yesterdayDateStr(now = null) {
   return checkpointDate.yesterdayDateStr(now || rt.now(), rt.timeZone);
 }
 
+function parseCliArgs(argv = []) {
+  const options = {
+    dryRun: false,
+    targetDate: null,
+  };
+
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (arg === "--dry-run") {
+      options.dryRun = true;
+      continue;
+    }
+    if (arg === "--target-date") {
+      options.targetDate = argv[index + 1] || null;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--target-date=")) {
+      options.targetDate = arg.slice("--target-date=".length) || null;
+    }
+  }
+
+  return options;
+}
+
 function buildNightlyEntryId({ targetDate, category = "episodic", generatedAt = null } = {}) {
   const rt = getRuntime();
   return checkpointDate.buildNightlyEntryId({
@@ -95,8 +120,8 @@ function warnConfidenceWriteFailure({ entryId, category, section, type, key, err
 /**
  * Run the full nightly checkpoint: one LLM call → 4 outputs.
  */
-async function nightlyCheckpoint(rawLogs) {
-  const episodeDate = yesterdayDateStr();
+async function nightlyCheckpoint(rawLogs, options = {}) {
+  const episodeDate = options.targetDate || yesterdayDateStr();
   const generatedAt = currentIsoString();
   const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
   const conversationLogs = assessment.conversationLogs;
@@ -290,17 +315,48 @@ async function nightlyCheckpoint(rawLogs) {
 
 // ── Main ──
 
-async function main() {
+async function main(argv = process.argv.slice(2)) {
   const start = Date.now();
+  const options = parseCliArgs(argv);
+  const targetDate = options.targetDate || yesterdayDateStr();
   console.log(`[checkpoint] === Session Checkpoint ${todayDateStr()} ===`);
 
   try {
     // Step 1: Gather raw logs
-    const rawLogs = getRuntime().readYesterdayRawLogs();
-    console.log(`[checkpoint] Found ${rawLogs.length} raw log entries (yesterday: ${yesterdayDateStr()})`);
+    const rawLogs = getRuntime().readCheckpointRawLogs({
+      targetDate,
+      timeZone: getRuntime().timeZone,
+    });
+    const rawLogStats = checkpointRawLog.getRawLogCollectionStats(rawLogs);
+    console.log(`[checkpoint] Found ${rawLogs.length} raw log entries (targetDate: ${targetDate}, timeZone: ${getRuntime().timeZone})`);
+    if (rawLogStats) {
+      console.log(`[checkpoint] Input stats ${JSON.stringify(rawLogStats)}`);
+    }
+
+    if (options.dryRun) {
+      const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
+      if (rawLogStats) {
+        rawLogStats.finalCombinedTextCharCount = assessment.combinedText.length;
+      }
+      console.log(`[checkpoint] Dry run summary ${JSON.stringify({
+        targetDate,
+        timeZone: getRuntime().timeZone,
+        rawCount: assessment.rawCount,
+        allCount: assessment.allCount,
+        conversationCount: assessment.conversationCount,
+        noteCount: assessment.noteCount,
+        combinedTextCharCount: assessment.combinedText.length,
+      })}`);
+      return {
+        dryRun: true,
+        targetDate,
+        stats: rawLogStats,
+        assessment,
+      };
+    }
 
     // Step 2: Unified nightly checkpoint (1 LLM call → 3 outputs)
-    const result = await nightlyCheckpoint(rawLogs);
+    const result = await nightlyCheckpoint(rawLogs, { targetDate });
 
     // Step 2.5: Repair orphan vectors (SQLite has, LanceDB missing)
     const repaired = await getRuntime().repairOrphanVectors();
@@ -324,6 +380,7 @@ async function main() {
 
 runtimeRegistry.installRuntimeFallbacks({
   llmNightlyExtract: checkpointLlm.llmNightlyExtract,
+  readCheckpointRawLogs: checkpointRawLog.readCheckpointRawLogs,
   readYesterdayRawLogs: checkpointRawLog.readYesterdayRawLogs,
   repairOrphanVectors,
   resolveConfigConflicts,
@@ -341,5 +398,6 @@ module.exports = {
   buildNightlyEntryId,
   mergeKgData,
   nightlyCheckpoint,
+  parseCliArgs,
   withRuntime,
 };
