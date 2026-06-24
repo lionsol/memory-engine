@@ -103,6 +103,7 @@ function createAuditFixtureDbs() {
       ["5555555555555555-smart", "memory/smart-add/2026-06-18.md", "memory", 1, 10, "hash-smart", "smart add text", 1718672800000, 1718672700000, 60],
       ["6666666666666666-episode", "memory/episodes/2026-06-18.md", "memory", 1, 10, "hash-episode", "episode text", 1718673800000, 1718673700000, 50],
       ["7777777777777777-stats", "memory/stats-history.md", "memory", 1, 10, "hash-stats", "stats history", 1718674800000, 1718674700000, 40],
+      ["8888888888888888-quarantine", "memory/legacy-daily-mirrors/2026-06-18.md", "memory", 1, 10, "hash-quarantine", "quarantined mirror", 1718675800000, 1718675700000, 30],
     ];
 
     for (const [id, path, source, start, end, hash, text, updatedAt, mtime, size] of rows) {
@@ -175,6 +176,7 @@ test("family inference covers dreaming, smart-add, episodes, projects, daily, ME
   assert.equal(inferAuditFamily("memory/episodes/2026-06-18.md"), "episode");
   assert.equal(inferAuditFamily("memory/projects/demo.md"), "project");
   assert.equal(inferAuditFamily("memory/2026-06-18.md"), "daily_memory");
+  assert.equal(inferAuditFamily("memory/legacy-daily-mirrors/2026-06-18.md"), "quarantined_daily_mirror");
   assert.equal(inferAuditFamily("MEMORY.md"), "curated_memory");
   assert.equal(inferAuditFamily("memory/raw_log/run.md"), "raw_log");
   assert.equal(inferAuditFamily("memory/custom/random.md"), "unknown");

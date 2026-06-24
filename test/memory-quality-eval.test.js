@@ -452,6 +452,7 @@ test("quality types export stable MVP v4 constants", () => {
 test("getPathFamily classifies managed memory paths", () => {
   assert.equal(getPathFamily("memory/dreaming/foo.md"), "dreaming");
   assert.equal(getPathFamily("memory/episodes/2026-06-18.md"), "episodes");
+  assert.equal(getPathFamily("memory/legacy-daily-mirrors/2026-06-18.md"), "legacy-daily-mirrors");
   assert.equal(getPathFamily("memory/2026-06-18.md"), "daily-root");
   assert.equal(getPathFamily("memory/smart-add/2026-06-18.md"), "smart-add");
 });
@@ -459,6 +460,7 @@ test("getPathFamily classifies managed memory paths", () => {
 test("ownership-aware quality scope classifies initial ownership rules", () => {
   assert.equal(getQualityScopeFamily("memory/dreaming/foo.md"), "dreaming");
   assert.equal(getQualityScopeFamily("memory/episodes/2026-06-18.md"), "episode");
+  assert.equal(getQualityScopeFamily("memory/legacy-daily-mirrors/2026-06-18.md"), "quarantined_daily_mirror");
   assert.equal(getQualityScopeFamily("memory/2026-06-18.md"), "daily_memory");
   assert.equal(getQualityScopeFamily("MEMORY.md"), "curated_memory");
   assert.equal(getQualityScopeFamily("memory/projects/a.md"), "project");
@@ -475,6 +477,7 @@ test("ownership-aware quality scope classifies initial ownership rules", () => {
     reason: "smart-add chunks are lifecycle-owned by memory-engine and should carry confidence metadata",
   });
   assert.equal(classifyQualityScope("memory/dreaming/foo.md").default_quality_score_scope, false);
+  assert.equal(classifyQualityScope("memory/legacy-daily-mirrors/2026-06-18.md").retrieval_visible, false);
   assert.equal(classifyQualityScope("MEMORY.md").owner, "openclaw_core");
   assert.equal(classifyQualityScope("memory/2026-06-18.md").retrieval_visible, true);
   assert.equal(classifyQualityScope("memory/custom/a.md").owner, "unknown");
