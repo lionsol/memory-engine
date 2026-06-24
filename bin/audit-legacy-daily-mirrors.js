@@ -15,10 +15,12 @@ Options:
   --memory-dir <path>     Memory directory; defaults to <root>/memory
   --apply                 Move confirmed legacy mirror files into quarantine
   --confirm <token>       Required with --apply; use quarantine-legacy-daily-mirrors
+  --review-report         Generate quarantine review report JSON without modifying quarantine-log.jsonl
 
 Notes:
   - Default mode is dry-run
   - Apply mode only moves files classified as legacy_daily_mirror_candidates
+  - Review report writes memory/legacy-daily-mirrors/quarantine-review-YYYY-MM-DD.json
 `);
 }
 
@@ -38,6 +40,7 @@ function parseArgs(argv = []) {
     root: process.cwd(),
     memoryDir: null,
     apply: false,
+    reviewReport: false,
     confirm: null,
     help: false,
   };
@@ -73,6 +76,10 @@ function parseArgs(argv = []) {
     }
     if (arg === "--apply") {
       options.apply = true;
+      continue;
+    }
+    if (arg === "--review-report") {
+      options.reviewReport = true;
       continue;
     }
     if (arg === "--confirm") {
@@ -123,12 +130,17 @@ async function main(argv = process.argv.slice(2)) {
     }
 
     const mod = await import("../lib/quality/legacy-daily-mirror-audit.js");
-    const report = mod.runLegacyDailyMirrorAudit({
-      rootDir: options.root,
-      memoryDir: options.memoryDir || undefined,
-      apply: options.apply,
-      confirm: options.confirm,
-    });
+    const report = options.reviewReport
+      ? mod.generateLegacyDailyMirrorQuarantineReview({
+        rootDir: options.root,
+        memoryDir: options.memoryDir || undefined,
+      })
+      : mod.runLegacyDailyMirrorAudit({
+        rootDir: options.root,
+        memoryDir: options.memoryDir || undefined,
+        apply: options.apply,
+        confirm: options.confirm,
+      });
     const output = options.markdown
       ? renderMarkdown(report)
       : JSON.stringify(report, null, 2);

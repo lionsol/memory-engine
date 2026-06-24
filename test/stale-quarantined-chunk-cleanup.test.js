@@ -114,6 +114,8 @@ test("dry-run does not modify DB and confirmed quarantined mirror chunks enter w
   assert.deepEqual(report.affected_paths, [confirmedPath]);
   assert.equal(report.stale_quarantined_legacy_mirror_chunks.length, 1);
   assert.equal(report.stale_quarantined_legacy_mirror_chunks[0].chunk_count, 2);
+  assert.equal(report.stale_quarantined_legacy_mirror_chunks[0].quarantine_timestamp, "2026-06-24T00:00:00.000Z");
+  assert.equal(report.stale_quarantined_legacy_mirror_chunks[0].episode_format, "unknown");
   assert.equal(report.missing_file_chunks_not_in_quarantine_log.length, 1);
   assert.equal(report.missing_file_chunks_not_in_quarantine_log[0].path, missingUnknownPath);
   assert.equal(report.existing_root_daily_chunks.length, 1);
@@ -193,4 +195,32 @@ test("existing root daily chunk never enters delete set", () => {
   assert.equal(report.would_delete_chunk_count, 0);
   assert.equal(report.existing_root_daily_chunks.length, 1);
   assert.equal(report.existing_root_daily_chunks[0].path, path);
+});
+
+test("v1 quarantine log entries remain eligible for stale cleanup without episode_format", () => {
+  const fixture = createFixture();
+  const confirmedPath = "memory/2026-06-27.md";
+  insertChunk(fixture.coreDbPath, { id: "c1", path: confirmedPath });
+  writeFileSync(resolve(fixture.quarantineDir, "2026-06-27.md"), "quarantined");
+  writeFileSync(
+    resolve(fixture.quarantineDir, "quarantine-log.jsonl"),
+    `${JSON.stringify({
+      moved_at: "2026-06-24T01:02:03.000Z",
+      moved_from: confirmedPath,
+      moved_to: "memory/legacy-daily-mirrors/2026-06-27.md",
+      reason: "legacy_daily_mirror_candidate",
+      similarity: 0.99,
+    })}\n`,
+  );
+
+  const report = auditStaleQuarantinedChunks({
+    rootDir: fixture.root,
+    memoryDir: fixture.memoryDir,
+    coreDbPath: fixture.coreDbPath,
+  });
+
+  assert.equal(report.would_delete_chunk_count, 1);
+  assert.equal(report.stale_quarantined_legacy_mirror_chunks.length, 1);
+  assert.equal(report.stale_quarantined_legacy_mirror_chunks[0].episode_format, "unknown");
+  assert.equal(report.stale_quarantined_legacy_mirror_chunks[0].quarantine_timestamp, "2026-06-24T01:02:03.000Z");
 });
