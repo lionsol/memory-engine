@@ -1601,6 +1601,15 @@ agentmemory.add({
 4. 原始日志 → LLM 摘要（150-200字）→ 写入 episodic 类别
 5. **自动冲突标记**：同 key 配置保留最新，旧条目设 `conflict_flag=1`；唯一条目误标则自动解除
 
+当前 `session-checkpoint` 只写 canonical episode 到 `memory/episodes/YYYY-MM-DD.md`。
+不会再默认创建或更新 `memory/YYYY-MM-DD.md` 这类 daily journal namespace 文件；历史 daily 文件仅保留，不做迁移删除。
+如确有兼容需求，可通过显式 legacy 开关 `checkpointLegacyDailyMirror` 恢复旧 mirror 行为。
+
+Quality scope 约定同步更新：
+- `memory/episodes/YYYY-MM-DD.md` 是 canonical generated episode。
+- `memory/YYYY-MM-DD.md` 只保留给真实 daily journal。
+- 识别出的 legacy generated mirror 应移动到 `memory/legacy-daily-mirrors/YYYY-MM-DD.md` 做 quarantine，不参与 recall / quality candidate 链路。
+
 ### Memory Prompt Supplement
 
 `registerMemoryPromptSupplement` 在 session 启动时动态注入：

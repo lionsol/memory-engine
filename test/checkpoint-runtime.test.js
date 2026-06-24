@@ -74,4 +74,5 @@ test("getRuntime default fields remain available", () => {
   assert.equal(typeof runtime.configJsonPath, "string");
   assert.equal(typeof runtime.timeZone, "string");
   assert.equal(typeof runtime.now, "function");
+  assert.equal(runtime.checkpointLegacyDailyMirror, false);
 });
