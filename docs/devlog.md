@@ -1,3 +1,218 @@
+## 2026-06-24
+
+### 修复：停止 session-checkpoint 生成 legacy daily mirror
+
+今天处理了 `session-checkpoint` 生成 episode 时同时写入两份 daily 摘要的问题。
+
+旧逻辑中，`writeEpisodeFiles()` 会同时写：
+
+* `memory/episodes/YYYY-MM-DD.md`：完整 canonical episode，包含元数据、LLM 摘要、配置记忆和 generated footer。
+* `memory/YYYY-MM-DD.md`：简版 daily 摘要，仅包含标题和 LLM 摘要正文。
+
+由于 `episodes/YYYY-MM-DD.md` 每次 checkpoint 都会覆盖更新，而 `memory/YYYY-MM-DD.md` 只有文件不存在时才创建，两个文件会在后续 checkpoint 中产生内容漂移。同时，root-level `memory/YYYY-MM-DD.md` 也会被分类为 `daily_journal` / `daily_memory`，存在进入 retrieval-visible 范围并污染召回的风险。
+
+本次修复后：
+
+* `session-checkpoint` 默认只写 canonical episode：`memory/episodes/YYYY-MM-DD.md`。
+* `memory/YYYY-MM-DD.md` 不再默认由 checkpoint 创建。
+* 保留显式 legacy 开关 `checkpointLegacyDailyMirror` 作为兼容回退，默认关闭。
+* 历史 root daily 文件不自动删除，避免误伤人工 daily journal。
+
+相关测试覆盖：
+
+* canonical episode 仍正常写入。
+* 默认不会创建 root-level daily mirror。
+* 已存在的 root-level daily journal 不会被覆盖。
+* runtime 默认关闭 legacy mirror 写入。
+
+### 新增：legacy daily mirror audit / quarantine
+
+新增 legacy daily mirror 审计和隔离工具，用于识别历史遗留的 root-level `memory/YYYY-MM-DD.md` 镜像文件。
+
+新增能力：
+
+* 扫描 root-level `memory/YYYY-MM-DD.md`。
+* 与对应 `memory/episodes/YYYY-MM-DD.md` 比对。
+* 输出三类结果：
+
+  * `legacy_daily_mirror_candidates`
+  * `manual_daily_journal_candidates`
+  * `ambiguous_daily_files`
+* 默认 dry-run，不修改文件。
+* apply 模式必须显式传入 `--apply --confirm quarantine-legacy-daily-mirrors`。
+* 确认的 legacy mirror 会被移动到 `memory/legacy-daily-mirrors/`，并记录到 `quarantine-log.jsonl`。
+
+同时新增 `path-family` / quality scope 支持：
+
+* `memory/legacy-daily-mirrors/` 被识别为 `quarantined_daily_mirror`。
+* 该 path family 非 retrieval-visible。
+* 不进入 default quality scope。
+* 从 quality candidates 和 chunks-without-confidence audit 中排除。
+* path-family 规则确认 `quarantined_daily_mirror` 优先于 `daily_memory`，避免被宽泛 root daily 规则误判。
+
+### 修复：legacy episode 格式导致 audit false negative
+
+初版 detector 只支持带有 `targetDate` / `generatedAt` / `category` / `source_type` 元数据头的 modern episode。真实 workspace 中多数历史 episode 是旧格式：
+
+* `# Episode`
+* 摘要正文
+* 可选 `### 配置记忆`
+* `_Generated at ..._` footer
+
+由于旧格式缺少元数据，原 detector 会把 summary 解析为空，导致相似度为 0，所有 root daily mirror 都落入 ambiguous，无法被自动 quarantine。
+
+本次修复后，`parseCanonicalEpisode()` 支持两种格式：
+
+* `modern`：带完整 metadata 的 canonical episode。
+* `legacy`：旧格式 `# Episode` + body + optional config memory + generated footer。
+
+legacy 解析逻辑会：
+
+* 去掉 H1 标题。
+* 去掉 `_Generated at ..._` footer。
+* 去掉 `### 配置记忆` 块。
+* 使用剩余正文与 root daily 内容做相似度比对。
+
+真实 workspace 复跑后：
+
+* `memory/2026-06-20.md`
+* `memory/2026-06-21.md`
+* `memory/2026-06-22.md`
+
+被正确识别为 legacy mirror。
+
+`memory/2026-06-23.md` 因为此前已手动重写，相似度约 0.2123，被保留为 `manual_daily_journal_candidate`，未被误伤。
+
+### 真实 workspace 清理结果
+
+在真实 workspace 执行 legacy daily mirror quarantine 后，共隔离 12 个历史 legacy mirror：
+
+* `memory/2026-05-28.md`
+* `memory/2026-05-30.md`
+* `memory/2026-06-06.md`
+* `memory/2026-06-09.md`
+* `memory/2026-06-11.md`
+* `memory/2026-06-13.md`
+* `memory/2026-06-14.md`
+* `memory/2026-06-15.md`
+* `memory/2026-06-19.md`
+* `memory/2026-06-20.md`
+* `memory/2026-06-21.md`
+* `memory/2026-06-22.md`
+
+这些文件与对应 episode 摘要相似度均为 `1`，确认是完全镜像。
+
+清理后复跑 audit：
+
+* `legacy_daily_mirror_candidates: 0`
+* `memory/2026-06-23.md` 保留为 manual daily journal
+* 无 ambiguous 误判
+
+### 新增：stale quarantined chunk cleanup
+
+filesystem quarantine 后，发现 OpenClaw core DB 中仍有旧 root daily path 的 indexed chunks 残留。虽然文件已经从 `memory/YYYY-MM-DD.md` 移到 `memory/legacy-daily-mirrors/YYYY-MM-DD.md`，但 core DB 的 `chunks` / `chunks_fts` 仍可能指向旧 path，继续污染 retrieval。
+
+新增 audit-first cleanup 工具：
+
+* 默认 dry-run，不修改 DB。
+* 只清理 confirmed quarantined legacy mirror 的旧 root daily path。
+* 不清理普通 missing-file chunks。
+* 不清理仍存在的 root daily journal。
+* apply 模式必须显式传入 `--apply --confirm cleanup-stale-quarantined-chunks`。
+* apply 前自动备份 core DB。
+* apply 时同时删除 `chunks` 和 `chunks_fts` 对应行。
+
+真实 dry-run 识别到 7 个 stale core DB chunks：
+
+* `memory/2026-05-28.md`
+* `memory/2026-05-30.md`
+* `memory/2026-06-06.md`
+* `memory/2026-06-09.md`
+* `memory/2026-06-11.md`
+* `memory/2026-06-13.md`
+* `memory/2026-06-14.md`
+
+apply 后结果：
+
+* 删除 7 条 `chunks`
+* 删除 7 条 `chunks_fts`
+* 备份创建于 `backups/main-before-stale-quarantined-chunk-cleanup-20260624T081406Z.sqlite`
+
+复查结果：
+
+* `stale_quarantined_legacy_mirror_chunks: 0`
+* `would_delete_chunk_count: 0`
+* core DB 查询上述 7 个 path 无结果
+* `memory/2026-06-23.md` 仍保留
+
+### 增强：quarantine log schema v2 与 review report
+
+历史 `quarantine-log.jsonl` 没有被重写，保持 append-only。
+
+未来新增 quarantine 记录升级为 `schema_version=2`，字段包括：
+
+* `schema_version`
+* `moved_at`
+* `timestamp`
+* `moved_from`
+* `moved_to`
+* `episode_path`
+* `episode_format`
+* `reason`
+* `similarity`
+* `daily_sha256`
+* `episode_summary_sha256`
+
+同时新增 review report 能力：
+
+* CLI 支持 `--review-report`
+* 只读扫描现有 `quarantine-log.jsonl`
+* 输出 `memory/legacy-daily-mirrors/quarantine-review-YYYY-MM-DD.json`
+* 为历史 moved entries 补充 `episode_path`、`episode_format`、hash 和 `review_result`
+* 不修改原始 JSONL
+
+`stale-quarantined-chunk-cleanup` 也兼容旧 v1 quarantine log：
+
+* `timestamp` 缺失时回退到 `moved_at`
+* `episode_format` 缺失时视为 `unknown`
+* 旧日志不会因为缺少新字段而影响 stale cleanup 判定
+
+### 测试
+
+本次相关测试均通过，包括：
+
+* `test/checkpoint-episode-writer.test.js`
+* `test/checkpoint-runtime.test.js`
+* `test/legacy-daily-mirror-audit.test.js`
+* `test/stale-quarantined-chunk-cleanup.test.js`
+* `test/memory-quality-eval.test.js`
+* `test/chunks-without-confidence-audit.test.js`
+* `test/timestamp-pollution-audit.test.js`
+
+全量测试通过：
+
+* tests: 378
+* pass: 372
+* fail: 0
+* skipped: 6
+* duration: 4595ms
+
+### 结果
+
+本轮完成了 legacy daily mirror 污染的完整闭环：
+
+1. writer 层停止继续生成 root daily mirror。
+2. audit 层支持 modern / legacy episode mirror 检测。
+3. filesystem 层将 12 个历史 mirror quarantine。
+4. quality/retrieval scope 层排除 quarantined mirror。
+5. core DB 层删除 7 个 stale chunks 和 7 个 FTS rows。
+6. 审计层补齐 v2 log 和 review report 能力。
+7. manual daily journal `memory/2026-06-23.md` 被正确保留。
+
+这次修复把 `memory/episodes/YYYY-MM-DD.md` 明确为 canonical generated episode，把 `memory/YYYY-MM-DD.md` 重新留给真实 daily journal / user-facing daily memory，消除了历史双写带来的冗余、漂移和 retrieval 污染。
+
+
+
 ## 2026-06-23
 
 ### P2: Agent memory tool strategy and smoke runbook
