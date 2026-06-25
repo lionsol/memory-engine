@@ -1,3 +1,179 @@
+## 2026-06-25
+
+### 修复：session-checkpoint evidence 与 targetDate 脱钩
+
+今天修复了 `session-checkpoint` 生成 episode / smart-add 时日期标签不准的问题。
+
+问题表现是：
+
+* `memory/episodes/YYYY-MM-DD.md`
+* `memory/smart-add/YYYY-MM-DD.md`
+
+文件名使用 `yesterdayDateStr()`，但实际喂给 LLM 的 evidence 并没有严格限制在这个 `targetDate` 内，导致文件名日期与摘要内容来源日期可能不一致。
+
+### 根因
+
+这次问题的真实数据流如下：
+
+1. `session-checkpoint` 先调用 `flush-session-rawlog.js --checkpoint`。
+2. `flush-session-rawlog.js` 解析 `.jsonl.reset.*` 文件：
+
+   * 按消息自身的 `timestamp` 分组到日期。
+   * 跳过今天。
+   * 非今天消息写入 DB：
+
+     * `chunks`
+     * `memory_confidence`
+     * `category='raw_log'`
+3. `session-checkpoint` 随后又从多个源收集 evidence：
+
+   * smart-add：读取昨天日期的笔记。
+   * DB raw_log：旧逻辑读取最新 100 条，未按日期过滤。
+   * reset 文件：旧逻辑再次全量解析所有 `.jsonl.reset.*`。
+
+核心问题有三点：
+
+* DB raw_log 查询使用 `ORDER BY updated_at DESC LIMIT 100`，没有 targetDate 过滤。
+* reset 文件直读没有按消息 timestamp 筛选日期，可能混入很旧的对话。
+* flush 已经解析 reset 并写入 DB，checkpoint 又重复解析 reset 文件，造成 reset 内容重复进入 LLM context。
+
+### 修复内容
+
+本次修复后，`session-checkpoint` 统一使用一个 `targetDate`，并确保所有 evidence 都与这个 targetDate 对齐。
+
+具体改动：
+
+* `main()` 先调用 `flush-session-rawlog --checkpoint`，再按同一个 `targetDate` 收集 evidence。
+* DB raw_log 查询改为 targetDate bounded：
+
+  * 不再使用无边界的 latest 100 fallback。
+  * diagnostics / metadata 明确写入 `rawLogTimeBasis=updated_at`。
+  * 查询结果按时间窗口约束，避免跨日 raw_log 混入。
+* reset 文件直读默认关闭：
+
+  * 默认不再直接解析所有 `.jsonl.reset.*`。
+  * 只有显式传入 `--legacy-reset-direct-parse` 时才启用。
+  * legacy 模式下也必须逐条按消息 `timestamp` 过滤 targetDate。
+  * 无 timestamp 的消息会跳过并计入 diagnostics。
+* smart-add 仍按 targetDate 读取：
+
+  * `memory/smart-add/YYYY-MM-DD.md`
+* episode / marker 文件增加 evidence filter 相关 metadata：
+
+  * `targetDate`
+  * `generatedAt`
+  * `timeZone`
+  * `rawLogTimeBasis`
+  * `rawLogIncluded`
+  * `resetDirectParseEnabled`
+  * evidence date filter diagnostics
+
+### 时区边界测试
+
+为避免以后退化成字符串日期匹配或 UTC 日期匹配，补充了精确到毫秒的 Asia/Shanghai 时区边界测试。
+
+新增测试：
+
+```text
+timezone-aware boundary includes start and excludes end for Asia/Shanghai targetDate
+```
+
+固定：
+
+```text
+targetDate = 2026-06-17
+timeZone = Asia/Shanghai
+```
+
+验证窗口语义为：
+
+```text
+windowStart <= updated_at < windowEnd
+```
+
+覆盖边界：
+
+* `2026-06-16T16:00:00.000Z`
+
+  * 等于 `2026-06-17 00:00:00 Asia/Shanghai`
+  * 应被包含
+* `2026-06-16T15:59:59.999Z`
+
+  * 等于 `2026-06-16 23:59:59.999 Asia/Shanghai`
+  * 应被排除
+* `2026-06-17T16:00:00.000Z`
+
+  * 等于 `2026-06-18 00:00:00 Asia/Shanghai`
+  * 应被排除，因为 window end 是 exclusive
+
+### 变更文件
+
+本轮涉及文件：
+
+* `bin/session-checkpoint.js`
+* `lib/checkpoint/raw-log.js`
+* `lib/checkpoint/episode-writer.js`
+* `lib/checkpoint/markers.js`
+* `lib/checkpoint/runtime.js`
+* `test/checkpoint-raw-log.test.js`
+* `test/checkpoint-episode-writer.test.js`
+* `test/session-checkpoint.integration.test.js`
+* `test/checkpoint-orphan-repair.test.js`
+
+### Dry-run diagnostics
+
+受控 fixture 下的 dry-run 结果：
+
+```text
+targetDate: 2026-06-17
+rawLogIncluded: 1
+rawLogSkippedOutOfTargetDate: 0
+rawLogTimeBasis: updated_at
+resetDirectParseEnabled: false
+resetFilesScanned: 0
+resetEventsIncluded: 0
+resetEventsSkippedOutOfTargetDate: 0
+smartAddPath: memory/smart-add/2026-06-17.md
+generatedEpisodePath: /tmp/memory-engine-dryrun-*/memory/episodes/2026-06-17.md
+```
+
+其中 `rawLogSkippedOutOfTargetDate=0` 是预期行为，因为 SQL 已经先做 targetDate bounded 过滤，不再把跨日 raw_log 读入后再丢弃。
+
+### 测试
+
+已运行：
+
+```bash
+node --test test/checkpoint-raw-log.test.js
+node --test test/checkpoint-episode-writer.test.js
+node --test test/session-checkpoint.integration.test.js
+node --test test/checkpoint-orphan-repair.test.js
+npm test
+```
+
+结果：
+
+```text
+62 passed
+0 failed
+```
+
+### 结果
+
+本轮修复后，`session-checkpoint` 不再把无边界 raw_log 和全量 reset 文件混入 `yesterdayDateStr()` 对应的输出文件。
+
+新的默认语义是：
+
+* `targetDate` 统一生成。
+* smart-add、raw_log、episode metadata 都围绕同一个 targetDate。
+* reset 文件直读不再是默认 evidence source。
+* flush 写入 DB raw_log 后，checkpoint 以 DB raw_log 为 canonical source。
+* 不再 fallback 到 latest 100 或 all reset files。
+
+这次修复堵住了 checkpoint 日期归因污染的主要入口，避免 episode / smart-add 文件继续出现“文件名是某天，但内容混入其他日期数据”的问题。
+
+
+
 ## 2026-06-24
 
 ### 修复：停止 session-checkpoint 生成 legacy daily mirror
