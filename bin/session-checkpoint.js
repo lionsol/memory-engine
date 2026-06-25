@@ -9,6 +9,8 @@
  *   3. 生成今日摘要（episode），供新 session 注入
  */
 
+const { spawnSync } = require("node:child_process");
+const { resolve } = require("node:path");
 const checkpointDate = require("../lib/checkpoint/date");
 const checkpointCompleteness = require("../lib/checkpoint/completeness");
 const { resolveConfigConflicts } = require("../lib/checkpoint/conflict-resolver");
@@ -46,10 +48,15 @@ function yesterdayDateStr(now = null) {
   return checkpointDate.yesterdayDateStr(now || rt.now(), rt.timeZone);
 }
 
+function resolveTargetDate(options = {}) {
+  return options.targetDate || yesterdayDateStr();
+}
+
 function parseCliArgs(argv = []) {
   const options = {
     dryRun: false,
     targetDate: null,
+    legacyResetDirectParse: false,
   };
 
   for (let index = 0; index < argv.length; index++) {
@@ -65,10 +72,58 @@ function parseCliArgs(argv = []) {
     }
     if (arg.startsWith("--target-date=")) {
       options.targetDate = arg.slice("--target-date=".length) || null;
+      continue;
+    }
+    if (arg === "--legacy-reset-direct-parse") {
+      options.legacyResetDirectParse = true;
     }
   }
 
   return options;
+}
+
+function buildCheckpointEvidenceDiagnostics(targetDate, rawLogStats = null) {
+  const rt = getRuntime();
+  const stats = rawLogStats && typeof rawLogStats === "object" ? rawLogStats : {};
+  return {
+    targetDate,
+    timeZone: rt.timeZone,
+    smartAddPath: stats.smartAddPath || `memory/smart-add/${targetDate}.md`,
+    generatedEpisodePath: resolve(rt.episodesDir, `${targetDate}.md`),
+    evidenceDateFilter: stats.evidenceDateFilter
+      || `targetDate=${targetDate}; timeZone=${rt.timeZone}; smartAdd=memory/smart-add/${targetDate}.md; raw_log=updated_at bounded to targetDate`,
+    rawLogTimeBasis: stats.rawLogTimeBasis || "updated_at",
+    rawLogTimeBasisNote: stats.rawLogTimeBasisNote || "updated_at may reflect write/update time, not original event time",
+    rawLogIncluded: stats.rawLogIncluded || 0,
+    rawLogSkippedOutOfTargetDate: stats.rawLogSkippedOutOfTargetDate || 0,
+    resetDirectParseEnabled: stats.resetDirectParseEnabled === true,
+    resetFilesScanned: stats.resetFilesScanned || 0,
+    resetEventsIncluded: stats.resetEventsIncluded || 0,
+    resetEventsSkippedOutOfTargetDate: stats.resetEventsSkippedOutOfTargetDate || 0,
+    resetEventsSkippedMissingTimestamp: stats.resetEventsSkippedMissingTimestamp || 0,
+  };
+}
+
+function runFlushSessionRawlogCheckpoint({
+  spawnSyncImpl = spawnSync,
+  nodeExecPath = process.execPath,
+  scriptPath = resolve(__dirname, "flush-session-rawlog.js"),
+  cwd = resolve(__dirname, ".."),
+  env = process.env,
+} = {}) {
+  const result = spawnSyncImpl(nodeExecPath, [scriptPath, "--checkpoint"], {
+    cwd,
+    env,
+    encoding: "utf8",
+  });
+  const status = Number.isInteger(result?.status) ? result.status : null;
+  const stdout = String(result?.stdout || "");
+  const stderr = String(result?.stderr || "");
+  if (status !== 0) {
+    const message = stderr.trim() || stdout.trim() || "flush-session-rawlog checkpoint exited with non-zero status";
+    throw new Error(message);
+  }
+  return { ok: true, status, stdout, stderr };
 }
 
 function buildNightlyEntryId({ targetDate, category = "episodic", generatedAt = null } = {}) {
@@ -121,8 +176,9 @@ function warnConfidenceWriteFailure({ entryId, category, section, type, key, err
  * Run the full nightly checkpoint: one LLM call → 4 outputs.
  */
 async function nightlyCheckpoint(rawLogs, options = {}) {
-  const episodeDate = options.targetDate || yesterdayDateStr();
+  const episodeDate = resolveTargetDate(options);
   const generatedAt = currentIsoString();
+  const diagnostics = buildCheckpointEvidenceDiagnostics(episodeDate, options.rawLogStats);
   const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
   const conversationLogs = assessment.conversationLogs;
   const allLogs = assessment.allLogs;
@@ -130,19 +186,19 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
 
   if (assessment.status === "no_raw_logs") {
     console.log("[checkpoint] No raw logs found — nothing to extract.");
-    writeEmptyEpisode(episodeDate);
+    writeEmptyEpisode(episodeDate, diagnostics);
     return { memories: 0, episode: false, configs: 0 };
   }
 
   if (assessment.status === "all_logs_empty") {
     console.log("[checkpoint] All logs empty — nothing to extract.");
-    writeEmptyEpisode(episodeDate);
+    writeEmptyEpisode(episodeDate, diagnostics);
     return { memories: 0, episode: false, configs: 0 };
   }
 
   if (assessment.status === "no_conversation") {
     console.log(`[checkpoint] No conversation logs found (${assessment.allCount} note entries only) — marking as incomplete, skipping LLM.`);
-    writeIncompleteEpisode(episodeDate, assessment.allCount);
+    writeIncompleteEpisode(episodeDate, assessment.allCount, diagnostics);
     return { memories: 0, episode: false, configs: 0, skipped: true, reason: "no_conversation_data" };
   }
 
@@ -154,14 +210,14 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
     extracted = await getRuntime().llmNightlyExtract(combinedText);
   } catch (error) {
     console.error(`[checkpoint] LLM extraction failed: ${error.message}`);
-    writeLLMTimeoutEpisode(episodeDate);
+    writeLLMTimeoutEpisode(episodeDate, diagnostics);
     return { memories: 0, episode: false, configs: 0, timeout: true, error: error.message };
   }
 
   // ── Timeout guard: llm超时 → write marker episode and exit early ──
   if (extracted.error === "llm超时") {
     console.log("[checkpoint] llm超时 — both providers failed");
-    writeLLMTimeoutEpisode(episodeDate);
+    writeLLMTimeoutEpisode(episodeDate, diagnostics);
     return { memories: 0, episode: false, configs: 0, timeout: true };
   }
 
@@ -249,7 +305,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
       if (isHallucinated) {
         console.warn(`[checkpoint] ⚠️ Episode hallucinated (0 conversation logs, ${allLogs.length} note entries). Discarding.`);
         episodeWritten = false;
-        writeIncompleteEpisode(episodeDate, allLogs.length);
+        writeIncompleteEpisode(episodeDate, allLogs.length, diagnostics);
       } else {
         // No conversation but no hallucination keywords — write data-only episode
         console.log(`[checkpoint] No conversation logs, but episode text doesn't mention discussion. Writing as-is.`);
@@ -262,12 +318,13 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
         generatedAt,
         episodeText,
         configs: extracted.configs,
+        diagnostics,
       });
     }
   }
 
   if (!episodeWritten) {
-    writeEmptyEpisode(episodeDate);
+    writeEmptyEpisode(episodeDate, diagnostics);
   }
 
   // ── 3. Write configs (existing logic, same format) ──
@@ -318,16 +375,20 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
 async function main(argv = process.argv.slice(2)) {
   const start = Date.now();
   const options = parseCliArgs(argv);
-  const targetDate = options.targetDate || yesterdayDateStr();
+  const targetDate = resolveTargetDate(options);
   console.log(`[checkpoint] === Session Checkpoint ${todayDateStr()} ===`);
 
   try {
+    getRuntime().flushCheckpointRawLog();
+
     // Step 1: Gather raw logs
     const rawLogs = getRuntime().readCheckpointRawLogs({
       targetDate,
       timeZone: getRuntime().timeZone,
+      resetDirectParseEnabled: options.legacyResetDirectParse,
     });
     const rawLogStats = checkpointRawLog.getRawLogCollectionStats(rawLogs);
+    const diagnostics = buildCheckpointEvidenceDiagnostics(targetDate, rawLogStats);
     console.log(`[checkpoint] Found ${rawLogs.length} raw log entries (targetDate: ${targetDate}, timeZone: ${getRuntime().timeZone})`);
     if (rawLogStats) {
       console.log(`[checkpoint] Input stats ${JSON.stringify(rawLogStats)}`);
@@ -346,6 +407,16 @@ async function main(argv = process.argv.slice(2)) {
         conversationCount: assessment.conversationCount,
         noteCount: assessment.noteCount,
         combinedTextCharCount: assessment.combinedText.length,
+        rawLogIncluded: diagnostics.rawLogIncluded,
+        rawLogSkippedOutOfTargetDate: diagnostics.rawLogSkippedOutOfTargetDate,
+        rawLogTimeBasis: diagnostics.rawLogTimeBasis,
+        resetDirectParseEnabled: diagnostics.resetDirectParseEnabled,
+        resetFilesScanned: diagnostics.resetFilesScanned,
+        resetEventsIncluded: diagnostics.resetEventsIncluded,
+        resetEventsSkippedOutOfTargetDate: diagnostics.resetEventsSkippedOutOfTargetDate,
+        resetEventsSkippedMissingTimestamp: diagnostics.resetEventsSkippedMissingTimestamp,
+        smartAddPath: diagnostics.smartAddPath,
+        generatedEpisodePath: diagnostics.generatedEpisodePath,
       })}`);
       return {
         dryRun: true,
@@ -356,7 +427,7 @@ async function main(argv = process.argv.slice(2)) {
     }
 
     // Step 2: Unified nightly checkpoint (1 LLM call → 3 outputs)
-    const result = await nightlyCheckpoint(rawLogs, { targetDate });
+    const result = await nightlyCheckpoint(rawLogs, { targetDate, rawLogStats });
 
     // Step 2.5: Repair orphan vectors (SQLite has, LanceDB missing)
     const repaired = await getRuntime().repairOrphanVectors();
@@ -382,6 +453,7 @@ runtimeRegistry.installRuntimeFallbacks({
   llmNightlyExtract: checkpointLlm.llmNightlyExtract,
   readCheckpointRawLogs: checkpointRawLog.readCheckpointRawLogs,
   readYesterdayRawLogs: checkpointRawLog.readYesterdayRawLogs,
+  flushCheckpointRawLog: runFlushSessionRawlogCheckpoint,
   repairOrphanVectors,
   resolveConfigConflicts,
 });
@@ -395,9 +467,12 @@ module.exports = {
   inspectBusyTimeouts,
   main,
   yesterdayDateStr,
+  resolveTargetDate,
   buildNightlyEntryId,
+  buildCheckpointEvidenceDiagnostics,
   mergeKgData,
   nightlyCheckpoint,
   parseCliArgs,
+  runFlushSessionRawlogCheckpoint,
   withRuntime,
 };

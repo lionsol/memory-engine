@@ -122,7 +122,7 @@ test("readCheckpointRawLogs reads only the explicit targetDate smart-add file", 
     "",
   ].join("\n"));
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   assert.equal(logs.some((log) => log.source === "note" && log.text === "target date note"), true);
   assert.equal(logs.some((log) => log.text === "other day note"), false);
 });
@@ -150,11 +150,37 @@ test("DB raw_log entries outside targetDate are excluded and kept in chronologic
     updatedAt: Date.parse("2026-06-18T00:05:00.000+08:00") / 1000,
   });
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const conversationTexts = logs.filter((log) => log.source === "conversation").map((log) => log.text);
   assert.deepEqual(conversationTexts, [
     "**User:** first on target day",
     "**Assistant:** second on target day",
+  ]);
+});
+
+test("timezone-aware boundary includes start and excludes end for Asia/Shanghai targetDate", async () => {
+  const fixture = createFixture();
+  insertRawLogChunk(fixture, {
+    id: "chunk-at-start",
+    text: "**User:** included at exact targetDate start",
+    updatedAt: Date.parse("2026-06-16T16:00:00.000Z") / 1000,
+  });
+  insertRawLogChunk(fixture, {
+    id: "chunk-before-start",
+    text: "**User:** excluded before targetDate start",
+    updatedAt: Date.parse("2026-06-16T15:59:59.999Z") / 1000,
+  });
+  insertRawLogChunk(fixture, {
+    id: "chunk-at-end",
+    text: "**User:** excluded at exact targetDate end",
+    updatedAt: Date.parse("2026-06-17T16:00:00.000Z") / 1000,
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const conversationTexts = logs.filter((log) => log.source === "conversation").map((log) => log.text);
+
+  assert.deepEqual(conversationTexts, [
+    "**User:** included at exact targetDate start",
   ]);
 });
 
@@ -166,7 +192,7 @@ test("timestamp-prefixed **User:** DB raw_log is classified as user", async () =
     updatedAt: Date.parse("2026-06-17T08:00:00.000+08:00") / 1000,
   });
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(logs.some((log) => log.text.includes("prefixed user message")), true);
   assert.equal(stats.charsByRoleAfterBudget.user > 0, true);
@@ -181,7 +207,7 @@ test("timestamp-prefixed **Assistant:** DB raw_log is classified as assistant", 
     updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
   });
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(logs.some((log) => log.text.includes("prefixed assistant message")), true);
   assert.equal(stats.charsByRoleAfterBudget.assistant > 0, true);
@@ -196,7 +222,7 @@ test("bare DB raw_log text without role evidence remains metadata_header", async
     updatedAt: Date.parse("2026-06-17T10:00:00.000+08:00") / 1000,
   });
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(logs.some((log) => log.text.includes("system marker without explicit speaker")), true);
   assert.equal(stats.charsByRoleAfterBudget.metadata_header > 0, true);
@@ -211,7 +237,7 @@ test("long episode-like DB raw_log text is not misclassified as user", async () 
     updatedAt: Date.parse("2026-06-17T11:00:00.000+08:00") / 1000,
   });
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(logs.some((log) => log.text.includes("Summary for the day")), true);
   assert.equal(stats.charsByRoleAfterBudget.user, 0);
@@ -221,16 +247,19 @@ test("long episode-like DB raw_log text is not misclassified as user", async () 
 test("reset transcript files outside targetDate are excluded", async () => {
   const fixture = createFixture();
   writeSessionFile(fixture, "target.jsonl.reset.1", [
-    { type: "message", message: { role: "user", content: "target day dialogue" } },
+    { type: "message", message: { role: "user", content: "target day dialogue" }, timestamp: "2026-06-17T09:00:00.000+08:00" },
   ], "2026-06-17T09:00:00.000+08:00");
   writeSessionFile(fixture, "old.jsonl.reset.1", [
-    { type: "message", message: { role: "user", content: "historical dialogue" } },
+    { type: "message", message: { role: "user", content: "historical dialogue" }, timestamp: "2026-06-10T09:00:00.000+08:00" },
   ], "2026-06-10T09:00:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   assert.equal(logs.some((log) => log.text.includes("target day dialogue")), true);
   assert.equal(logs.some((log) => log.text.includes("historical dialogue")), false);
-  assert.equal(checkpointRawLog.getRawLogCollectionStats(logs).skippedResetFileCount >= 1, true);
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  assert.equal(stats.resetDirectParseEnabled, true);
+  assert.equal(stats.resetEventsIncluded, 1);
+  assert.equal(stats.resetEventsSkippedOutOfTargetDate, 1);
 });
 
 test("toolResult records are dropped and target-date user-assistant dialogue is retained", async () => {
@@ -241,7 +270,7 @@ test("toolResult records are dropped and target-date user-assistant dialogue is 
     { type: "message", message: { role: "assistant", content: [{ type: "text", text: "I found the boundary issue." }] }, timestamp: "2026-06-17T10:05:00.000+08:00" },
   ], "2026-06-17T10:05:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const combinedText = logs.map((log) => log.text).join("\n");
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(combinedText.includes("please inspect the bug"), true);
@@ -270,7 +299,7 @@ test("compact test summary is retained while full tool output is absent", async 
     },
   ], "2026-06-17T10:01:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const combinedText = logs.map((log) => log.text).join("\n");
   assert.equal(combinedText.includes("Tool summary: tests pass=3") || combinedText.includes("Tool summary: tests pass=2"), true);
   assert.equal(combinedText.includes("duration_ms=1234.5"), true);
@@ -294,7 +323,7 @@ test("compact doctor summary is retained", async () => {
     },
   ], "2026-06-17T10:02:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const combinedText = logs.map((log) => log.text).join("\n");
   assert.equal(combinedText.includes("Tool summary: doctor warnings=2, errors=1"), true);
   assert.equal(combinedText.includes("config path missing"), true);
@@ -314,7 +343,7 @@ test("large config file style tool output is dropped", async () => {
     { type: "message", message: { role: "user", content: "config dump should not pollute summary" }, timestamp: "2026-06-17T10:04:00.000+08:00" },
   ], "2026-06-17T10:04:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const combinedText = logs.map((log) => log.text).join("\n");
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(combinedText.includes("\"k\":\"v\""), false);
@@ -333,7 +362,7 @@ test("duplicate DB raw_log and reset transcript dialogue is included only once",
     { type: "message", message: { role: "user", content: "investigate checkpoint leak" }, timestamp: "2026-06-17T11:00:00.000+08:00" },
   ], "2026-06-17T11:00:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const matching = logs.filter((log) => log.text.includes("investigate checkpoint leak"));
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(matching.length, 1);
@@ -349,7 +378,7 @@ test("large tool output does not dominate final combinedText", async () => {
     { type: "message", message: { role: "assistant", content: "The failing run was caused by cross-day transcript bleed." }, timestamp: "2026-06-17T14:05:00.000+08:00" },
   ], "2026-06-17T14:05:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(stats.finalCombinedTextCharCount < 5000, true);
   assert.equal(logs.some((log) => log.text.includes("cross-day transcript bleed")), true);
@@ -369,7 +398,7 @@ test("budget defaults are exposed and applied to final combined text", async () 
     { type: "message", message: { role: "user", content: "u".repeat(50000) }, timestamp: "2026-06-17T09:00:00.000+08:00" },
   ], "2026-06-17T09:00:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(stats.finalCombinedTextCharCount <= checkpointRawLog.DEFAULT_BUDGETS.maxFinalCombinedChars, true);
   assert.equal(stats.budgetApplied, true);
@@ -384,6 +413,7 @@ test("huge same-day reset transcript is capped and stats report budget applicati
   ], "2026-06-17T09:10:00.000+08:00");
 
   const logs = await getLogsForTargetDate(fixture, "2026-06-17", {
+    resetDirectParseEnabled: true,
     budgets: {
       maxFinalCombinedChars: 800,
       smartAddChars: 200,
@@ -427,6 +457,7 @@ test("tool summaries cannot exceed their own budget", async () => {
   ], "2026-06-17T12:02:00.000+08:00");
 
   const logs = await getLogsForTargetDate(fixture, "2026-06-17", {
+    resetDirectParseEnabled: true,
     budgets: {
       maxFinalCombinedChars: 500,
       smartAddChars: 100,
@@ -459,6 +490,7 @@ test("smart-add tagged lines are preserved under budget pressure", async () => {
   ], "2026-06-17T10:05:00.000+08:00");
 
   const logs = await getLogsForTargetDate(fixture, "2026-06-17", {
+    resetDirectParseEnabled: true,
     budgets: {
       maxFinalCombinedChars: 500,
       smartAddChars: 200,
@@ -478,6 +510,7 @@ test("user messages outrank assistant chatter under budget pressure", async () =
   ], "2026-06-17T11:10:00.000+08:00");
 
   const logs = await getLogsForTargetDate(fixture, "2026-06-17", {
+    resetDirectParseEnabled: true,
     budgets: {
       maxFinalCombinedChars: 450,
       smartAddChars: 100,
@@ -496,7 +529,7 @@ test("readCheckpointRawLogs honors embedded timestamps when reset file mtime is 
     { type: "message", message: { role: "assistant", content: "captured from reset transcript" }, timestamp: "2026-06-17T23:56:00.000+08:00" },
   ], "2026-06-18T00:10:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   assert.equal(logs.some((log) => log.text.includes("late-night target work")), true);
   assert.equal(logs.some((log) => log.text.includes("captured from reset transcript")), true);
 });
@@ -507,8 +540,52 @@ test("trajectory files are excluded from checkpoint session scan", async () => {
     { type: "message", message: { role: "user", content: "trajectory should be ignored" } },
   ], "2026-06-17T11:00:00.000+08:00");
 
-  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   assert.equal(logs.some((log) => log.text.includes("trajectory should be ignored")), false);
+});
+
+test("reset direct parse is disabled by default so checkpoint does not re-consume reset files", async () => {
+  const fixture = createFixture();
+  writeSessionFile(fixture, "default-off.jsonl.reset.1", [
+    { type: "message", message: { role: "user", content: "should stay out of default checkpoint input" }, timestamp: "2026-06-17T09:00:00.000+08:00" },
+  ], "2026-06-17T09:00:00.000+08:00");
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  assert.equal(logs.some((log) => log.text.includes("should stay out of default checkpoint input")), false);
+  assert.equal(stats.resetDirectParseEnabled, false);
+  assert.equal(stats.resetFilesScanned, 0);
+  assert.equal(stats.resetEventsIncluded, 0);
+});
+
+test("reset direct parse skips records without timestamp and records diagnostics", async () => {
+  const fixture = createFixture();
+  writeSessionFile(fixture, "missing-ts.jsonl.reset.1", [
+    { type: "message", message: { role: "user", content: "missing timestamp should be skipped" } },
+    { type: "message", message: { role: "assistant", content: "timestamped keep" }, timestamp: "2026-06-17T10:05:00.000+08:00" },
+  ], "2026-06-17T10:05:00.000+08:00");
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  assert.equal(logs.some((log) => log.text.includes("missing timestamp should be skipped")), false);
+  assert.equal(logs.some((log) => log.text.includes("timestamped keep")), true);
+  assert.equal(stats.resetEventsSkippedMissingTimestamp, 1);
+});
+
+test("DB raw_log reader does not fall back to latest 100 outside targetDate", async () => {
+  const fixture = createFixture();
+  for (let index = 0; index < 120; index++) {
+    insertRawLogChunk(fixture, {
+      id: `outside-${index}`,
+      text: `**User:** outside target ${index}`,
+      updatedAt: Date.parse("2026-06-18T08:00:00.000+08:00") / 1000,
+    });
+  }
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  assert.equal(logs.filter((log) => log.source === "conversation").length, 0);
+  assert.equal(stats.rawLogIncluded, 0);
 });
 
 test("DB read failure logs warning and loader still returns other sources", async () => {
@@ -557,5 +634,14 @@ test("parseCliArgs supports explicit targetDate semantics", async () => {
   assert.deepEqual(checkpoint.parseCliArgs(["--dry-run", "--target-date", "2026-06-22"]), {
     dryRun: true,
     targetDate: "2026-06-22",
+    legacyResetDirectParse: false,
+  });
+});
+
+test("parseCliArgs supports legacy reset direct parse flag", async () => {
+  assert.deepEqual(checkpoint.parseCliArgs(["--legacy-reset-direct-parse"]), {
+    dryRun: false,
+    targetDate: null,
+    legacyResetDirectParse: true,
   });
 });

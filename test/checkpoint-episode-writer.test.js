@@ -30,6 +30,13 @@ test("writeEpisodeFiles writes memory/episodes file", async () => {
       generatedAt: "2026-06-18T01:23:45.000Z",
       episodeText: "episode text body",
       configs: [],
+      diagnostics: {
+        timeZone: "Asia/Shanghai",
+        rawLogTimeBasis: "updated_at",
+        rawLogIncluded: 2,
+        resetDirectParseEnabled: false,
+        evidenceDateFilter: "targetDate=2026-06-17",
+      },
     });
   });
 
@@ -38,8 +45,13 @@ test("writeEpisodeFiles writes memory/episodes file", async () => {
   assert.match(content, /episode text body/);
   assert.match(content, /targetDate: 2026-06-17/);
   assert.match(content, /generatedAt: 2026-06-18T01:23:45.000Z/);
+  assert.match(content, /timeZone: Asia\/Shanghai/);
   assert.match(content, /category: episodic/);
   assert.match(content, /source_type: checkpoint_llm/);
+  assert.match(content, /rawLogTimeBasis: updated_at/);
+  assert.match(content, /rawLogIncluded: 2/);
+  assert.match(content, /resetDirectParseEnabled: false/);
+  assert.match(content, /evidenceDateFilter: targetDate=2026-06-17/);
   assert.match(content, /---\n_Generated at 2026-06-18T01:23:45.000Z_/);
 });
 
@@ -55,6 +67,13 @@ test("episode metadata contains targetDate, generatedAt, category, source_type",
       generatedAt: "2026-06-18T01:23:45.000Z",
       episodeText: "episode text body",
       configs: [],
+      diagnostics: {
+        timeZone: "Asia/Shanghai",
+        rawLogTimeBasis: "updated_at",
+        rawLogIncluded: 2,
+        resetDirectParseEnabled: false,
+        evidenceDateFilter: "targetDate=2026-06-17",
+      },
     });
   });
 
@@ -63,6 +82,9 @@ test("episode metadata contains targetDate, generatedAt, category, source_type",
   assert.match(content, /generatedAt: 2026-06-18T01:23:45.000Z/);
   assert.match(content, /category: episodic/);
   assert.match(content, /source_type: checkpoint_llm/);
+  assert.match(content, /rawLogTimeBasis: updated_at/);
+  assert.match(content, /rawLogIncluded: 2/);
+  assert.match(content, /resetDirectParseEnabled: false/);
 });
 
 test("non-empty configs include 配置记忆 section", async () => {

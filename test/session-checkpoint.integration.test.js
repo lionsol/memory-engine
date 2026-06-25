@@ -245,9 +245,10 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
       }),
       repairOrphanVectors: async () => 0,
       resolveConfigConflicts: () => 0,
-      readYesterdayRawLogs: () => ([
+      readCheckpointRawLogs: () => ([
         { chunk_id: "conv-1", category: "raw_log", text: "**User:** summarize today", source: "conversation" },
       ]),
+      flushCheckpointRawLog: () => ({ ok: true }),
     }, () => checkpoint.main());
 
     assert.equal(result, undefined);
@@ -278,14 +279,52 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
     assert.match(episode, /MOCK SUMMARY: checkpoint integration test/);
     assert.match(episode, /targetDate: 2026-06-16/);
     assert.match(episode, /generatedAt: 2026-06-16T17:30:00.000Z/);
+    assert.match(episode, /timeZone: Asia\/Shanghai/);
     assert.match(episode, /category: episodic/);
     assert.match(episode, /source_type: checkpoint_llm/);
+    assert.match(episode, /rawLogTimeBasis: updated_at/);
+    assert.match(episode, /rawLogIncluded: 0|rawLogIncluded: 1/);
+    assert.match(episode, /resetDirectParseEnabled: false/);
     assert.match(smartAdd, /## 2026-06-16_episodic_nightly_generated_013000/);
     assert.match(smartAdd, /Category: episodic/);
     assert.match(smartAdd, /"generatedAt":"2026-06-16T17:30:00.000Z"/);
     assert.match(smartAdd, /"targetDate":"2026-06-16"/);
     assert.ok(confidenceRows.length >= 1);
     assert.equal(confidenceRows[0].chunk_id, "smartadd-chunk-1");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("session checkpoint calls flush before reading targetDate-bounded raw logs and keeps reset direct parse off by default", async () => {
+  const fixture = createFixture();
+  let flushed = 0;
+  let readerOptions = null;
+
+  try {
+    await checkpoint.withRuntime({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      workspaceDir: fixture.workspaceDir,
+      memoryDir: fixture.memoryDir,
+      sessionsDir: fixture.sessionsDir,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse(fixture.now),
+      flushCheckpointRawLog: () => {
+        flushed += 1;
+        return { ok: true };
+      },
+      readCheckpointRawLogs: (options) => {
+        readerOptions = options;
+        return [];
+      },
+      repairOrphanVectors: async () => 0,
+      resolveConfigConflicts: () => 0,
+    }, () => checkpoint.main(["--dry-run"]));
+
+    assert.equal(flushed, 1);
+    assert.equal(readerOptions.targetDate, "2026-06-16");
+    assert.equal(readerOptions.resetDirectParseEnabled, false);
   } finally {
     fixture.cleanup();
   }

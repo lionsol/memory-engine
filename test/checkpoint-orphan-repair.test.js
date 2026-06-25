@@ -167,7 +167,8 @@ test("runtime override repairOrphanVectors still controls main flow", async () =
       engineDbPath: fixture.engineDbPath,
       timeZone: "Asia/Shanghai",
       now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
-      readYesterdayRawLogs: () => [],
+      readCheckpointRawLogs: () => [],
+      flushCheckpointRawLog: () => ({ ok: true }),
       repairOrphanVectors: async () => {
         repairCalls += 1;
         return 7;
