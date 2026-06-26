@@ -130,6 +130,7 @@ export async function appendSmartAdd({
   isProtected,
   text,
   fingerprint,
+  provenance = "agent_smart_add",
   syncCli,
   syncCliForce = true,
   syncCliQuiet = true,
@@ -154,7 +155,7 @@ export async function appendSmartAdd({
   }
 
   const header = existed ? "" : "# Smart Added Memory\n\n";
-  const entry = `${header}## ${entryId}\n\nCategory: ${cat}${isProtected ? " | Protected" : ""}\n<!-- smart-add-fingerprint: ${fingerprint} -->\n\n${cleanText}\n\n`;
+  const entry = `${header}## ${entryId}\n\nCategory: ${cat}${isProtected ? " | Protected" : ""}\nProvenance: ${String(provenance || "agent_smart_add").trim() || "agent_smart_add"}\n<!-- smart-add-fingerprint: ${fingerprint} -->\n\n${cleanText}\n\n`;
   appendFileSync(filePath, header ? entry : `\n${entry}`);
   const shouldSync = typeof syncCli === "boolean" ? syncCli : shouldAutoSyncPath(filePath);
   if (!shouldSync) return { appended: true };

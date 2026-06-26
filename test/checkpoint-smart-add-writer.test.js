@@ -14,10 +14,12 @@ function createFixture() {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-smart-add-writer-"));
   const workspaceDir = resolve(root, "workspace");
   const smartAddDir = resolve(root, "memory", "smart-add");
+  const generatedSmartAddDir = resolve(root, "memory", "generated-smart-add");
   const coreDbPath = resolve(root, "core.sqlite");
   const engineDbPath = resolve(root, "engine.sqlite");
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(smartAddDir, { recursive: true });
+  mkdirSync(generatedSmartAddDir, { recursive: true });
 
   const coreDb = new Database(coreDbPath);
   try {
@@ -46,7 +48,7 @@ function createFixture() {
     engineDb.close();
   }
 
-  return { workspaceDir, smartAddDir, coreDbPath, engineDbPath };
+  return { workspaceDir, smartAddDir, generatedSmartAddDir, coreDbPath, engineDbPath };
 }
 
 function insertCoreChunk(coreDbPath, { id, path, text = "", updatedAt = 1 }) {
@@ -86,7 +88,7 @@ test("smartAddFingerprint is stable across CRLF and comments/title normalization
 
 test("readSmartAddFingerprints reads comment fingerprint", async () => {
   const fixture = createFixture();
-  writeFileSync(resolve(fixture.smartAddDir, "2026-06-18.md"), [
+  writeFileSync(resolve(fixture.generatedSmartAddDir, "2026-06-18.md"), [
     "# Smart Added Memory",
     "",
     "<!-- smart-add-fingerprint: abcdef1234567890 -->",
@@ -100,12 +102,15 @@ test("readSmartAddFingerprints reads comment fingerprint", async () => {
 
   await checkpoint.withRuntime({
     smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
     coreDbPath: fixture.coreDbPath,
     engineDbPath: fixture.engineDbPath,
     timeZone: "Asia/Shanghai",
     now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
   }, async () => {
-    const fps = smartAddWriter.readSmartAddFingerprints("2026-06-18");
+    const fps = smartAddWriter.readSmartAddFingerprints("2026-06-18", {
+      provenance: smartAddWriter.SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+    });
     assert.equal(fps.has("abcdef1234567890"), true);
   });
 });
@@ -141,6 +146,7 @@ test("appendSmartAdd writes header for new file and keeps entry format", async (
 
   await checkpoint.withRuntime({
     smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
     coreDbPath: fixture.coreDbPath,
     engineDbPath: fixture.engineDbPath,
     timeZone: "Asia/Shanghai",
@@ -153,11 +159,12 @@ test("appendSmartAdd writes header for new file and keeps entry format", async (
     assert.equal(entryId, "entry_1");
   });
 
-  const content = readFileSync(resolve(fixture.smartAddDir, "2026-06-18.md"), "utf8");
+  const content = readFileSync(resolve(fixture.generatedSmartAddDir, "2026-06-18.md"), "utf8");
   assert.match(content, /^# Smart Added Memory\n\n/);
   assert.match(content, /<!-- smart-add-fingerprint: [a-f0-9]{64} -->/);
   assert.match(content, /## entry_1/);
   assert.match(content, /Category: raw_log/);
+  assert.match(content, /Provenance: checkpoint_generated/);
   assert.match(content, /kg_data: \{"a":1\}/);
   assert.match(content, /hello world/);
 });
@@ -167,6 +174,7 @@ test("appendSmartAdd does not repeat header for existing file", async () => {
 
   await checkpoint.withRuntime({
     smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
     coreDbPath: fixture.coreDbPath,
     engineDbPath: fixture.engineDbPath,
     timeZone: "Asia/Shanghai",
@@ -176,7 +184,7 @@ test("appendSmartAdd does not repeat header for existing file", async () => {
     smartAddWriter.appendSmartAdd("another body", "preference", { entryId: "entry_2" });
   });
 
-  const content = readFileSync(resolve(fixture.smartAddDir, "2026-06-18.md"), "utf8");
+  const content = readFileSync(resolve(fixture.generatedSmartAddDir, "2026-06-18.md"), "utf8");
   assert.equal((content.match(/^# Smart Added Memory$/gm) || []).length, 1);
   assert.match(content, /\n<!-- smart-add-fingerprint: [a-f0-9]{64} -->\n## entry_2/);
 });
@@ -186,6 +194,7 @@ test("appendSmartAdd returns null on fingerprint duplicate", async () => {
 
   await checkpoint.withRuntime({
     smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
     coreDbPath: fixture.coreDbPath,
     engineDbPath: fixture.engineDbPath,
     timeZone: "Asia/Shanghai",
@@ -202,13 +211,16 @@ test("isDuplicate returns true when today's fingerprint matches", async () => {
   const fixture = createFixture();
   await checkpoint.withRuntime({
     smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
     coreDbPath: fixture.coreDbPath,
     engineDbPath: fixture.engineDbPath,
     timeZone: "Asia/Shanghai",
     now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
   }, async () => {
     smartAddWriter.appendSmartAdd("hello world", "raw_log", { entryId: "entry_1" });
-    assert.equal(smartAddWriter.isDuplicate("hello world", "raw_log"), true);
+    assert.equal(smartAddWriter.isDuplicate("hello world", "raw_log", {
+      provenance: smartAddWriter.SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+    }), true);
   });
 });
 
@@ -216,11 +228,29 @@ test("isDuplicate returns false on DB error", async () => {
   const fixture = createFixture();
   await checkpoint.withRuntime({
     smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
     coreDbPath: resolve(fixture.workspaceDir, "missing-core.sqlite"),
     engineDbPath: fixture.engineDbPath,
     timeZone: "Asia/Shanghai",
     now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
   }, async () => {
     assert.equal(smartAddWriter.isDuplicate("hello world", "raw_log"), false);
+  });
+});
+
+test("resolveOutputTarget sends checkpoint_generated output to generated-smart-add path", async () => {
+  const fixture = createFixture();
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    const target = smartAddWriter.resolveOutputTarget({
+      provenance: smartAddWriter.SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+    });
+    assert.equal(target.fileRel, "memory/generated-smart-add/2026-06-18.md");
   });
 });

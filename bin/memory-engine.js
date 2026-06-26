@@ -71,7 +71,7 @@ function smartAdd(text, opts = {}) {
   const header = !fs.existsSync(filePath)
     ? '# Smart Added Memory\n\n' : '';
   const entryText = text.trim();
-  const entry = `${header}## ${entryId}\n\nCategory: ${category}${isProtected ? ' | Protected' : ''}\n\n${entryText}\n\n`;
+  const entry = `${header}## ${entryId}\n\nCategory: ${category}${isProtected ? ' | Protected' : ''}\nProvenance: agent_smart_add\n\n${entryText}\n\n`;
 
   fs.appendFileSync(filePath, header ? entry : `\n${entry}`);
 

@@ -21,9 +21,11 @@ function createCheckpointFixture() {
   const memoryDir = resolve(root, "memory");
   const episodesDir = resolve(memoryDir, "episodes");
   const smartAddDir = resolve(memoryDir, "smart-add");
+  const generatedSmartAddDir = resolve(memoryDir, "generated-smart-add");
   mkdirSync(episodesDir, { recursive: true });
   mkdirSync(smartAddDir, { recursive: true });
-  return { root, memoryDir, episodesDir, smartAddDir };
+  mkdirSync(generatedSmartAddDir, { recursive: true });
+  return { root, memoryDir, episodesDir, smartAddDir, generatedSmartAddDir };
 }
 
 function buildCandidate(overrides = {}) {
@@ -125,6 +127,7 @@ test("smart-add writer keeps clean facts clean but operational timestamps remain
 
   await checkpoint.withRuntime({
     smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
     memoryDir: fixture.memoryDir,
     now: () => new Date("2026-06-18T01:23:45.000Z"),
   }, async () => {
@@ -140,7 +143,7 @@ test("smart-add writer keeps clean facts clean but operational timestamps remain
     });
   });
 
-  const content = readFileSync(resolve(fixture.smartAddDir, "2026-06-18.md"), "utf8");
+  const content = readFileSync(resolve(fixture.generatedSmartAddDir, "2026-06-18.md"), "utf8");
   const cleanBlock = content.match(/## clean_entry[\s\S]*?(?=\n<!-- smart-add-fingerprint:|\s*$)/)?.[0] || "";
   const pollutedBlock = content.match(/## polluted_entry[\s\S]*?(?=\n<!-- smart-add-fingerprint:|\s*$)/)?.[0] || "";
 

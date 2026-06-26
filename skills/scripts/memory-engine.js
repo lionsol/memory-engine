@@ -74,7 +74,7 @@ function smartAdd(text, opts = {}) {
     ? '# Smart Added Memory\n\n' : '';
   const entryText = text.trim();
   const kgMeta = kgData ? `kg_data: ${JSON.stringify(kgData)}\n` : '';
-  const entry = `${header}## ${entryId}\n\nCategory: ${category}${isProtected ? ' | Protected' : ''}\n${kgMeta}\n${entryText}\n\n`;
+  const entry = `${header}## ${entryId}\n\nCategory: ${category}${isProtected ? ' | Protected' : ''}\nProvenance: agent_smart_add\n${kgMeta}\n${entryText}\n\n`;
 
   fs.appendFileSync(filePath, header ? entry : `\n${entry}`);
 
