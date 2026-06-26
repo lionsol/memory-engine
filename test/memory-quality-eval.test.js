@@ -126,6 +126,16 @@ function createQualityFixtureDbs() {
       1718670200,
     );
     insertChunk.run(
+      "ffffffffffffffff-1",
+      "memory/generated-smart-add/2026-06-18.md",
+      "fixture",
+      26,
+      30,
+      "hash-f",
+      "generated smart add text",
+      1718670250,
+    );
+    insertChunk.run(
       "dddddddddddddddd-1",
       "MEMORY.md",
       "fixture",
@@ -455,11 +465,13 @@ test("getPathFamily classifies managed memory paths", () => {
   assert.equal(getPathFamily("memory/legacy-daily-mirrors/2026-06-18.md"), "legacy-daily-mirrors");
   assert.equal(getPathFamily("memory/2026-06-18.md"), "daily-root");
   assert.equal(getPathFamily("memory/smart-add/2026-06-18.md"), "smart-add");
+  assert.equal(getPathFamily("memory/generated-smart-add/2026-06-18.md"), "generated-smart-add");
 });
 
 test("ownership-aware quality scope classifies initial ownership rules", () => {
   assert.equal(getQualityScopeFamily("memory/dreaming/foo.md"), "dreaming");
   assert.equal(getQualityScopeFamily("memory/episodes/2026-06-18.md"), "episode");
+  assert.equal(getQualityScopeFamily("memory/generated-smart-add/2026-06-18.md"), "generated_smart_add");
   assert.equal(getQualityScopeFamily("memory/legacy-daily-mirrors/2026-06-18.md"), "quarantined_daily_mirror");
   assert.equal(getQualityScopeFamily("memory/2026-06-18.md"), "daily_memory");
   assert.equal(getQualityScopeFamily("MEMORY.md"), "curated_memory");
@@ -477,6 +489,15 @@ test("ownership-aware quality scope classifies initial ownership rules", () => {
     reason: "smart-add chunks are lifecycle-owned by memory-engine and should carry confidence metadata",
   });
   assert.equal(classifyQualityScope("memory/dreaming/foo.md").default_quality_score_scope, false);
+  assert.deepEqual(classifyQualityScope("memory/generated-smart-add/2026-06-18.md"), {
+    family: "generated_smart_add",
+    owner: "memory_engine_generated_or_diagnostic",
+    expected_confidence: false,
+    default_quality_score_scope: false,
+    diagnostic_scope: true,
+    retrieval_visible: false,
+    reason: "generated smart-add is checkpoint output, not eligible for recall or quality scoring",
+  });
   assert.equal(classifyQualityScope("memory/legacy-daily-mirrors/2026-06-18.md").retrieval_visible, false);
   assert.equal(classifyQualityScope("MEMORY.md").owner, "openclaw_core");
   assert.equal(classifyQualityScope("memory/2026-06-18.md").retrieval_visible, true);
@@ -487,8 +508,10 @@ test("ownership-aware quality scope classifies initial ownership rules", () => {
 test("default active-memory scope is ownership-aware and excludes dreaming", () => {
   assert.equal(isDefaultIncludedPathFamily("dreaming"), false);
   assert.equal(isDefaultIncludedPathFamily("episodes"), true);
+  assert.equal(isDefaultIncludedPathFamily("generated-smart-add"), false);
   assert.equal(isActiveMemoryPath("memory/dreaming/foo.md"), false);
   assert.equal(isActiveMemoryPath("memory/episodes/2026-06-18.md"), true);
+  assert.equal(isActiveMemoryPath("memory/generated-smart-add/2026-06-18.md"), false);
 });
 
 test("stats-history is excluded from default active-memory scope", () => {
@@ -633,6 +656,7 @@ test("collectQualityCandidates reads chunks and confidence in readonly mode with
     assert.equal(byId.has("dddddddddddddddd-1"), false);
     assert.equal(byId.has("cccccccccccccccc-1"), false);
     assert.equal(byId.has("eeeeeeeeeeeeeeee-1"), false);
+    assert.equal(byId.has("ffffffffffffffff-1"), false);
 
     assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").has_confidence_record, false);
     assert.equal(byId.get("bbbbbbbbbbbbbbbb-1").path_family, "smart-add");
@@ -681,6 +705,7 @@ test("collectQualityCandidates can include stats-history and archived entries wh
     const ids = new Set(result.candidates.map(candidate => candidate.id));
     assert.equal(ids.has("cccccccccccccccc-1"), true);
     assert.equal(ids.has("eeeeeeeeeeeeeeee-1"), true);
+    assert.equal(ids.has("ffffffffffffffff-1"), false);
     assert.equal(result.diagnostics.path_family_distribution["stats-history"], 1);
   } finally {
     if (oldCore === undefined) delete process.env.MEMORY_ENGINE_CORE_DB;

@@ -102,6 +102,7 @@ function createAuditFixtureDbs() {
       ["4444444444444444-raw", "memory/raw_log/2026-06-09T0100_healthcheck.md", "memory", 1, 10, "hash-raw", "raw log artifact text", 1718671800000, 1718671700000, 70],
       ["5555555555555555-smart", "memory/smart-add/2026-06-18.md", "memory", 1, 10, "hash-smart", "smart add text", 1718672800000, 1718672700000, 60],
       ["6666666666666666-episode", "memory/episodes/2026-06-18.md", "memory", 1, 10, "hash-episode", "episode text", 1718673800000, 1718673700000, 50],
+      ["9999999999999999-generated", "memory/generated-smart-add/2026-06-18.md", "memory", 1, 10, "hash-generated", "generated smart add text", 1718674300000, 1718674200000, 45],
       ["7777777777777777-stats", "memory/stats-history.md", "memory", 1, 10, "hash-stats", "stats history", 1718674800000, 1718674700000, 40],
       ["8888888888888888-quarantine", "memory/legacy-daily-mirrors/2026-06-18.md", "memory", 1, 10, "hash-quarantine", "quarantined mirror", 1718675800000, 1718675700000, 30],
     ];
@@ -172,6 +173,7 @@ async function withAuditEnv(paths, fn) {
 test("family inference covers dreaming, smart-add, episodes, projects, daily, MEMORY.md, raw_log, and unknown", async () => {
   const { inferAuditFamily } = await importAuditModule();
   assert.equal(inferAuditFamily("memory/dreaming/light/2026-06-18.md"), "dreaming");
+  assert.equal(inferAuditFamily("memory/generated-smart-add/2026-06-18.md"), "generated_smart_add");
   assert.equal(inferAuditFamily("memory/smart-add/2026-06-18.md"), "smart_add");
   assert.equal(inferAuditFamily("memory/episodes/2026-06-18.md"), "episode");
   assert.equal(inferAuditFamily("memory/projects/demo.md"), "project");
@@ -202,6 +204,25 @@ test("compareFlagSets confirms missing confidence and missing category are the s
     } finally {
       db.close();
     }
+  });
+});
+
+test("generated-smart-add stays out of chunks-without-confidence candidates and path prefix inference is explicit", async () => {
+  const fixture = createAuditFixtureDbs();
+  const mod = await importAuditModule();
+  assert.equal(mod.inferAuditPathPrefix("memory/generated-smart-add/2026-06-18.md"), "memory/generated-smart-add");
+  await withAuditEnv(fixture, async () => {
+    const report = mod.runChunksWithoutConfidenceAudit({
+      generatedAt: "2026-06-20T00:00:00.000Z",
+    });
+    const samplePaths = [
+      ...report.samples.dreaming_examples.map(item => item.path),
+      ...report.samples.non_dreaming_examples.map(item => item.path),
+      ...report.samples.retrieved_examples.map(item => item.path),
+      ...report.samples.injected_examples.map(item => item.path),
+    ];
+    assert.equal(samplePaths.some(path => path === "memory/generated-smart-add/2026-06-18.md"), false);
+    assert.equal(report.breakdowns.by_path_prefix.some(row => row.path_prefix === "memory/generated-smart-add"), false);
   });
 });
 

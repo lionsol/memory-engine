@@ -5,6 +5,7 @@ import {
   deriveCandidateSources,
   inferCategoryFromChunk,
   inferCategoryFromPath,
+  isRetrievalExcludedPath,
   isCandidateAllowedForRerank,
   normalizeExternalMemory,
   normalizeUnixSeconds,
@@ -123,6 +124,7 @@ test("category inference keeps explicit, path, and fallback behavior", () => {
   assert.equal(fromPath.category, "episodic");
   assert.equal(fallbackCategory, "external");
   assert.equal(inferCategoryFromPath("memory/smart-add/2026-06-18.md"), "raw_log");
+  assert.equal(inferCategoryFromPath("memory/generated-smart-add/2026-06-18.md"), "generated");
 });
 
 test("normalizeUnixSeconds handles seconds, milliseconds, and invalid timestamps", () => {
@@ -137,6 +139,14 @@ test("normalizeUnixSeconds handles seconds, milliseconds, and invalid timestamps
 test("invalid candidates stay non-throwing and keep existing id/text handling", () => {
   assert.equal(normalizeExternalMemory({ text: "missing id" }), null);
 
+  assert.equal(isRetrievalExcludedPath("memory/generated-smart-add/2026-06-18.md"), true);
+  assert.equal(normalizeExternalMemory({
+    id: "generated-1",
+    text: "checkpoint generated text",
+    path: "memory/generated-smart-add/2026-06-18.md",
+    similarity: 0.9,
+  }), null);
+
   const missingText = normalizeExternalMemory({
     id: "missing-text",
     path: "docs/other.md",
@@ -145,6 +155,10 @@ test("invalid candidates stay non-throwing and keep existing id/text handling", 
   assert.equal(missingText.text, "");
   assert.equal(missingText.id, "missing-text");
   assert.equal(isCandidateAllowedForRerank(null, 0.5), false);
+  assert.equal(
+    isCandidateAllowedForRerank({ id: "generated-2", path: "memory/generated-smart-add/2026-06-18.md", confidence_mode: "external" }, 0.5),
+    false,
+  );
   assert.equal(isCandidateAllowedForRerank({ id: "managed", confidence_mode: "managed", confidence: null }, 0.5), false);
 });
 

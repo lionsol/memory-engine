@@ -13,6 +13,7 @@ test("inferCategoryFromPath covers stable managed and external path rules", () =
   assert.equal(inferCategoryFromPath("memory/dreaming/night.md"), "dreaming");
   assert.equal(inferCategoryFromPath("memory/stats-history.md"), "stats");
   assert.equal(inferCategoryFromPath("memory/episodes/e1.md"), "episodic");
+  assert.equal(inferCategoryFromPath("memory/generated-smart-add/2026-06-08.md"), "generated");
   assert.equal(inferCategoryFromPath("memory/smart-add/2026-06-08.md"), "raw_log");
   assert.equal(inferCategoryFromPath("docs/other.md"), "external");
 });

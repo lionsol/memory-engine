@@ -14,6 +14,7 @@ test("hybrid-search inferCategoryFromPath stays consistent with shared rules", a
     "memory/dreaming/night.md",
     "memory/stats-history.md",
     "memory/episodes/e1.md",
+    "memory/generated-smart-add/2026-06-08.md",
     "memory/smart-add/2026-06-08.md",
     "docs/other.md",
   ];
