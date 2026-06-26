@@ -107,6 +107,7 @@ test("readCheckpointRawLogs reads only the explicit targetDate smart-add file", 
     "## target_entry",
     "",
     "Category: raw_log",
+    "Provenance: manual",
     "",
     "target date note",
     "",
@@ -117,6 +118,7 @@ test("readCheckpointRawLogs reads only the explicit targetDate smart-add file", 
     "## other_entry",
     "",
     "Category: raw_log",
+    "Provenance: manual",
     "",
     "other day note",
     "",
@@ -125,6 +127,104 @@ test("readCheckpointRawLogs reads only the explicit targetDate smart-add file", 
   const logs = await getLogsForTargetDate(fixture, "2026-06-17", { resetDirectParseEnabled: true });
   assert.equal(logs.some((log) => log.source === "note" && log.text === "target date note"), true);
   assert.equal(logs.some((log) => log.text === "other day note"), false);
+});
+
+test("checkpoint skips smart-add entries with unknown provenance", async () => {
+  const fixture = createFixture();
+  writeFileSync(resolve(fixture.smartAddDir, "2026-06-17.md"), [
+    "# Smart Added Memory",
+    "",
+    "## legacy_entry",
+    "",
+    "Category: raw_log",
+    "",
+    "legacy note without provenance",
+    "",
+  ].join("\n"));
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  assert.equal(logs.some((log) => log.text.includes("legacy note without provenance")), false);
+  assert.equal(stats.smartAddIncluded, 0);
+  assert.equal(stats.smartAddSkippedUnknownProvenance, 1);
+});
+
+test("checkpoint skips checkpoint_generated smart-add entries in input pool", async () => {
+  const fixture = createFixture();
+  writeFileSync(resolve(fixture.smartAddDir, "2026-06-17.md"), [
+    "# Smart Added Memory",
+    "",
+    "## generated_entry",
+    "",
+    "Category: episodic",
+    "Provenance: checkpoint_generated",
+    "",
+    "wrongly generated checkpoint residue",
+    "",
+  ].join("\n"));
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  assert.equal(logs.some((log) => log.text.includes("wrongly generated checkpoint residue")), false);
+  assert.equal(stats.smartAddIncluded, 0);
+  assert.equal(stats.smartAddSkippedCheckpointGenerated, 1);
+});
+
+test("checkpoint includes manual and agent_smart_add smart-add entries", async () => {
+  const fixture = createFixture();
+  writeFileSync(resolve(fixture.smartAddDir, "2026-06-17.md"), [
+    "# Smart Added Memory",
+    "",
+    "## manual_entry",
+    "",
+    "Category: preference",
+    "Provenance: manual",
+    "",
+    "manual trusted fact",
+    "",
+    "## agent_entry",
+    "",
+    "Category: raw_log",
+    "Provenance: agent_smart_add",
+    "",
+    "agent trusted fact",
+    "",
+  ].join("\n"));
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  assert.equal(logs.some((log) => log.text.includes("manual trusted fact")), true);
+  assert.equal(logs.some((log) => log.text.includes("agent trusted fact")), true);
+  assert.equal(stats.smartAddIncluded, 2);
+  assert.equal(stats.smartAddSkippedUnknownProvenance, 0);
+  assert.equal(stats.smartAddSkippedCheckpointGenerated, 0);
+});
+
+test("pollution chain replay: checkpoint_generated residue is not promoted into next checkpoint evidence", async () => {
+  const fixture = createFixture();
+  writeFileSync(resolve(fixture.smartAddDir, "2026-06-25.md"), [
+    "# Smart Added Memory",
+    "",
+    "## polluted_entry",
+    "",
+    "Category: episodic",
+    "Provenance: checkpoint_generated",
+    "",
+    "2026-06-10 opencode env prefix fix happened here",
+    "",
+  ].join("\n"));
+  insertRawLogChunk(fixture, {
+    id: "target-day-conv",
+    text: "**User:** summarize only today's real work",
+    updatedAt: Date.parse("2026-06-25T12:00:00.000+08:00") / 1000,
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-25");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  const combinedText = logs.map((log) => log.text).join("\n");
+  assert.equal(combinedText.includes("2026-06-10 opencode env prefix fix"), false);
+  assert.equal(combinedText.includes("summarize only today's real work"), true);
+  assert.equal(stats.smartAddSkippedCheckpointGenerated, 1);
 });
 
 test("DB raw_log entries outside targetDate are excluded and kept in chronological order", async () => {
@@ -480,6 +580,7 @@ test("smart-add tagged lines are preserved under budget pressure", async () => {
     "## pref_entry",
     "",
     "Category: preference",
+    "Provenance: manual",
     "",
     "Decision: keep strict checkpoint boundaries.",
     "",
@@ -596,6 +697,7 @@ test("DB read failure logs warning and loader still returns other sources", asyn
     "## note_entry",
     "",
     "Category: raw_log",
+    "Provenance: manual",
     "",
     "note body survives db warning",
     "",

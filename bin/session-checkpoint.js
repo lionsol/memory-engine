@@ -22,10 +22,12 @@ const { writeEmptyEpisode, writeIncompleteEpisode, writeLLMTimeoutEpisode } = re
 const { repairOrphanVectors } = require("../lib/checkpoint/orphan-repair");
 const checkpointRawLog = require("../lib/checkpoint/raw-log");
 const {
+  SMART_ADD_PROVENANCE,
   mapToCategory,
   appendSmartAdd,
   readSmartAddFingerprints,
   isDuplicate,
+  resolveOutputTarget,
 } = require("../lib/checkpoint/smart-add-writer");
 const { getRuntime, withRuntime } = require("../lib/checkpoint/runtime");
 const runtimeRegistry = require("../lib/checkpoint/runtime");
@@ -89,6 +91,10 @@ function buildCheckpointEvidenceDiagnostics(targetDate, rawLogStats = null) {
     targetDate,
     timeZone: rt.timeZone,
     smartAddPath: stats.smartAddPath || `memory/smart-add/${targetDate}.md`,
+    smartAddInputPolicy: stats.smartAddInputPolicy || checkpointRawLog.SMART_ADD_INPUT_POLICY,
+    smartAddIncluded: stats.smartAddIncluded || 0,
+    smartAddSkippedUnknownProvenance: stats.smartAddSkippedUnknownProvenance || 0,
+    smartAddSkippedCheckpointGenerated: stats.smartAddSkippedCheckpointGenerated || 0,
     generatedEpisodePath: resolve(rt.episodesDir, `${targetDate}.md`),
     evidenceDateFilter: stats.evidenceDateFilter
       || `targetDate=${targetDate}; timeZone=${rt.timeZone}; smartAdd=memory/smart-add/${targetDate}.md; raw_log=updated_at bounded to targetDate`,
@@ -223,12 +229,17 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
 
   // ── 1. Write structured memories (6 types) ──
   let memWritten = 0;
+  const generatedFileRel = resolveOutputTarget({
+    provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+  }).fileRel;
   for (const item of extracted.smart_memories || []) {
     if (memWritten >= 10) break;
     if (!item.text || !item.type) continue;
 
     // Dedup check
-    if (isDuplicate(item.text, mapToCategory(item.type))) {
+    if (isDuplicate(item.text, mapToCategory(item.type), {
+      provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+    })) {
       console.log(`  ↳ Skipped (duplicate): ${item.text.slice(0, 60)}`);
       continue;
     }
@@ -239,13 +250,14 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
     const entryId = appendSmartAdd(item.text, cat, {
       targetDate: episodeDate,
       generatedAt,
+      provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
     });
     if (!entryId) {
       console.log(`  ↳ Skipped (duplicate/fingerprint): ${stableText.slice(0, 60)}`);
       continue;
     }
     try {
-      writeConfidence(entryId, item.text, cat);
+      writeConfidence(entryId, item.text, cat, { fileRel: generatedFileRel });
     } catch (e) {
       warnConfidenceWriteFailure({
         entryId,
@@ -276,10 +288,11 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
       kg_data: kgData,
       targetDate: episodeDate,
       generatedAt,
+      provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
     });
     if (entryId) {
       try {
-        writeConfidence(entryId, episodeText, 'episodic');
+        writeConfidence(entryId, episodeText, 'episodic', { fileRel: generatedFileRel });
       } catch (e) {
         warnConfidenceWriteFailure({
           entryId,
@@ -337,13 +350,14 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
     const entryId = appendSmartAdd(text, 'preference', {
       targetDate: episodeDate,
       generatedAt,
+      provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
     });
     if (!entryId) {
       console.log(`  ↳ Skipped config (duplicate/fingerprint): ${cfg.key}`);
       continue;
     }
     try {
-      writeConfidence(entryId, text, 'preference');
+      writeConfidence(entryId, text, 'preference', { fileRel: generatedFileRel });
     } catch (e) {
       warnConfidenceWriteFailure({
         entryId,
@@ -416,6 +430,10 @@ async function main(argv = process.argv.slice(2)) {
         resetEventsSkippedOutOfTargetDate: diagnostics.resetEventsSkippedOutOfTargetDate,
         resetEventsSkippedMissingTimestamp: diagnostics.resetEventsSkippedMissingTimestamp,
         smartAddPath: diagnostics.smartAddPath,
+        smartAddInputPolicy: diagnostics.smartAddInputPolicy,
+        smartAddIncluded: diagnostics.smartAddIncluded,
+        smartAddSkippedUnknownProvenance: diagnostics.smartAddSkippedUnknownProvenance,
+        smartAddSkippedCheckpointGenerated: diagnostics.smartAddSkippedCheckpointGenerated,
         generatedEpisodePath: diagnostics.generatedEpisodePath,
       })}`);
       return {

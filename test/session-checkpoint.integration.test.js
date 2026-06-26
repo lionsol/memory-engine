@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -46,7 +46,7 @@ function createFixture({ now = "2026-06-16T17:30:00.000Z" } = {}) {
   mkdirSync(memoryDir, { recursive: true });
   mkdirSync(sessionsDir, { recursive: true });
 
-  const smartAddPath = "memory/smart-add/2026-06-17.md";
+  const smartAddPath = "memory/generated-smart-add/2026-06-17.md";
   const coreDb = new Database(coreDbPath);
   try {
     coreDb.exec(`
@@ -267,7 +267,8 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
     assert.equal(busy.attachedCore, 5000);
 
     const episodePath = resolve(fixture.memoryDir, "episodes", "2026-06-16.md");
-    const smartAddPath = resolve(fixture.memoryDir, "smart-add", "2026-06-17.md");
+    const smartAddPath = resolve(fixture.memoryDir, "generated-smart-add", "2026-06-17.md");
+    const legacyInputSmartAddPath = resolve(fixture.memoryDir, "smart-add", "2026-06-17.md");
     const episode = readFileSync(episodePath, "utf8");
     const smartAdd = readFileSync(smartAddPath, "utf8");
     const confidenceRows = readEngineConfidenceRows(fixture.engineDbPath);
@@ -276,17 +277,24 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
     assert.equal(coreRowsAfter, coreRowsBefore);
     assert.ok(episodePath.startsWith(fixture.root));
     assert.ok(smartAddPath.startsWith(fixture.root));
+    assert.equal(existsSync(legacyInputSmartAddPath), false);
     assert.match(episode, /MOCK SUMMARY: checkpoint integration test/);
     assert.match(episode, /targetDate: 2026-06-16/);
     assert.match(episode, /generatedAt: 2026-06-16T17:30:00.000Z/);
     assert.match(episode, /timeZone: Asia\/Shanghai/);
     assert.match(episode, /category: episodic/);
     assert.match(episode, /source_type: checkpoint_llm/);
+    assert.match(episode, /smartAddPath: memory\/smart-add\/2026-06-16\.md/);
+    assert.match(episode, /smartAddInputPolicy: trusted_only:manual,agent_smart_add/);
+    assert.match(episode, /smartAddIncluded: 0/);
+    assert.match(episode, /smartAddSkippedUnknownProvenance: 0/);
+    assert.match(episode, /smartAddSkippedCheckpointGenerated: 0/);
     assert.match(episode, /rawLogTimeBasis: updated_at/);
     assert.match(episode, /rawLogIncluded: 0|rawLogIncluded: 1/);
     assert.match(episode, /resetDirectParseEnabled: false/);
     assert.match(smartAdd, /## 2026-06-16_episodic_nightly_generated_013000/);
     assert.match(smartAdd, /Category: episodic/);
+    assert.match(smartAdd, /Provenance: checkpoint_generated/);
     assert.match(smartAdd, /"generatedAt":"2026-06-16T17:30:00.000Z"/);
     assert.match(smartAdd, /"targetDate":"2026-06-16"/);
     assert.ok(confidenceRows.length >= 1);
