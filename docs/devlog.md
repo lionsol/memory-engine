@@ -1,3 +1,568 @@
+## 2026-06-26
+
+### 修复：session-checkpoint evidence 与 targetDate 脱钩
+
+今天继续处理 `session-checkpoint` 的日期归因污染问题。
+
+此前发现，`memory/episodes/YYYY-MM-DD.md` 和 `memory/smart-add/YYYY-MM-DD.md` 的文件名使用 `yesterdayDateStr()`，但实际喂给 LLM 的 evidence 没有严格绑定到同一个 `targetDate`。这会导致文件名日期与内容来源日期不一致。
+
+#### 真实数据流
+
+这次重新梳理后确认，问题不是简单的“reset 文件日期不准”，而是 checkpoint 的 evidence selection 本身没有统一日期边界。
+
+真实流程如下：
+
+1. `session-checkpoint` 会先调用 `flush-session-rawlog.js --checkpoint`。
+2. `flush-session-rawlog.js` 解析 `.jsonl.reset.*` 文件：
+
+   * 按消息自身的 `timestamp` 分组到日期。
+   * 跳过今天。
+   * 非今天消息写入 DB：
+
+     * `chunks`
+     * `memory_confidence`
+     * `category='raw_log'`
+3. `session-checkpoint` 随后又读取多个 evidence source：
+
+   * smart-add：读取昨天日期的笔记。
+   * DB raw_log：旧逻辑读取最新 100 条，未按日期过滤。
+   * reset 文件：旧逻辑再次全量解析所有 `.jsonl.reset.*`。
+
+核心问题有三点：
+
+* DB raw_log 查询使用 `ORDER BY updated_at DESC LIMIT 100`，没有 targetDate 过滤。
+* reset 文件直读没有按消息 timestamp 筛选日期，可能混入很旧的对话。
+* flush 已经解析 reset 并写入 DB，checkpoint 又重复解析 reset 文件，造成 reset 内容重复进入 LLM context。
+
+#### 修复内容
+
+本次修复后，`session-checkpoint` 统一使用一个 `targetDate`，并确保所有 evidence 都与这个 targetDate 对齐。
+
+改动包括：
+
+* `main()` 先调用 `flush-session-rawlog --checkpoint`，再按同一个 `targetDate` 收集 evidence。
+* DB raw_log 查询改为 targetDate bounded：
+
+  * 不再使用无边界的 latest 100 fallback。
+  * diagnostics / metadata 明确写入 `rawLogTimeBasis=updated_at`。
+  * 查询结果按时间窗口约束，避免跨日 raw_log 混入。
+* reset 文件直读默认关闭：
+
+  * 默认不再直接解析所有 `.jsonl.reset.*`。
+  * 只有显式传入 `--legacy-reset-direct-parse` 时才启用。
+  * legacy 模式下也必须逐条按消息 `timestamp` 过滤 targetDate。
+  * 无 timestamp 的消息会跳过并计入 diagnostics。
+* smart-add 仍按 targetDate 读取：
+
+  * `memory/smart-add/YYYY-MM-DD.md`
+* episode / marker 文件增加 evidence filter 相关 metadata：
+
+  * `targetDate`
+  * `generatedAt`
+  * `timeZone`
+  * `rawLogTimeBasis`
+  * `rawLogIncluded`
+  * `resetDirectParseEnabled`
+  * evidence date filter diagnostics
+
+#### 时区边界测试
+
+为避免以后退化成字符串日期匹配或 UTC 日期匹配，补充了精确到毫秒的 Asia/Shanghai 时区边界测试。
+
+新增测试：
+
+`timezone-aware boundary includes start and excludes end for Asia/Shanghai targetDate`
+
+固定：
+
+* `targetDate = 2026-06-17`
+* `timeZone = Asia/Shanghai`
+
+验证窗口语义为：
+
+`windowStart <= updated_at < windowEnd`
+
+覆盖边界：
+
+* `2026-06-16T16:00:00.000Z`
+
+  * 等于 `2026-06-17 00:00:00 Asia/Shanghai`
+  * 应被包含
+* `2026-06-16T15:59:59.999Z`
+
+  * 等于 `2026-06-16 23:59:59.999 Asia/Shanghai`
+  * 应被排除
+* `2026-06-17T16:00:00.000Z`
+
+  * 等于 `2026-06-18 00:00:00 Asia/Shanghai`
+  * 应被排除，因为 window end 是 exclusive
+
+#### 验证
+
+相关测试通过：
+
+* `test/checkpoint-raw-log.test.js`
+* `test/checkpoint-episode-writer.test.js`
+* `test/session-checkpoint.integration.test.js`
+* `test/checkpoint-orphan-repair.test.js`
+* `npm test`
+
+当时全量测试结果：
+
+* `62 passed`
+* `0 failed`
+
+本修复提交：
+
+* `b8d6fbb fix(checkpoint): bind evidence collection to target date`
+
+---
+
+### 修复：smart-add feedback loop 污染
+
+在修复 checkpoint 日期过滤后，又发现一个更严重的二阶污染问题：smart-add 会作为 checkpoint 的污染放大器。
+
+#### 问题表现
+
+真实事件：
+
+* `opencode` 的 `env:` 前缀修复实际发生在 `2026-06-10`。
+
+污染链：
+
+1. 旧 checkpoint 因为没有日期过滤，在 `2026-06-25` 凌晨把 `6/10` 的事件误写入 `memory/smart-add/2026-06-24.md`。
+2. `2026-06-26` 凌晨 checkpoint 又读取 `memory/smart-add/2026-06-24.md`。
+3. LLM 把错误 smart-add 当成近期 evidence，升级写入 `memory/episodes/2026-06-25.md`。
+
+这说明 smart-add 当时同时承担了两个角色：
+
+* 人工/agent 主动追加的候选记忆输入池。
+* checkpoint LLM 自动生成内容的输出池。
+
+这会形成 feedback loop：
+
+raw evidence → checkpoint LLM → smart-add → 下一轮 checkpoint LLM → episode
+
+只要 LLM 一次错写，错误就会被持久化并在后续 checkpoint 中继续传播。
+
+#### 修复内容
+
+本次改动把 checkpoint 生成物和 checkpoint 输入池彻底拆开。
+
+新的规则：
+
+* `session-checkpoint` 只从 `memory/smart-add/YYYY-MM-DD.md` 读取可信 provenance 的条目：
+
+  * `manual`
+  * `agent_smart_add`
+* 以下 provenance 默认跳过：
+
+  * `checkpoint_generated`
+  * `migrated_legacy`
+  * missing / unknown provenance
+* checkpoint 自己生成的内容不再写回 `memory/smart-add/*`。
+* checkpoint 生成内容改写到：
+
+  * `memory/generated-smart-add/YYYY-MM-DD.md`
+* generated smart-add 明确写入：
+
+  * `Provenance: checkpoint_generated`
+
+episode diagnostics 也补充了 smart-add 输入策略字段：
+
+* `smartAddPath`
+* `smartAddInputPolicy`
+* `smartAddIncluded`
+* `smartAddSkippedUnknownProvenance`
+* `smartAddSkippedCheckpointGenerated`
+
+普通 agent / CLI 写入 smart-add 时会自动写入：
+
+* `Provenance: agent_smart_add`
+
+这样后续 checkpoint 可以继续信任 agent/CLI 明确写入的 smart-add，但不会再消费 checkpoint 自己生成的内容。
+
+#### 验证
+
+相关测试通过：
+
+* `test/checkpoint-raw-log.test.js`
+* `test/checkpoint-smart-add-writer.test.js`
+* `test/session-checkpoint.integration.test.js`
+* `test/timestamp-pollution-audit.test.js`
+* `npm test`
+
+本修复提交：
+
+* `d689aaa fix(checkpoint): prevent smart-add feedback-loop pollution`
+
+---
+
+### 修复：generated-smart-add scope 漏洞
+
+在将 checkpoint 生成内容改写到 `memory/generated-smart-add/` 后，继续审计发现该新路径没有被所有 scope 系统识别。
+
+#### 问题
+
+`memory/generated-smart-add/` 不匹配普通 `memory/smart-add/` 规则，会掉到 `unknown` family。
+
+而当时 `unknown` 的默认行为是：
+
+* `default_quality_score_scope: true`
+* `retrieval_visible: true`
+
+这意味着虽然 generated smart-add 不再作为 checkpoint 输入，但仍可能进入 quality / recall 周边路径。
+
+#### 修复内容
+
+补齐 `memory/generated-smart-add/` 在各层的排除规则：
+
+* `lib/quality/quality-scope.js`
+
+  * 新增 `generated_smart_add`
+  * `default_quality_score_scope=false`
+  * `diagnostic_scope=true`
+  * `retrieval_visible=false`
+* `lib/quality/path-family.js`
+
+  * 新增 path family `generated-smart-add`
+  * 默认 excluded
+* `lib/quality/collect-quality-candidates.js`
+
+  * SQL 硬排除 `memory/generated-smart-add/%`
+* `lib/quality/chunks-without-confidence-audit.js`
+
+  * candidate 读取排除 `memory/generated-smart-add/%`
+  * `inferAuditPathPrefix` 显式支持该前缀
+* `lib/category-inference.js`
+
+  * `memory/generated-smart-add/` 映射为 `generated`
+* recall 层：
+
+  * `lib/recall/hybrid/normalize-candidate.js` 新增统一 `isRetrievalExcludedPath`
+  * `lib/recall/hybrid/channels/fts.js` 加 SQL 硬排除
+  * `lib/recall/hybrid/channels/recent.js` 加 SQL 硬排除
+  * `normalizeCandidate` / `isCandidateAllowedForRerank` 也会拒绝该路径
+
+修复后，边界为：
+
+| 路径                             | 角色                 | quality | recall |     checkpoint input |
+| ------------------------------ | ------------------ | ------: | -----: | -------------------: |
+| `memory/smart-add/`            | manual / agent 输入池 |       是 |      是 | provenance-safe only |
+| `memory/generated-smart-add/`  | checkpoint 生成物     |       否 |      否 |                    否 |
+| `memory/episodes/`             | canonical episode  |      受控 |     受控 |            不作为默认递归输入 |
+| `memory/legacy-daily-mirrors/` | quarantine         |       否 |      否 |                    否 |
+
+#### 验证
+
+相关测试覆盖：
+
+* generated-smart-add quality scope 非 retrieval-visible
+* 不进入 collect-quality-candidates
+* 不进入 chunks-without-confidence-audit
+* path family 默认 excluded
+* `inferCategoryFromPath` 返回 `generated`
+* recall normalize / rerank 排除
+
+全量测试：
+
+* `63/63 passed`
+
+本修复提交：
+
+* `1182c7c fix(memory): exclude checkpoint-generated smart-add outputs`
+
+---
+
+### 新增：smart-add propagation audit
+
+新增只读审计工具，用于扫描 smart-add 传播污染。
+
+实现文件：
+
+* `lib/quality/smart-add-propagation-audit.js`
+* `bin/audit-smart-add-propagation.js`
+* `test/smart-add-propagation-audit.test.js`
+
+审计范围：
+
+* `memory/smart-add/*.md`
+* `memory/episodes/*.md`
+
+输出字段包括：
+
+* `suspected_wrong_date_smart_add`
+* `suspected_propagated_episode`
+* `source_date_candidate`
+* `target_date_polluted`
+* quarantine 建议
+* stale index / core DB 清理候选
+
+真实 workspace 审计报告曾输出：
+
+* `suspected_wrong_date_smart_add: 129`
+* `suspected_propagated_episode: 6`
+* `stale_index_cleanup_path_count: 14`
+* `stale_index_cleanup_chunk_count: 1203`
+
+其中已知污染对象命中：
+
+* `memory/smart-add/2026-06-24.md`
+* `memory/episodes/2026-06-25.md`
+
+该 audit 故意偏保守，宁可多报，不做自动删除或自动 DB 清理。
+
+测试通过：
+
+* `test/smart-add-propagation-audit.test.js`
+* `npm test`
+
+本提交：
+
+* `456d8ca feat(quality): audit smart-add propagation pollution`
+
+tag：
+
+* `v0.8.12-checkpoint-date-provenance`
+
+---
+
+### 新增：confirmed-only smart-add propagation quarantine
+
+在只读 audit 之后，新增 confirmed-only quarantine 工具，用于手术式隔离已人工确认的传播污染。
+
+实现文件：
+
+* `lib/quality/smart-add-propagation-quarantine.js`
+* `bin/quarantine-smart-add-propagation.js`
+* `test/smart-add-propagation-quarantine.test.js`
+
+#### 行为
+
+工具默认 dry-run，不修改 live memory。
+
+apply 必须显式提供：
+
+* `--apply`
+* `--confirm quarantine-smart-add-propagation`
+
+工具只处理明确传入的 confirmed path / selector，不会自动处理全部 suspected。
+
+支持 selector：
+
+* `--confirmed-path`
+* `--confirmed-fingerprint`
+* `--confirmed-prefix`
+
+能力：
+
+* block / segment-level quarantine
+* 无安全边界时返回 `requires_manual_review`
+* dry-run 输出 exact changed block preview
+* quarantine log 记录：
+
+  * `schema_version`
+  * `quarantined_at`
+  * `source_path`
+  * `target_path`
+  * `block_id`
+  * `fingerprint`
+  * `block_hash`
+  * `reason`
+  * `pollution_type`
+  * `review_status`
+  * `source_date_candidate`
+  * `polluted_target_date`
+  * `matched_terms`
+
+#### live cleanup：episode
+
+先对 confirmed 的 `memory/episodes/2026-06-25.md` 执行 quarantine。
+
+隔离内容：
+
+* 1 句 summary：
+
+  * `apiKey` 缺失 `env:` 前缀相关污染
+* 1 行 config bullet：
+
+  * `env:OPENCODE_API_KEY`
+
+结果：
+
+* `quarantined_count: 2`
+* 复跑 `would_quarantine_count: 0`
+* 文件中 2 个污染段落已移除
+
+#### live cleanup：smart-add
+
+随后对 `memory/smart-add/2026-06-24.md` 做 manual review。
+
+文件结构：
+
+* 25 个条目
+* 13 个 `2026-06-23_` 前缀条目错误进入 `2026-06-24.md`
+* 1 个 `2026-06-24_` 前缀条目 fingerprint `87c081ed` 含 OpenCode 污染
+* 10 个 clean 条目保留
+
+执行 selector：
+
+* `--confirmed-prefix 2026-06-23_`
+* `--confirmed-fingerprint 3f503661`
+* `--confirmed-fingerprint 87c081ed`
+
+最终 unique blocks：
+
+* 13 个 `2026-06-23_` wrong-file blocks
+* 1 个 `87c081ed` confirmed OpenCode pollution block
+* 共 14 个 blocks
+
+apply 后复查：
+
+* `would_quarantine_count: 0`
+* `grep "2026-06-23_"` 无结果
+* `grep "87c081ed"` 无结果
+* `grep "3f503661"` 无结果
+* `OpenCode` 仍在 clean raw_log transcript 中合法残留，不隔离
+
+本提交：
+
+* `6bd85c0 feat(quality): quarantine confirmed smart-add propagation pollution`
+
+---
+
+### 新增：confirmed-only stale chunk cleanup verification
+
+在 block-level quarantine 后，继续检查 core DB / FTS 是否仍有旧 chunk 残留。
+
+此前初步检查曾怀疑 `memory/smart-add/2026-06-24.md` 仍有 14 条 stale chunks。但进一步确认后发现其中包含误报：一些 marker residual 实际是 `2026-06-23.md` 文件名引用，不是 `2026-06-23_` block-id 前缀污染。
+
+为避免手工误删 DB，新增 confirmed-only stale cleanup 工具。
+
+实现文件：
+
+* `lib/quality/confirmed-smart-add-propagation-stale-cleanup.js`
+* `bin/cleanup-confirmed-smart-add-propagation-stale-chunks.js`
+* `test/confirmed-smart-add-propagation-stale-cleanup.test.js`
+
+#### 行为
+
+工具默认 dry-run。
+
+初始范围严格限制为：
+
+* `memory/smart-add/2026-06-24.md`
+
+confirmed markers：
+
+* `2026-06-23_`
+* `87c081ed`
+* `3f503661`
+
+删除前要求：
+
+* 当前磁盘文件已无这些 marker
+* quarantine log 中存在 confirmed evidence
+* chunk 内容精确匹配 confirmed markers
+
+如果 apply，必须显式提供：
+
+* `--apply`
+* `--confirm cleanup-confirmed-smart-add-propagation-stale-chunks`
+
+删除范围为：
+
+* `chunks`
+* `chunks_fts`
+* 如存在对应 `memory_confidence`，同步删除，避免 orphan confidence
+
+不会按整条 path 删除，因此 clean raw_log 中合法的 OpenCode / OPENCODE_API_KEY transcript 会被保留。
+
+#### live 验证结果
+
+真实 workspace dry-run：
+
+* `confirmed_stale_chunk_count: 0`
+* `confirmed_stale_fts_row_count: 0`
+* `affected_paths: []`
+* `matched_markers: []`
+* `would_delete_chunk_ids: []`
+* `clean_keyword_residuals_ignored` 中包含合法 OpenCode transcript chunk
+
+随后执行 apply，创建备份：
+
+* `main-before-smart-add-propagation-stale-cleanup-20260626T113620Z.sqlite`
+
+由于 DB 已经 clean，实际删除：
+
+* `deleted_chunk_count: 0`
+* `deleted_fts_row_count: 0`
+
+最终确认：
+
+* 文件系统 clean
+* core DB chunks clean
+* FTS clean
+* 合法 raw_log OpenCode transcript 保留
+
+本提交：
+
+* `57d4796 fix(quality): verify confirmed smart-add propagation stale chunks`
+
+tag：
+
+* `v0.8.13-smart-add-propagation-cleanup`
+
+---
+
+### 测试结果
+
+最终全量测试通过：
+
+* `tests: 413`
+* `pass: 407`
+* `fail: 0`
+* `skipped: 6`
+* `duration_ms: 6579.8726`
+
+最终版本线：
+
+* `v0.8.12-checkpoint-date-provenance`
+
+  * checkpoint date / evidence 绑定
+  * smart-add provenance 防污染
+  * generated-smart-add scope 排除
+  * propagation audit
+* `v0.8.13-smart-add-propagation-cleanup`
+
+  * confirmed-only propagation quarantine
+  * confirmed live cleanup
+  * stale chunk cleanup verification
+
+---
+
+### 结果
+
+本轮完成了从未来防污染到历史 confirmed 污染清理的闭环：
+
+1. checkpoint evidence 不再与 targetDate 脱钩。
+2. raw_log 不再使用无边界 latest 100。
+3. reset 文件直读默认关闭，避免与 flush 重复消费。
+4. smart-add 增加 provenance gate。
+5. checkpoint 生成内容不再写回 smart-add 输入池。
+6. generated-smart-add 从 quality / recall / audit 默认路径排除。
+7. 新增 smart-add propagation audit。
+8. 对 confirmed 历史污染进行 block-level quarantine：
+
+   * `memory/episodes/2026-06-25.md`：2 段
+   * `memory/smart-add/2026-06-24.md`：14 blocks
+9. 验证 core DB / FTS 对 confirmed 文件无 stale 污染。
+10. 保留合法 raw_log OpenCode transcript，避免过度清理。
+
+剩余的 129 suspected 只作为后续人工审计队列，不自动 apply，不进入本轮清理范围。
+
+
+
 ## 2026-06-25
 
 ### 修复：session-checkpoint evidence 与 targetDate 脱钩
