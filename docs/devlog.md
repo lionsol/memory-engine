@@ -2878,6 +2878,39 @@ memory-engine 完成第一轮结构化重构。
 
 workspace/scripts/session-checkpoint.js 已本地修复为 Asia/Shanghai business date，低耦合，不纳入 memory-engine CodeGraph。
 
+## (2026-06-27) P0 Shadow Entrypoint Bypass
+
+- 事故性质确认：这不是 `plugins/memory-engine/bin/session-checkpoint.js` 修复失效，而是 `workspace/scripts/session-checkpoint.js` 作为 shadow entrypoint 继续被 cron 调用，绕过了插件版 `lib/checkpoint/*` 的 targetDate 过滤、reset direct parse 默认关闭，以及 smart-add provenance gating。
+- canonical checkpoint implementation 继续定义为：
+  - `bin/session-checkpoint.js`
+  - `lib/checkpoint/raw-log.js`
+  - `lib/checkpoint/episode-writer.js`
+  - `lib/checkpoint/runtime.js`
+- `workspace/scripts/session-checkpoint.js` 的职责应收缩为 thin shim：
+  - 保留 shebang
+  - 透传 `process.argv.slice(2)`
+  - 透传 `stdio`
+  - 透传 `env`
+  - 使用插件入口 exit code
+- 新增静态保护，避免 legacy script 再次携带以下实现细节：
+  - `WHERE mc.category = 'raw_log'`
+  - `ORDER BY c.updated_at DESC`
+  - `LIMIT 100`
+  - `.jsonl.reset.`
+  - raw evidence collection / LLM prompt assembly
+- 入口审计范围补充为：
+  - crontab
+  - systemd user timers
+  - package scripts
+  - docs 中旧命令
+  - `workspace/scripts` 下其他 checkpoint 复制品
+- 本地审计结果：
+  - 用户 `crontab -l` 当前未见 `session-checkpoint` 条目，仅有 agentmemory `@reboot` 项。
+  - `systemctl --user list-timers --all` 当前未见 checkpoint 相关 user timer，仅有 `launchpadlib-cache-clean.timer`。
+  - 插件仓库 `package.json` 当前没有 checkpoint npm script，避免了 package script 层绕路。
+  - `workspace/scripts` 目录内仅发现一个 `session-checkpoint.js` 和一个引用它的 `checkpoint-fallback-episode.sh`，未发现第二个 JS 复制品。
+  - `workspace/docs/openclaw_memory_v0.1.md` 与 `workspace/docs/devlog.md` 仍保留旧命令/旧实现描述，属于文档陈旧，不代表 canonical 运行路径正确。
+
 ## (2026-05-29) Bug Fixed
 - 修复 OpenClaw core memory 缺失 confidence 时在 vector / LanceDB / FTS5 / fallback 检索链路中被误过滤的问题。
 - 统一 external memory metadata normalize，新增 confidence_mode、source_type、category、decay_eligible、archive_eligible 等字段。

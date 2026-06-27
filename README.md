@@ -128,8 +128,13 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - 面向 agent 的窄工具为 `memory_engine_search` 与 `memory_engine_get`；原有 `memory_engine` 保留以兼容既有调用。
 - `active-memory` 与 `memory-engine` 的 `autoRecall` 不应同时启用，除非显式做去重，否则会产生重复注入。
 
+## Checkpoint Canonical Entry
+
+- 唯一 canonical checkpoint implementation 是 `bin/session-checkpoint.js` 与 `lib/checkpoint/*`。
+- `workspace/scripts/session-checkpoint.js` 仅允许作为 thin shim CLI 入口，负责透传 `argv` / `env` / `stdio` 到插件实现。
+- 不要在 legacy workspace script 中复制 raw evidence collection、reset 扫描、LLM prompt assembly 或 smart-add 输入策略逻辑。
+
 ---
 
 
 - **Task classifier** — `bin/task-classifier.js` 按输入关键词路由 coding / default 任务
-
