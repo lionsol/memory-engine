@@ -163,6 +163,17 @@ function renderAutoRecallInjectionRate(target, summary) {
     </article>
   </div>`;
 }
+
+function reportKindLabel(kind) {
+  return ({
+    annotation_summary: 'Annotation Summary',
+    annotation_eligibility_preview: 'Eligibility Preview',
+    auto_recall_safety_smoke: 'AutoRecall Safety Smoke',
+    annotation_candidates: 'Annotation Candidates',
+    annotation_labels: 'Annotation Labels',
+  })[kind] || kind || 'unknown';
+}
+
 async function api(path, options) {
   const res = await fetch(path, options);
   return res.json();
@@ -334,9 +345,65 @@ function initMetrics() {
   ], pageData.conflicts || []);
 }
 
+function renderReportDetail(report) {
+  const node = $('[data-report-detail]');
+  if (!node) return;
+  if (!report || report.error) {
+    node.innerHTML = `<div class="muted">${esc(report?.error || 'Report unavailable')}</div>`;
+    return;
+  }
+  node.innerHTML = `<div class="detail">
+    <div><span class="badge">${esc(reportKindLabel(report.kind))}</span> <span class="badge">${esc(report.name)}</span> <span class="badge">${esc(report.updated_at || '-')}</span></div>
+    <pre>${esc(report.content || '')}</pre>
+  </div>`;
+}
+
+function initReports() {
+  if (!$('[data-reports-table]')) return;
+  const latest = pageData.latest || {};
+  const latestItems = [
+    latest.annotation_summary,
+    latest.annotation_eligibility_preview,
+    latest.auto_recall_safety_smoke,
+  ].filter(Boolean);
+  cards('[data-report-latest-cards]', latestItems.map(item => ({
+    label: reportKindLabel(item.kind),
+    value: item.updated_at ? item.updated_at.slice(0, 10) : item.name,
+  })));
+
+  const status = pageData.safety_status || {};
+  const statusNode = $('[data-report-status]');
+  if (statusNode) {
+    statusNode.innerHTML = Object.entries(status).map(([key, item]) => `<div class="status-row">
+      <div><span class="badge">${esc(item.enabled ? 'enabled' : 'disabled')}</span> <strong>${esc(key)}</strong></div>
+      <div class="muted">${esc(item.summary || '')}</div>
+    </div>`).join('');
+  }
+
+  const files = pageData.files || [];
+  table('[data-reports-table]', [
+    { label: 'Name', value: r => r.name, class: 'id' },
+    { label: 'Type', value: r => reportKindLabel(r.kind) },
+    { label: 'Updated', value: r => r.updated_at || '-' },
+    { label: 'Size', value: r => r.size ?? 0 },
+  ], files.map(row => ({ ...row, click: row.name })));
+
+  const defaultReport = latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_safety_smoke || files[0];
+  if (defaultReport?.name) {
+    api(`/api/reports/file?name=${encodeURIComponent(defaultReport.name)}`).then(renderReportDetail);
+  }
+
+  $('[data-reports-table]')?.addEventListener('click', async event => {
+    const row = event.target.closest('tr[data-click]');
+    if (!row) return;
+    renderReportDetail(await api(`/api/reports/file?name=${encodeURIComponent(row.dataset.click)}`));
+  });
+}
+
 document.querySelector('[data-refresh]')?.addEventListener('click', () => location.reload());
 initDashboard();
 initTraces();
 initMemories();
 initTelemetry();
 initMetrics();
+initReports();

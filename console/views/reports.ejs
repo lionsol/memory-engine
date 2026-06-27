@@ -1,0 +1,33 @@
+<section class="toolbar">
+  <h1>Safety Reports</h1>
+  <button class="icon-button" data-refresh title="Refresh">↻</button>
+</section>
+<section class="grid metrics" data-report-latest-cards></section>
+<section class="split">
+  <section>
+    <h2>Safety Status</h2>
+    <div class="panel report-status" data-report-status></div>
+  </section>
+  <section>
+    <h2>Latest Report</h2>
+    <div class="panel report-detail" data-report-detail>
+      <div class="muted">Select a report to preview.</div>
+    </div>
+  </section>
+</section>
+<section class="split wide-left">
+  <section>
+    <h2>Allowed Reports</h2>
+    <div class="panel table-wrap"><table data-reports-table></table></div>
+  </section>
+  <section>
+    <h2>Read-only Boundaries</h2>
+    <div class="panel">
+      <div class="detail">
+        <div class="badge">read-only</div>
+        <div class="muted">This viewer does not write DB, does not modify memory records, does not change eligibility flags, and does not trigger autoRecall.</div>
+        <div class="muted">No apply, quarantine, archive, delete, reinforce, or write-db actions are exposed here.</div>
+      </div>
+    </div>
+  </section>
+</section>

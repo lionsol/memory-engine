@@ -11,6 +11,8 @@ import { handleSessionApi, handleTraceApi } from "./routes/sessions.js";
 import { handleMemoryApi } from "./routes/memories.js";
 import { handleTelemetryApi } from "./routes/telemetry.js";
 import { handleMetricsApi } from "./routes/metrics.js";
+import { handleReportsApi } from "./routes/reports.js";
+import { reportsPageSnapshot } from "./services/reports-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -69,6 +71,7 @@ async function handleApi(req, res, url) {
   if (parts[0] === "api" && parts[1] === "memories") result = await handleMemoryApi({ req, method: req.method, parts, searchParams: url.searchParams });
   if (parts[0] === "api" && parts[1] === "telemetry") result = handleTelemetryApi({ method: req.method, parts, searchParams: url.searchParams });
   if (parts[0] === "api" && parts[1] === "metrics") result = handleMetricsApi({ method: req.method, parts, searchParams: url.searchParams });
+  if (parts[0] === "api" && parts[1] === "reports") result = handleReportsApi({ method: req.method, parts, searchParams: url.searchParams });
   if (!result) return false;
   sendJson(res, result.status, result.body);
   return true;
@@ -80,6 +83,7 @@ function routePage(pathname) {
   if (pathname === "/memories") return { view: "memory-inspector", active: "memories", title: "Memory Inspector", data: { memories: listMemories({ limit: 100 }) } };
   if (pathname === "/telemetry") return { view: "telemetry", active: "telemetry", title: "Telemetry", data: recallTelemetry() };
   if (pathname === "/metrics") return { view: "metrics", active: "metrics", title: "Metrics", data: { overview: overviewMetrics(), retrieval: retrievalMetrics(), conflicts: conflictMetrics() } };
+  if (pathname === "/reports") return { view: "reports", active: "reports", title: "Safety Reports", data: reportsPageSnapshot() };
   return null;
 }
 
