@@ -1,3 +1,466 @@
+## 2026-06-27
+
+### 修复：checkpoint shadow entrypoint bypass
+
+今天继续排查昨天摘要污染问题时，发现一个新的 P0：之前修复的插件版 `session-checkpoint` 并不是唯一生产入口。实际历史路径中还存在一个 workspace 级 legacy entrypoint：
+
+* `/home/lionsol/.openclaw/workspace/scripts/session-checkpoint.js`
+
+该文件是 Phase 6 重构期留下的 workspace 副本，创建时间为 `2026-06-15 19:40`。它保留了一份独立 checkpoint 实现逻辑，并没有使用插件版最新的：
+
+* `plugins/memory-engine/bin/session-checkpoint.js`
+* `plugins/memory-engine/lib/checkpoint/*`
+
+这意味着即使插件版 checkpoint 已经修复了 targetDate 过滤、reset direct parse 默认关闭、smart-add provenance gating，只要 cron 或 legacy path 仍调用 workspace script，就会绕过这些修复。
+
+#### 问题根因
+
+legacy workspace script 中仍存在旧的 raw evidence 收集逻辑。
+
+DB raw_log source 使用无日期过滤查询：
+
+```sql
+WHERE mc.category = 'raw_log'
+ORDER BY c.updated_at DESC
+LIMIT 100
+```
+
+这会直接取最新 100 条 raw_log，而不是目标日期的 raw_log。
+
+更严重的是，`flush-session-rawlog.js` 写入时使用的是当前写入时间作为 `updated_at`。如果旧 reset 文件被重新 flush，旧对话会因为 `updated_at=Date.now()` 变成“最新 raw_log”，从而被 legacy checkpoint 读入昨天摘要。
+
+reset transcript source 也没有日期过滤：
+
+```js
+const resetFiles = readdirSync(SESSIONS_DIR).filter(f => f.includes(".jsonl.reset."));
+for (const file of resetFiles) {
+  // ...
+}
+```
+
+旧逻辑会扫描所有 `.jsonl.reset.*` 文件，不按 targetDate / timestamp range 筛选，导致任意历史 session 内容都可能被送入 LLM。
+
+插件版 `lib/checkpoint/raw-log.js` 已经有：
+
+* `getTargetDateRange`
+* `isTimestampInRange`
+* targetDate bounded DB raw_log collection
+* reset direct parse 默认关闭
+* legacy reset direct parse 也按 timestamp 过滤
+
+但 legacy workspace script 绕过了这些逻辑。
+
+#### 修复方式
+
+没有在 workspace legacy script 里复制新版逻辑，而是将其改成 thin shim。
+
+现在：
+
+* `/home/lionsol/.openclaw/workspace/scripts/session-checkpoint.js`
+
+只负责把调用转发到：
+
+* `../plugins/memory-engine/bin/session-checkpoint.js`
+
+shim 行为：
+
+* 保留 shebang
+* 透传 `process.argv.slice(2)`
+* 透传 `stdio`
+* 透传 `env`
+* 返回插件入口的 exit code
+
+这样即使 cron、fallback shell、旧文档命令或其他 legacy caller 继续调用 workspace path，也会落到 canonical plugin checkpoint implementation。
+
+#### 时间线确认
+
+后续确认文件时间线：
+
+* `2026-06-15 19:40`
+
+  * `workspace/scripts/session-checkpoint.js` 创建，为 Phase 6 重构期留下的 workspace 副本。
+* `2026-06-27 15:05`
+
+  * 该文件被替换为 557-byte thin shim。
+* `2026-06-27 19:22`
+
+  * edi 检查 staged 内容时，workspace script 已经是 shim，因此静态测试通过。
+
+这说明：
+
+* 当前态修复有效。
+* 静态测试证明的是“当前 legacy path 已是 shim，并防止未来回归”。
+* 静态测试不证明 `2026-06-27 15:05` 之前没有 legacy script 产物污染。
+
+因此将 legacy-risk window 定义为：
+
+* `2026-06-15 19:40` 至 `2026-06-27 15:05`
+
+这段时间内，任何通过 `workspace/scripts/session-checkpoint.js` 生成的 episode / smart-add 都需要视为 legacy-risk generated。
+
+#### 防回归保护
+
+新增静态测试：
+
+* `test/session-checkpoint-shadow-entrypoint.test.js`
+
+测试目标：
+
+* workspace legacy script 必须是 thin shim。
+* 不允许再出现旧 checkpoint 实现细节，包括：
+
+  * `WHERE mc.category = 'raw_log'`
+  * `ORDER BY c.updated_at DESC`
+  * `LIMIT 100`
+  * `.jsonl.reset.`
+  * `llmNightlyExtract`
+  * raw evidence collection / LLM prompt assembly 逻辑
+
+README 同步补充 canonical checkpoint implementation 说明：
+
+唯一 canonical checkpoint implementation 是：
+
+* `bin/session-checkpoint.js`
+* `lib/checkpoint/*`
+
+workspace-level legacy entrypoint 只能是 shim，不应再承载业务逻辑。
+
+#### 入口审计
+
+完成入口审计：
+
+| 项目                                   | 结果                                                    |
+| ------------------------------------ | ----------------------------------------------------- |
+| `crontab -l`                         | 当前未见 `session-checkpoint` 条目，仅有 agentmemory `@reboot` |
+| `systemctl --user list-timers --all` | 未见 checkpoint 相关 timer                                |
+| plugin `package.json`                | 无 checkpoint npm script                               |
+| `workspace/scripts/`                 | 未发现第二个 checkpoint JS 复制品                              |
+| `checkpoint-fallback-episode.sh`     | 仍引用 workspace script path，但该 path 现在已是 shim           |
+| workspace docs                       | 仍存在旧命令 / 旧实现描述，记录为文档陈旧                                |
+| production checkpoint code           | 未发现旧无边界 checkpoint raw collection 逻辑                  |
+
+旧逻辑特征审计结果：
+
+* `workspace/scripts/session-checkpoint.js`
+
+  * 已无 `ORDER BY c.updated_at DESC`
+  * 已无 `.jsonl.reset.` 扫描逻辑
+* `plugins/memory-engine/bin/session-checkpoint.js`
+
+  * 不包含旧 raw_log latest-100 查询
+  * 走 `lib/checkpoint/raw-log.js`
+* `.jsonl.reset.` 的生产引用仅保留在：
+
+  * `lib/checkpoint/raw-log.js`
+  * 且有 timestamp range filtering / legacy flag 保护
+* 其他命中主要是：
+
+  * 测试
+  * 标注数据
+  * 对该 bug 的讨论记录
+  * 非生产代码
+
+#### 历史摘要审计
+
+对近期 episode 做了人工审计。
+
+结果：
+
+| 日期           | 结论   | 说明                                                                                             |
+| ------------ | ---- | ---------------------------------------------------------------------------------------------- |
+| `2026-06-26` | 污染   | 混入 06-24 `huashu-design skill` 安装、06-24/25 `opencode provider` 调试、更早的 FTX 巴哈马；同时也包含 06-26 真实事件 |
+| `2026-06-25` | 污染   | 混入更早的 FTX 巴哈马；opencode / Tailscale 基本是当天讨论，需更细审                                                |
+| `2026-06-24` | 基本干净 | huashu-design 是当天真实事件，但 FTX 巴哈马为跨日 carryover                                                   |
+| `2026-06-27` | 尚未生成 | 将作为 shim 生效后的首个回归样本                                                                            |
+
+因此后续历史审计范围不应只看 06-25 / 06-26，而应覆盖 legacy-risk window：
+
+* `memory/episodes/2026-06-16.md` 至 `memory/episodes/2026-06-26.md`
+* `memory/smart-add/2026-06-16.md` 至 `memory/smart-add/2026-06-26.md`
+
+但处理优先级保持：
+
+1. P1：`2026-06-25` / `2026-06-26`
+2. P2：`2026-06-24`
+3. P3：`2026-06-16` 至 `2026-06-23`
+
+#### 验证
+
+测试通过：
+
+* `node --test test/session-checkpoint-shadow-entrypoint.test.js`
+* `npm test`
+
+全量测试结果：
+
+* `69/69 passed`
+* `0 failed`
+
+tag：
+
+* `v0.8.14-checkpoint-shadow-entrypoint-fix`
+
+#### 结果
+
+这次修复确认了一个关键架构原则：
+
+> checkpoint 只能有一个 canonical implementation。任何 workspace-level / cron-level / fallback-level entrypoint 都只能是 shim，不能复制业务逻辑。
+
+否则后续即使插件代码修复，也可能被 shadow entrypoint 绕过。
+
+---
+
+### 新增：人工标注候选导出与 annotation reviewer
+
+今天还继续推进 memory-quality 人工标注闭环，为后续 Recall Hint / 统计型 LTR / content-aware recall 提供可验证的 gold-set 数据。
+
+#### 背景
+
+之前的 memory-quality-eval、orphan confidence cleanup、chunks without confidence、smart-add propagation audit 已经能产出大量候选问题，但还缺一个轻量、可复核、可导出的人工标注流程。
+
+目标不是立刻训练模型，而是先建立一个最小闭环：
+
+1. 从 quality / recall / pollution audit 中导出候选样本。
+2. 人工判断样本质量、时效性、是否适合 auto-recall。
+3. 形成 JSONL gold-set。
+4. 汇总标签分布，为后续 recall policy / LTR 提供评估集。
+
+#### 新增候选导出工具
+
+新增文件：
+
+* `lib/annotation/export-annotation-candidates.js`
+* `bin/export-annotation-candidates.js`
+* `test/export-annotation-candidates.test.js`
+
+能力：
+
+* 从 memory-quality / recall / audit 数据中导出 annotation candidates。
+* 输出 JSONL / Markdown report。
+* 样本字段包含：
+
+  * `sample_id`
+  * `sample_type`
+  * `memory_id`
+  * `chunk_id`
+  * `primary_bucket`
+  * `sample_buckets`
+  * `source_path`
+  * `risk_score`
+  * `content_preview`
+  * 其他辅助审查字段
+
+导出结果示例：
+
+* `reports/annotation-candidates-20260626-131339.jsonl`
+* `reports/annotation-candidates-20260626-131349.md`
+* `reports/annotation-candidates-20260626-133014.jsonl`
+* `reports/annotation-candidates-20260626-133055.md`
+* `reports/annotation-candidates-20260626-133843.jsonl`
+* `reports/annotation-candidates-20260626-133907.md`
+
+这些 report 属于运行产物，是否提交需要单独决定。默认不建议将全部生成样本提交到 repo，除非要固定一版 gold-set seed。
+
+#### 新增本地 annotation reviewer
+
+新增文件：
+
+* `tools/annotation-reviewer.html`
+* `test/annotation-reviewer-static.test.js`
+
+设计原则：
+
+* 纯静态页面
+* 本地运行
+* 只读输入
+* 不依赖服务端
+* 不直接修改 DB / memory 文件
+
+使用方式：
+
+* 通过浏览器 File API 加载 `reports/annotation-candidates-*.jsonl`
+* 在页面中逐条审查候选样本
+* 导出 annotation labels JSONL
+
+页面展示字段包括：
+
+* `sample_id`
+* `memory_id`
+* `chunk_id`
+* `primary_bucket`
+* `sample_buckets`
+* `source_path`
+* `risk_score`
+* `content_preview`
+
+支持标注字段：
+
+* `quality`
+* `currency`
+* `auto_recall_eligible`
+* `preferred_action`
+* `reason`
+
+支持筛选：
+
+* `primary_bucket`
+* `source_path` prefix
+* unlabeled only
+
+支持统计：
+
+* total
+* labeled
+* remaining
+* labeled by primary_bucket
+
+导出的 label schema 包含：
+
+* `schema_version`
+* `sample_id`
+* `sample_type`
+* `quality`
+* `currency`
+* `auto_recall_eligible`
+* `preferred_action`
+* `reason`
+* `labeled_at`
+
+#### 新增 annotation labels summary / validator
+
+新增文件：
+
+* `lib/annotation/summarize-annotation-labels.js`
+* `bin/summarize-annotation-labels.js`
+* `test/summarize-annotation-labels.test.js`
+
+能力：
+
+* 读取 `reports/annotation-labels-*.jsonl`
+* 校验 required schema
+* 校验 enum values
+* 输出 Markdown 或 JSON summary
+
+汇总内容包括：
+
+* total label count
+* labeled count
+* missing-field count
+* primary_bucket distribution
+* quality distribution
+* auto_recall_eligible distribution
+* preferred_action distribution
+* per-bucket breakdown
+
+示例 label 文件：
+
+* `reports/annotation-labels-20260626-first50.jsonl`
+
+同样，label 文件是否提交需要单独判断。如果只是本地试标，建议不提交；如果作为初始 gold-set，可在文档中明确 frozen sample version 后提交。
+
+#### 文档
+
+新增 / 更新：
+
+* `docs/human-annotation-gold-set.md`
+
+文档说明：
+
+* annotation candidate 的来源
+* reviewer 使用方式
+* label schema
+* quality / currency / auto_recall_eligible / preferred_action 的判定口径
+* gold-set 如何用于后续 recall / LTR 评估
+
+#### 验证
+
+相关测试包括：
+
+* `test/export-annotation-candidates.test.js`
+* `test/annotation-reviewer-static.test.js`
+* `test/summarize-annotation-labels.test.js`
+
+这些工具为后续两个方向打基础：
+
+1. Recall quality evaluation
+
+   * 判断哪些记忆适合 auto-recall。
+   * 判断哪些记忆应降权、归档、合并或修正。
+2. Statistical LTR / policy tuning
+
+   * 将人工标签作为训练 / 验证集合。
+   * 对比 lexical score、vector score、RRF、recency、category boost、reinforcement 等特征与人工 judgment 的相关性。
+
+---
+
+### 当前待办
+
+#### 1. 观察 2026-06-27 checkpoint 输出
+
+`2026-06-27` 将是 shadow entrypoint fix 后的首个关键回归样本。
+
+需要检查：
+
+* 是否由 canonical plugin checkpoint 生成。
+* metadata 是否包含新版 diagnostics。
+* `resetDirectParseEnabled=false`。
+* raw_log evidence 是否按 targetDate window 过滤。
+* 是否还混入旧日期内容：
+
+  * FTX 巴哈马
+  * huashu-design
+  * old opencode provider
+  * 其他 legacy-risk window 中的跨日内容
+
+#### 2. confirmed polluted episode regenerate
+
+确认 `2026-06-27` clean 后，再处理历史污染 episode。
+
+优先级：
+
+1. `memory/episodes/2026-06-26.md`
+2. `memory/episodes/2026-06-25.md`
+3. `memory/episodes/2026-06-24.md`
+
+建议流程：
+
+1. quarantine old polluted episode
+2. 使用 canonical plugin checkpoint 显式 targetDate regenerate
+3. 如果 evidence 不足，不生成 fabricated episode，而是写 data-insufficient marker
+4. reindex / verify
+5. 记录 quarantine log
+
+#### 3. legacy-risk window audit
+
+对 `2026-06-16` 至 `2026-06-26` 的：
+
+* `memory/episodes/*.md`
+* `memory/smart-add/*.md`
+
+做只读 audit，不自动 apply。
+
+重点识别：
+
+* block id 日期与文件日期不一致
+* 明显跨日主题
+* old reset carryover
+* FTX / opencode / huashu-design 等已知污染链
+
+#### 4. annotation reports 是否入库
+
+当前 annotation candidate / label reports 属于运行产物，需要决定：
+
+* 不提交，仅作为本地审查输出；
+* 或冻结一版小规模 seed gold-set，并明确 schema / 版本 / 来源后提交。
+
+默认建议：
+
+* 工具、测试、文档提交；
+* 大量 `reports/annotation-candidates-*` 不提交；
+* `annotation-labels-20260626-first50.jsonl` 只有在确认作为 seed gold-set 时再提交。
+
+
+
 ## 2026-06-26
 
 ### 修复：session-checkpoint evidence 与 targetDate 脱钩
