@@ -110,6 +110,14 @@ test("autoRecall debug metadata snapshot stays stable", () => {
     }
   ],
   "injected_count": 2,
+  "recall_intent_should_recall": null,
+  "recall_intent_reason": null,
+  "long_input_detected": null,
+  "generic_task_detected": null,
+  "focused_query": null,
+  "focused_query_chars": null,
+  "original_input_chars": null,
+  "skipped_by_recall_intent": false,
   "skipped": false,
   "skip_reason": null,
   "candidate_counts_before_filtering": {
@@ -148,4 +156,39 @@ test("autoRecall debug metadata includes vector_init_error only when present", (
 
   assert.equal(failedResult.vector_init_error, "lancedb init failed");
   assert.equal(Object.prototype.hasOwnProperty.call(readyResult, "vector_init_error"), false);
+});
+
+test("autoRecall debug metadata includes recall intent telemetry fields", () => {
+  const indexCode = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+  const source = extractFunctionSource(indexCode, "buildAutoRecallDebugMetadata");
+  const context = {
+    buildFtsFallbackQuery,
+    normalizeFtsQuery,
+    stripPromptMetadataPrefix,
+  };
+  vm.runInNewContext(`${source}\nthis.__fn = buildAutoRecallDebugMetadata;`, context);
+  const fn = context.__fn;
+
+  const result = fn("full prompt", {
+    results: [],
+    debug: {
+      query_stripped: "memory-engine 当前基线 review",
+      recall_intent_should_recall: true,
+      recall_intent_reason: "long_input_with_history_context_use_focused_query",
+      long_input_detected: true,
+      generic_task_detected: false,
+      focused_query: "memory-engine 当前基线 review",
+      focused_query_chars: 27,
+      original_input_chars: 3200,
+      skipped_by_recall_intent: false,
+    },
+  });
+
+  assert.equal(result.recall_intent_should_recall, true);
+  assert.equal(result.recall_intent_reason, "long_input_with_history_context_use_focused_query");
+  assert.equal(result.long_input_detected, true);
+  assert.equal(result.focused_query, "memory-engine 当前基线 review");
+  assert.equal(result.focused_query_chars, 27);
+  assert.equal(result.original_input_chars, 3200);
+  assert.equal(result.skipped_by_recall_intent, false);
 });

@@ -101,8 +101,32 @@ test("memory_engine_search returns the same top results as memory_engine action=
   ]);
 });
 
-test("memory_engine_get handles missing ids cleanly", async () => {
+test("manual memory_engine_search is not filtered by autoRecall hard deny policy", async () => {
   const runtime = createBaseRuntime({
+    hybridSearch: async () => ({
+      results: [
+        {
+          id: "suspected-tool-output-1",
+          primary_bucket: "suspected_tool_output",
+          sample_buckets: ["suspected_tool_output"],
+          text: "tool transcript residue",
+        },
+      ],
+    }),
+  });
+  const executeSearch = createMemoryEngineSearchExecute(runtime);
+
+  const result = await executeSearch("tool-manual-search", { query: "show me that memory", top_k: 3 });
+
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].id, "suspected-tool-output-1");
+  assert.equal(result.results[0].primary_bucket, "suspected_tool_output");
+});
+
+test("memory_engine_get handles missing ids cleanly", async () => {
+  const seen = [];
+  const runtime = createBaseRuntime({
+    onMemoryEngineGetSuccess: (id) => seen.push(id),
     withDb: (fn) => fn({
       prepare(sql) {
         const query = String(sql);
@@ -126,6 +150,49 @@ test("memory_engine_get handles missing ids cleanly", async () => {
     id: "missing-id",
     error: "not found",
   });
+  assert.deepEqual(seen, []);
+});
+
+test("manual memory_engine_get can still return suspected_tool_output memory", async () => {
+  const seen = [];
+  const runtime = createBaseRuntime({
+    onMemoryEngineGetSuccess: (id) => seen.push(id),
+    withDb: (fn) => fn({
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("PRAGMA table_info(chunks)")) {
+          return { all: () => [{ name: "id" }, { name: "path" }, { name: "text" }] };
+        }
+        if (query.includes("FROM chunks c")) {
+          return {
+            all: () => [{
+              id: "suspected-tool-output-1",
+              path: "memory/dreaming/light/2026-05-16.md",
+              text: "tool transcript residue",
+              confidence: 0.2,
+              last_confidence_update: 1710000000,
+              base_tau: 7,
+              hit_count: 0,
+              is_protected: 0,
+              conflict_flag: 0,
+              is_archived: 0,
+              category: "raw_log",
+            }],
+          };
+        }
+        return { all: () => [], get: () => null, run: () => ({}) };
+      },
+      transaction: (inner) => inner,
+    }),
+  });
+  const executeGet = createMemoryEngineGetExecute(runtime);
+
+  const result = await executeGet("tool-manual-get", { id: "suspected-tool-out" });
+
+  assert.equal(result.found, true);
+  assert.equal(result.memory.id, "suspected-tool-output-1");
+  assert.equal(result.memory.path, "memory/dreaming/light/2026-05-16.md");
+  assert.deepEqual(seen, ["suspected-tool-output-1"]);
 });
 
 test("memory_engine_get returns source path and line range when chunk metadata is available", async () => {

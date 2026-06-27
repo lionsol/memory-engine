@@ -9,6 +9,7 @@ import {
   stripPromptMetadataPrefix,
   tokenCoverage,
 } from "./query-utils.js";
+import { evaluateAutoRecallEligibility } from "./lib/recall/auto-recall-eligibility.js";
 export {
   buildFtsFallbackQuery,
   buildLikeFallbackPatterns,
@@ -174,6 +175,7 @@ function hasRelaxedClassMatch(matched) {
 
 export function shouldInjectCandidate(candidate, query, debug = null) {
   const row = candidate || {};
+  const eligibility = evaluateAutoRecallEligibility(row);
   const category = String(row.category || "raw_log").toLowerCase();
   const path = String(row.path || "");
   const text = String(row.text || "");
@@ -191,6 +193,24 @@ export function shouldInjectCandidate(candidate, query, debug = null) {
   const matchedKeyClasses = keyMatch.matchedKeyClasses;
   const classRejectReason = "insufficient_key_class_match";
 
+  if (!eligibility.allowed) {
+    const reason = eligibility.deny_reasons[0] || "denied_by_policy";
+    return {
+      inject: false,
+      reason,
+      rejected_reason: reason,
+      matched_key_classes: matchedKeyClasses,
+      matched_key_tokens: keyMatch.matched,
+      deny_reasons: eligibility.deny_reasons,
+      risk_reasons: eligibility.risk_reasons,
+      allowed: eligibility.allowed,
+      reinforcement_allowed: eligibility.reinforcement_allowed,
+      ...metrics,
+      min_coverage: minCoverage,
+      final_score: finalScore,
+    };
+  }
+
   if (keyProfile.applyClassGate) {
     const hasEnoughClasses = matchedKeyClasses.length >= 2;
     const rawLogRequiresVersion = category === "raw_log" && keyProfile.versionMatchers.length > 0;
@@ -203,6 +223,10 @@ export function shouldInjectCandidate(candidate, query, debug = null) {
         rejected_reason: classRejectReason,
         matched_key_classes: matchedKeyClasses,
         matched_key_tokens: keyMatch.matched,
+        deny_reasons: [],
+        risk_reasons: eligibility.risk_reasons,
+        allowed: eligibility.allowed,
+        reinforcement_allowed: eligibility.reinforcement_allowed,
         ...metrics,
         min_coverage: minCoverage,
         final_score: finalScore,
@@ -217,6 +241,10 @@ export function shouldInjectCandidate(candidate, query, debug = null) {
       rejected_reason: "no_informative_terms",
       matched_key_classes: matchedKeyClasses,
       matched_key_tokens: keyMatch.matched,
+      deny_reasons: [],
+      risk_reasons: eligibility.risk_reasons,
+      allowed: eligibility.allowed,
+      reinforcement_allowed: eligibility.reinforcement_allowed,
       ...metrics,
       min_coverage: minCoverage,
       final_score: finalScore,
@@ -229,6 +257,10 @@ export function shouldInjectCandidate(candidate, query, debug = null) {
       rejected_reason: isRelaxedSource ? "relaxed_source_low_coverage_no_exact" : "raw_log_low_coverage_no_exact",
       matched_key_classes: matchedKeyClasses,
       matched_key_tokens: keyMatch.matched,
+      deny_reasons: [],
+      risk_reasons: eligibility.risk_reasons,
+      allowed: eligibility.allowed,
+      reinforcement_allowed: eligibility.reinforcement_allowed,
       ...metrics,
       min_coverage: minCoverage,
       final_score: finalScore,
@@ -241,6 +273,10 @@ export function shouldInjectCandidate(candidate, query, debug = null) {
       rejected_reason: "raw_log_final_score_below_minimum",
       matched_key_classes: matchedKeyClasses,
       matched_key_tokens: keyMatch.matched,
+      deny_reasons: [],
+      risk_reasons: eligibility.risk_reasons,
+      allowed: eligibility.allowed,
+      reinforcement_allowed: eligibility.reinforcement_allowed,
       ...metrics,
       min_coverage: minCoverage,
       final_score: finalScore,
@@ -253,6 +289,10 @@ export function shouldInjectCandidate(candidate, query, debug = null) {
       rejected_reason: "episodic_final_score_below_minimum",
       matched_key_classes: matchedKeyClasses,
       matched_key_tokens: keyMatch.matched,
+      deny_reasons: [],
+      risk_reasons: eligibility.risk_reasons,
+      allowed: eligibility.allowed,
+      reinforcement_allowed: eligibility.reinforcement_allowed,
       ...metrics,
       min_coverage: minCoverage,
       final_score: finalScore,
@@ -265,6 +305,10 @@ export function shouldInjectCandidate(candidate, query, debug = null) {
     rejected_reason: null,
     matched_key_classes: matchedKeyClasses,
     matched_key_tokens: keyMatch.matched,
+    deny_reasons: eligibility.deny_reasons,
+    risk_reasons: eligibility.risk_reasons,
+    allowed: eligibility.allowed,
+    reinforcement_allowed: eligibility.reinforcement_allowed,
     ...metrics,
     min_coverage: minCoverage,
     final_score: finalScore,

@@ -40,6 +40,11 @@ import {
   inferCategoryFromChunk,
   resolvePrefixes,
 } from "./lib/memory-confidence.js";
+import {
+  buildReinforcementAllowedIds,
+  filterCitedIdsForReinforcement,
+} from "./lib/recall/auto-recall-reinforcement.js";
+import { analyzeAutoRecallIntent } from "./lib/recall/auto-recall-intent.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
@@ -131,6 +136,14 @@ function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
     rejected_candidates: Array.isArray(debugInfo.rejected_candidates) ? debugInfo.rejected_candidates : [],
     gate_decisions: Array.isArray(debugInfo.gate_decisions) ? debugInfo.gate_decisions : [],
     injected_count: Number(debugInfo.injected_count ?? 0),
+    recall_intent_should_recall: debugInfo.recall_intent_should_recall ?? null,
+    recall_intent_reason: debugInfo.recall_intent_reason ?? null,
+    long_input_detected: debugInfo.long_input_detected ?? null,
+    generic_task_detected: debugInfo.generic_task_detected ?? null,
+    focused_query: debugInfo.focused_query ?? null,
+    focused_query_chars: debugInfo.focused_query_chars ?? null,
+    original_input_chars: debugInfo.original_input_chars ?? null,
+    skipped_by_recall_intent: debugInfo.skipped_by_recall_intent ?? false,
     skipped: Boolean(skipReason),
     skip_reason: skipReason || null,
     candidate_counts_before_filtering: debugInfo.candidate_counts_before_filtering || {},
@@ -191,6 +204,7 @@ export default definePluginEntry({
 
     const autoRecallTraceByRun = new Map();
     const autoRecallTraceBySession = new Map();
+    const currentTurnMemoryEngineGetIds = new Set();
     const memoryEngineConfig = getMemoryEngineConfig(api?.config || null);
     const smartAddTimeZone = getSmartAddTimeZone(api?.config || null);
     const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
@@ -213,6 +227,7 @@ export default definePluginEntry({
       console.log(`[memory-engine] autoRecall hook registered topK=${autoRecallTopK} timeoutMs=${autoRecallTimeoutMs}`);
       api.on("before_prompt_build", async (event, ctx) => {
         try {
+          currentTurnMemoryEngineGetIds.clear();
           const prompt = String(event?.prompt || "").trim();
           const traceId = crypto.randomUUID();
           const startedAt = Date.now();
@@ -246,8 +261,55 @@ export default definePluginEntry({
             });
             return;
           }
-          recordMemoryEvent({ event_type: "recall_started", session_id: sessionId, trace_id: traceId, source: "autoRecall", metadata_json: { prompt: prompt.slice(0, 500), topK: autoRecallTopK } });
-          const result = await runHybridSearch(prompt, { topK: autoRecallTopK }, {
+          const recallIntent = analyzeAutoRecallIntent(prompt);
+          const searchPrompt = recallIntent.long_input_detected && recallIntent.should_recall
+            ? recallIntent.focused_query
+            : prompt;
+          if (!recallIntent.should_recall || !String(searchPrompt || "").trim()) {
+            const intentSkipReason = !recallIntent.should_recall
+              ? recallIntent.intent_reason
+              : "focused_query_empty";
+            const intentDebugMetadata = buildAutoRecallDebugMetadata(prompt, {
+              results: [],
+              debug: {
+                recall_intent_should_recall: recallIntent.should_recall,
+                recall_intent_reason: !recallIntent.should_recall ? recallIntent.intent_reason : "focused_query_empty",
+                long_input_detected: recallIntent.long_input_detected,
+                generic_task_detected: recallIntent.generic_task_detected,
+                focused_query: recallIntent.focused_query,
+                focused_query_chars: recallIntent.focused_query_chars,
+                original_input_chars: recallIntent.original_input_chars,
+                skipped_by_recall_intent: true,
+              },
+            }, intentSkipReason);
+            recordMemoryEvent({
+              event_type: "auto_recall_debug",
+              session_id: sessionId,
+              trace_id: traceId,
+              source: "autoRecall",
+              metadata_json: intentDebugMetadata,
+            });
+            recordMemoryEvent({
+              event_type: "recall_completed",
+              session_id: sessionId,
+              trace_id: traceId,
+              latency_ms: Date.now() - startedAt,
+              candidate_count: 0,
+              injected_count: 0,
+              source: "autoRecall",
+              metadata_json: buildRecallCompletedMetadata({
+                skipped: true,
+                skip_reason: intentSkipReason,
+                candidate_count: 0,
+                strict_count: 0,
+                fallback_count: 0,
+                post_rerank_count: 0,
+              }),
+            });
+            return;
+          }
+          recordMemoryEvent({ event_type: "recall_started", session_id: sessionId, trace_id: traceId, source: "autoRecall", metadata_json: { prompt: prompt.slice(0, 500), topK: autoRecallTopK, focused_query: searchPrompt, recall_intent_reason: recallIntent.intent_reason } });
+          const result = await runHybridSearch(searchPrompt, { topK: autoRecallTopK }, {
             withDb,
             calcRealtimeConf,
             syncIndexIfNeeded,
@@ -259,6 +321,17 @@ export default definePluginEntry({
             generateEmbedding: generateEmbeddingRuntime,
             getMemorySearchManager,
           });
+          result.debug = {
+            ...(result?.debug || {}),
+            recall_intent_should_recall: recallIntent.should_recall,
+            recall_intent_reason: recallIntent.intent_reason,
+            long_input_detected: recallIntent.long_input_detected,
+            generic_task_detected: recallIntent.generic_task_detected,
+            focused_query: recallIntent.focused_query,
+            focused_query_chars: recallIntent.focused_query_chars,
+            original_input_chars: recallIntent.original_input_chars,
+            skipped_by_recall_intent: false,
+          };
           const hits = result?.results?.length || 0;
           const gateDebug = {
             candidate_count_before_gate: hits,
@@ -267,7 +340,7 @@ export default definePluginEntry({
             gate_decisions: [],
             injected_count: 0,
           };
-          const gateQuery = String(result?.debug?.query_stripped || stripPromptMetadataPrefix(prompt));
+          const gateQuery = String(result?.debug?.query_stripped || stripPromptMetadataPrefix(searchPrompt));
           const gatedResults = (Array.isArray(result?.results) ? result.results : []).filter(candidate => {
             const gate = shouldInjectCandidate(candidate, gateQuery, gateDebug);
             const category = String(candidate?.category || "raw_log").toLowerCase();
@@ -277,8 +350,12 @@ export default definePluginEntry({
             const decision = {
               id,
               injected: Boolean(gate?.inject),
+              allowed: gate?.allowed !== false,
               rejection_reason: gate?.reason || null,
               rejected_reason: gate?.rejected_reason || gate?.reason || null,
+              deny_reasons: Array.isArray(gate?.deny_reasons) ? gate.deny_reasons : [],
+              risk_reasons: Array.isArray(gate?.risk_reasons) ? gate.risk_reasons : [],
+              reinforcement_allowed: gate?.reinforcement_allowed !== false,
               matched_key_classes: Array.isArray(gate?.matched_key_classes) ? gate.matched_key_classes : [],
               threshold_used: gateThresholdForCategory(category, gate?.min_coverage, api.config || null),
               category,
@@ -291,6 +368,9 @@ export default definePluginEntry({
               category,
               reason: gate?.reason || "gated",
               rejected_reason: gate?.rejected_reason || gate?.reason || "gated",
+              deny_reasons: Array.isArray(gate?.deny_reasons) ? gate.deny_reasons : [],
+              risk_reasons: Array.isArray(gate?.risk_reasons) ? gate.risk_reasons : [],
+              reinforcement_allowed: gate?.reinforcement_allowed !== false,
               matched_key_classes: Array.isArray(gate?.matched_key_classes) ? gate.matched_key_classes : [],
               preview: String(candidate?.text || "").slice(0, 120),
             });
@@ -371,8 +451,12 @@ export default definePluginEntry({
               metadata_json: {
                 debug_type: "gate_decision",
                 injected: Boolean(item?.injected),
+                allowed: item?.allowed !== false,
                 rejection_reason: item?.rejection_reason || null,
                 rejected_reason: item?.rejected_reason || item?.rejection_reason || null,
+                deny_reasons: Array.isArray(item?.deny_reasons) ? item.deny_reasons : [],
+                risk_reasons: Array.isArray(item?.risk_reasons) ? item.risk_reasons : [],
+                reinforcement_allowed: item?.reinforcement_allowed !== false,
                 matched_key_classes: Array.isArray(item?.matched_key_classes) ? item.matched_key_classes : [],
                 threshold_used: item?.threshold_used || null,
                 category: String(item?.category || "raw_log"),
@@ -381,6 +465,10 @@ export default definePluginEntry({
             });
           });
           const injectedIds = gatedResults.slice(0, autoRecallTopK).map(r => String(r.id || "").slice(0, 16));
+          const reinforcementAllowedIds = gatedResults
+            .slice(0, autoRecallTopK)
+            .filter(r => gateDecisionById.get(String(r.id || "").slice(0, 16))?.reinforcement_allowed !== false)
+            .map(r => String(r.id || "").slice(0, 16));
           gatedResults.slice(0, autoRecallTopK).forEach(r => {
             const id = String(r.id || "").slice(0, 16);
             const decision = gateDecisionById.get(id);
@@ -398,6 +486,9 @@ export default definePluginEntry({
               metadata_json: {
                 injected: true,
                 rejection_reason: null,
+                deny_reasons: Array.isArray(decision?.deny_reasons) ? decision.deny_reasons : [],
+                risk_reasons: Array.isArray(decision?.risk_reasons) ? decision.risk_reasons : [],
+                reinforcement_allowed: decision?.reinforcement_allowed !== false,
                 threshold_used: thresholdUsed,
                 category,
                 final_score: finalScore,
@@ -431,7 +522,7 @@ export default definePluginEntry({
               injected_count: Math.min(gatedResults.length, autoRecallTopK),
             }),
           });
-          const traceState = { traceId, sessionId: sessionIdForEvents, injectedIds };
+          const traceState = { traceId, sessionId: sessionIdForEvents, injectedIds, reinforcementAllowedIds };
           const runKey = ctx?.runId || event?.runId;
           if (runKey) autoRecallTraceByRun.set(runKey, traceState);
           if (sessionIdForEvents) autoRecallTraceBySession.set(sessionIdForEvents, traceState);
@@ -451,14 +542,35 @@ export default definePluginEntry({
           const traceState =
             autoRecallTraceByRun.get(event?.runId || ctx?.runId) ||
             autoRecallTraceBySession.get(sessionId);
-          const allowed = new Set(traceState?.injectedIds || []);
-          const idsToReinforce = citedIds.filter(id => allowed.size === 0 || allowed.has(id.slice(0, 16)));
+          const allowlist = buildReinforcementAllowedIds({
+            traceState,
+            currentTurnMemoryEngineGetIds: [...currentTurnMemoryEngineGetIds],
+          });
+          const filtered = filterCitedIdsForReinforcement(citedIds, allowlist.reinforcement_allowed_ids);
+          const idsToReinforce = filtered.reinforced_ids;
+          recordMemoryEvent({
+            event_type: "auto_recall_debug",
+            session_id: sessionId,
+            trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,
+            source: "autoRecall.finalize",
+            metadata_json: {
+              debug_type: "reinforcement_gate",
+              cited_memory_ids: citedIds.map(id => String(id || "").slice(0, 16)),
+              auto_recall_reinforcement_allowed_ids: allowlist.auto_recall_reinforcement_allowed_ids,
+              current_turn_memory_engine_get_ids: allowlist.current_turn_memory_engine_get_ids,
+              reinforcement_allowed_ids: allowlist.reinforcement_allowed_ids,
+              reinforced_ids: filtered.reinforced_ids,
+              ignored_cited_ids: filtered.ignored_cited_ids,
+              ignored_reasons: filtered.ignored_reasons,
+            },
+          });
           if (idsToReinforce.length === 0) return;
           const fullIds = withDb(db => {
             const resolved = resolvePrefixes(db, idsToReinforce);
             if (resolved.length > 0) batchReinforce(db, resolved, Math.floor(Date.now() / 1000));
             return resolved;
           });
+          const reinforcedShortIds = fullIds.map(id => String(id || "").slice(0, 16));
           for (const id of fullIds) {
             recordMemoryEvent({
               event_type: "memory_cited",
@@ -467,18 +579,39 @@ export default definePluginEntry({
               memory_id: id.slice(0, 16),
               cited_count: 1,
               source: "autoRecall.finalize",
-              metadata_json: { cited_memory_ids: citedIds, runId: event?.runId || ctx?.runId || null }
+              metadata_json: {
+                cited_memory_ids: citedIds.map(value => String(value || "").slice(0, 16)),
+                auto_recall_reinforcement_allowed_ids: allowlist.auto_recall_reinforcement_allowed_ids,
+                current_turn_memory_engine_get_ids: allowlist.current_turn_memory_engine_get_ids,
+                reinforcement_allowed_ids: allowlist.reinforcement_allowed_ids,
+                reinforced_ids: reinforcedShortIds,
+                ignored_cited_ids: filtered.ignored_cited_ids,
+                ignored_reasons: filtered.ignored_reasons,
+                runId: event?.runId || ctx?.runId || null,
+              }
             });
             recordMemoryEvent({
               event_type: "memory_reinforced",
               session_id: sessionId,
               trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,
               memory_id: id.slice(0, 16),
-              source: "autoRecall.finalize"
+              source: "autoRecall.finalize",
+              metadata_json: {
+                cited_memory_ids: citedIds.map(value => String(value || "").slice(0, 16)),
+                auto_recall_reinforcement_allowed_ids: allowlist.auto_recall_reinforcement_allowed_ids,
+                current_turn_memory_engine_get_ids: allowlist.current_turn_memory_engine_get_ids,
+                reinforcement_allowed_ids: allowlist.reinforcement_allowed_ids,
+                reinforced_ids: reinforcedShortIds,
+                ignored_cited_ids: filtered.ignored_cited_ids,
+                ignored_reasons: filtered.ignored_reasons,
+                runId: event?.runId || ctx?.runId || null,
+              }
             });
           }
         } catch (e) {
           api.logger?.warn?.(`memory-engine autoRecall citation finalize skipped: ${e.message}`);
+        } finally {
+          currentTurnMemoryEngineGetIds.clear();
         }
       });
     }
@@ -546,6 +679,10 @@ export default definePluginEntry({
       withDb,
       calcRealtimeConf,
       CATEGORY_MAP,
+      onMemoryEngineGetSuccess: (memoryId) => {
+        const shortId = String(memoryId || "").slice(0, 16).trim();
+        if (shortId) currentTurnMemoryEngineGetIds.add(shortId);
+      },
     });
 
     registerMemoryEngineTools(api, {

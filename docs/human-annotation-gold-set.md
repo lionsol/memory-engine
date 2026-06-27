@@ -279,3 +279,76 @@ MVP 阶段禁止：
 - 不修改 candidate 文件
 - 不修改 `auto_recall_eligible`
 - 不直接触发 reinforcement
+
+## 基于人工标注的 autoRecall 安全策略 v1
+
+本版本策略只用于约束 autoRecall 的自动注入与自动强化资格，不直接修改数据库，不直接改写记忆文件，也不自动执行 quarantine、archive、delete。
+
+### 一、`suspected_tool_output` 作为硬拒绝信号
+
+当候选记忆满足以下任一条件时，autoRecall 直接拒绝：
+
+- `primary_bucket = suspected_tool_output`
+- `sample_buckets` 包含 `suspected_tool_output`
+- `quality_flags` 包含 `suspected_tool_output`
+
+拒绝效果：
+
+- 不允许进入 autoRecall 自动注入
+- 不允许进入 autoRecall 自动强化
+- gate reason 固定记录为 `denied_by_suspected_tool_output`
+
+这样做的原因是：第一批人工标注已经显示，`suspected_tool_output` 具有很高的污染概率，继续允许自动注入或自动强化，会把生成物、工具输出、转录残留再次反馈回记忆链路。
+
+### 二、`raw_log_leak` 只作为风险信号
+
+`raw_log_leak` 目前不能作为整桶硬拒绝条件。
+
+原因是：人工标注显示这一桶存在明显误伤，不能因为命中 `raw_log_leak` 就自动判定为污染，也不能直接触发 quarantine、delete、archive。
+
+本版本对 `raw_log_leak` 的处理方式是：
+
+- 单独命中 `raw_log_leak` 时，不自动拒绝 autoRecall
+- 只记录风险原因 `risk_raw_log_leak_review_required`
+- 保留后续人工复核空间
+
+也就是说，`raw_log_leak` 在 v1 里是“需要谨慎”的风险提示，不是“自动封禁”的执行信号。
+
+### 三、`delete` 必须人工确认
+
+人工标注中的 `preferred_action = delete` 不等于系统可以直接删除。
+
+无论 preview 还是后续策略推导，只要出现 `delete` 建议，都必须保留人工确认要求。系统不能因为标签里写了 `delete`，就自动删候选、删记忆、删索引。
+
+这一点的目的，是防止把人工标注的策略意图误当成破坏性执行指令。
+
+### 四、`demote_only` 不等于删除或隔离
+
+人工标注中的 `preferred_action = demote`，以及派生建议里的 `demote_only`，只表示：
+
+- 该记忆不应继续享有当前的自动召回优先级
+- 可能需要降低信任、降低可见性、降低强化资格
+
+它不表示：
+
+- 删除该记忆
+- 隔离该记忆
+- 归档该记忆
+
+因此，`demote_only` 不能被实现成 delete 或 quarantine 的别名。
+
+### 五、策略影响范围
+
+本版本策略只影响以下两条自动链路：
+
+- autoRecall 自动注入
+- autoRecall 自动强化
+
+本版本明确不影响以下手动能力：
+
+- `memory_engine_search`
+- `memory_engine_get`
+
+也就是说，即使某条记忆因为 `suspected_tool_output` 被 autoRecall 硬拒绝，人工仍然可以通过手动 search/get 检索到它，用于排查、审计、对照和后续人工处理。
+
+这样可以把“自动安全收紧”和“人工可见性保留”同时成立，避免因为安全策略把调查入口也一并封死。
