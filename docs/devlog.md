@@ -1,3 +1,304 @@
+## 2026-06-28
+
+### 新增：date-specific recap 回答策略
+
+今天补充了 retrieval / answering policy，解决“昨天做了什么 / 某天做了什么 / 上周做了什么”这类 date-specific recap 不能只凭 episode 作答的问题。
+
+#### 背景
+
+近期排查 checkpoint 污染时发现，历史 legacy checkpoint 曾生成过跨日污染的 episode。根因已经止血：
+
+* `workspace/scripts/session-checkpoint.js` 已改为 thin shim。
+* canonical checkpoint implementation 已统一到：
+
+  * `bin/session-checkpoint.js`
+  * `lib/checkpoint/*`
+* 新版 checkpoint 已具备：
+
+  * targetDate evidence filtering
+  * reset direct parse 默认关闭
+  * smart-add provenance gating
+
+但历史 episode 已经被旧逻辑污染。更重要的是，回答“昨天做了什么”时，如果直接把 episode 当成权威事实来源，就会把 LLM 二手摘要中的错误再次放大。
+
+因此，本次补充的不是 checkpoint 生成逻辑，而是 **回答策略**。
+
+#### 新规则
+
+新增文档：
+
+* `docs/retrieval-answering-policy.md`
+
+新增 fixture：
+
+* `test/fixtures/date-specific-recap-policy.json`
+
+新增测试：
+
+* `test/retrieval-answering-policy.test.js`
+
+文档明确规定：
+
+1. date-specific recap 包括：
+
+   * “昨天做了什么”
+   * “某天做了什么”
+   * “上周做了什么”
+   * “某个日期我们修了什么”
+2. 这类问题不能只凭 episode 回答。
+3. source priority 为：
+
+   * primary：raw session / raw_log
+   * secondary：manual / agent_smart_add
+   * tertiary：episode
+4. episode 是 derived summary，不是 authoritative fact source。
+5. 如果 episode 与 raw_log 冲突，以 raw_log 为准。
+6. legacy-risk episode 只能作为线索，不能作为最终事实依据。
+7. 以下路径不参与事实回答：
+
+   * `memory/generated-smart-add/`
+   * `memory/quarantined-*`
+   * `memory/legacy-daily-mirrors/`
+8. 明确禁止：
+
+   * `episode_only_answer`
+
+#### 目的
+
+该策略修复的是污染链的第三层：
+
+| 层级   | 问题                                      | 状态                   |
+| ---- | --------------------------------------- | -------------------- |
+| 生产入口 | legacy checkpoint 绕过插件版 targetDate 过滤   | 已修复                  |
+| 派生记忆 | 历史 episode / smart-add 被旧 checkpoint 写脏 | 后续 confirmed-only 清理 |
+| 回答策略 | date-specific recap 直接信 episode         | 本次补充 policy          |
+
+本次变更要求未来回答日期回顾问题时，必须先验证原始 session / raw_log，再使用 episode 作为辅助线索。
+
+---
+
+### 验证：AutoRecall safety smoke 现有覆盖
+
+今天还复查了 AutoRecall safety smoke 中对 dreaming artifact 的防护覆盖。
+
+确认现有代码已经包含相关 case，不需要新增实现：
+
+* `bin/run-auto-recall-safety-smoke.js`
+* `test/auto-recall-safety-smoke.test.js`
+* `test/auto-recall-eligibility.test.js`
+
+已覆盖 synthetic dreaming artifact case：
+
+* `dreaming_candidate_staging`
+* `dreaming_maintenance_log`
+
+验证点：
+
+* `deny_reasons` 包含：
+
+  * `denied_by_dreaming_artifact`
+* `reinforcement_allowed=false`
+* staging case 验证：
+
+  * `reinforced_ids` 不包含该 candidate id
+
+边界保持不变：
+
+* 不写 DB
+* 不改 memory
+* 不 quarantine / delete / archive
+* 不 reinforcement
+* `dreaming_duplicate` alone 仍不 hard deny
+* `raw_log_leak` 仍是 risk-only
+
+执行命令：
+
+```bash
+node --test test/auto-recall-safety-smoke.test.js test/auto-recall-eligibility.test.js
+npm test
+node bin/run-auto-recall-safety-smoke.js
+```
+
+生成 smoke report：
+
+* `reports/auto-recall-safety-smoke-20260628-025631.md`
+
+report 中确认：
+
+* `checks_passed: 8/8`
+* `dreaming_candidate_staging` 被 `denied_by_dreaming_artifact` 拒绝
+* `dreaming_maintenance_log` 被 `denied_by_dreaming_artifact` 拒绝
+
+该 report 属于运行产物，不提交到 repo。
+
+---
+
+### 测试结果
+
+新增 policy 后执行测试：
+
+```bash
+node --test test/retrieval-answering-policy.test.js
+npm test
+```
+
+最终全量结果：
+
+* `77/77 passed`
+* `0 failed`
+
+---
+
+### 结果
+
+本次变更建立了 date-specific recap 的 source hierarchy：
+
+```text
+raw session / raw_log
+> manual / agent_smart_add
+> episode
+```
+
+这意味着之后回答“昨天做了什么”时，episode 只能作为摘要线索，不能替代原始记录。
+
+后续仍需继续处理历史 polluted episode：
+
+1. 等待 `2026-06-27` 摘要作为 shadow entrypoint fix 后的回归样本。
+2. 如果 06-27 clean，再对 `2026-06-25` / `2026-06-26` 做 confirmed polluted episode quarantine / regenerate。
+3. legacy-risk window `2026-06-16` 至 `2026-06-26` 只先 audit，不自动 apply。
+
+
+
+## 2026-06-28
+
+### Console Annotation Reviewer 第一阶段
+
+完成 Console 内置标注页面第一阶段，将原先独立的 `tools/annotation-reviewer.html` 能力迁移到 Console，同时保留 standalone 页面以降低迁移风险。
+
+新增 `/annotations` 页面和导航入口：
+
+* `console/server.js`
+* `console/views/layout.ejs`
+* `console/views/annotations.ejs`
+* `console/public/style.css`
+* `test/console-annotations.test.js`
+
+第一阶段保持完全本地化和只读边界：
+
+* 使用浏览器 File API 加载本地 `annotation-candidates-*.jsonl`
+* 在浏览器本地填写标注字段
+* 在浏览器本地导出 `annotation-labels-*.jsonl`
+* 不上传 labels 到 server
+* 不写 DB
+* 不修改 memory records
+* 不提供 apply / delete / archive / quarantine / reinforce / write-db 操作入口
+
+页面支持：
+
+* 展示 `sample_id` / `memory_id` / `chunk_id`
+* 展示 `primary_bucket` / `sample_buckets` / `source_path` / `risk_score`
+* 展示 `content_preview`
+* 填写 `quality` / `currency` / `auto_recall_eligible` / `preferred_action` / `reason`
+* 按 `primary_bucket` 筛选
+* 按 `source_path prefix` 筛选
+* 只看未标注项
+* 展示 total / labeled / remaining / by primary_bucket 进度
+* 导出 labels JSONL
+
+### Console Reports allowlist 兼容 bucket slug
+
+修复 Console `/api/reports` 文件名白名单与 annotation export 输出命名不一致的问题。
+
+问题表现：
+
+* export 工具会生成带 bucket slug 的文件名，例如：
+
+  * `annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-030143.jsonl`
+* Console reports allowlist 之前只接受：
+
+  * `annotation-candidates-YYYYMMDD-HHMMSS.jsonl`
+* 导致 `/api/reports` 返回空数组。
+
+修复后，Console reports allowlist 支持：
+
+* 标准 annotation candidates 报告
+* 带单个 bucket slug 的 candidates 报告
+* 带多个 bucket slug 的 candidates 报告
+* date-only legacy bucket 文件名
+
+安全边界保持不变：
+
+* 拒绝 `../`
+* 拒绝绝对路径
+* 拒绝嵌套路径
+* 拒绝非白名单文件
+* 拒绝任意扩展名
+* 不放宽为 `annotation-candidates-.*`
+
+验收结果：
+
+* `/api/reports` 已能展示带 bucket slug 的 annotation candidates 报告
+* `/api/reports/latest` 能正确返回最新 autoRecall safety smoke 报告
+* 非白名单和路径穿越仍被拒绝
+
+### autoRecall safety smoke 覆盖确认
+
+确认最新 smoke 报告已覆盖 dreaming artifact hard gate：
+
+* `checks_passed: 8/8`
+* `dreaming_candidate_staging` synthetic candidate 被 `denied_by_dreaming_artifact` 拒绝
+* `dreaming_maintenance_log` synthetic candidate 被 `denied_by_dreaming_artifact` 拒绝
+* `reinforcement_allowed=false`
+
+保持不变：
+
+* `dreaming_duplicate` alone 不 hard deny
+* `raw_log_leak` 仍是 risk-only
+* 不写 DB
+* 不改 memory
+* 不 quarantine / delete / archive
+* 不触发 reinforcement
+
+### 验证
+
+本轮验证：
+
+* `node --test test/console-annotations.test.js test/console-reports.test.js test/annotation-reviewer-static.test.js`
+* `npm test`
+
+结果：
+
+* 全量测试通过：`76/76`
+
+### 运行产物处理
+
+本轮生成的 reports 运行产物不进入 git，已按惯例移出或保留在 `/tmp/memory-engine-reports/`。
+
+### 建议 tag
+
+建议本轮提交后打 tag：
+
+* `v0.8.19-console-annotation-reviewer`
+
+建议 commit message：
+
+* `feat(console): add annotation reviewer page`
+
+### 下一步
+
+建议先跑一个真实 GUI 标注闭环：
+
+1. 在 `/reports` 找最新 candidates 报告
+2. 在 `/annotations` 本地加载 candidates JSONL
+3. 标注 10 条
+4. 导出 labels JSONL
+5. 用 CLI 生成 annotation summary / eligibility preview
+6. 回到 `/reports` 查看生成结果
+
+闭环跑通后，再考虑 Console 第二阶段：从白名单 reports 列表中选择 candidates 自动加载，但 labels 仍保持本地导出，不让 server 写入。
+
+
+
 ## 2026-06-27
 
 ### 修复：checkpoint shadow entrypoint bypass

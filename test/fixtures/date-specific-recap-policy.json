@@ -1,0 +1,40 @@
+{
+  "policy_name": "date_specific_recap",
+  "query_examples": [
+    "昨天做了什么",
+    "2026-06-25 做了什么",
+    "上周做了什么"
+  ],
+  "source_precedence": {
+    "primary": [
+      "raw_session",
+      "raw_log"
+    ],
+    "secondary": [
+      "manual_smart_add",
+      "agent_smart_add"
+    ],
+    "tertiary": [
+      "episode"
+    ]
+  },
+  "conflict_resolution": {
+    "episode_vs_raw_log": "raw_log_wins",
+    "smart_add_vs_raw_log": "raw_log_wins"
+  },
+  "legacy_risk_policy": {
+    "legacy_risk_episode": "hint_only_not_authoritative"
+  },
+  "excluded_sources": [
+    "memory/generated-smart-add/",
+    "memory/quarantined-",
+    "memory/legacy-daily-mirrors/"
+  ],
+  "disallowed_answering_modes": [
+    "episode_only_answer",
+    "legacy_risk_episode_only_answer",
+    "generated_smart_add_only_answer",
+    "quarantined_only_answer",
+    "legacy_mirror_only_answer"
+  ]
+}
