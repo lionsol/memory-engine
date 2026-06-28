@@ -107,6 +107,26 @@ async function runSmoke(options = {}) {
     primary_bucket: "suspected_tool_output",
   };
   const suspectedGate = autoRecall.shouldInjectCandidate(suspectedCandidate, "memory engine baseline", {});
+  const dreamingCandidateStagingCandidate = {
+    id: "dream-stage-1",
+    category: "dreaming",
+    path: "memory/dreaming/2026-06-28.md",
+    text: "- Candidate: durable memory candidate\nconfidence: 0.72\nevidence: seen in recalls\nstatus: staged",
+    final_score: 0.82,
+    primary_bucket: "dreaming_candidate_staging",
+    sample_buckets: ["dreaming_candidate_staging", "dreaming_duplicate"],
+  };
+  const dreamingCandidateStagingGate = autoRecall.shouldInjectCandidate(dreamingCandidateStagingCandidate, "continue memory-engine work", {});
+  const dreamingMaintenanceCandidate = {
+    id: "dream-maint-1",
+    category: "dreaming",
+    path: "memory/dreaming/2026-06-27.md",
+    text: "# Deep Sleep\nRepaired recall artifacts\nRanked 10 candidate(s) for durable promotion\nPromoted 1 candidate(s) into MEMORY.md",
+    final_score: 0.78,
+    primary_bucket: "dreaming_maintenance_log",
+    sample_buckets: ["dreaming_maintenance_log"],
+  };
+  const dreamingMaintenanceGate = autoRecall.shouldInjectCandidate(dreamingMaintenanceCandidate, "continue memory-engine work", {});
   const noTraceReinforcement = filterCitedIdsForReinforcement(
     ["hallucinated99999"],
     buildReinforcementAllowedIds({ traceState: null, currentTurnMemoryEngineGetIds: [] }).reinforcement_allowed_ids,
@@ -118,6 +138,10 @@ async function runSmoke(options = {}) {
   const getOnlyReinforcement = filterCitedIdsForReinforcement(
     ["getonly1234567890", "searchonly1234567"],
     getOnlyAllowlist.reinforcement_allowed_ids,
+  );
+  const deniedDreamingReinforcement = filterCitedIdsForReinforcement(
+    [dreamingCandidateStagingCandidate.id],
+    buildReinforcementAllowedIds({ traceState: null, currentTurnMemoryEngineGetIds: [] }).reinforcement_allowed_ids,
   );
 
   const telemetrySkip = buildAutoRecallDebugMetadata("full prompt", {
@@ -149,6 +173,12 @@ async function runSmoke(options = {}) {
       rejected_candidates: [{
         id: "suspected-tool-ou",
         deny_reasons: suspectedGate.deny_reasons,
+      }, {
+        id: "dream-stage-1",
+        deny_reasons: dreamingCandidateStagingGate.deny_reasons,
+      }, {
+        id: "dream-maint-1",
+        deny_reasons: dreamingMaintenanceGate.deny_reasons,
       }],
     },
   });
@@ -175,6 +205,28 @@ async function runSmoke(options = {}) {
       name: "suspected_tool_output candidate is rejected with denied_by_suspected_tool_output",
       pass: suspectedGate.inject === false && suspectedGate.reason === "denied_by_suspected_tool_output",
       details: suspectedGate,
+    },
+    {
+      name: "dreaming_candidate_staging candidate is rejected with denied_by_dreaming_artifact",
+      pass: dreamingCandidateStagingGate.inject === false &&
+        dreamingCandidateStagingGate.reason === "denied_by_dreaming_artifact" &&
+        Array.isArray(dreamingCandidateStagingGate.deny_reasons) &&
+        dreamingCandidateStagingGate.deny_reasons.includes("denied_by_dreaming_artifact") &&
+        dreamingCandidateStagingGate.reinforcement_allowed === false &&
+        !deniedDreamingReinforcement.reinforced_ids.includes(dreamingCandidateStagingCandidate.id),
+      details: {
+        gate: dreamingCandidateStagingGate,
+        reinforcement: deniedDreamingReinforcement,
+      },
+    },
+    {
+      name: "dreaming_maintenance_log candidate is rejected with denied_by_dreaming_artifact",
+      pass: dreamingMaintenanceGate.inject === false &&
+        dreamingMaintenanceGate.reason === "denied_by_dreaming_artifact" &&
+        Array.isArray(dreamingMaintenanceGate.deny_reasons) &&
+        dreamingMaintenanceGate.deny_reasons.includes("denied_by_dreaming_artifact") &&
+        dreamingMaintenanceGate.reinforcement_allowed === false,
+      details: dreamingMaintenanceGate,
     },
     {
       name: "no trace + no get + cited ids does not reinforce",

@@ -314,7 +314,37 @@ MVP 阶段禁止：
 
 也就是说，`raw_log_leak` 在 v1 里是“需要谨慎”的风险提示，不是“自动封禁”的执行信号。
 
-### 三、`delete` 必须人工确认
+### 三、`dreaming_duplicate` 专项人工观察与 v1 处理
+
+对 `dreaming_duplicate` 专项样本的快速人工检查显示，当前主要不是“可长期召回的语义记忆”，而是 dreaming pipeline artifacts，集中落在两类：
+
+- `dreaming_maintenance_log`
+  - 例如 `# Deep Sleep`
+  - `Repaired recall artifacts`
+  - `Ranked ... candidate(s) for durable promotion`
+  - `Promoted ... candidate(s) into MEMORY.md`
+- `dreaming_candidate_staging`
+  - 例如 `- Candidate:`
+  - 同时带有 `confidence:`
+  - `evidence:`
+  - `status: staged`
+
+这些内容在第一阶段的处理原则是：
+
+- 禁止进入 autoRecall 自动注入
+- 禁止进入 autoRecall 自动强化
+- 不自动 delete
+- 不自动 quarantine
+- 不直接改写数据库或记忆文件
+
+同时需要保留一个边界：
+
+- `dreaming_duplicate` 本身暂时不做整桶 hard deny
+- 只有命中上述更具体的 artifact bucket，才进入 hard deny
+
+这样可以先把 dreaming pipeline artifact 从自动链路里移出，再保留后续人工决定 demote、quarantine、archive 的空间。
+
+### 四、`delete` 必须人工确认
 
 人工标注中的 `preferred_action = delete` 不等于系统可以直接删除。
 
@@ -322,7 +352,7 @@ MVP 阶段禁止：
 
 这一点的目的，是防止把人工标注的策略意图误当成破坏性执行指令。
 
-### 四、`demote_only` 不等于删除或隔离
+### 五、`demote_only` 不等于删除或隔离
 
 人工标注中的 `preferred_action = demote`，以及派生建议里的 `demote_only`，只表示：
 
@@ -337,7 +367,7 @@ MVP 阶段禁止：
 
 因此，`demote_only` 不能被实现成 delete 或 quarantine 的别名。
 
-### 五、策略影响范围
+### 六、策略影响范围
 
 本版本策略只影响以下两条自动链路：
 

@@ -31,6 +31,10 @@ Options:
   --per-bucket-limit <n>
                         Export at most N samples per primary risk bucket before global backfill (default: 30)
   --preview-chars <n>   Content preview length in chars (default: 700)
+  --include-buckets <list>
+                        Comma-separated bucket allowlist, e.g. dreaming_duplicate
+  --exclude-buckets <list>
+                        Comma-separated bucket denylist
   --format <name>       jsonl | md (default: jsonl)
   --out <path>          Output path; default reports/annotation-candidates-YYYYMMDD-HHmmss.<ext>
 
@@ -46,6 +50,8 @@ function parseArgs(argv = []) {
     limit: 200,
     perBucketLimit: 30,
     previewChars: 700,
+    includeBuckets: [],
+    excludeBuckets: [],
     format: "jsonl",
     out: null,
     fixturePath: process.env.MEMORY_ENGINE_ANNOTATION_CANDIDATE_FIXTURE_PATH || null,
@@ -72,6 +78,22 @@ function parseArgs(argv = []) {
     }
     if (arg === "--preview-chars") {
       options.previewChars = Number.parseInt(readFlagValue(argv, i, "--preview-chars"), 10);
+      i += 1;
+      continue;
+    }
+    if (arg === "--include-buckets") {
+      options.includeBuckets = readFlagValue(argv, i, "--include-buckets")
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean);
+      i += 1;
+      continue;
+    }
+    if (arg === "--exclude-buckets") {
+      options.excludeBuckets = readFlagValue(argv, i, "--exclude-buckets")
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean);
       i += 1;
       continue;
     }

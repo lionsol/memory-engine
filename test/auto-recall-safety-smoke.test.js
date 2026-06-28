@@ -34,4 +34,6 @@ test("autoRecall safety smoke script writes report with required telemetry field
   assert.equal(content.includes("reinforcement_allowed_ids"), true);
   assert.equal(content.includes("reinforced_ids"), true);
   assert.equal(content.includes("ignored_cited_ids"), true);
+  assert.equal(content.includes("denied_by_dreaming_artifact"), true);
+  assert.equal(content.includes("checks_passed: 8/8"), true);
 });
