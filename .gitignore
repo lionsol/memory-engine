@@ -10,6 +10,9 @@ node_modules/
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 /data/
 /memory/
 /knowledge-graph.json
@@ -48,3 +51,8 @@ actions.md
 
 # Local Codex / agent instructions
 AGENTS.md
+
+# Reports
+reports/*
+!reports/.gitkeep
+!reports/README.md
