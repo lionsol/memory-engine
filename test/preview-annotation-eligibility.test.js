@@ -79,6 +79,8 @@ test("suspected_tool_output bucket recommends auto recall false and reinforcemen
   });
 
   assert.equal(report.write_db, false);
+  assert.equal(report.memory_side_effects, false);
+  assert.equal(report.reinforcement_side_effects, false);
   assert.equal(existsSync(outPath), true);
   assert.equal(report.summary.affected_sample_count, 1);
   assert.equal(report.recommendations[0].recommend_auto_recall_eligible, false);
@@ -103,6 +105,10 @@ test("raw_log_leak alone does not trigger quarantine or delete from bucket membe
   assert.equal(report.summary.raw_log_leak_only_samples_seen, 1);
   assert.equal(report.summary.raw_log_leak_only_bucket_noop_count, 1);
   assert.equal(report.summary.affected_sample_count, 0);
+  assert.equal(report.summary.labeled_bucket_distribution.raw_log_leak, 1);
+  assert.equal(report.summary.candidate_bucket_distribution.raw_log_leak, 1);
+  assert.equal(report.summary.validation_only_covers_raw_log_leak, true);
+  assert.equal(report.summary.validation_scope_note, "This validation only covers raw_log_leak.");
 });
 
 test("delete recommendation always requires manual confirmation", () => {
@@ -158,6 +164,34 @@ test("demote does not escalate to delete or quarantine", () => {
   assert.equal(report.recommendations[0].requires_manual_confirm, false);
 });
 
+test("notes alias is accepted without changing canonical reporting fields", () => {
+  const dir = createFixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const outPath = resolve(dir, "preview.md");
+  writeJsonl(labelsPath, [
+    labelRow({
+      annotation: {
+        quality: "usable",
+        currency: "current",
+        auto_recall_eligible: "no",
+        preferred_action: "demote",
+        notes: "use notes alias",
+      },
+    }),
+  ]);
+
+  const report = previewAnnotationEligibility({
+    labels: labelsPath,
+    format: "md",
+    out: outPath,
+  });
+
+  assert.equal(report.summary.affected_sample_count, 1);
+  const markdown = readFileSync(outPath, "utf8");
+  assert.equal(markdown.includes("validation_scope_note: This validation only covers raw_log_leak."), true);
+  assert.equal(markdown.includes("notes"), false);
+});
+
 test("CLI rejects destructive flags and stays read-only", () => {
   const dir = createFixtureDir();
   const labelsPath = resolve(dir, "labels.jsonl");
@@ -192,4 +226,5 @@ test("CLI rejects destructive flags and stays read-only", () => {
   const markdown = readFileSync(outPath, "utf8");
   assert.equal(markdown.includes("Annotation Eligibility Preview"), true);
   assert.equal(markdown.includes("write_db: false"), true);
+  assert.equal(markdown.includes("Candidate Bucket Distribution"), true);
 });

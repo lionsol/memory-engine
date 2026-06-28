@@ -23,11 +23,12 @@ function printHelp() {
   console.log(`Summarize Human Annotation Labels
 
 Usage:
-  node bin/summarize-annotation-labels.js --in <labels.jsonl> [options]
+  node bin/summarize-annotation-labels.js --labels <labels.jsonl> [options]
 
 Options:
   --help                Show this help
-  --in <path>           Input annotation labels JSONL
+  --labels <path>       Input annotation labels JSONL
+  --in <path>           Backward-compatible alias for --labels
   --format <name>       json | md (default: md)
   --out <path>          Output path; default reports/annotation-summary-YYYYMMDD-HHmmss.<ext>
 
@@ -54,8 +55,8 @@ function parseArgs(argv = []) {
       options.help = true;
       continue;
     }
-    if (arg === "--in") {
-      options.inputPath = resolve(readFlagValue(argv, i, "--in"));
+    if (arg === "--labels" || arg === "--in") {
+      options.inputPath = resolve(readFlagValue(argv, i, arg));
       i += 1;
       continue;
     }
