@@ -4,9 +4,14 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
+const ANNOTATION_BUCKET_SLUG = "[a-z0-9_]+(?:-[a-z0-9_]+)*";
+const ANNOTATION_BUCKET_SEGMENTS = `(?:-${ANNOTATION_BUCKET_SLUG})+`;
 
 const REPORT_PATTERNS = [
-  { kind: "annotation_candidates", regex: /^annotation-candidates-\d{8}-\d{6}\.(jsonl|md)$/ },
+  {
+    kind: "annotation_candidates",
+    regex: new RegExp(`^annotation-candidates(?:${ANNOTATION_BUCKET_SEGMENTS})?-(?:\\d{8}-\\d{6}|\\d{8})\\.(jsonl|md)$`),
+  },
   { kind: "annotation_labels", regex: /^annotation-labels-.*\.jsonl$/ },
   { kind: "annotation_summary", regex: /^annotation-summary-\d{8}-\d{6}\.(json|md)$/ },
   { kind: "annotation_eligibility_preview", regex: /^annotation-eligibility-preview-\d{8}-\d{6}\.(json|md)$/ },
@@ -134,5 +139,13 @@ export function reportsPageSnapshot() {
         summary: "长输入默认跳过 autoRecall；只有显式历史/项目依赖时才使用 focused_query。",
       },
     },
+  };
+}
+
+export function annotationReportsSnapshot() {
+  const files = listReports();
+  return {
+    available_candidates: files.filter(file => file.kind === "annotation_candidates"),
+    available_labels: files.filter(file => file.kind === "annotation_labels"),
   };
 }

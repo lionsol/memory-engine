@@ -12,7 +12,7 @@ import { handleMemoryApi } from "./routes/memories.js";
 import { handleTelemetryApi } from "./routes/telemetry.js";
 import { handleMetricsApi } from "./routes/metrics.js";
 import { handleReportsApi } from "./routes/reports.js";
-import { reportsPageSnapshot } from "./services/reports-service.js";
+import { annotationReportsSnapshot, reportsPageSnapshot } from "./services/reports-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -84,6 +84,7 @@ function routePage(pathname) {
   if (pathname === "/telemetry") return { view: "telemetry", active: "telemetry", title: "Telemetry", data: recallTelemetry() };
   if (pathname === "/metrics") return { view: "metrics", active: "metrics", title: "Metrics", data: { overview: overviewMetrics(), retrieval: retrievalMetrics(), conflicts: conflictMetrics() } };
   if (pathname === "/reports") return { view: "reports", active: "reports", title: "Safety Reports", data: reportsPageSnapshot() };
+  if (pathname === "/annotations") return { view: "annotations", active: "annotations", title: "Annotations", data: annotationReportsSnapshot() };
   return null;
 }
 

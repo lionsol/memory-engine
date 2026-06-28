@@ -30,7 +30,8 @@ body[data-active="sessions"] [data-nav="sessions"],
 body[data-active="memories"] [data-nav="memories"],
 body[data-active="telemetry"] [data-nav="telemetry"],
 body[data-active="metrics"] [data-nav="metrics"],
-body[data-active="reports"] [data-nav="reports"] { background: #22313d; color: #ffffff; }
+body[data-active="reports"] [data-nav="reports"],
+body[data-active="annotations"] [data-nav="annotations"] { background: #22313d; color: #ffffff; }
 main { padding: 18px 22px 32px; min-width: 0; }
 h1 { font-size: 22px; margin: 0; }
 h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0; color: var(--muted); margin: 0 0 8px; }
@@ -87,6 +88,20 @@ tr[data-click]:hover { background: #f6fbfa; }
 .status-row { display: grid; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .status-row:last-child { border-bottom: 0; padding-bottom: 0; }
 .report-detail pre { max-height: calc(100vh - 280px); overflow: auto; background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+.annotation-shell { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+.annotation-sidebar { position: sticky; top: 18px; display: grid; gap: 14px; }
+.annotation-content { display: grid; gap: 16px; }
+.annotation-card { display: grid; gap: 10px; }
+.annotation-field { display: grid; gap: 6px; }
+.annotation-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.annotation-preview { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 220px; }
+.annotation-meta-grid, .annotation-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.annotation-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.annotation-list li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+.annotation-file-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.annotation-file-list li { border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+.annotation-progress { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.annotation-progress .metric .value { font-size: 20px; }
 @media (max-width: 900px) {
   body { grid-template-columns: 1fr; }
   .sidebar { position: static; }
@@ -95,4 +110,6 @@ tr[data-click]:hover { background: #f6fbfa; }
   .diversity-grid { grid-template-columns: 1fr; }
   .filters { width: 100%; flex-wrap: wrap; }
   input { min-width: 0; flex: 1; }
+  .annotation-shell, .annotation-meta-grid, .annotation-form-grid, .annotation-progress { grid-template-columns: 1fr; }
+  .annotation-sidebar { position: static; }
 }

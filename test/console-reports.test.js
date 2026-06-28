@@ -41,6 +41,9 @@ test("reports API lists only whitelisted report files", withTempReports(({ repor
   writeReport(reportsDir, "annotation-summary-20260627-101010.md", "# summary", Date.UTC(2026, 5, 27, 10, 10, 10));
   writeReport(reportsDir, "annotation-labels-20260626-first50.jsonl", "{\"a\":1}\n", Date.UTC(2026, 5, 26, 10, 10, 10));
   writeReport(reportsDir, "auto-recall-safety-smoke-20260627-130731.md", "# smoke", Date.UTC(2026, 5, 27, 13, 7, 31));
+  writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl", "{\"sample\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 27));
+  writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.jsonl", "{\"sample\":2}\n", Date.UTC(2026, 5, 28, 2, 27, 28));
+  writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628.md", "# legacy", Date.UTC(2026, 5, 28, 2, 27, 29));
   writeReport(reportsDir, "not-allowed.txt", "nope", Date.UTC(2026, 5, 27, 1, 0, 0));
   fs.mkdirSync(path.join(reportsDir, "nested"), { recursive: true });
   fs.writeFileSync(path.join(reportsDir, "nested", "annotation-summary-20260627-101010.md"), "nested", "utf8");
@@ -55,6 +58,9 @@ test("reports API lists only whitelisted report files", withTempReports(({ repor
   assert.deepEqual(
     result.body.files.map(file => file.name),
     [
+      "annotation-candidates-dreaming_duplicate-20260628.md",
+      "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.jsonl",
+      "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl",
       "auto-recall-safety-smoke-20260627-130731.md",
       "annotation-summary-20260627-101010.md",
       "annotation-labels-20260626-first50.jsonl",
@@ -65,7 +71,7 @@ test("reports API lists only whitelisted report files", withTempReports(({ repor
 test("reports file API rejects path traversal", withTempReports(({ reportsDir }) => {
   writeReport(reportsDir, "annotation-summary-20260627-101010.md", "# summary", Date.UTC(2026, 5, 27, 10, 10, 10));
 
-  for (const name of ["../secret.txt", "/etc/passwd", "nested/file.md", "..\\\\windows.txt"]) {
+  for (const name of ["../secret.txt", "/etc/passwd", "nested/file.md", "..\\\\windows.txt", "annotation-candidates-../../x.jsonl"]) {
     const result = handleReportsApi({
       method: "GET",
       parts: ["api", "reports", "file"],
@@ -79,15 +85,17 @@ test("reports file API rejects path traversal", withTempReports(({ reportsDir })
 test("reports file API rejects non-whitelisted files", withTempReports(({ reportsDir }) => {
   writeReport(reportsDir, "annotation-summary-20260627-101010.md", "# summary", Date.UTC(2026, 5, 27, 10, 10, 10));
   writeReport(reportsDir, "memory-quality-eval.md", "# nope", Date.UTC(2026, 5, 27, 10, 11, 10));
+  writeReport(reportsDir, "annotation-candidates-evil.txt", "evil", Date.UTC(2026, 5, 27, 10, 11, 11));
 
-  const result = handleReportsApi({
-    method: "GET",
-    parts: ["api", "reports", "file"],
-    searchParams: new URLSearchParams({ name: "memory-quality-eval.md" }),
-  });
-
-  assert.equal(result.status, 400);
-  assert.match(result.body.error, /not allowed/i);
+  for (const name of ["memory-quality-eval.md", "package.json", "annotation-candidates-evil.txt"]) {
+    const result = handleReportsApi({
+      method: "GET",
+      parts: ["api", "reports", "file"],
+      searchParams: new URLSearchParams({ name }),
+    });
+    assert.equal(result.status, 400);
+    assert.match(result.body.error, /not allowed/i);
+  }
 }));
 
 test("reports latest API picks latest summary eligibility preview and smoke files", withTempReports(({ reportsDir }) => {
@@ -141,6 +149,22 @@ test("reports service reads only whitelisted files and classifies kinds", withTe
   const file = readReportFile("annotation-candidates-20260627-111111.jsonl");
   assert.equal(file.content, "{\"sample\":1}\n");
   assert.equal(file.format, "jsonl");
+}));
+
+test("reports service allows bucket-slug and multi-bucket annotation candidate filenames", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl", "{\"sample\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 27));
+  writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.md", "# sample", Date.UTC(2026, 5, 28, 2, 27, 28));
+  writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628.jsonl", "{\"legacy\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 29));
+
+  const names = listReports().map(file => file.name);
+  assert.deepEqual(names, [
+    "annotation-candidates-dreaming_duplicate-20260628.jsonl",
+    "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.md",
+    "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl",
+  ]);
+  assert.equal(getAllowedReportKind("annotation-candidates-dreaming_duplicate-20260628-022727.jsonl"), "annotation_candidates");
+  assert.equal(getAllowedReportKind("annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.md"), "annotation_candidates");
+  assert.equal(getAllowedReportKind("annotation-candidates-dreaming_duplicate-20260628.jsonl"), "annotation_candidates");
 }));
 
 test("reports latest helper returns null for missing families", withTempReports(() => {

@@ -1,0 +1,456 @@
+<section class="toolbar">
+  <h1>Annotations</h1>
+  <button class="icon-button" data-refresh title="Refresh">↻</button>
+</section>
+<section class="annotation-shell">
+  <aside class="annotation-sidebar">
+    <section class="panel annotation-card">
+      <div>
+        <h2>Local Review</h2>
+        <div class="muted">This page uses browser File API only. It does not upload labels, does not write DB, and does not modify memory records.</div>
+      </div>
+      <div class="annotation-field">
+        <label for="annotationCandidateFile">Load candidate JSONL</label>
+        <input id="annotationCandidateFile" type="file" accept=".jsonl,.txt">
+      </div>
+      <div class="annotation-field">
+        <label for="annotationAnnotator">Annotator</label>
+        <input id="annotationAnnotator" type="text" placeholder="name or handle">
+      </div>
+      <div class="annotation-field">
+        <label for="annotationBucketFilter">Filter: primary bucket</label>
+        <select id="annotationBucketFilter"><option value="">All buckets</option></select>
+      </div>
+      <div class="annotation-field">
+        <label for="annotationPathPrefixFilter">Filter: source path prefix</label>
+        <input id="annotationPathPrefixFilter" type="text" placeholder="memory/smart-add">
+      </div>
+      <label class="annotation-field">
+        <span>View filter</span>
+        <span class="row"><input id="annotationUnlabeledOnly" type="checkbox"><span>Unlabeled only</span></span>
+      </label>
+      <div class="row">
+        <button id="annotationPrevButton" type="button">Previous</button>
+        <button id="annotationNextButton" type="button">Next</button>
+      </div>
+      <div class="row">
+        <button id="annotationExportButton" type="button">Export Labels JSONL</button>
+      </div>
+    </section>
+
+    <section class="panel annotation-card">
+      <h2>Progress</h2>
+      <div class="annotation-progress">
+        <article class="metric"><div class="label">Total</div><div id="annotationTotalCount" class="value">0</div></article>
+        <article class="metric"><div class="label">Labeled</div><div id="annotationLabeledCount" class="value">0</div></article>
+        <article class="metric"><div class="label">Remaining</div><div id="annotationRemainingCount" class="value">0</div></article>
+      </div>
+    </section>
+
+    <section class="panel annotation-card">
+      <h2>Labeled by Primary Bucket</h2>
+      <ul id="annotationBucketCounts" class="annotation-list"></ul>
+    </section>
+
+    <section class="panel annotation-card">
+      <h2>Available Candidate Reports</h2>
+      <div class="muted">The server only lists whitelisted `reports/` files. Loading still happens through your browser-selected local file.</div>
+      <ul id="annotationAvailableCandidates" class="annotation-file-list"></ul>
+    </section>
+  </aside>
+
+  <main class="annotation-content">
+    <section id="annotationEmptyState" class="panel annotation-card">
+      <h2>No candidate file loaded</h2>
+      <div class="muted">Choose a local `reports/annotation-candidates-*.jsonl` file to begin review.</div>
+    </section>
+
+    <section id="annotationReviewState" hidden class="annotation-card">
+      <div class="panel annotation-card">
+        <div class="toolbar">
+          <div>
+            <h2 id="annotationRecordTitle">Sample</h2>
+            <div id="annotationRecordSubtitle" class="muted"></div>
+          </div>
+          <div id="annotationSaveStatus" class="badge">local-only</div>
+        </div>
+      </div>
+
+      <section class="annotation-meta-grid">
+        <article class="panel annotation-card">
+          <h2>Identity</h2>
+          <ul class="annotation-list">
+            <li><span>sample_id</span><strong id="annotationSampleId"></strong></li>
+            <li><span>memory_id</span><strong id="annotationMemoryId"></strong></li>
+            <li><span>chunk_id</span><strong id="annotationChunkId"></strong></li>
+            <li><span>primary_bucket</span><strong id="annotationPrimaryBucket"></strong></li>
+            <li><span>source_path</span><strong id="annotationSourcePath"></strong></li>
+            <li><span>risk_score</span><strong id="annotationRiskScore"></strong></li>
+          </ul>
+        </article>
+        <article class="panel annotation-card">
+          <h2>Sample Buckets</h2>
+          <div id="annotationSampleBuckets" class="annotation-pills"></div>
+        </article>
+      </section>
+
+      <section class="panel annotation-card">
+        <h2>Content Preview</h2>
+        <div id="annotationContentPreview" class="annotation-preview"></div>
+      </section>
+
+      <section class="annotation-form-grid">
+        <div class="annotation-field">
+          <label for="annotationQualityInput">quality</label>
+          <select id="annotationQualityInput">
+            <option value="">Unset</option>
+            <option value="good">good</option>
+            <option value="usable">usable</option>
+            <option value="low_quality">low_quality</option>
+            <option value="polluted">polluted</option>
+          </select>
+        </div>
+        <div class="annotation-field">
+          <label for="annotationCurrencyInput">currency</label>
+          <select id="annotationCurrencyInput">
+            <option value="">Unset</option>
+            <option value="current">current</option>
+            <option value="superseded">superseded</option>
+            <option value="unknown">unknown</option>
+          </select>
+        </div>
+        <div class="annotation-field">
+          <label for="annotationAutoRecallEligibleInput">auto_recall_eligible</label>
+          <select id="annotationAutoRecallEligibleInput">
+            <option value="">Unset</option>
+            <option value="yes">yes</option>
+            <option value="no">no</option>
+            <option value="unsure">unsure</option>
+          </select>
+        </div>
+        <div class="annotation-field">
+          <label for="annotationPreferredActionInput">preferred_action</label>
+          <select id="annotationPreferredActionInput">
+            <option value="">Unset</option>
+            <option value="keep">keep</option>
+            <option value="demote">demote</option>
+            <option value="quarantine">quarantine</option>
+            <option value="archive">archive</option>
+            <option value="delete">delete</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="panel annotation-card">
+        <div class="annotation-field">
+          <label for="annotationReasonInput">reason</label>
+          <textarea id="annotationReasonInput" placeholder="why did you choose these labels?"></textarea>
+        </div>
+      </section>
+
+      <section class="panel annotation-card">
+        <h2>Read-only Boundaries</h2>
+        <div class="muted">No apply, archive, delete, quarantine, reinforce, or write-db operations are exposed here. Labels stay in your browser until you export a local JSONL file.</div>
+      </section>
+    </section>
+  </main>
+</section>
+
+<script>
+  (() => {
+    const pageData = JSON.parse(document.getElementById("page-data")?.textContent || "{}").payload || {};
+    const state = { samples: [], filteredSamples: [], labels: new Map(), currentIndex: 0 };
+    const els = {
+      candidateFile: document.getElementById("annotationCandidateFile"),
+      annotator: document.getElementById("annotationAnnotator"),
+      bucketFilter: document.getElementById("annotationBucketFilter"),
+      pathPrefixFilter: document.getElementById("annotationPathPrefixFilter"),
+      unlabeledOnly: document.getElementById("annotationUnlabeledOnly"),
+      prevButton: document.getElementById("annotationPrevButton"),
+      nextButton: document.getElementById("annotationNextButton"),
+      exportButton: document.getElementById("annotationExportButton"),
+      totalCount: document.getElementById("annotationTotalCount"),
+      labeledCount: document.getElementById("annotationLabeledCount"),
+      remainingCount: document.getElementById("annotationRemainingCount"),
+      bucketCounts: document.getElementById("annotationBucketCounts"),
+      availableCandidates: document.getElementById("annotationAvailableCandidates"),
+      emptyState: document.getElementById("annotationEmptyState"),
+      reviewState: document.getElementById("annotationReviewState"),
+      recordTitle: document.getElementById("annotationRecordTitle"),
+      recordSubtitle: document.getElementById("annotationRecordSubtitle"),
+      saveStatus: document.getElementById("annotationSaveStatus"),
+      sampleId: document.getElementById("annotationSampleId"),
+      memoryId: document.getElementById("annotationMemoryId"),
+      chunkId: document.getElementById("annotationChunkId"),
+      primaryBucket: document.getElementById("annotationPrimaryBucket"),
+      sampleBuckets: document.getElementById("annotationSampleBuckets"),
+      sourcePath: document.getElementById("annotationSourcePath"),
+      riskScore: document.getElementById("annotationRiskScore"),
+      contentPreview: document.getElementById("annotationContentPreview"),
+      qualityInput: document.getElementById("annotationQualityInput"),
+      currencyInput: document.getElementById("annotationCurrencyInput"),
+      autoRecallEligibleInput: document.getElementById("annotationAutoRecallEligibleInput"),
+      preferredActionInput: document.getElementById("annotationPreferredActionInput"),
+      reasonInput: document.getElementById("annotationReasonInput"),
+    };
+
+    function deriveSampleId(sample) {
+      return String(sample.sample_id || sample.chunk_id || sample.memory_id || sample.sampleId || "");
+    }
+
+    function sourcePathOf(sample) {
+      return String(sample.source_path || sample.path || "");
+    }
+
+    function normalizeSample(raw) {
+      return {
+        sample_type: raw.sample_type || "memory",
+        sample_id: deriveSampleId(raw),
+        memory_id: String(raw.memory_id || ""),
+        chunk_id: String(raw.chunk_id || ""),
+        primary_bucket: String(raw.primary_bucket || ""),
+        sample_buckets: Array.isArray(raw.sample_buckets) ? raw.sample_buckets.map(String) : [],
+        source_path: sourcePathOf(raw),
+        risk_score: Number(raw.risk_score || 0),
+        content_preview: String(raw.content_preview || ""),
+      };
+    }
+
+    function parseJsonl(text) {
+      return String(text || "")
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => normalizeSample(JSON.parse(line)))
+        .filter(sample => sample.sample_type === "memory" && sample.sample_id);
+    }
+
+    function isAnnotationFilled(annotation) {
+      if (!annotation) return false;
+      return Boolean(annotation.quality || annotation.currency || annotation.auto_recall_eligible || annotation.preferred_action || annotation.reason);
+    }
+
+    function currentSample() {
+      return state.filteredSamples[state.currentIndex] || null;
+    }
+
+    function labeledBucketCounts() {
+      const counts = new Map();
+      for (const sample of state.samples) {
+        const label = state.labels.get(sample.sample_id);
+        if (!label || !isAnnotationFilled(label.annotation)) continue;
+        const bucket = sample.primary_bucket || "unknown";
+        counts.set(bucket, (counts.get(bucket) || 0) + 1);
+      }
+      return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    }
+
+    function syncBucketFilterOptions() {
+      const buckets = Array.from(new Set(state.samples.map(sample => sample.primary_bucket).filter(Boolean))).sort();
+      const current = els.bucketFilter.value;
+      els.bucketFilter.innerHTML = '<option value="">All buckets</option>';
+      for (const bucket of buckets) {
+        const option = document.createElement("option");
+        option.value = bucket;
+        option.textContent = bucket;
+        els.bucketFilter.appendChild(option);
+      }
+      els.bucketFilter.value = buckets.includes(current) ? current : "";
+    }
+
+    function loadLabelIntoForm(sample) {
+      const existing = state.labels.get(sample.sample_id)?.annotation || {};
+      els.qualityInput.value = existing.quality || "";
+      els.currencyInput.value = existing.currency || "";
+      els.autoRecallEligibleInput.value = existing.auto_recall_eligible || "";
+      els.preferredActionInput.value = existing.preferred_action || "";
+      els.reasonInput.value = existing.reason || "";
+    }
+
+    function captureFormAnnotation() {
+      return {
+        quality: els.qualityInput.value || null,
+        currency: els.currencyInput.value || null,
+        auto_recall_eligible: els.autoRecallEligibleInput.value || null,
+        preferred_action: els.preferredActionInput.value || null,
+        reason: els.reasonInput.value.trim() || null,
+      };
+    }
+
+    function updateProgress() {
+      const total = state.samples.length;
+      let labeled = 0;
+      for (const sample of state.samples) {
+        const label = state.labels.get(sample.sample_id);
+        if (label && isAnnotationFilled(label.annotation)) labeled += 1;
+      }
+      els.totalCount.textContent = String(total);
+      els.labeledCount.textContent = String(labeled);
+      els.remainingCount.textContent = String(Math.max(0, total - labeled));
+
+      const rows = labeledBucketCounts();
+      els.bucketCounts.innerHTML = "";
+      if (rows.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "No labeled samples yet";
+        li.className = "muted";
+        els.bucketCounts.appendChild(li);
+        return;
+      }
+      for (const [bucket, count] of rows) {
+        const li = document.createElement("li");
+        li.innerHTML = `<span>${bucket}</span><strong>${count}</strong>`;
+        els.bucketCounts.appendChild(li);
+      }
+    }
+
+    function renderAvailableCandidates() {
+      const rows = Array.isArray(pageData.available_candidates) ? pageData.available_candidates : [];
+      els.availableCandidates.innerHTML = "";
+      if (!rows.length) {
+        const li = document.createElement("li");
+        li.textContent = "No candidate reports listed";
+        li.className = "muted";
+        els.availableCandidates.appendChild(li);
+        return;
+      }
+      for (const file of rows) {
+        const li = document.createElement("li");
+        li.innerHTML = `<div><strong>${file.name}</strong></div><div class="muted">${file.updated_at || "-"} · ${file.size || 0} bytes</div>`;
+        els.availableCandidates.appendChild(li);
+      }
+    }
+
+    function render() {
+      updateProgress();
+      const sample = currentSample();
+      if (!sample) {
+        els.emptyState.hidden = false;
+        els.reviewState.hidden = true;
+        els.emptyState.innerHTML = state.samples.length
+          ? '<h2>No sample matches current filters</h2><div class="muted">Change bucket/path filters or disable unlabeled-only.</div>'
+          : '<h2>No candidate file loaded</h2><div class="muted">Choose a local `reports/annotation-candidates-*.jsonl` file to begin review.</div>';
+        return;
+      }
+
+      els.emptyState.hidden = true;
+      els.reviewState.hidden = false;
+      els.recordTitle.textContent = `${state.currentIndex + 1} / ${state.filteredSamples.length}`;
+      els.recordSubtitle.textContent = sample.primary_bucket || "memory sample";
+      els.sampleId.textContent = sample.sample_id;
+      els.memoryId.textContent = sample.memory_id;
+      els.chunkId.textContent = sample.chunk_id;
+      els.primaryBucket.textContent = sample.primary_bucket || "unknown";
+      els.sourcePath.textContent = sample.source_path || "unknown";
+      els.riskScore.textContent = String(sample.risk_score);
+      els.contentPreview.textContent = sample.content_preview || "(empty)";
+      els.sampleBuckets.innerHTML = "";
+      for (const bucket of sample.sample_buckets) {
+        const span = document.createElement("span");
+        span.className = "badge";
+        span.textContent = bucket;
+        els.sampleBuckets.appendChild(span);
+      }
+      loadLabelIntoForm(sample);
+    }
+
+    function persistCurrentForm() {
+      const sample = currentSample();
+      if (!sample) return;
+      state.labels.set(sample.sample_id, {
+        schema_version: 1,
+        sample_id: sample.sample_id,
+        sample_type: sample.sample_type,
+        memory_id: sample.memory_id,
+        chunk_id: sample.chunk_id,
+        primary_bucket: sample.primary_bucket,
+        source_path: sample.source_path,
+        annotation: captureFormAnnotation(),
+        annotator: els.annotator.value.trim() || null,
+        labeled_at: new Date().toISOString(),
+      });
+      els.saveStatus.textContent = "Annotation captured locally";
+      updateProgress();
+    }
+
+    function applyFilters() {
+      const bucket = els.bucketFilter.value.trim();
+      const prefix = els.pathPrefixFilter.value.trim();
+      const unlabeledOnly = els.unlabeledOnly.checked;
+      state.filteredSamples = state.samples.filter(sample => {
+        if (bucket && sample.primary_bucket !== bucket) return false;
+        if (prefix && !sourcePathOf(sample).startsWith(prefix)) return false;
+        if (unlabeledOnly) {
+          const label = state.labels.get(sample.sample_id);
+          if (label && isAnnotationFilled(label.annotation)) return false;
+        }
+        return true;
+      });
+      if (state.currentIndex >= state.filteredSamples.length) state.currentIndex = Math.max(0, state.filteredSamples.length - 1);
+      render();
+    }
+
+    function exportLabels() {
+      const annotator = els.annotator.value.trim() || null;
+      const rows = [];
+      for (const sample of state.samples) {
+        const label = state.labels.get(sample.sample_id);
+        if (!label || !isAnnotationFilled(label.annotation)) continue;
+        rows.push(JSON.stringify({
+          schema_version: 1,
+          sample_id: sample.sample_id,
+          sample_type: sample.sample_type,
+          memory_id: sample.memory_id,
+          chunk_id: sample.chunk_id,
+          primary_bucket: sample.primary_bucket,
+          source_path: sample.source_path,
+          annotation: label.annotation,
+          annotator: annotator || label.annotator || null,
+          labeled_at: label.labeled_at || new Date().toISOString(),
+        }));
+      }
+      const blob = new Blob([rows.join("\n") + (rows.length ? "\n" : "")], { type: "application/x-ndjson" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `annotation-labels-${new Date().toISOString().replace(/[:]/g, "-")}.jsonl`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    }
+
+    els.candidateFile.addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      state.samples = parseJsonl(text);
+      state.labels.clear();
+      state.currentIndex = 0;
+      syncBucketFilterOptions();
+      applyFilters();
+    });
+    els.bucketFilter.addEventListener("change", applyFilters);
+    els.pathPrefixFilter.addEventListener("input", applyFilters);
+    els.unlabeledOnly.addEventListener("change", applyFilters);
+    els.prevButton.addEventListener("click", () => {
+      persistCurrentForm();
+      if (state.currentIndex > 0) state.currentIndex -= 1;
+      render();
+    });
+    els.nextButton.addEventListener("click", () => {
+      persistCurrentForm();
+      if (state.currentIndex < state.filteredSamples.length - 1) state.currentIndex += 1;
+      render();
+    });
+    els.exportButton.addEventListener("click", () => {
+      persistCurrentForm();
+      exportLabels();
+    });
+    [els.qualityInput, els.currencyInput, els.autoRecallEligibleInput, els.preferredActionInput, els.reasonInput, els.annotator].forEach((el) => {
+      el.addEventListener("input", persistCurrentForm);
+      el.addEventListener("change", persistCurrentForm);
+    });
+
+    renderAvailableCandidates();
+    updateProgress();
+  })();
+</script>
