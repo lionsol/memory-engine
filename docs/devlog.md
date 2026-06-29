@@ -1,3 +1,227 @@
+## 2026-06-29
+
+### Memory process boundary audit
+
+新增只读的记忆过程边界审计，用于验证当前双记忆系统基线是否稳定。
+
+本次审计目标是确认在关闭 `active-memory`、`dreaming` 和 memory-engine `autoRecall` 后，是否还存在新增的过程层记忆污染。审计会报告预期基线、可探测到的配置状态、最近一次本地 03:00 边界或显式 `--since` 之后新增的 `memory/dreaming/*` 文件、non-lifecycle recall warning 摘要，以及明确的无副作用声明。
+
+新增文件：
+
+* `lib/quality/memory-process-boundary-audit.js`
+* `bin/audit-memory-process-boundary.js`
+* `test/memory-process-boundary-audit.test.js`
+
+验证已完成：
+
+* `node --test test/memory-process-boundary-audit.test.js`
+* `npm test`
+* `node bin/audit-memory-process-boundary.js --json`
+* `node bin/audit-memory-process-boundary.js --markdown`
+* `node bin/audit-memory-process-boundary.js --since "2026-06-29 03:00:00" --json`
+* Markdown 报告已输出到 `/tmp/memory-engine-reports/memory-process-boundary-audit-20260629.md`
+
+真实运行结果：
+
+* `status: pass`
+* `new_dreaming_files_since_count: 0`
+* `non_lifecycle_injected_count: 1`，判定为历史遗留 warning，不作为本次失败条件
+* 所有 `side_effects` 字段均为 `false`
+
+安全边界：
+
+* 不写入数据库
+* 不修改记忆文件
+* 不修改配置
+* 不执行 archive / quarantine
+* 不执行 reinforce
+* 不启用 autoRecall
+
+结论：
+
+* 当前关闭后的过程边界验证通过。
+* `dreaming` 在 2026-06-29 03:00 之后没有继续生成新文件。
+* non-lifecycle injected 计数没有新增增长，当前仅保留历史遗留记录。
+* 本次不创建新的 release tag。
+* GitHub 最新 tag 继续保持为 `v0.8.21-annotation-loop-validation`。
+* 在达到真正可用的 1.0 版本前，后续完成项通过 `docs/devlog.md` 和普通 commit 记录，不再发布新的 release tag。
+
+### Ownership-aware quality flags
+
+修正 quality flags 的 ownership 语义，避免 memory-engine 把 OpenClaw memory-core / generated diagnostic 层的正常无 confidence 状态误判为 P0 质量缺陷。
+
+本次变更原则：
+
+* `missing_category` 只在候选记忆 `expected_confidence=true` 时进入 P0。
+* `chunks_without_confidence` 只在候选记忆 `expected_confidence=true` 时进入 P0。
+* `memory/smart-add/*` 和 `memory/episodes/*` 仍保持严格的 memory-engine lifecycle 质量约束。
+* `memory/dreaming/*`、daily-root、`MEMORY.md` 等 non-lifecycle / memory-core-owned 记录不再因为缺少 category / confidence 被打 P0。
+* 内容风险 flags 不降级：`raw_log_leak`、`debug_noise`、`timestamp_pollution`、`duplicate_exact` 等仍按原逻辑生效。
+* 未知路径继续保持严格策略；真实 DB 中唯一剩余的 `missing_category / chunks_without_confidence` P0 是历史误写孤本 `memory/daily.md`。
+
+代码变更：
+
+* `lib/quality/quality-rules.js`
+  * 引入 `classifyQualityScope()`。
+  * 在 `evaluateQualityFlags()` 中解析 `expected_confidence` / quality scope。
+  * 将 category / confidence 缺失检查改为 ownership-aware。
+  * 输出 `quality_scope_family`、`quality_scope_owner`、`expected_confidence`，便于报告和测试确认语义。
+* `test/memory-quality-eval.test.js`
+  * 增加 lifecycle-owned 与 memory-core/generated-owned 对照测试。
+  * 覆盖 smart-add / episodes 无 confidence 仍为 P0。
+  * 覆盖 dreaming / daily-root / `MEMORY.md` 无 confidence 不再为 P0。
+  * 覆盖 memory-core-owned 记录中的 `raw_log_leak` 仍保留 P0。
+* `lib/quality/memory-process-boundary-audit.js`
+  * 顺手修复 audit 运行时读取 `OPENCLAW_CONFIG_PATH` 的问题，避免测试 fixture 设置 env 后仍读取模块导入时的默认 config 路径。
+
+真实 DB 验证：
+
+* `node bin/memory-quality-eval.js --scope all --json --top 10`
+  * `total_evaluated: 8498`
+  * `average_score: 86.67`
+  * `chunks_without_confidence_count: 1497` 仍保留为 diagnostics。
+  * `lifecycle_owned_chunks_without_confidence_count: 0`
+  * `top_flags` 中已不再出现 `missing_category` / `chunks_without_confidence`。
+* `node bin/memory-quality-eval.js --scope active-memory --json --top 10`
+  * `total_evaluated: 7002`
+  * `average_score: 87.69`
+  * `chunks_without_confidence_count: 1`
+  * `lifecycle_owned_chunks_without_confidence_count: 0`
+  * 剩余 1 条为 `memory/daily.md`，owner/family 为 `unknown`，继续保留 P0 作为异常路径提示。
+* 直接统计确认：
+  * `scope=all` 下 `missing_category=1`，`chunks_without_confidence=1`，均属于 `unknown` owner。
+  * `dreaming` / daily-root / `MEMORY.md` 不再因缺 category / confidence 被记为 P0。
+
+验证已完成：
+
+* `node --test test/memory-quality-eval.test.js test/export-annotation-candidates.test.js test/timestamp-pollution-audit.test.js`
+  * 53/53 通过。
+* `node --test test/memory-process-boundary-audit.test.js`
+  * 9/9 通过。
+* `npm test`
+  * 491 tests，485 pass，6 skip，0 fail。
+
+结论：
+
+* quality report 现在区分 lifecycle quality defect 与 non-lifecycle diagnostic observation。
+* memory-core-owned / generated diagnostic 层不再制造 `missing_category` / `chunks_without_confidence` P0 噪声。
+* 内容风险检测和 dreaming artifact hard-deny 语义不受影响。
+* 本次仍不创建新的 release tag，继续通过 devlog + 普通 commit 记录。
+
+### Unknown memory path audit
+
+新增 unknown memory path 只读审计，用于解释 ownership-aware quality flags 修正后剩余的唯一 `missing_category / chunks_without_confidence` P0 来源。
+
+背景：
+
+ownership-aware quality flags 生效后，memory-engine lifecycle-owned 的 confidence/category 缺口已经归零，但质量报告中仍剩余 1 条 `missing_category / chunks_without_confidence` P0。该条目不是 `memory/smart-add/*` 或 `memory/episodes/*`，而是历史误写路径：
+
+* `memory/daily.md`
+
+本次新增只读 audit，用于定位 indexed memory 中 `quality_scope_owner=unknown`、`quality_scope_family=unknown` 或 unknown path family 的候选，确认其使用情况与处理建议。
+
+新增文件：
+
+* `lib/quality/unknown-memory-path-audit.js`
+* `bin/audit-unknown-memory-paths.js`
+* `test/unknown-memory-path-audit.test.js`
+
+CLI 支持：
+
+* `--help`
+* `--json`
+* `--markdown`
+* `--out <path>`
+* `--include-archived`
+* `--sample-limit <n>`
+
+安全边界：
+
+* 不写入数据库
+* 不修改 memory 文件
+* 不修改配置
+* 不执行 archive / quarantine
+* 不执行 reinforce
+* 不执行 confidence backfill
+* 不调用 LLM
+* 不访问网络
+
+真实 DB 验证结果：
+
+* `unknown_count: 1`
+* 唯一路径：`memory/daily.md`
+* `quality_scope_owner: unknown`
+* `quality_scope_family: unknown`
+* `path_family: memory-other`
+* `has_confidence_record: false`
+* `retrieved_count: 0`
+* `injected_count: 0`
+* `suggested_action: safe_to_review_for_stale_index_or_legacy_file`
+
+结论：
+
+* `memory/daily.md` 是当前唯一 unknown memory path。
+* 该条目未被 retrieved，未被 injected，也没有 confidence record。
+* 当前不执行删除、archive 或 quarantine。
+* 后续如需处理，应走单独的 stale-index / legacy-file 人工确认流程。
+
+验证已完成：
+
+* `node --test test/unknown-memory-path-audit.test.js`
+* `node bin/audit-unknown-memory-paths.js --json`
+* `node bin/audit-unknown-memory-paths.js --markdown`
+* `node bin/audit-unknown-memory-paths.js --json --out /tmp/memory-engine-reports/unknown-memory-path-audit-20260629.json`
+* `npm test`
+
+全量测试结果：
+
+* `497 tests`
+* `491 pass`
+* `6 skip`
+* `0 fail`
+
+### Annotation export / quality report validation
+
+完成 ownership-aware quality flags 之后的 annotation export 与 quality report 验证，确认质量报告和标注候选不再被 non-lifecycle `missing_category / chunks_without_confidence` 噪声污染。
+
+验证结果：
+
+* `--scope all` 的 top 100 flags 中，`missing_category` 已完全消失。
+* `--scope all` 的 `lifecycle_owned_chunks_without_confidence_count: 0`。
+* `--scope active-memory` 只剩 1 条 `chunks_without_confidence`，即 `memory/daily.md`，owner 为 `unknown`，不属于 memory-engine lifecycle。
+* unknown memory path 实测仅有 `memory/daily.md` 一条。
+* annotation export 保持只读：
+
+  * `write_db: false`
+  * `annotation_side_effects: false`
+  * `reinforcement_side_effects: false`
+
+本次 annotation export 输入源是 memory 级别样本，没有 dreaming 级别样本，因此 dreaming buckets 为 0：
+
+* `dreaming_maintenance_log: 0`
+* `dreaming_candidate_staging: 0`
+* `dreaming_duplicate: 0`
+* `dreaming_non_duplicate: 0`
+
+这不是异常。本次验证重点是 ownership-aware 修正后，annotation export 不再被 non-lifecycle missing metadata 噪声污染。
+
+候选 primary bucket 分配正常：
+
+* `raw_log_leak: 50`
+* `suspected_tool_output: 50`
+* `duplicate_exact: 50`
+* `never_retrieved: 35`
+
+结论：
+
+* memory-engine lifecycle-owned confidence/category 缺口已经归零。
+* `missing_category / chunks_without_confidence` 的主噪声已经清除。
+* annotation export 仍保持 read-only。
+* bucket 分配正常。
+* 剩余异常已收敛到单一历史路径 `memory/daily.md`。
+* 今天的质量治理链条已闭环：process-boundary audit → ownership-aware quality flags → unknown memory path audit → annotation export / quality report validation。
+
+
 ## 2026-06-28
 
 ### 新增：date-specific recap 回答策略
