@@ -1,5 +1,22 @@
 ## 2026-06-29
 
+### Episode 文件冗余与漂移问题收尾
+
+本轮完成 episode 文件冗余与漂移问题的主链路修复与验证，可以按“主问题关闭，历史清理项进入 backlog”处理。
+
+已确认新的 canonical checkpoint episode 格式生效。episode 文件现在包含明确的 `targetDate`、`generatedAt`、`source_type: checkpoint_llm`、`smartAddInputPolicy: trusted_only:manual,agent_smart_add`、`smartAddIncluded`、`rawLogIncluded` 与 `evidenceDateFilter` 等 metadata，用于明确生成日期、证据来源与 raw-log-first 边界。
+
+已验证 `2026-06-27` episode 为 clean canonical checkpoint 输出。该文件由 bounded raw logs 生成，`smartAddIncluded: 0`，正文中出现历史污染排查相关内容属于当天真实 raw log 主题，不应再被视为 smart-add 传播污染。
+
+已对 `2026-06-25` 与 `2026-06-26` polluted episode 文件进行隔离，并基于 raw-log-first checkpoint 重新生成 active episode。重生成后的 active 文件均使用 bounded raw logs，`smartAddIncluded: 0`，旧污染关键词不再出现在 active episode 中。
+
+修复了 smart-add propagation audit 对 clean canonical checkpoint episode 的误报问题。audit 现在可以正确识别 `# Episode` 标题后的 canonical metadata，并跳过符合 raw-log-first 条件的 clean checkpoint episode。已补充回归测试，覆盖“正文提到历史污染关键词，但 metadata clean”的 canonical episode 场景。
+
+已完成 `2026-06-16` 至 `2026-06-26` legacy-risk window 的只读 audit，没有对历史风险窗口执行自动 apply。剩余风险主要集中在旧 smart-add suspect、少量旧 episode suspect 与 stale smart-add chunks，属于历史数据清理问题，不再阻塞 episode 漂移主问题收尾。
+
+结论：episode 漂移传播链路已切断，核心日期 `2026-06-25`、`2026-06-26`、`2026-06-27` 已完成修复或验证。该问题可以关闭。后续将 legacy smart-add cleanup 与 stale index cleanup 作为独立 backlog 项继续跟进。
+
+
 ### Memory process boundary audit
 
 新增只读的记忆过程边界审计，用于验证当前双记忆系统基线是否稳定。
