@@ -870,18 +870,83 @@ test("evaluateDuplicateFlags detects exact duplicates via normalized text", () =
   assert.equal(evaluated.p0_flags.includes("duplicate_exact"), true);
 });
 
-test("evaluateQualityFlags marks conflict and missing confidence record", () => {
+test("evaluateQualityFlags marks conflict and missing confidence record for lifecycle-owned memory", () => {
   const result = evaluateQualityFlags({
     id: "c1",
-    path: "memory/projects/roadmap.md",
+    path: "memory/smart-add/roadmap.md",
     text: "Project roadmap decision: keep v0.8.4 and docs/runtime-sync.md updated.",
-    category: "project",
+    category: "raw_log",
     has_confidence_record: false,
     conflict_flag: 1,
   }, { nowSec: 1719000000 });
 
   assert.equal(result.p0_flags.includes("conflict_flagged"), true);
   assert.equal(result.p0_flags.includes("chunks_without_confidence"), true);
+});
+
+test("evaluateQualityFlags keeps category and confidence requirements ownership-aware", () => {
+  const smartAdd = evaluateQualityFlags({
+    id: "own-smart-add",
+    path: "memory/smart-add/2026-06-29.md",
+    text: "Memory-engine lifecycle note with file path lib/quality/quality-rules.js completed.",
+    category: null,
+    has_confidence_record: false,
+  }, { nowSec: 1719000000 });
+  const episode = evaluateQualityFlags({
+    id: "own-episode",
+    path: "memory/episodes/2026-06-29.md",
+    text: "Episode lifecycle note with tag v0.8.21 and commit abc1234 recorded.",
+    category: null,
+    has_confidence_record: false,
+  }, { nowSec: 1719000000 });
+  const dreaming = evaluateQualityFlags({
+    id: "core-dreaming",
+    path: "memory/dreaming/light/2026-06-29.md",
+    text: "# Deep Sleep\nRanked candidate diagnostics for later manual review.",
+    category: null,
+    has_confidence_record: false,
+  }, { nowSec: 1719000000 });
+  const dailyRoot = evaluateQualityFlags({
+    id: "core-daily",
+    path: "memory/2026-06-29.md",
+    text: "# Daily memory\nUser discussed memory process boundary audit validation.",
+    category: null,
+    has_confidence_record: false,
+  }, { nowSec: 1719000000 });
+  const memoryRoot = evaluateQualityFlags({
+    id: "core-memory-root",
+    path: "MEMORY.md",
+    text: "User prefers Chinese devlog entries and no release tags before 1.0.",
+    category: null,
+    has_confidence_record: false,
+  }, { nowSec: 1719000000 });
+
+  for (const result of [smartAdd, episode]) {
+    assert.equal(result.expected_confidence, true);
+    assert.equal(result.p0_flags.includes("missing_category"), true);
+    assert.equal(result.p0_flags.includes("chunks_without_confidence"), true);
+  }
+
+  for (const result of [dreaming, dailyRoot, memoryRoot]) {
+    assert.equal(result.expected_confidence, false);
+    assert.equal(result.p0_flags.includes("missing_category"), false);
+    assert.equal(result.p0_flags.includes("chunks_without_confidence"), false);
+  }
+});
+
+test("evaluateQualityFlags preserves content-risk flags for memory-core-owned records", () => {
+  const result = evaluateQualityFlags({
+    id: "core-raw-log-risk",
+    path: "memory/2026-06-29.md",
+    text: "User: summarize today\nAssistant: used raw transcript style by mistake",
+    category: null,
+    has_confidence_record: false,
+  }, { nowSec: 1719000000 });
+
+  assert.equal(result.expected_confidence, false);
+  assert.equal(result.p0_flags.includes("raw_log_leak"), true);
+  assert.equal(result.p0_flags.includes("missing_category"), false);
+  assert.equal(result.p0_flags.includes("chunks_without_confidence"), false);
 });
 
 test("evaluateQualityFlags applies deterministic age gates for utility flags", () => {
