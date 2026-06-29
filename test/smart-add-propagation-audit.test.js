@@ -106,6 +106,43 @@ test("audit flags suspicious smart-add and episode targets and reports stale ind
   assert.equal(report.summary.stale_index_cleanup_chunk_count, 2);
 });
 
+test("audit skips clean canonical checkpoint episode even when recap discusses old pollution terms", async () => {
+  const fixture = createFixture();
+  writeFileSync(resolve(fixture.episodesDir, "2026-06-27.md"), [
+    "# Episode: 2026-06-27",
+    "",
+    "targetDate: 2026-06-27",
+    "generatedAt: 2026-06-27T19:35:39.162Z",
+    "timeZone: Asia/Shanghai",
+    "category: episodic",
+    "source_type: checkpoint_llm",
+    "smartAddPath: memory/smart-add/2026-06-27.md",
+    "smartAddInputPolicy: trusted_only:manual,agent_smart_add",
+    "smartAddIncluded: 0",
+    "smartAddSkippedUnknownProvenance: 32",
+    "smartAddSkippedCheckpointGenerated: 0",
+    "rawLogIncluded: 83",
+    "rawLogSkippedOutOfTargetDate: 0",
+    "evidenceDateFilter: targetDate=2026-06-27; raw_log=updated_at bounded to targetDate",
+    "",
+    "今天确认 opencode provider 配置修复实际发生在 2026-06-10，而不是 2026-06-24 / 2026-06-25。",
+    "并继续审计 memory/smart-add/2026-06-24.md 和 memory/episodes/2026-06-25.md。",
+    "",
+  ].join("\n"), "utf8");
+
+  const audit = await importAudit();
+  const report = audit.runSmartAddPropagationAudit({
+    rootDir: fixture.root,
+    memoryDir: fixture.memoryDir,
+    coreDbPath: fixture.coreDbPath,
+  });
+
+  assert.equal(report.suspected_propagated_episode.length, 0);
+  assert.equal(report.skipped_canonical_checkpoint_episode.length, 1);
+  assert.equal(report.skipped_canonical_checkpoint_episode[0].path, "memory/episodes/2026-06-27.md");
+  assert.equal(report.skipped_canonical_checkpoint_episode[0].reason, "canonical_checkpoint_raw_log_first_episode");
+});
+
 test("CLI --json writes audit report", () => {
   const fixture = createFixture();
   writeFileSync(resolve(fixture.smartAddDir, "2026-06-24.md"), [
