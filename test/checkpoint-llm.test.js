@@ -141,6 +141,12 @@ test("llmNightlyExtract keeps default deepseek then siliconflow order", async ()
     fallbackProvider: "siliconflow",
     warnings: [],
   }), async () => {
+    await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+      maxInputChars: 45000,
+      maxTokens: 4096,
+      timeoutMs: 120000,
+      warnings: [],
+    }), async () => {
     await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
       await withPatched(checkpointConfig, "getSFKey", () => "sf-key", async () => {
         await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
@@ -162,6 +168,7 @@ test("llmNightlyExtract keeps default deepseek then siliconflow order", async ()
         });
       });
     });
+    });
   });
 
   assert.deepEqual(calls, [
@@ -177,6 +184,12 @@ test("llmNightlyExtract does not call fallback when primary succeeds", async () 
     fallbackProvider: "siliconflow",
     warnings: [],
   }), async () => {
+    await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+      maxInputChars: 45000,
+      maxTokens: 4096,
+      timeoutMs: 120000,
+      warnings: [],
+    }), async () => {
     await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
       await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
         await withPatched(https, "request", createRequestStub(({ url, callback }) => {
@@ -189,6 +202,7 @@ test("llmNightlyExtract does not call fallback when primary succeeds", async () 
           assert.equal(result.episode_summary, "ok");
         });
       });
+    });
     });
   });
 
@@ -204,6 +218,12 @@ test("llmNightlyExtract returns timeout payload when fallback is none", async ()
       fallbackProvider: "none",
       warnings: [],
     }), async () => {
+      await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+        maxInputChars: 45000,
+        maxTokens: 4096,
+        timeoutMs: 120000,
+        warnings: [],
+      }), async () => {
       await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
         await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
           await withPatched(https, "request", createRequestStub(({ url, callback }) => {
@@ -219,6 +239,7 @@ test("llmNightlyExtract returns timeout payload when fallback is none", async ()
             });
           });
         });
+      });
       });
     });
   });
@@ -236,6 +257,12 @@ test("llmNightlyExtract only attempts once when primary and fallback are the sam
       fallbackProvider: "deepseek",
       warnings: [],
     }), async () => {
+      await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+        maxInputChars: 45000,
+        maxTokens: 4096,
+        timeoutMs: 120000,
+        warnings: [],
+      }), async () => {
       await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
         await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
           await withPatched(https, "request", createRequestStub(({ url, callback }) => {
@@ -246,6 +273,7 @@ test("llmNightlyExtract only attempts once when primary and fallback are the sam
             assert.equal(result.error, "llm超时");
           });
         });
+      });
       });
     });
   });
@@ -260,6 +288,12 @@ test("llmNightlyExtract returns timeout payload when fallback also fails", async
     fallbackProvider: "siliconflow",
     warnings: [],
   }), async () => {
+    await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+      maxInputChars: 45000,
+      maxTokens: 4096,
+      timeoutMs: 120000,
+      warnings: [],
+    }), async () => {
     await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
       await withPatched(checkpointConfig, "getSFKey", () => "sf-key", async () => {
         await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
@@ -283,6 +317,7 @@ test("llmNightlyExtract returns timeout payload when fallback also fails", async
         });
       });
     });
+    });
   });
 });
 
@@ -294,6 +329,12 @@ test("llmNightlyExtract keeps empty payload when response contains no JSON", asy
       fallbackProvider: "siliconflow",
       warnings: [],
     }), async () => {
+      await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+        maxInputChars: 45000,
+        maxTokens: 4096,
+        timeoutMs: 120000,
+        warnings: [],
+      }), async () => {
       await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
         await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
           await withPatched(https, "request", createRequestStub(({ callback }) => {
@@ -307,6 +348,7 @@ test("llmNightlyExtract keeps empty payload when response contains no JSON", asy
             });
           });
         });
+      });
       });
     });
   });
@@ -325,6 +367,12 @@ test("llmNightlyExtract logs attempt failed and succeeded entries with provider 
       fallbackProvider: "siliconflow",
       warnings: [],
     }), async () => {
+      await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+        maxInputChars: 45000,
+        maxTokens: 4096,
+        timeoutMs: 120000,
+        warnings: [],
+      }), async () => {
       await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
         await withPatched(checkpointConfig, "getSFKey", () => "sf-key", async () => {
           await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
@@ -345,12 +393,124 @@ test("llmNightlyExtract logs attempt failed and succeeded entries with provider 
           });
         });
       });
+      });
     });
   });
 
-  assert.ok(entries.some((entry) => entry.message.includes("LLM attempt provider=deepseek model=deepseek-chat chars=4")));
+  assert.ok(entries.some((entry) => entry.message.includes("LLM attempt provider=deepseek model=deepseek-chat chars=4 maxTokens=4096 timeoutMs=120000")));
   assert.ok(entries.some((entry) => entry.message.includes("LLM failed provider=deepseek model=deepseek-chat durationMs=") && entry.message.includes("error=ds failed")));
-  assert.ok(entries.some((entry) => entry.message.includes("LLM attempt provider=siliconflow model=deepseek-ai/DeepSeek-V3.2 chars=4")));
+  assert.ok(entries.some((entry) => entry.message.includes("LLM attempt provider=siliconflow model=deepseek-ai/DeepSeek-V3.2 chars=4 maxTokens=4096 timeoutMs=120000")));
   assert.ok(entries.some((entry) => entry.message.includes("LLM succeeded provider=siliconflow durationMs=")));
   assert.ok(entries.some((entry) => entry.message.includes("LLM fallback succeeded provider=siliconflow durationMs=")));
+  assert.ok(entries.every((entry) => !entry.message.includes("Bearer ")));
+  assert.ok(entries.every((entry) => !entry.message.includes("plain text only")));
+  assert.ok(entries.every((entry) => !entry.message.includes("sensitive-looking content")));
+});
+
+test("llmNightlyExtract uses default request budget values", async () => {
+  let observedBody = null;
+  let observedTimeoutMs = null;
+  await withPatched(checkpointConfig, "resolveCheckpointProviders", () => ({
+    primaryProvider: "deepseek",
+    fallbackProvider: "siliconflow",
+    warnings: [],
+  }), async () => {
+    await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+      maxInputChars: 45000,
+      maxTokens: 4096,
+      timeoutMs: 120000,
+      warnings: [],
+    }), async () => {
+      await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
+        await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
+          await withPatched(https, "request", createRequestStub(({ callback, req }) => {
+            observedBody = JSON.parse(req.body);
+            observedTimeoutMs = req.timeoutMs;
+            emitJsonResponse(callback, {
+              choices: [{ message: { content: "{\"episode_summary\":\"ok\",\"smart_memories\":[],\"configs\":[]}" } }],
+            });
+          }), async () => {
+            const result = await checkpointLlm.llmNightlyExtract("body");
+            assert.equal(result.episode_summary, "ok");
+          });
+        });
+      });
+    });
+  });
+
+  assert.equal(observedBody.max_tokens, 4096);
+  assert.equal(observedTimeoutMs, 120000);
+});
+
+test("llmNightlyExtract uses overridden request budget values", async () => {
+  let observedBody = null;
+  let observedTimeoutMs = null;
+  const { entries, logger } = createLogger();
+  await withPatchedConsole(logger, async () => {
+    await withPatched(checkpointConfig, "resolveCheckpointProviders", () => ({
+      primaryProvider: "deepseek",
+      fallbackProvider: "siliconflow",
+      warnings: [],
+    }), async () => {
+      await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+        maxInputChars: 30000,
+        maxTokens: 2048,
+        timeoutMs: 90000,
+        warnings: [],
+      }), async () => {
+        await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
+          await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
+            await withPatched(https, "request", createRequestStub(({ callback, req }) => {
+              observedBody = JSON.parse(req.body);
+              observedTimeoutMs = req.timeoutMs;
+              emitJsonResponse(callback, {
+                choices: [{ message: { content: "{\"episode_summary\":\"ok\",\"smart_memories\":[],\"configs\":[]}" } }],
+              });
+            }), async () => {
+              const result = await checkpointLlm.llmNightlyExtract("body");
+              assert.equal(result.episode_summary, "ok");
+            });
+          });
+        });
+      });
+    });
+  });
+
+  assert.equal(observedBody.max_tokens, 2048);
+  assert.equal(observedTimeoutMs, 90000);
+  assert.ok(entries.some((entry) => entry.message.includes("maxTokens=2048 timeoutMs=90000")));
+});
+
+test("llmNightlyExtract trims input to configured maxInputChars", async () => {
+  let observedPrompt = "";
+  const longInput = "x".repeat(50000);
+  await withPatched(checkpointConfig, "resolveCheckpointProviders", () => ({
+    primaryProvider: "deepseek",
+    fallbackProvider: "siliconflow",
+    warnings: [],
+  }), async () => {
+    await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+      maxInputChars: 30000,
+      maxTokens: 4096,
+      timeoutMs: 120000,
+      warnings: [],
+    }), async () => {
+      await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
+        await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
+          await withPatched(https, "request", createRequestStub(({ callback, req }) => {
+            observedPrompt = JSON.parse(req.body).messages[0].content;
+            emitJsonResponse(callback, {
+              choices: [{ message: { content: "{\"episode_summary\":\"ok\",\"smart_memories\":[],\"configs\":[]}" } }],
+            });
+          }), async () => {
+            const result = await checkpointLlm.llmNightlyExtract(longInput);
+            assert.equal(result.episode_summary, "ok");
+          });
+        });
+      });
+    });
+  });
+
+  assert.ok(observedPrompt.endsWith("x".repeat(30000)));
+  assert.equal(observedPrompt.includes("x".repeat(30001)), false);
 });

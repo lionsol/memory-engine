@@ -268,3 +268,74 @@ test("resolveCheckpointProviders treats empty strings as invalid", () => {
   });
   assert.equal(warnings.length, 2);
 });
+
+test("resolveCheckpointLlmRequestConfig returns default request budget values", () => {
+  const warnings = [];
+  const resolved = checkpointConfig.resolveCheckpointLlmRequestConfig({}, {
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.deepEqual(resolved, {
+    maxInputChars: 45000,
+    maxTokens: 4096,
+    timeoutMs: 120000,
+    warnings: [],
+  });
+  assert.deepEqual(warnings, []);
+});
+
+test("resolveCheckpointLlmRequestConfig supports env override", () => {
+  const resolved = checkpointConfig.resolveCheckpointLlmRequestConfig({
+    MEMORY_ENGINE_CHECKPOINT_LLM_MAX_INPUT_CHARS: "30000",
+    MEMORY_ENGINE_CHECKPOINT_LLM_MAX_TOKENS: "2048",
+    MEMORY_ENGINE_CHECKPOINT_LLM_TIMEOUT_MS: "90000",
+  }, null);
+
+  assert.deepEqual(resolved, {
+    maxInputChars: 30000,
+    maxTokens: 2048,
+    timeoutMs: 90000,
+    warnings: [],
+  });
+});
+
+test("resolveCheckpointLlmRequestConfig falls back invalid values to defaults with warnings", () => {
+  const warnings = [];
+  const resolved = checkpointConfig.resolveCheckpointLlmRequestConfig({
+    MEMORY_ENGINE_CHECKPOINT_LLM_MAX_INPUT_CHARS: "0",
+    MEMORY_ENGINE_CHECKPOINT_LLM_MAX_TOKENS: "-1",
+    MEMORY_ENGINE_CHECKPOINT_LLM_TIMEOUT_MS: "abc",
+  }, {
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.deepEqual(resolved, {
+    maxInputChars: 45000,
+    maxTokens: 4096,
+    timeoutMs: 120000,
+    warnings,
+  });
+  assert.equal(warnings.length, 3);
+  assert.match(warnings[0], /MEMORY_ENGINE_CHECKPOINT_LLM_MAX_INPUT_CHARS/);
+  assert.match(warnings[1], /MEMORY_ENGINE_CHECKPOINT_LLM_MAX_TOKENS/);
+  assert.match(warnings[2], /MEMORY_ENGINE_CHECKPOINT_LLM_TIMEOUT_MS/);
+});
+
+test("resolveCheckpointLlmRequestConfig treats empty string as invalid", () => {
+  const warnings = [];
+  const resolved = checkpointConfig.resolveCheckpointLlmRequestConfig({
+    MEMORY_ENGINE_CHECKPOINT_LLM_MAX_INPUT_CHARS: "",
+    MEMORY_ENGINE_CHECKPOINT_LLM_MAX_TOKENS: "",
+    MEMORY_ENGINE_CHECKPOINT_LLM_TIMEOUT_MS: "",
+  }, {
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.deepEqual(resolved, {
+    maxInputChars: 45000,
+    maxTokens: 4096,
+    timeoutMs: 120000,
+    warnings,
+  });
+  assert.equal(warnings.length, 3);
+});
