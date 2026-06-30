@@ -18,6 +18,7 @@
     "test": "node --test",
     "memory:quality": "node bin/memory-quality-eval.js",
     "smoke:quality-baseline": "node bin/run-memory-quality-baseline-smoke.js",
+    "smoke:smart-add-duplicates": "node bin/run-smart-add-duplicate-baseline-smoke.js",
     "memory:cleanup-orphan-confidence": "node bin/cleanup-orphan-confidence.js",
     "console": "node console/cli.js",
     "sync-index": "node bin/sync-memory-index.js --force"

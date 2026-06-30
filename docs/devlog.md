@@ -1,5 +1,20 @@
 ## 2026-06-30
 
+### Smart-add duplicate safety baseline smoke
+
+新增只读的 smart-add duplicate safety baseline smoke，并暴露 npm 入口：
+
+* `npm run smoke:smart-add-duplicates`
+
+这次没有去 snapshot 全部 live duplicate totals，而是冻结高信号的安全基线：
+
+* cleanup eligible groups: 10
+* cleanup eligible entries: 27
+* ingestion bug candidate groups: 10
+* unsafe-to-cleanup groups: 37
+
+同时验证 retrieved / injected / repeated-confirmation / mixed-or-unclear duplicate groups 继续保持 non-cleanup-eligible。本轮没有引入任何 cleanup/apply 行为。
+
 ### Memory quality baseline smoke
 
 新增只读的 memory quality baseline smoke，用来冻结当前已清理完成的质量基线状态：
