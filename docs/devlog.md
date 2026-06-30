@@ -1,5 +1,18 @@
 ## 2026-06-30
 
+### Memory quality baseline smoke
+
+新增只读的 memory quality baseline smoke，用来冻结当前已清理完成的质量基线状态：
+
+* unknown memory paths = 0
+* active-memory chunks without confidence = 0
+* lifecycle-owned chunks without confidence = 0
+* process-boundary audit pass
+* confirmed legacy singleton stale cleanup dry-run has no actionable target
+* autoRecall safety smoke continues to deny suspected tool output and dreaming artifacts
+
+同时修复了 `unknown-memory-path-audit.test.js`，将其改为使用 hermetic synthetic fixture，而不是依赖可变的 live baseline 或 import-time env 假设。
+
 ### Session-checkpoint cron / LLM 稳定化
 
 完成 session-checkpoint 凌晨执行链路的稳定化收尾。本轮问题的核心结论是：凌晨 03:30 的失败并不主要是 LLM API 在脚本内不可用，而是 OpenClaw cron 以 `agentTurn` 方式运行 checkpoint，导致任务在执行脚本前就可能卡死于外层 agent model call 的 `model-call-started` 阶段。

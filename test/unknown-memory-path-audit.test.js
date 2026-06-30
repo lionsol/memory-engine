@@ -4,14 +4,15 @@ import Database from "better-sqlite3";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import unknownMemoryPathCli from "../bin/audit-unknown-memory-paths.js";
 import {
   buildUnknownMemoryPathAudit,
   renderUnknownMemoryPathMarkdown,
-  runUnknownMemoryPathAudit,
 } from "../lib/quality/unknown-memory-path-audit.js";
 
 const { parseArgs, main } = unknownMemoryPathCli;
+const SYNTHETIC_UNKNOWN_PATH = "memory/custom/odd.md";
 
 function createFixtureDb() {
   const root = mkdtempSync(resolve(tmpdir(), "unknown-memory-path-audit-"));
@@ -72,7 +73,7 @@ function createFixtureDb() {
       INSERT INTO chunks (id, path, source, text, updated_at, start_line, end_line, hash)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    insertChunk.run("unknown-1", "memory/daily.md", "memory", "orphan legacy daily path", 1782698400000, 1, 2, "h1");
+    insertChunk.run("unknown-1", SYNTHETIC_UNKNOWN_PATH, "memory", "orphan unknown memory path", 1782698400000, 1, 2, "h1");
     insertChunk.run("smart-1", "memory/smart-add/2026-06-29.md", "memory", "smart add", 1782698401000, 1, 2, "h2");
     insertChunk.run("episode-1", "memory/episodes/2026-06-29.md", "memory", "episode", 1782698402000, 1, 2, "h3");
     insertChunk.run("dream-1", "memory/dreaming/2026-06-29.md", "memory", "dream", 1782698403000, 1, 2, "h4");
@@ -97,7 +98,7 @@ function createFixtureDb() {
       "t1",
       "unknown-1",
       "audit-test",
-      JSON.stringify({ path: "memory/daily.md", id: "unknown-1" }),
+      JSON.stringify({ path: SYNTHETIC_UNKNOWN_PATH, id: "unknown-1" }),
       "2026-06-29 01:00:00",
     );
   } finally {
@@ -146,7 +147,7 @@ async function captureConsole(fn) {
 function buildCandidate(overrides = {}) {
   return {
     id: "unknown-1",
-    path: "memory/daily.md",
+    path: SYNTHETIC_UNKNOWN_PATH,
     path_family: "memory-other",
     quality_scope_owner: "unknown",
     quality_scope_family: "unknown",
@@ -200,14 +201,34 @@ test("CLI --help exits cleanly and prints supported options", async () => {
   assert.equal(captured.output.includes("--sample-limit <n>"), true);
 });
 
-test("audit filtering includes unknown path and excludes known families", async () => {
-  const fixture = createFixtureDb();
-  await withFixtureEnv(fixture, async () => {
-    const report = runUnknownMemoryPathAudit();
-    assert.equal(report.summary.unknown_count, 1);
-    assert.equal(report.items.length, 1);
-    assert.equal(report.items[0].path, "memory/daily.md");
+test("audit filtering includes unknown path and excludes known families", () => {
+  const report = buildUnknownMemoryPathAudit({
+    candidateSource: {
+      candidates: [
+        buildCandidate(),
+        buildCandidate({
+          id: "known-smart-add",
+          path: "memory/smart-add/2026-06-29.md",
+          path_family: "smart-add",
+          quality_scope_owner: "memory_engine_lifecycle",
+          quality_scope_family: "smart_add",
+          expected_confidence: true,
+        }),
+        buildCandidate({
+          id: "known-daily-root",
+          path: "memory/2026-06-29.md",
+          path_family: "daily-root",
+          quality_scope_owner: "openclaw_core",
+          quality_scope_family: "daily_memory",
+          expected_confidence: false,
+        }),
+      ],
+    },
   });
+
+  assert.equal(report.summary.unknown_count, 1);
+  assert.equal(report.items.length, 1);
+  assert.equal(report.items[0].path, SYNTHETIC_UNKNOWN_PATH);
 });
 
 test("suggested_action becomes manual_review_required for injected, retrieved, or confidence cases", () => {
@@ -264,7 +285,7 @@ test("markdown rendering includes unknown item and side effects", () => {
   });
   const markdown = renderUnknownMemoryPathMarkdown(report);
   assert.equal(markdown.includes("# Unknown Memory Path Audit"), true);
-  assert.equal(markdown.includes("memory/daily.md"), true);
+  assert.equal(markdown.includes(SYNTHETIC_UNKNOWN_PATH), true);
   assert.equal(markdown.includes("## Side Effects"), true);
   assert.equal(markdown.includes("audit_only: true"), true);
 });
@@ -272,12 +293,23 @@ test("markdown rendering includes unknown item and side effects", () => {
 test("CLI --out writes report file", async () => {
   const fixture = createFixtureDb();
   const outPath = resolve(fixture.root, "unknown-memory-path-audit.json");
-  await withFixtureEnv(fixture, async () => {
-    const captured = await captureConsole(() => main(["--json", "--out", outPath]));
-    assert.equal(captured.result, 0);
-    assert.equal(existsSync(outPath), true);
-    const parsed = JSON.parse(readFileSync(outPath, "utf8"));
-    assert.equal(parsed.summary.unknown_count, 1);
-    assert.equal(JSON.parse(captured.output).summary.unknown_count, 1);
+  const result = spawnSync(process.execPath, [
+    resolve(process.cwd(), "bin/audit-unknown-memory-paths.js"),
+    "--json",
+    "--out", outPath,
+  ], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      MEMORY_ENGINE_CORE_DB: fixture.corePath,
+      MEMORY_ENGINE_DB: fixture.enginePath,
+      MEMORY_ENGINE_DB_PATH: fixture.enginePath,
+    },
   });
+
+  assert.equal(result.status, 0);
+  assert.equal(existsSync(outPath), true);
+  const parsed = JSON.parse(readFileSync(outPath, "utf8"));
+  assert.equal(parsed.summary.unknown_count, 1);
 });
