@@ -1,3 +1,148 @@
+## 2026-06-30
+
+### Session-checkpoint cron / LLM 稳定化
+
+完成 session-checkpoint 凌晨执行链路的稳定化收尾。本轮问题的核心结论是：凌晨 03:30 的失败并不主要是 LLM API 在脚本内不可用，而是 OpenClaw cron 以 `agentTurn` 方式运行 checkpoint，导致任务在执行脚本前就可能卡死于外层 agent model call 的 `model-call-started` 阶段。
+
+P0 已落地：session-checkpoint cron 已从 agentTurn 切换为 command payload，直接执行 deterministic wrapper：
+
+* `bin/run-session-checkpoint-direct.sh`
+
+该 wrapper 负责：
+
+* 按 Asia/Shanghai 计算默认 targetDate 为 yesterday。
+* 先运行插件内 canonical `bin/flush-session-rawlog.js --checkpoint`。
+* 再运行插件内 canonical `bin/session-checkpoint.js --target-date <targetDate>`。
+* 只有 checkpoint exit 0 且 `memory/episodes/<targetDate>.md` 存在且非空时才判定成功。
+* checkpoint 失败或 episode 缺失时，写入 `memory/episodes/<targetDate>.md` fallback marker。
+* fallback marker 使用 canonical metadata，包括 `targetDate`、`generatedAt`、`timeZone`、`category`、`source_type: checkpoint_fallback`、`smartAddInputPolicy` 与 `evidenceDateFilter`。
+* fallback DB 统计尊重 `MEMORY_ENGINE_CORE_DB_PATH`，不再硬编码 core DB 路径。
+
+运行态 cron 已验证切换成功：
+
+* `payload.kind: command`
+* command: `/bin/bash /home/lionsol/.openclaw/workspace/plugins/memory-engine/bin/run-session-checkpoint-direct.sh`
+* `cwd: /home/lionsol/.openclaw/workspace`
+* `timeoutSeconds: 900`
+* `noOutputTimeoutSeconds: 180`
+* `outputMaxBytes: 30000`
+* schedule 仍为 `30 3 * * *`
+* timezone 仍为 `Asia/Shanghai`
+* `staggerMs: 0`
+
+P1a 新增 checkpoint-size synthetic healthcheck，用于测试接近 checkpoint 规模的大 prompt LLM 请求，而不是只测 `回复 OK 即可` 的小请求：
+
+* `bin/checkpoint-size-healthcheck.js`
+* `test/checkpoint-size-healthcheck.test.js`
+
+该 CLI 默认使用 synthetic checkpoint-sized prompt，不读取真实 `raw_log`、session 或 memory 内容。默认参数：
+
+* provider: `siliconflow`
+* chars: `22000`
+* maxTokens: `1024`
+* timeoutMs: `120000`
+* SiliconFlow 默认 model: `deepseek-ai/DeepSeek-V3.2`
+* DeepSeek 默认 model: `deepseek-chat`
+* JSONL 日志默认写入 `~/.openclaw/workspace/memory/checkpoint-size-health-log.jsonl`
+* 可通过 `MEMORY_ENGINE_CHECKPOINT_SIZE_HEALTH_LOG` 覆盖日志路径
+
+真实 synthetic 对照结果：
+
+* SiliconFlow 22k / 1024 tokens: ok=true, durationMs=67525
+* DeepSeek 22k / 1024 tokens: ok=true, durationMs=6503
+* SiliconFlow 22k / 4096 tokens: ok=true, durationMs=63609
+* DeepSeek 22k / 4096 tokens: ok=true, durationMs=6463
+
+结论：不要把 SiliconFlow 改为默认 primary。当前数据支持继续保留 DeepSeek primary、SiliconFlow fallback。
+
+P1b 完成 LLM provider 顺序可配置化，默认顺序保持不变：
+
+* primary: `deepseek`
+* fallback: `siliconflow`
+
+新增 env：
+
+* `MEMORY_ENGINE_CHECKPOINT_PRIMARY_PROVIDER`
+* `MEMORY_ENGINE_CHECKPOINT_FALLBACK_PROVIDER`
+
+允许 provider 值：
+
+* `deepseek`
+* `siliconflow`
+* `none`
+
+其中 `fallback=none` 表示禁用 fallback；`fallback === primary` 时只尝试一次，避免重复打同一个 provider。非法 provider 采用 fail-soft 策略：回退默认值并记录 warning，避免 nightly 自动任务因为 env 写错而整条中断。
+
+LLM telemetry 已改为 provider-agnostic 结构化日志：
+
+* `LLM attempt provider=... model=... chars=...`
+* `LLM failed provider=... model=... durationMs=... error=...`
+* `LLM succeeded provider=... durationMs=...`
+* `LLM fallback disabled ...`
+* `LLM fallback skipped ... reason=same-provider`
+
+同时移除了 JSON parse miss 时输出 raw response 片段的行为。现在只记录 response length，例如：
+
+* `LLM response did not contain JSON responseChars=<n>`
+
+`llmComplete()` 的 parse failure 错误也已去掉 raw body 片段，仅保留 `responseChars=<n>`，避免日志泄露 raw response。
+
+P2 完成 checkpoint LLM request budget 可配置化。新增 request budget helper：
+
+* `resolveCheckpointLlmRequestConfig()`
+
+新增 env：
+
+* `MEMORY_ENGINE_CHECKPOINT_LLM_MAX_INPUT_CHARS`
+* `MEMORY_ENGINE_CHECKPOINT_LLM_MAX_TOKENS`
+* `MEMORY_ENGINE_CHECKPOINT_LLM_TIMEOUT_MS`
+
+默认值：
+
+* `maxInputChars: 45000`
+* `maxTokens: 4096`
+* `timeoutMs: 120000`
+
+本轮将 nightly checkpoint 默认 `maxTokens` 从 8192 降为 4096。理由是 P1a synthetic 4096 已验证可用，而真实 `episode_summary + smart_memories + configs` 通常不需要 8192；较高输出预算会增加 provider 延迟和失败风险。如需临时拉高，可通过 env 覆盖。
+
+`llmNightlyExtract()` 现在通过 request budget helper 控制：
+
+* input trim 上限
+* maxTokens
+* timeoutMs
+
+attempt 日志也包含请求预算：
+
+* `chars=... maxTokens=... timeoutMs=...`
+
+验证已完成：
+
+* `node --test test/checkpoint-config.test.js test/checkpoint-llm.test.js test/checkpoint-size-healthcheck.test.js`
+* 41 tests，41 pass，0 fail
+
+未执行项：
+
+* 未运行真实 API。
+* 未运行 live cron。
+* 未扩大修改到 raw-log selection、自动压缩或 token 估算。
+* 未处理既有 audit `SQLITE_CANTOPEN` 问题。
+
+代码状态说明：
+
+* P0 commit: `55a6c0d fix(checkpoint): add direct cron runner`
+* P1a commit: `771470c feat(checkpoint): add checkpoint-size healthcheck`
+* P1b commit: `1fad51c feat(checkpoint): make LLM provider order configurable`
+* P2 当前实现已通过 targeted tests，建议与本 devlog 一起提交为独立 commit。
+
+结论：
+
+* 03:30 checkpoint 已脱离 agentTurn 外层模型调用，不再受 `model-call-started` 卡死影响。
+* checkpoint-size healthcheck 已能观测大 prompt LLM 路径。
+* provider 顺序可配置但默认仍保持 DeepSeek primary。
+* LLM request budget 已可配置，默认输出预算降为 4096。
+* 下一步建议观察今晚 03:30 direct cron + 4096 token budget 的真实运行日志，再决定是否需要进一步调整 raw-log input budget 或摘要压缩策略。
+
+
 ## 2026-06-29
 
 ### Episode 文件冗余与漂移问题收尾
