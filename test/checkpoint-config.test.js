@@ -169,3 +169,102 @@ test("config helpers do not leak key text in thrown errors", async () => {
     });
   });
 });
+
+test("resolveCheckpointProviders returns deepseek then siliconflow by default", () => {
+  const warnings = [];
+  const resolved = checkpointConfig.resolveCheckpointProviders({}, {
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.deepEqual(resolved, {
+    primaryProvider: "deepseek",
+    fallbackProvider: "siliconflow",
+    warnings: [],
+  });
+  assert.deepEqual(warnings, []);
+});
+
+test("resolveCheckpointProviders supports env override", () => {
+  const resolved = checkpointConfig.resolveCheckpointProviders({
+    MEMORY_ENGINE_CHECKPOINT_PRIMARY_PROVIDER: "siliconflow",
+    MEMORY_ENGINE_CHECKPOINT_FALLBACK_PROVIDER: "deepseek",
+  }, null);
+
+  assert.deepEqual(resolved, {
+    primaryProvider: "siliconflow",
+    fallbackProvider: "deepseek",
+    warnings: [],
+  });
+});
+
+test("resolveCheckpointProviders accepts fallback none", () => {
+  const resolved = checkpointConfig.resolveCheckpointProviders({
+    MEMORY_ENGINE_CHECKPOINT_FALLBACK_PROVIDER: "none",
+  }, null);
+
+  assert.deepEqual(resolved, {
+    primaryProvider: "deepseek",
+    fallbackProvider: "none",
+    warnings: [],
+  });
+});
+
+test("resolveCheckpointProviders preserves same primary and fallback provider", () => {
+  const resolved = checkpointConfig.resolveCheckpointProviders({
+    MEMORY_ENGINE_CHECKPOINT_PRIMARY_PROVIDER: "deepseek",
+    MEMORY_ENGINE_CHECKPOINT_FALLBACK_PROVIDER: "deepseek",
+  }, null);
+
+  assert.deepEqual(resolved, {
+    primaryProvider: "deepseek",
+    fallbackProvider: "deepseek",
+    warnings: [],
+  });
+});
+
+test("resolveCheckpointProviders falls back invalid primary to default and records warning", () => {
+  const warnings = [];
+  const resolved = checkpointConfig.resolveCheckpointProviders({
+    MEMORY_ENGINE_CHECKPOINT_PRIMARY_PROVIDER: "DeepSeek",
+  }, {
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.equal(resolved.primaryProvider, "deepseek");
+  assert.equal(resolved.fallbackProvider, "siliconflow");
+  assert.equal(resolved.warnings.length, 1);
+  assert.match(resolved.warnings[0], /Invalid MEMORY_ENGINE_CHECKPOINT_PRIMARY_PROVIDER/);
+  assert.deepEqual(warnings, resolved.warnings);
+});
+
+test("resolveCheckpointProviders falls back invalid fallback to default and records warning", () => {
+  const warnings = [];
+  const resolved = checkpointConfig.resolveCheckpointProviders({
+    MEMORY_ENGINE_CHECKPOINT_FALLBACK_PROVIDER: "SILICONFLOW",
+  }, {
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.equal(resolved.primaryProvider, "deepseek");
+  assert.equal(resolved.fallbackProvider, "siliconflow");
+  assert.equal(resolved.warnings.length, 1);
+  assert.match(resolved.warnings[0], /Invalid MEMORY_ENGINE_CHECKPOINT_FALLBACK_PROVIDER/);
+  assert.deepEqual(warnings, resolved.warnings);
+});
+
+test("resolveCheckpointProviders treats empty strings as invalid", () => {
+  const warnings = [];
+  const resolved = checkpointConfig.resolveCheckpointProviders({
+    MEMORY_ENGINE_CHECKPOINT_PRIMARY_PROVIDER: "",
+    MEMORY_ENGINE_CHECKPOINT_FALLBACK_PROVIDER: "",
+  }, {
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.deepEqual(resolved, {
+    primaryProvider: "deepseek",
+    fallbackProvider: "siliconflow",
+    warnings,
+  });
+  assert.equal(warnings.length, 2);
+});
