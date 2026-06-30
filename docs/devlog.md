@@ -142,6 +142,61 @@ attempt 日志也包含请求预算：
 * LLM request budget 已可配置，默认输出预算降为 4096。
 * 下一步建议观察今晚 03:30 direct cron + 4096 token budget 的真实运行日志，再决定是否需要进一步调整 raw-log input budget 或摘要压缩策略。
 
+### Confirmed legacy singleton stale cleanup apply
+
+完成 `memory/daily.md` confirmed-only stale indexed chunk cleanup。
+
+背景：
+
+前序只读审计已确认 `memory/daily.md` 是唯一 unknown memory path，并且 legacy singleton review 进一步确认：
+
+* 文件不存在于 disk
+* core index 中残留 1 条 indexed chunk
+* 无 confidence record
+* 无 retrieved event
+* 无 injected event
+* 分类为 `stale_index_candidate`
+
+本次使用 guarded cleanup 工具执行真实 apply：
+
+* `bin/cleanup-confirmed-legacy-singleton-stale.js`
+* confirm token: `cleanup-confirmed-legacy-singleton-stale`
+
+apply 前 dry-run 确认：
+
+* `preflight_passed: true`
+* `would_delete.core_chunks: 1`
+* `would_delete.core_chunks_fts: 1`
+* `would_delete.engine_memory_confidence: 0`
+* `side_effects.db_writes: false`
+
+apply 已完成，并创建 core DB backup：
+
+* `/home/lionsol/.openclaw/memory/backups/main-before-confirmed-legacy-singleton-stale-cleanup-20260630T122914Z.sqlite`
+
+实际删除范围：
+
+* 删除 `core.chunks` 中精确 id/path 匹配的 stale row
+* 删除 `chunks_fts` 中精确 id 匹配的 stale row
+* `engine.memory_confidence` 删除数为 0
+* 不删除 `memory_events`
+* 不修改 memory 文件
+* 不执行 archive / quarantine / reinforce / confidence backfill
+
+post-check 全部通过：
+
+* `review-legacy-singleton-memory`: `indexed_chunk_count: 0`
+* `audit-unknown-memory-paths`: `unknown_count: 0`
+* `cleanup-confirmed-legacy-singleton-stale` dry-run: `preflight_passed: false`，无可清理残留
+* `memory-quality-eval --scope active-memory`: `chunks_without_confidence: 0` / `lifecycle_owned_chunks_without_confidence_count: 0`
+
+结论：
+
+* `memory/daily.md` stale indexed chunk 已干净删除。
+* unknown memory path 已归零。
+* active-memory 缺 confidence/category 的残留已归零。
+* 本次 cleanup 未产生 memory 文件、副作用路径或 lifecycle 状态变更。
+
 
 ## 2026-06-29
 
