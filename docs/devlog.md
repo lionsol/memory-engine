@@ -1,5 +1,17 @@
 ## 2026-06-30
 
+### 质量治理 / Smart-Add 重复清理确认清单校验
+
+* 新增只读 CLI：`bin/validate-smart-add-duplicate-cleanup-manifest.js`，用于校验人工确认的 smart-add duplicate cleanup manifest。
+* 新增测试：`test/smart-add-duplicate-cleanup-manifest.test.js`，覆盖 manifest shape 校验、group/hash 匹配、keep/delete candidate 校验、skip/manual-review 分支、unsafe current group 拒绝、mixed valid/invalid 场景、CLI JSON/Markdown 输出和非零退出码。
+* manifest 必须满足 `version === 1`、`kind === "smart_add_duplicate_cleanup_manifest"`、`mode === "dry_run_only"`，并只能使用 `approve_delete_candidates`、`skip`、`manual_review_required` 三种 decision。
+* validator 只接受当前 preview 中仍然安全的候选组：`cleanup_eligibility === true`、`classification === "ingestion_bug_candidate"`、retrieved/injected 均为 0、且仅属于 lifecycle-owned smart_add。
+* 输出 dry-run 报告，包括 `would_keep`、`would_delete`、approved/skipped/manual-review/rejected 计数、errors/warnings 和完整 side-effect false 合约。
+* 修正 mixed manifest 场景下的局部错误计数：一个坏 group 不会污染后续合法 group 的 `would_keep` / `would_delete` 产出。
+* manifest shape 校验统一由 `validateCleanupManifestAgainstPreview()` 负责，避免 file-based 路径重复追加同一类 shape error。
+* 本阶段仍不引入任何 cleanup/apply 行为；CLI 只读，不写 DB、不修改真实 memory 文件、不 archive/quarantine/reinforce/backfill、不调用 LLM、不访问网络、不写 runtime report 文件。
+
+
 ### 质量治理 / Smart-Add 重复候选预览
 
 * 新增只读 CLI：`bin/preview-smart-add-duplicate-cleanup-candidates.js`，用于预览当前 smart-add duplicate cleanup 候选组。
