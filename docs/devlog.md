@@ -1,5 +1,20 @@
 ## 2026-06-30
 
+### 质量治理 / Smart-Add 重复候选预览
+
+* 新增只读 CLI：`bin/preview-smart-add-duplicate-cleanup-candidates.js`，用于预览当前 smart-add duplicate cleanup 候选组。
+* 新增 npm 入口：`preview:smart-add-duplicate-cleanup`，对应命令为 `node bin/preview-smart-add-duplicate-cleanup-candidates.js`。
+* 新增测试：`test/smart-add-duplicate-cleanup-preview.test.js`，覆盖参数解析、破坏性参数拒绝、JSON/Markdown 输出、`--limit`、候选字段完整性、keep/delete candidates、以及完整 side-effect false 合约。
+* 预览 CLI 仅筛选 `cleanup_eligibility === true` 且 `classification === "ingestion_bug_candidate"` 的候选组，当前基线为：
+
+  * cleanup eligible groups: 10
+  * cleanup eligible entries: 27
+* 每个候选组输出 `group_hash`、`normalized_content_hash`、分类、风险等级、原因、代表内容 preview、路径/日期/category/fingerprint、`suggested_keep_candidate`、`suggested_delete_candidates` 和 compact occurrences，方便人工 review。
+* 明确保持只读边界：不写 DB、不修改真实 memory 文件、不执行 cleanup/apply、不 archive/quarantine/reinforce/backfill、不调用 LLM、不访问网络、不写 runtime report 文件。
+* 本阶段只提供人工 review 预览，不引入任何 cleanup/apply 行为；后续是否实现 confirmed-selector cleanup，需要先人工检查全部 10 组候选。
+* 验证通过：`git diff --check`、`node bin/preview-smart-add-duplicate-cleanup-candidates.js --json`、`node bin/preview-smart-add-duplicate-cleanup-candidates.js --markdown --limit 3`、`node --test test/smart-add-duplicate-cleanup-preview.test.js`、`npm test`。
+
+
 ### Smart-add duplicate safety baseline smoke
 
 新增只读的 smart-add duplicate safety baseline smoke，并暴露 npm 入口：
