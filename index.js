@@ -45,6 +45,7 @@ import {
   filterCitedIdsForReinforcement,
 } from "./lib/recall/auto-recall-reinforcement.js";
 import { analyzeAutoRecallIntent } from "./lib/recall/auto-recall-intent.js";
+import { evaluateAutoRecallRuntimeGate } from "./lib/recall/auto-recall-runtime-gate.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
@@ -232,6 +233,37 @@ export default definePluginEntry({
           const traceId = crypto.randomUUID();
           const startedAt = Date.now();
           const sessionId = resolveHookSessionId(event, ctx);
+
+          const runtimeGate = evaluateAutoRecallRuntimeGate({ event, ctx, config: autoRecallConfig });
+          if (!runtimeGate.allowed) {
+            const skipDebugMetadata = buildAutoRecallDebugMetadata(prompt, null, runtimeGate.reason);
+            recordMemoryEvent({
+              event_type: "auto_recall_debug",
+              session_id: sessionId,
+              trace_id: traceId,
+              source: "autoRecall",
+              metadata_json: skipDebugMetadata,
+            });
+            recordMemoryEvent({
+              event_type: "recall_completed",
+              session_id: sessionId,
+              trace_id: traceId,
+              latency_ms: Date.now() - startedAt,
+              candidate_count: 0,
+              injected_count: 0,
+              source: "autoRecall",
+              metadata_json: buildRecallCompletedMetadata({
+                skipped: true,
+                skip_reason: runtimeGate.reason,
+                candidate_count: 0,
+                strict_count: 0,
+                fallback_count: 0,
+                post_rerank_count: 0,
+              }),
+            });
+            return;
+          }
+
           const skipReason = explainAutoRecallSkip(prompt);
           if (skipReason) {
             const skipDebugMetadata = buildAutoRecallDebugMetadata(prompt, null, skipReason);
