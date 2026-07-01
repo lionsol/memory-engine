@@ -1,3 +1,112 @@
+## 2026-07-01
+
+### AutoRecall P1 / P2 / P3 闭环收敛
+
+完成 autoRecall Master Plan 中 P1 runtime gate、P2 long-input/focused-query smoke、P3 turn-level gold set replay 与 dataset lifecycle 的收敛工作。本阶段目标是把 autoRecall 从规则逻辑推进到可回放、可诊断、可冻结、可人工扩展的数据闭环；仍不引入 ML / classifier / online learning，也不自动修改 runtime 规则。
+
+#### P1 runtime hook guard
+
+- 新增 `lib/recall/auto-recall-runtime-gate.js`，集中实现 autoRecall runtime 入口 allowlist 判定。
+- `index.js` 的 `before_prompt_build` hook 在进入 `explainAutoRecallSkip()`、`analyzeAutoRecallIntent()`、`hybridSearch()` 之前先执行 runtime gate。
+- 默认只允许 `agent_id=edi`、`chat_type=interactive_user_chat`、`message_role=user`。
+- 缺失 `agent_id`、`chat_type`、`message_role` 时 default-deny，分别返回：
+  - `denied_missing_agent_id`
+  - `denied_missing_chat_type`
+  - `denied_missing_message_role`
+- 非 allowlist agent/chat/role 分别返回：
+  - `denied_by_agent_allowlist`
+  - `denied_by_chat_type_allowlist`
+  - `denied_by_message_role_allowlist`
+- 支持 config override：`agentAllowlist` / `agent_allowlist`、`chatTypeAllowlist` / `chat_type_allowlist`、`messageRoleAllowlist` / `message_role_allowlist`。
+- 未通过 runtime gate 时只记录 `auto_recall_debug` 和 `recall_completed` skip event，并立即 return；不会进入 intent、retrieval、injection 或 reinforcement。
+- 新增 isolated unit test：`test/auto-recall-runtime-gate.test.js`，覆盖默认 allow、缺字段 default-deny、非 allowlist deny、config override、以及从 ctx 读取 agent id。
+
+#### P2 long-input gate / focused-query smoke 与 Console decision trace
+
+- 新增只读 smoke CLI：`bin/run-auto-recall-long-input-smoke.js`。
+- 新增测试：`test/auto-recall-long-input-smoke.test.js`。
+- smoke 覆盖：long rewrite skips recall、long summarize skips recall、long translate skips recall、long debug without history skips recall、long project review uses focused query、long debug with history uses focused query。
+- smoke 明确 side-effect false：不写 DB、不修改 memory 文件、不 retrieval、不 injection、不 cleanup/apply、不 archive/quarantine/reinforce、不调用 LLM、不访问网络、不写 runtime report。
+- 新增 `lib/recall/auto-recall-decision-trace.js`，把 `analyzeAutoRecallIntent()` 输出映射成稳定 Console 展示结构。
+- `console/services/reports-service.js` 对 autoRecall JSON report 增加 `decision_trace`，仅从 report content 做 pure mapping，不调用 runtime、不执行 search/inject。
+- `console/views/reports.ejs` 新增 `Long Input Decision Trace` panel。
+- `console/public/charts.js` 渲染 `long_input_detected`、`generic_task_detected`、`explicit_history_context`、`should_recall`、`intent_reason`、`focused_query`。
+- `test/console-reports.test.js` 增加前端静态 token guard 和 reports-service `decision_trace` pure mapping 测试。
+
+#### P3 turn-level gold set replay system
+
+- 新增 `lib/recall/auto-recall-turn-gold-set.js`，实现 turn-level gold set schema、JSONL parser、row validation、replay、mismatch classification、feedback clustering、expansion plan。
+- schema version 固定为 `TURN_GOLD_SET_SCHEMA_VERSION = 1`。
+- schema 支持 `turn_id`、`prompt` / `user_prompt` / `input` / `text`、`task_intent`、`recall_intent`、`disclosure_level`、`expected_should_recall`、`expected_intent_reason`、`expected_focused_query_contains`、`expected_focused_query_excludes`、`label_confidence`。
+- 新增 seed dataset：`test/fixtures/auto-recall-turn-gold-set.seed.jsonl`。
+- 当前 seed dataset 固定为 12 条，覆盖 long generic skip、debug without history skip、debug with history recall + focused query、long project review + current baseline recall、short continuation recall、explicit history rewrite recall、project-state question recall。
+- 当前 seed replay 结果：12/12 pass，invalid=0，feedback clusters=0，expansion candidates=0。
+
+#### P3 mismatch feedback / expansion / commit gate
+
+- `buildTurnGoldSetReplayFeedback()` 将 replay mismatch 聚合为可解释 cluster。
+- mismatch category 包括 `false_positive_recall`、`false_negative_recall`、`intent_reason_mismatch`、`focused_query_missing_expected_token`、`focused_query_contains_forbidden_token`、`json_parse_error`、`invalid_label_row`。
+- `buildTurnGoldSetExpansionPlan()` 根据 feedback 生成人工复核候选行；默认只生成 plan，不写回 dataset。
+- 新增只读 replay CLI：`bin/run-turn-gold-set-replay.js`，输出 replay + feedback + expansion-plan summary。该 CLI 位于 `bin/` 的 CommonJS package scope 下，已改为 CommonJS + dynamic import，避免 ESM syntax error。
+- 新增 manual-gated commit CLI：`bin/commit-turn-gold-set-expansion.js`。
+- commit CLI 默认 dry-run；只有同时满足 `--apply`、`--confirm-append-turn-gold-set APPEND_TURN_GOLD_SET`、candidate status 为 `approved` / `human_approved` / `approved_for_append`、`row_template` schema valid、target dataset 不存在 duplicate `turn_id`、target dataset 没有 invalid JSONL row，才 append dataset。
+- commit CLI 只允许写 dataset 文件；不写 DB、不改 memory 文件、不 retrieval/injection/reinforce、不调用 LLM、不访问网络、不写 runtime report。
+
+#### P3 freeze / dataset growth observation
+
+- 新增 `lib/recall/auto-recall-dataset-observation.js`，实现 seed dataset freeze check、coverage analysis、growth gap detection 和只读 observation report。
+- 新增 `TURN_GOLD_SET_SEED_FREEZE`，冻结当前 seed baseline：`total_count=12`、`valid_count=12`、`failed_count=0`、`feedback_cluster_count=0`、`expansion_candidate_count=0`。
+- 新增 CLI：`bin/observe-turn-gold-set-dataset.js`，默认观测 `test/fixtures/auto-recall-turn-gold-set.seed.jsonl`。
+- 新增测试：`test/auto-recall-turn-gold-set-observation.test.js`，覆盖 seed freeze contract stable、required task intent / recall intent / case family coverage、side-effect false contract、freeze drift 和 coverage gap 检测、replay CLI 与 observation CLI 在 `bin/package.json` CommonJS scope 下可执行。
+- 修复 observation case-family 分类：不再只依赖 `prompt.length >= 1000`，而是优先使用 replay actual 中的 `long_input_detected`，避免 evaluation layer 与 runtime long-input 判定漂移。
+
+#### 验证
+
+通过 targeted tests：
+
+```bash
+node --test test/auto-recall-runtime-gate.test.js test/auto-recall-turn-gold-set-observation.test.js test/auto-recall-intent.test.js test/auto-recall-long-input-smoke.test.js test/auto-recall-decision-trace.test.js test/console-reports.test.js
+```
+
+结果：
+
+```text
+# tests 36
+# pass 36
+# fail 0
+```
+
+手动验证：
+
+```bash
+node bin/run-turn-gold-set-replay.js --summary
+```
+
+输出基线：
+
+```text
+- replay_total: 12
+- replay_passed: 12
+- replay_failed: 0
+- replay_pass_rate: 1
+- feedback_clusters: 0
+- expansion_candidates: 0
+```
+
+未执行项：
+
+- 未运行全量 `npm test`。
+- 未运行真实 autoRecall runtime hook。
+- 未访问真实 DB / memory 文件 apply 路径。
+- 未引入 ML、classifier、online learning、自动 rule update 或自动 dataset mutation。
+
+结论：
+
+- P1 runtime gate 已从隐式 hook 逻辑收敛为显式 default-deny allowlist gate。
+- P2 long-input/focused-query 已有只读 smoke、Console decision trace 和 report pure mapping。
+- P3 已形成 turn-level gold set replay、feedback、expansion plan、manual commit gate、freeze contract 与 dataset growth observation 的完整非 ML 数据闭环。
+- 下一步建议进入提交整理：将 runtime gate、Console decision trace、P3 dataset lifecycle 分为清晰逻辑 commit；提交前可再补一次 `git diff --check` 与相关测试。
+
 ## 2026-06-30
 
 ### 质量治理 / Smart-Add 重复清理确认清单校验
@@ -4543,3 +4652,16 @@ skipped 5 为既有条件跳过测试：
 - 新增 smart-add async sync runner 相关测试。
 - 新增配置默认值漂移检测，确保 JS defaults 与 `openclaw.plugin.json` 保持一致。
 - 新增 runtime path 测试，防止 engine DB 或 console DB 路径回退到插件项目根。
+
+## 2026-06-30
+
+### 质量治理 / Smart-Add 重复清理确认清单校验
+
+- 新增只读 CLI：`bin/validate-smart-add-duplicate-cleanup-manifest.js`，用于校验人工确认的 smart-add duplicate cleanup manifest。
+- 新增测试：`test/smart-add-duplicate-cleanup-manifest.test.js`，覆盖 manifest shape 校验、group/hash 匹配、keep/delete candidate 校验、skip/manual-review 分支、unsafe current group 拒绝、mixed valid/invalid 场景、CLI JSON/Markdown 输出和非零退出码。
+- manifest 必须满足 `version === 1`、`kind === "smart_add_duplicate_cleanup_manifest"`、`mode === "dry_run_only"`，并只能使用 `approve_delete_candidates`、`skip`、`manual_review_required` 三种 decision。
+- validator 只接受当前 preview 中仍然安全的候选组：`cleanup_eligibility === true`、`classification === "ingestion_bug_candidate"`、retrieved/injected 均为 0、且仅属于 lifecycle-owned smart_add。
+- 输出 dry-run 报告，包括 `would_keep`、`would_delete`、approved/skipped/manual-review/rejected 计数、errors/warnings 和完整 side-effect false 合约。
+- 修正 mixed manifest 场景下的局部错误计数：一个坏 group 不会污染后续合法 group 的 `would_keep` / `would_delete` 产出。
+- manifest shape 校验统一由 `validateCleanupManifestAgainstPreview()` 负责，避免 file-based 路径重复追加同一类 shape error。
+- 本阶段仍不引入任何 cleanup/apply 行为；CLI 只读，不写 DB、不修改真实 memory 文件、不 archive/quarantine/reinforce/backfill、不调用 LLM、不访问网络、不写 runtime report 文件。
