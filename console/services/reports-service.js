@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildAutoRecallDecisionTrace, isAutoRecallIntentAnalysis } from "../../lib/recall/auto-recall-decision-trace.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -16,12 +17,14 @@ const REPORT_PATTERNS = [
   { kind: "annotation_summary", regex: /^annotation-summary-\d{8}-\d{6}\.(json|md)$/ },
   { kind: "annotation_eligibility_preview", regex: /^annotation-eligibility-preview-\d{8}-\d{6}\.(json|md)$/ },
   { kind: "auto_recall_safety_smoke", regex: /^auto-recall-safety-smoke-\d{8}-\d{6}\.md$/ },
+  { kind: "auto_recall_long_input_smoke", regex: /^auto-recall-long-input-smoke-\d{8}-\d{6}\.(json|md)$/ },
 ];
 
 const LATEST_KIND_KEYS = [
   "annotation_summary",
   "annotation_eligibility_preview",
   "auto_recall_safety_smoke",
+  "auto_recall_long_input_smoke",
 ];
 
 function isoFromMs(ms) {
@@ -71,6 +74,41 @@ function sortReports(a, b) {
   return (Number(b.mtimeMs) || 0) - (Number(a.mtimeMs) || 0) || String(b.name).localeCompare(String(a.name));
 }
 
+function parseJsonContent(content) {
+  try {
+    return JSON.parse(String(content || ""));
+  } catch {
+    return null;
+  }
+}
+
+function decisionTraceScore(intent) {
+  let score = 0;
+  if (intent?.long_input_detected) score += 10;
+  if (intent?.explicit_history_context) score += 20;
+  if (intent?.should_recall) score += 5;
+  if (typeof intent?.focused_query === "string" && intent.focused_query.length > 0) score += 10;
+  return score;
+}
+
+function selectDecisionTraceCandidate(payload) {
+  if (isAutoRecallIntentAnalysis(payload)) return payload;
+  const checks = Array.isArray(payload?.checks) ? payload.checks : [];
+  const candidates = checks
+    .map(check => check?.details)
+    .filter(isAutoRecallIntentAnalysis)
+    .sort((a, b) => decisionTraceScore(b) - decisionTraceScore(a));
+  return candidates[0] || null;
+}
+
+function extractAutoRecallDecisionTrace(entry, content, format) {
+  if (!String(entry?.kind || "").startsWith("auto_recall_")) return null;
+  if (format !== "json") return null;
+  const payload = parseJsonContent(content);
+  const candidate = selectDecisionTraceCandidate(payload);
+  return buildAutoRecallDecisionTrace(candidate);
+}
+
 export function listReports() {
   const dir = getReportsDir();
   if (!fs.existsSync(dir)) return [];
@@ -114,6 +152,7 @@ export function readReportFile(name) {
     ...entry,
     content,
     format: path.extname(validName).replace(/^\./, ""),
+    decision_trace: extractAutoRecallDecisionTrace(entry, content, path.extname(validName).replace(/^\./, "")),
   };
 }
 

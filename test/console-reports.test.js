@@ -135,8 +135,26 @@ test("reports view stays read-only and contains no destructive action buttons or
     "does not write DB",
     "does not modify memory records",
     "does not trigger autoRecall",
+    "Long Input Decision Trace",
+    "data-report-decision-trace",
   ]) {
     assert.equal(view.includes(required), true, `missing required token: ${required}`);
+  }
+});
+
+test("reports charts include decision trace rendering hooks and fields", () => {
+  const charts = readFileSync(new URL("../console/public/charts.js", import.meta.url), "utf8");
+
+  for (const required of [
+    "data-report-decision-trace",
+    "long_input_detected",
+    "generic_task_detected",
+    "explicit_history_context",
+    "should_recall",
+    "intent_reason",
+    "focused_query",
+  ]) {
+    assert.equal(charts.includes(required), true, `missing required token: ${required}`);
   }
 });
 
@@ -149,6 +167,36 @@ test("reports service reads only whitelisted files and classifies kinds", withTe
   const file = readReportFile("annotation-candidates-20260627-111111.jsonl");
   assert.equal(file.content, "{\"sample\":1}\n");
   assert.equal(file.format, "jsonl");
+}));
+
+test("reports service adds decision_trace for autoRecall long-input json reports via pure mapping", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "auto-recall-long-input-smoke-20260701-101010.json", JSON.stringify({
+    summary: { status: "pass" },
+    checks: [
+      {
+        id: "long_debug_with_history_uses_focused_query",
+        details: {
+          should_recall: true,
+          intent_reason: "long_input_with_history_context_use_focused_query",
+          long_input_detected: true,
+          generic_task_detected: false,
+          explicit_history_context: true,
+          focused_query: "结合之前上下文 | memory-engine | focused query",
+        },
+      },
+    ],
+  }, null, 2), Date.UTC(2026, 6, 1, 10, 10, 10));
+
+  const file = readReportFile("auto-recall-long-input-smoke-20260701-101010.json");
+  assert.equal(file.kind, "auto_recall_long_input_smoke");
+  assert.deepEqual(file.decision_trace, {
+    long_input_detected: true,
+    generic_task_detected: false,
+    explicit_history_context: true,
+    should_recall: true,
+    intent_reason: "long_input_with_history_context_use_focused_query",
+    focused_query: "结合之前上下文 | memory-engine | focused query",
+  });
 }));
 
 test("reports service allows bucket-slug and multi-bucket annotation candidate filenames", withTempReports(({ reportsDir }) => {

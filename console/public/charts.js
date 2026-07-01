@@ -347,15 +347,28 @@ function initMetrics() {
 
 function renderReportDetail(report) {
   const node = $('[data-report-detail]');
+  const traceNode = $('[data-report-decision-trace]');
   if (!node) return;
   if (!report || report.error) {
     node.innerHTML = `<div class="muted">${esc(report?.error || 'Report unavailable')}</div>`;
+    if (traceNode) traceNode.innerHTML = `<div class="muted">Decision trace unavailable.</div>`;
     return;
   }
   node.innerHTML = `<div class="detail">
     <div><span class="badge">${esc(reportKindLabel(report.kind))}</span> <span class="badge">${esc(report.name)}</span> <span class="badge">${esc(report.updated_at || '-')}</span></div>
     <pre>${esc(report.content || '')}</pre>
   </div>`;
+  if (traceNode) {
+    const trace = report.decision_trace;
+    traceNode.innerHTML = trace ? `<div class="detail">
+      <div><span class="badge">long_input_detected</span> ${esc(String(trace.long_input_detected))}</div>
+      <div><span class="badge">generic_task_detected</span> ${esc(String(trace.generic_task_detected))}</div>
+      <div><span class="badge">explicit_history_context</span> ${esc(String(trace.explicit_history_context))}</div>
+      <div><span class="badge">should_recall</span> ${esc(String(trace.should_recall))}</div>
+      <div><span class="badge">intent_reason</span> ${esc(trace.intent_reason || '')}</div>
+      <div><span class="badge">focused_query</span> ${esc(trace.focused_query || '')}</div>
+    </div>` : `<div class="muted">Decision trace unavailable for this report.</div>`;
+  }
 }
 
 function initReports() {
@@ -365,6 +378,7 @@ function initReports() {
     latest.annotation_summary,
     latest.annotation_eligibility_preview,
     latest.auto_recall_safety_smoke,
+    latest.auto_recall_long_input_smoke,
   ].filter(Boolean);
   cards('[data-report-latest-cards]', latestItems.map(item => ({
     label: reportKindLabel(item.kind),
@@ -388,7 +402,7 @@ function initReports() {
     { label: 'Size', value: r => r.size ?? 0 },
   ], files.map(row => ({ ...row, click: row.name })));
 
-  const defaultReport = latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_safety_smoke || files[0];
+  const defaultReport = latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
   if (defaultReport?.name) {
     api(`/api/reports/file?name=${encodeURIComponent(defaultReport.name)}`).then(renderReportDetail);
   }
