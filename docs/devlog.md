@@ -361,6 +361,62 @@ post-check 全部通过：
 * active-memory 缺 confidence/category 的残留已归零。
 * 本次 cleanup 未产生 memory 文件、副作用路径或 lifecycle 状态变更。
 
+### Nightly cron maintenance 修复
+
+本轮检查了昨日 session-checkpoint 与 nightly 相关 cron 运行状态。`session-checkpoint` 已确认正常：03:30 生成 episode，无 LLM 超时标记，执行耗时约 15.6s；smart-add 也保持连续生成。
+
+本次主要修复三个 nightly cron 问题：
+
+* `Memory Engine Nightly Maintenance`
+
+  * 原问题：连续失败，原因是 `payload.model` 仍为 `siliconflow/deepseek-ai/DeepSeek-V4-Flash`，已被 `agents.defaults.models` allowlist 拒绝。
+  * 修复：将 model 改为 `deepseek/deepseek-v4-flash`。
+  * 同时将 `toolsAllow` 收窄为 `memory_engine`，避免该任务继续暴露不必要的 read/write/exec/process 等工具。
+  * 保持 `payload.kind = agentTurn`，因为该任务本身是通过 `memory_engine` tool 执行 `detect-conflicts -> archive -> kg-bridge -> status`。
+
+* `Memory Daily Stats`
+
+  * 原问题：04:00 首跑经常卡在外层 `agentTurn` 的 `model-call-started`，触发 180s timeout；重试后偶尔成功。
+  * 修复：改为 `command` payload，直接运行 `node /home/lionsol/.openclaw/workspace/scripts/memory-stats.js`。
+  * 新配置：`timeoutSeconds=300`，`noOutputTimeoutSeconds=120`，`outputMaxBytes=30000`。
+  * 目标：避免统计脚本再依赖外层 LLM agent 启动。
+
+* `memory-weekly-p2-stats`
+
+  * 原问题：周日 05:00 任务同样使用已被 allowlist 移除的 `siliconflow/deepseek-ai/DeepSeek-V4-Flash`，导致 cron preflight 直接失败。
+  * 修复：改为 `command` payload，直接运行 `node /home/lionsol/.openclaw/workspace/scripts/memory-weekly-stats.js`。
+  * 新配置：`timeoutSeconds=300`，`noOutputTimeoutSeconds=120`，`outputMaxBytes=30000`。
+  * 目标：避免 weekly stats 这类纯脚本任务继续走 `agentTurn`。
+
+修复后预期状态：
+
+* `Memory Engine Nightly Maintenance`
+
+  * `payload.kind = agentTurn`
+  * `payload.model = deepseek/deepseek-v4-flash`
+  * `payload.toolsAllow = ["memory_engine"]`
+
+* `Memory Daily Stats`
+
+  * `payload.kind = command`
+  * model 显示为 `-`
+  * command 指向 `memory-stats.js`
+
+* `memory-weekly-p2-stats`
+
+  * `payload.kind = command`
+  * model 显示为 `-`
+  * command 指向 `memory-weekly-stats.js`
+
+说明：`cron list` 中这几个任务暂时仍显示 `error`，属于旧的 `lastRunStatus / lastError` 记录，不代表新配置失败。需要等待下一次自然调度后刷新状态。
+
+后续观察点：
+
+* 明天 02:00：确认 `Memory Engine Nightly Maintenance` 不再出现 allowlist error。
+* 明天 04:00：确认 `Memory Daily Stats` 不再出现 `model-call-started` timeout。
+* 周日 05:00：确认 `memory-weekly-p2-stats` command payload 正常完成。
+
+
 
 ## 2026-06-29
 
