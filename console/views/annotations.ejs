@@ -139,6 +139,37 @@
             <option value="delete">delete</option>
           </select>
         </div>
+        <div class="annotation-field">
+          <label for="annotationKeepActiveInput">keep_active</label>
+          <select id="annotationKeepActiveInput">
+            <option value="">Unset</option>
+            <option value="yes">yes</option>
+            <option value="no">no</option>
+            <option value="unsure">unsure</option>
+          </select>
+        </div>
+        <div class="annotation-field">
+          <label for="annotationTargetCategoryInput">target_category</label>
+          <select id="annotationTargetCategoryInput">
+            <option value="">Unset</option>
+            <option value="raw_log">raw_log</option>
+            <option value="episodic">episodic</option>
+            <option value="preference">preference</option>
+            <option value="project">project</option>
+            <option value="user_identity">user_identity</option>
+            <option value="kg_node">kg_node</option>
+            <option value="temporary">temporary</option>
+          </select>
+        </div>
+        <div class="annotation-field">
+          <label for="annotationRescueConfidenceInput">rescue_confidence</label>
+          <select id="annotationRescueConfidenceInput">
+            <option value="">Unset</option>
+            <option value="high">high</option>
+            <option value="medium">medium</option>
+            <option value="low">low</option>
+          </select>
+        </div>
       </section>
 
       <section class="panel annotation-card">
@@ -191,6 +222,9 @@
       currencyInput: document.getElementById("annotationCurrencyInput"),
       autoRecallEligibleInput: document.getElementById("annotationAutoRecallEligibleInput"),
       preferredActionInput: document.getElementById("annotationPreferredActionInput"),
+      keepActiveInput: document.getElementById("annotationKeepActiveInput"),
+      targetCategoryInput: document.getElementById("annotationTargetCategoryInput"),
+      rescueConfidenceInput: document.getElementById("annotationRescueConfidenceInput"),
       reasonInput: document.getElementById("annotationReasonInput"),
     };
 
@@ -213,6 +247,7 @@
         source_path: sourcePathOf(raw),
         risk_score: Number(raw.risk_score || 0),
         content_preview: String(raw.content_preview || ""),
+        risk_signals: Array.isArray(raw.risk_signals) ? raw.risk_signals.map(String) : [],
       };
     }
 
@@ -227,7 +262,7 @@
 
     function isAnnotationFilled(annotation) {
       if (!annotation) return false;
-      return Boolean(annotation.quality || annotation.currency || annotation.auto_recall_eligible || annotation.preferred_action || annotation.reason);
+      return Boolean(annotation.quality || annotation.currency || annotation.auto_recall_eligible || annotation.preferred_action || annotation.keep_active || annotation.target_category || annotation.rescue_confidence || annotation.reason);
     }
 
     function currentSample() {
@@ -264,6 +299,9 @@
       els.currencyInput.value = existing.currency || "";
       els.autoRecallEligibleInput.value = existing.auto_recall_eligible || "";
       els.preferredActionInput.value = existing.preferred_action || "";
+      els.keepActiveInput.value = existing.keep_active || "";
+      els.targetCategoryInput.value = existing.target_category || "";
+      els.rescueConfidenceInput.value = existing.rescue_confidence || "";
       els.reasonInput.value = existing.reason || "";
     }
 
@@ -273,6 +311,9 @@
         currency: els.currencyInput.value || null,
         auto_recall_eligible: els.autoRecallEligibleInput.value || null,
         preferred_action: els.preferredActionInput.value || null,
+        keep_active: els.keepActiveInput.value || null,
+        target_category: els.targetCategoryInput.value || null,
+        rescue_confidence: els.rescueConfidenceInput.value || null,
         reason: els.reasonInput.value.trim() || null,
       };
     }
@@ -445,7 +486,7 @@
       persistCurrentForm();
       exportLabels();
     });
-    [els.qualityInput, els.currencyInput, els.autoRecallEligibleInput, els.preferredActionInput, els.reasonInput, els.annotator].forEach((el) => {
+    [els.qualityInput, els.currencyInput, els.autoRecallEligibleInput, els.preferredActionInput, els.keepActiveInput, els.targetCategoryInput, els.rescueConfidenceInput, els.reasonInput, els.annotator].forEach((el) => {
       el.addEventListener("input", persistCurrentForm);
       el.addEventListener("change", persistCurrentForm);
     });
