@@ -57,36 +57,19 @@ function parseArgs(argv = []) {
   return options;
 }
 
-function buildCheck({ id, name, pass, details }) {
-  return {
-    id,
-    name,
-    pass: pass === true,
-    details,
-  };
-}
-
-function hasNoActionableLegacySingletonTarget(report) {
-  const wouldDelete = report?.would_delete || {};
-  const wouldDeleteTotal = Number(wouldDelete.core_chunks || 0)
-    + Number(wouldDelete.core_chunks_fts || 0)
-    + Number(wouldDelete.engine_memory_confidence || 0);
-  const indexedChunkCount = Number(report?.review?.indexed_chunk_count || 0);
-  const chunkIds = Array.isArray(report?.review?.chunk_ids) ? report.review.chunk_ids : [];
-  return wouldDeleteTotal === 0 && indexedChunkCount === 0 && chunkIds.length === 0;
-}
-
 async function runBaselineSmoke() {
   const [
     unknownAudit,
     qualityCandidates,
     boundaryAudit,
     legacyCleanup,
+    baselineContracts,
   ] = await Promise.all([
     import("../lib/quality/unknown-memory-path-audit.js"),
     import("../lib/quality/collect-quality-candidates.js"),
     import("../lib/quality/memory-process-boundary-audit.js"),
     import("../lib/quality/confirmed-legacy-singleton-stale-cleanup.js"),
+    import("../lib/quality/memory-quality-baseline-contracts.js"),
   ]);
 
   const unknownReport = unknownAudit.runUnknownMemoryPathAudit({
@@ -116,64 +99,14 @@ async function runBaselineSmoke() {
     "dreaming_candidate_staging candidate is rejected with denied_by_dreaming_artifact",
   );
 
-  const checks = [
-    buildCheck({
-      id: "unknown_memory_paths_clean",
-      name: "unknown memory path audit reports unknown_count === 0",
-      pass: Number(unknownReport?.summary?.unknown_count || 0) === 0,
-      details: {
-        unknown_count: Number(unknownReport?.summary?.unknown_count || 0),
-      },
-    }),
-    buildCheck({
-      id: "active_memory_chunks_without_confidence_zero",
-      name: "memory quality eval active-memory chunks_without_confidence_count === 0",
-      pass: Number(qualityCollected?.diagnostics?.chunks_without_confidence_count || 0) === 0,
-      details: {
-        chunks_without_confidence_count: Number(qualityCollected?.diagnostics?.chunks_without_confidence_count || 0),
-      },
-    }),
-    buildCheck({
-      id: "active_memory_lifecycle_owned_chunks_without_confidence_zero",
-      name: "memory quality eval active-memory lifecycle_owned_chunks_without_confidence_count === 0",
-      pass: Number(qualityCollected?.diagnostics?.chunks_without_confidence_lifecycle_owned_count || 0) === 0,
-      details: {
-        lifecycle_owned_chunks_without_confidence_count: Number(qualityCollected?.diagnostics?.chunks_without_confidence_lifecycle_owned_count || 0),
-      },
-    }),
-    buildCheck({
-      id: "process_boundary_pass",
-      name: "memory process boundary audit still passes",
-      pass: String(boundaryReport?.status || "") === "pass",
-      details: {
-        status: boundaryReport?.status || "unknown",
-        boundary_failures: Array.isArray(boundaryReport?.boundary_failures) ? boundaryReport.boundary_failures : [],
-      },
-    }),
-    buildCheck({
-      id: "legacy_singleton_cleanup_no_actionable_target",
-      name: "confirmed legacy singleton stale cleanup dry-run has no actionable target",
-      pass: hasNoActionableLegacySingletonTarget(legacyCleanupReport),
-      details: {
-        preflight_passed: Boolean(legacyCleanupReport?.preflight_passed),
-        indexed_chunk_count: Number(legacyCleanupReport?.review?.indexed_chunk_count || 0),
-        chunk_ids: Array.isArray(legacyCleanupReport?.review?.chunk_ids) ? legacyCleanupReport.review.chunk_ids : [],
-        would_delete: legacyCleanupReport?.would_delete || null,
-      },
-    }),
-    buildCheck({
-      id: "auto_recall_suspected_tool_output_denied",
-      name: "autoRecall safety smoke denies suspected_tool_output",
-      pass: Boolean(suspectedToolOutputCheck?.pass),
-      details: suspectedToolOutputCheck?.details || null,
-    }),
-    buildCheck({
-      id: "auto_recall_dreaming_artifact_denied",
-      name: "autoRecall safety smoke denies dreaming artifact candidate",
-      pass: Boolean(dreamingArtifactCheck?.pass),
-      details: dreamingArtifactCheck?.details || null,
-    }),
-  ];
+  const checks = baselineContracts.evaluateMemoryQualityBaselineContracts({
+    unknownReport,
+    qualityCollected,
+    boundaryReport,
+    legacyCleanupReport,
+    suspectedToolOutputCheck,
+    dreamingArtifactCheck,
+  });
 
   const failedChecks = checks.filter(check => !check.pass);
   const summary = {

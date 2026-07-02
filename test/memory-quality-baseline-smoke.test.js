@@ -5,6 +5,9 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import baselineSmokeCli from "../bin/run-memory-quality-baseline-smoke.js";
+import {
+  MEMORY_QUALITY_BASELINE_CONTRACTS,
+} from "../lib/quality/memory-quality-baseline-contracts.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const scriptPath = resolve(repoRoot, "bin/run-memory-quality-baseline-smoke.js");
@@ -60,6 +63,7 @@ test("baseline smoke is read-only by construction as much as practical", () => {
 test("baseline smoke checks intended invariants and reports read-only side effects", async () => {
   const report = await runBaselineSmoke();
   const ids = report.checks.map(check => check.id);
+  const levels = report.checks.map(check => check.level);
 
   assert.equal(report.side_effects.db_writes, false);
   assert.equal(report.side_effects.memory_file_mutation, false);
@@ -81,6 +85,18 @@ test("baseline smoke checks intended invariants and reports read-only side effec
     "auto_recall_suspected_tool_output_denied",
     "auto_recall_dreaming_artifact_denied",
   ]);
+  assert.deepEqual(ids, MEMORY_QUALITY_BASELINE_CONTRACTS.map(contract => contract.id));
+  assert.deepEqual(levels, [
+    "structural",
+    "quality",
+    "quality",
+    "process_boundary",
+    "cleanup",
+    "recall_safety",
+    "recall_safety",
+  ]);
+  assert.deepEqual(levels, MEMORY_QUALITY_BASELINE_CONTRACTS.map(contract => contract.level));
+  assert.equal(report.checks.every(check => typeof check.level === "string" && check.level.length > 0), true);
 });
 
 test("baseline smoke passes on current repo/data", async () => {
