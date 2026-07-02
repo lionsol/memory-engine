@@ -10,6 +10,10 @@ import {
   tokenCoverage,
 } from "./query-utils.js";
 import { evaluateAutoRecallEligibility } from "./lib/recall/auto-recall-eligibility.js";
+import {
+  isInjectableMemoryCard,
+  projectCandidateToMemoryCard,
+} from "./lib/recall/auto-recall-memory-card.js";
 export {
   buildFtsFallbackQuery,
   buildLikeFallbackPatterns,
@@ -401,4 +405,98 @@ export function formatAutoRecallContext(results, options = {}) {
   });
 
   return lines.join("\n");
+}
+
+function cardRuntimeConfig(config = {}) {
+  return config?.cardFirstRuntime || config?.card_first_runtime || {};
+}
+
+export function shouldUseAutoRecallCardRuntime(config = {}, runtimeGate = {}) {
+  const cfg = cardRuntimeConfig(config);
+  if (cfg.enabled !== true) return false;
+  const mode = String(cfg.mode || "memory_card");
+  if (mode !== "memory_card") return false;
+  const requiredAgentId = String(cfg.agentId || cfg.agent_id || "edi");
+  const actualAgentId = String(runtimeGate?.agentId || runtimeGate?.agent_id || "");
+  return actualAgentId === requiredAgentId;
+}
+
+export function buildAutoRecallCardContext(results, options = {}) {
+  const topK = Math.max(1, Number(options.topK || 3));
+  const items = Array.isArray(results) ? results.slice(0, topK) : [];
+  const agentScope = String(options.agentScope || options.agentId || "unknown");
+  const traceId = options.traceId ?? null;
+  const projected = items
+    .map((item, index) => projectCandidateToMemoryCard(item, {
+      agentScope,
+      traceId,
+      retrievalRank: index + 1,
+    }))
+    .filter(item => isInjectableMemoryCard(item.memory_card));
+
+  if (projected.length === 0) {
+    return {
+      context: "",
+      cards: [],
+      memory_objects: [],
+      side_effects: {
+        db_writes: false,
+        memory_file_mutation: false,
+        dataset_file_mutation: false,
+        retrieval: false,
+        injection: false,
+        cleanup_apply: false,
+        archive: false,
+        quarantine: false,
+        reinforce: false,
+        llm: false,
+        network: false,
+        runtime_report_files: false,
+      },
+    };
+  }
+
+  const lines = [
+    "## Auto Recall - memory cards",
+    "",
+    "The following memory cards may help answer this turn. They are card-only previews; full memory content is not included.",
+    "If your answer relies on any card, include a final metadata line exactly like: cited_memory_ids: [\"memory_id\"] using the IDs shown below.",
+    "Use memory_engine_get only if explicit full content is needed outside this prompt supplement.",
+    "",
+  ];
+
+  projected.forEach((item, index) => {
+    const card = item.memory_card;
+    const flags = Array.isArray(card.risk_flags) && card.risk_flags.length > 0 ? card.risk_flags.join(",") : "none";
+    lines.push(`${index + 1}. [${card.memory_id}] title=${card.title}`);
+    lines.push(`   category=${card.category} kind=${card.kind} disclosure=${card.disclosure_level} confidence=${card.confidence_score ?? "n/a"} risk_flags=${flags}`);
+    lines.push(`   summary: ${trimMemoryText(card.summary, 220)}`);
+    lines.push(`   why: ${trimMemoryText(card.salience_reason, 180)}`);
+    lines.push(`   source: ${card.source_hint || "unknown source"}`);
+    if (card.get_token) lines.push(`   get_token: ${card.get_token}`);
+  });
+
+  return {
+    context: lines.join("\n"),
+    cards: projected.map(item => item.memory_card),
+    memory_objects: projected.map(item => item.memory_object),
+    side_effects: {
+      db_writes: false,
+      memory_file_mutation: false,
+      dataset_file_mutation: false,
+      retrieval: false,
+      injection: false,
+      cleanup_apply: false,
+      archive: false,
+      quarantine: false,
+      reinforce: false,
+      llm: false,
+      network: false,
+      runtime_report_files: false,
+    },
+  };
+}
+
+export function formatAutoRecallCardContext(results, options = {}) {
+  return buildAutoRecallCardContext(results, options).context;
 }

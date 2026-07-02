@@ -4,7 +4,14 @@ import { buildSmartAddFingerprint } from "./smart-add-fingerprint.js";
 import { dateStrInTimeZone } from "./date-utils.js";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
-import { explainAutoRecallSkip, formatAutoRecallContext, parseCitedMemoryIds, shouldInjectCandidate } from "./auto-recall.js";
+import {
+  explainAutoRecallSkip,
+  formatAutoRecallCardContext,
+  formatAutoRecallContext,
+  parseCitedMemoryIds,
+  shouldInjectCandidate,
+  shouldUseAutoRecallCardRuntime,
+} from "./auto-recall.js";
 import {
   buildFtsFallbackQuery,
   normalizeFtsQuery,
@@ -111,6 +118,8 @@ function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
     "vector_warning",
     "vector_ms",
     "vector_query_length",
+    "card_first_runtime_enabled",
+    "auto_recall_disclosure_mode",
     "lexical_candidate_count",
     "lexical_top_score",
     "lexical_confidence",
@@ -410,9 +419,12 @@ export default definePluginEntry({
           });
           gateDebug.candidate_count_after_gate = gatedResults.length;
           gateDebug.injected_count = Math.min(gatedResults.length, autoRecallTopK);
+          const cardFirstRuntimeEnabled = shouldUseAutoRecallCardRuntime(autoRecallConfig, runtimeGate);
           result.debug = {
             ...(result?.debug || {}),
             ...gateDebug,
+            card_first_runtime_enabled: cardFirstRuntimeEnabled,
+            auto_recall_disclosure_mode: cardFirstRuntimeEnabled ? "memory_card" : "raw_text",
           };
           const debugInfo = result?.debug || {};
           const postRerankCount = Array.isArray(debugInfo.post_rerank_topK) ? debugInfo.post_rerank_topK.length : 0;
@@ -447,7 +459,14 @@ export default definePluginEntry({
               }
             });
           });
-          const prependContext = formatAutoRecallContext(gatedResults, { topK: autoRecallTopK });
+          const prependContext = cardFirstRuntimeEnabled
+            ? formatAutoRecallCardContext(gatedResults, {
+              topK: autoRecallTopK,
+              agentScope: runtimeGate.agentId || "unknown",
+              agentId: runtimeGate.agentId || "unknown",
+              traceId,
+            })
+            : formatAutoRecallContext(gatedResults, { topK: autoRecallTopK });
           if (!prependContext) {
             recordMemoryEvent({
               event_type: "recall_completed",
@@ -531,6 +550,8 @@ export default definePluginEntry({
                 decay_eligible: Boolean(r.decay_eligible),
                 archive_eligible: Boolean(r.archive_eligible),
                 preview: (r.text || "").slice(0, 200),
+                card_first_runtime_enabled: cardFirstRuntimeEnabled,
+                disclosure_mode: cardFirstRuntimeEnabled ? "memory_card" : "raw_text",
               }
             });
           });

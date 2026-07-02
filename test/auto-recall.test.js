@@ -5,12 +5,15 @@ import {
   shouldSkipAutoRecall,
   buildFtsFallbackQuery,
   buildLikeFallbackPatterns,
+  buildAutoRecallCardContext,
+  formatAutoRecallCardContext,
   formatAutoRecallContext,
   normalizeFtsQuery,
   parseCitedMemoryIds,
   rankFtsFallbackCandidates,
   sanitizeFtsQuery,
   shouldInjectCandidate,
+  shouldUseAutoRecallCardRuntime,
   stripPromptMetadataPrefix,
 } from "../auto-recall.js";
 
@@ -226,4 +229,72 @@ test("formats top memory results as prepend context", () => {
   assert.match(text, /abcdef1234567890/);
   assert.match(text, /preference/);
   assert.match(text, /cited_memory_ids/);
+});
+
+test("card-first runtime is disabled by default and edi-only when explicitly enabled", () => {
+  assert.equal(shouldUseAutoRecallCardRuntime({}, { agentId: "edi" }), false);
+  assert.equal(shouldUseAutoRecallCardRuntime({ cardFirstRuntime: { enabled: false } }, { agentId: "edi" }), false);
+  assert.equal(shouldUseAutoRecallCardRuntime({ cardFirstRuntime: { enabled: true } }, { agentId: "task-planner" }), false);
+  assert.equal(shouldUseAutoRecallCardRuntime({ cardFirstRuntime: { enabled: true } }, { agentId: "edi" }), true);
+  assert.equal(shouldUseAutoRecallCardRuntime({ cardFirstRuntime: { enabled: true, mode: "raw_text" } }, { agentId: "edi" }), false);
+});
+
+test("formats card-first runtime context without using raw formatter body", () => {
+  const text = formatAutoRecallCardContext([
+    {
+      id: "abcdef1234567890",
+      category: "project",
+      kind: "decision",
+      confidence: 0.82,
+      sources: ["fts", "kg"],
+      path: "memory/projects/memory-engine.md",
+      start_line: 10,
+      end_line: 12,
+      title: "P4 card-first decision",
+      summary: "Use memory cards before full content.",
+      text: "Full original body should not be formatted directly by card runtime.",
+    },
+  ], { topK: 1, agentScope: "edi", traceId: "trace-card" });
+
+  assert.match(text, /Auto Recall - memory cards/);
+  assert.match(text, /card-only previews/);
+  assert.match(text, /abcdef1234567890/);
+  assert.match(text, /P4 card-first decision/);
+  assert.match(text, /Use memory cards before full content/);
+  assert.match(text, /memory_engine_get:abcdef1234567890/);
+  assert.match(text, /cited_memory_ids/);
+  assert.doesNotMatch(text, /Full original body should not be formatted directly/);
+});
+
+test("card-first runtime withholds raw log and tool output body", () => {
+  const report = buildAutoRecallCardContext([
+    {
+      id: "feedfacecafebeef",
+      category: "raw_log",
+      confidence: 0.6,
+      sources: ["fts"],
+      path: "memory/smart-add/2026-07-02.md",
+      text: "2026-07-02 10:00:00 ERROR request failed\nTraceback at Object.handle (/tmp/runtime/index.js:42)",
+    },
+  ], { topK: 1, agentScope: "edi" });
+
+  assert.equal(report.cards.length, 1);
+  assert.equal(report.cards[0].risk_flags.includes("raw_log_like"), true);
+  assert.equal(report.cards[0].risk_flags.includes("tool_output_like"), true);
+  assert.match(report.context, /withheld/i);
+  assert.doesNotMatch(report.context, /Traceback|Object\.handle|2026-07-02 10:00:00/);
+  assert.deepEqual(report.side_effects, {
+    db_writes: false,
+    memory_file_mutation: false,
+    dataset_file_mutation: false,
+    retrieval: false,
+    injection: false,
+    cleanup_apply: false,
+    archive: false,
+    quarantine: false,
+    reinforce: false,
+    llm: false,
+    network: false,
+    runtime_report_files: false,
+  });
 });
