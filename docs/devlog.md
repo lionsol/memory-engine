@@ -1,3 +1,174 @@
+## 2026-07-02
+
+### AutoRecall P4 Memory Card / Object Model 与 card-first runtime 收敛
+
+完成 AutoRecall P4 memory card / memory object model 工作流。目标是把 autoRecall 从“直接把召回命中文本注入 prompt”推进到“先投影为可审计、可预览、可渐进披露的 memory card”，同时保持 runtime 默认行为不变。P4 全阶段仍不引入 DB migration、storage rewrite、retrieval ranking 变更、自动 `memory_engine_get`、full-content 默认注入或 card-render reinforcement。
+
+#### P4.1 memory card / object model design freeze
+
+- 新增设计文档：`docs/auto-recall-memory-card-object-model.md`。
+- 新增静态测试：`test/auto-recall-memory-card-object-model.test.js`。
+- 定义 memory object envelope，包括 `schema_version`、`object_id`、`memory_id`、`source`、`classification`、`content_ref`、`card`、`confidence`、`policy`、`debug`。
+- 定义 memory card schema，包括 `card_id`、`memory_id`、`title`、`summary`、`salience_reason`、`source_hint`、`category`、`kind`、`confidence_score`、`risk_flags`、`disclosure_level`、`get_token`。
+- 固定 disclosure vocabulary：`none`、`memory_card`、`short_summary`、`full_content_on_get`。
+- 固定风险标记：`raw_log_like`、`tool_output_like`、`dreaming_artifact`、`low_confidence`、`archived`、`quarantined`、`stale_index_candidate`、`conflict_flag`、`cross_agent_scope`、`sensitive_source`。
+- 固定 progressive disclosure 不变量：card rendered != cited、card injected != cited、search result != cited；只有当前 turn 显式 cited memory ids 才能进入 reinforcement。
+- 明确 agent scope 边界：默认面向 `edi`；`task-planner` 不自动注入到 `edi`；Codex CLI 保持在 memory-engine autoRecall 之外。
+
+#### P4.2 projection helpers
+
+- 新增 `lib/recall/auto-recall-memory-card.js`。
+- 新增测试：`test/auto-recall-memory-card.test.js`。
+- 新增纯函数：
+  - `normalizeCandidateToMemoryObject(candidate, options)`
+  - `projectMemoryObjectToCard(memoryObject)`
+  - `projectCandidateToMemoryCard(candidate, options)`
+  - `isInjectableMemoryCard(card)`
+- projection 层为 read-only：不读 DB、不写 DB、不写 event、不访问文件、不 retrieval、不 injection、不 reinforcement。
+- 普通 active candidate 默认投影为 `memory_card`；dreaming / archived / quarantined / stale candidate 默认 `none`。
+- raw-log-like / tool-output-like 内容会输出 withheld card summary，不泄露 traceback、stack、timestamp log body。
+- card 只包含 compact summary、source hint、risk flags 和 `memory_engine_get:<id>` token，不包含 full content。
+
+#### P4.3 turn gold-set replay card projection
+
+- 扩展 `lib/recall/auto-recall-turn-gold-set.js`，为 replay result 增加 `card_projection`。
+- 新增测试：`test/auto-recall-turn-gold-set-card-projection.test.js`。
+- Replay summary 新增：
+  - `card_expected_count`
+  - `card_projection_count`
+  - `full_content_on_get_expected_count`
+- 当前 seed baseline：12 条 replay 全部通过；其中 5 条期望 card projection。
+- P4.3 只生成 synthetic expected memory card，不伪造真实 retrieval candidate，不改变 P3 replay pass/fail mismatch 逻辑。
+
+#### P4.4 Console memory card preview
+
+- 扩展 Console reports allowlist，支持 `auto-recall-turn-gold-set-replay-YYYYMMDD-HHMMSS.json`。
+- `console/services/reports-service.js` 从 replay JSON 中提取 read-only `memory_card_preview`，最多展示 8 张 card。
+- `console/views/reports.ejs` 增加 Memory Card Preview 区块。
+- `console/public/charts.js` 渲染 card title、summary、salience reason、source hint、memory id、get token、risk flags、disclosure level。
+- 修复 UX：`/reports` 默认优先选择最新 turn gold replay report，并在顶部 `Turn Gold Replay Cards` 下方直接展示 Memory Card Preview。
+- 保持 Console 只读：不加 apply/archive/quarantine/delete/reinforce/get 按钮，不绑定 `memory_engine_get` click 行为。
+- 新增/扩展测试：`test/console-reports.test.js`。
+
+#### P4.4b replay report export checkpoint
+
+- 新增 CLI：`bin/export-turn-gold-set-replay-report.js`。
+- 新增测试：`test/export-turn-gold-set-replay-report.test.js`。
+- CLI 默认 dry-run，只打印 Console-compatible replay report payload，不写文件。
+- 只有显式传入 `--write-report --confirm-write-report WRITE_TURN_GOLD_REPLAY_REPORT` 才写入 `reports/auto-recall-turn-gold-set-replay-YYYYMMDD-HHMMSS.json`。
+- 写入前验证 filename allowlist、replay 无 failed row、无 invalid row。
+- 测试验证 dry-run 不写、缺 confirm token 不写、confirm 后只写临时 reports 目录，并且 Console `readReportFile()` 可读取 `memory_card_preview`。
+
+#### P4.5 gated card-first runtime experiment
+
+- 扩展 `auto-recall.js`，新增：
+  - `buildAutoRecallCardContext(results, options)`
+  - `formatAutoRecallCardContext(results, options)`
+  - `shouldUseAutoRecallCardRuntime(config, runtimeGate)`
+- 扩展 `index.js`，只在 `autoRecall.cardFirstRuntime.enabled === true` 且 runtime gate 解析到 `agentId=edi` 时使用 card-first prompt supplement。
+- 默认仍走旧 `formatAutoRecallContext()` raw-text 路径，现有 runtime 行为不变。
+- card-first supplement header 为 `## Auto Recall - memory cards`，只注入 card preview，不注入 full original memory body。
+- `auto_recall_debug` metadata 新增：
+  - `card_first_runtime_enabled`
+  - `auto_recall_disclosure_mode`
+- `memory_injected` event metadata 新增：
+  - `card_first_runtime_enabled`
+  - `disclosure_mode`
+- event type 仍为 `memory_injected`，通过 disclosure mode 区分 raw_text / memory_card。
+- 新增 runtime smoke：`bin/run-auto-recall-card-runtime-smoke.js`。
+- 新增测试：`test/auto-recall-card-runtime-smoke.test.js`。
+- smoke 覆盖：默认 raw_text、`edi` + explicit flag 使用 memory_card、非 `edi` 即使开 flag 仍 raw_text、raw-log/tool-output body withheld。
+
+#### P4 closeout / runbook
+
+- 新增 runbook：`docs/auto-recall-memory-card-runtime-runbook.md`。
+- 新增静态测试：`test/auto-recall-memory-card-runtime-runbook.test.js`。
+- Runbook 固定：默认关闭、edi-only、task-planner 保持 raw-text、Codex CLI 不进入 memory-engine autoRecall、无 DB migration、无 storage rewrite、无 retrieval ranking change、无自动 `memory_engine_get`、无 full content injection、无 card render/search result reinforcement。
+- Runbook 记录 activation checklist、rollback procedure、verification commands、Console preview 操作和 P5 canary 建议。
+
+#### 验证
+
+P4 targeted tests：
+
+```bash
+node --test \
+  test/auto-recall-memory-card-runtime-runbook.test.js \
+  test/auto-recall-memory-card-object-model.test.js \
+  test/auto-recall-card-runtime-smoke.test.js \
+  test/auto-recall-memory-card.test.js \
+  test/auto-recall-turn-gold-set-card-projection.test.js \
+  test/console-reports.test.js
+```
+
+结果：
+
+```text
+# tests 52
+# pass 52
+# fail 0
+```
+
+P4.5 runtime/card targeted tests：
+
+```bash
+git diff --check
+node --check index.js
+node --test \
+  test/auto-recall.test.js \
+  test/auto-recall-debug-metadata.snapshot.test.js \
+  test/auto-recall-memory-card.test.js \
+  test/auto-recall-runtime-gate.test.js \
+  test/auto-recall-turn-gold-set-card-projection.test.js \
+  test/console-reports.test.js
+```
+
+结果：
+
+```text
+# tests 51
+# pass 51
+# fail 0
+```
+
+Runtime smoke targeted tests：
+
+```bash
+git diff --check
+node --check bin/run-auto-recall-card-runtime-smoke.js
+node --test \
+  test/auto-recall-card-runtime-smoke.test.js \
+  test/auto-recall.test.js \
+  test/auto-recall-memory-card.test.js \
+  test/auto-recall-runtime-gate.test.js
+```
+
+结果：
+
+```text
+# tests 43
+# pass 43
+# fail 0
+```
+
+手动验证：
+
+- 生成 `reports/auto-recall-turn-gold-set-replay-20260702-133531.json` 后，`http://127.0.0.1:8787/reports` 可显示 `Turn Gold Replay Cards` 与 5 张 `Memory Card Preview`。
+- `/api/reports/file?name=auto-recall-turn-gold-set-replay-20260702-133531.json` 返回 `memory_card_preview.summary.preview_count = 5`。
+
+未执行项：
+
+- 未运行全量 `npm test`。
+- 未默认启用 `cardFirstRuntime.enabled`。
+- 未在真实 OpenClaw runtime session 中做 card-first canary。
+- 未修改真实 runtime config。
+- 未做 DB migration 或 memory 文件 mutation。
+
+结论：
+
+- P4 已完成 closeout：设计、projection、replay、Console preview、export checkpoint、gated runtime experiment、runtime smoke、runbook 均已落地。
+- 当前 card-first runtime 是 opt-in experiment，默认关闭。
+- 下一步建议进入 P5：只做 `edi` 本地小范围 canary plan，观察 `auto_recall_debug` / `memory_injected` disclosure mode、引用行为和答案质量，再决定是否扩大使用。
+
 ## 2026-07-01
 
 ### AutoRecall P1 / P2 / P3 闭环收敛
