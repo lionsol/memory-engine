@@ -18,6 +18,7 @@ const REPORT_PATTERNS = [
   { kind: "annotation_eligibility_preview", regex: /^annotation-eligibility-preview-\d{8}-\d{6}\.(json|md)$/ },
   { kind: "auto_recall_safety_smoke", regex: /^auto-recall-safety-smoke-\d{8}-\d{6}\.md$/ },
   { kind: "auto_recall_long_input_smoke", regex: /^auto-recall-long-input-smoke-\d{8}-\d{6}\.(json|md)$/ },
+  { kind: "auto_recall_turn_gold_set_replay", regex: /^auto-recall-turn-gold-set-replay-\d{8}-\d{6}\.json$/ },
 ];
 
 const LATEST_KIND_KEYS = [
@@ -25,6 +26,7 @@ const LATEST_KIND_KEYS = [
   "annotation_eligibility_preview",
   "auto_recall_safety_smoke",
   "auto_recall_long_input_smoke",
+  "auto_recall_turn_gold_set_replay",
 ];
 
 function isoFromMs(ms) {
@@ -109,6 +111,70 @@ function extractAutoRecallDecisionTrace(entry, content, format) {
   return buildAutoRecallDecisionTrace(candidate);
 }
 
+function normalizeMemoryCardPreview(card, result = {}) {
+  if (!card || typeof card !== "object") return null;
+  return {
+    turn_id: result?.turn_id || null,
+    line_number: result?.line_number ?? null,
+    card_id: card.card_id || null,
+    memory_id: card.memory_id || null,
+    title: card.title || "",
+    summary: card.summary || "",
+    salience_reason: card.salience_reason || "",
+    source_hint: card.source_hint || "",
+    category: card.category || "unknown",
+    kind: card.kind || "fact",
+    confidence_score: card.confidence_score ?? null,
+    risk_flags: Array.isArray(card.risk_flags) ? card.risk_flags : [],
+    disclosure_level: card.disclosure_level || "none",
+    get_token: card.get_token || null,
+  };
+}
+
+function extractMemoryCardsFromResults(results) {
+  return (Array.isArray(results) ? results : [])
+    .map(result => normalizeMemoryCardPreview(result?.card_projection?.memory_card, result))
+    .filter(Boolean);
+}
+
+function selectMemoryCardPreviewPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const replay = payload.replay && typeof payload.replay === "object" ? payload.replay : payload;
+  const cards = extractMemoryCardsFromResults(replay.results);
+  if (cards.length === 0) return null;
+  return {
+    summary: {
+      mode: "read_only_memory_card_preview",
+      total_count: Number(replay?.summary?.total_count || 0),
+      card_expected_count: Number(replay?.summary?.card_expected_count || cards.length),
+      card_projection_count: Number(replay?.summary?.card_projection_count || cards.length),
+      preview_count: Math.min(cards.length, 8),
+      truncated: cards.length > 8,
+    },
+    cards: cards.slice(0, 8),
+    side_effects: {
+      db_writes: false,
+      memory_file_mutation: false,
+      dataset_file_mutation: false,
+      retrieval: false,
+      injection: false,
+      cleanup_apply: false,
+      archive: false,
+      quarantine: false,
+      reinforce: false,
+      llm: false,
+      network: false,
+      runtime_report_files: false,
+    },
+  };
+}
+
+function extractMemoryCardPreview(entry, content, format) {
+  if (entry?.kind !== "auto_recall_turn_gold_set_replay") return null;
+  if (format !== "json") return null;
+  return selectMemoryCardPreviewPayload(parseJsonContent(content));
+}
+
 export function listReports() {
   const dir = getReportsDir();
   if (!fs.existsSync(dir)) return [];
@@ -153,6 +219,7 @@ export function readReportFile(name) {
     content,
     format: path.extname(validName).replace(/^\./, ""),
     decision_trace: extractAutoRecallDecisionTrace(entry, content, path.extname(validName).replace(/^\./, "")),
+    memory_card_preview: extractMemoryCardPreview(entry, content, path.extname(validName).replace(/^\./, "")),
   };
 }
 

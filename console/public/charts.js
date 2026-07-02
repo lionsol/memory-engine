@@ -345,13 +345,37 @@ function initMetrics() {
   ], pageData.conflicts || []);
 }
 
+function renderMemoryCardPreview(previewNode, preview) {
+  if (!previewNode) return;
+  if (!preview || !Array.isArray(preview.cards) || preview.cards.length === 0) {
+    previewNode.innerHTML = `<div class="muted">Memory card preview unavailable for this report.</div>`;
+    return;
+  }
+  const summary = preview.summary || {};
+  previewNode.innerHTML = `<div class="detail">
+    <div><span class="badge">memory_card_preview</span> <span class="badge">cards ${esc(String(summary.preview_count ?? preview.cards.length))}</span> <span class="badge">read-only</span></div>
+    ${preview.cards.map(card => `<div class="status-row memory-card-preview">
+      <div><span class="badge">${esc(card.disclosure_level || 'none')}</span> <strong>${esc(card.title || '')}</strong></div>
+      <div class="muted">${esc(card.summary || '')}</div>
+      <div class="muted">why: ${esc(card.salience_reason || '')}</div>
+      <div class="muted">source: ${esc(card.source_hint || '')}</div>
+      <div class="muted">memory_id: ${esc(card.memory_id || '')}</div>
+      <div class="muted">get token: ${esc(card.get_token || 'full content unavailable')}</div>
+      <div>${(card.risk_flags || []).map(flag => `<span class="badge">${esc(flag)}</span>`).join(' ')}</div>
+    </div>`).join('')}
+    ${summary.truncated ? `<div class="muted">Preview truncated.</div>` : ''}
+  </div>`;
+}
+
 function renderReportDetail(report) {
   const node = $('[data-report-detail]');
   const traceNode = $('[data-report-decision-trace]');
+  const previewNode = $('[data-report-memory-card-preview]');
   if (!node) return;
   if (!report || report.error) {
     node.innerHTML = `<div class="muted">${esc(report?.error || 'Report unavailable')}</div>`;
     if (traceNode) traceNode.innerHTML = `<div class="muted">Decision trace unavailable.</div>`;
+    if (previewNode) previewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
     return;
   }
   node.innerHTML = `<div class="detail">
@@ -369,6 +393,7 @@ function renderReportDetail(report) {
       <div><span class="badge">focused_query</span> ${esc(trace.focused_query || '')}</div>
     </div>` : `<div class="muted">Decision trace unavailable for this report.</div>`;
   }
+  renderMemoryCardPreview(previewNode, report.memory_card_preview);
 }
 
 function initReports() {

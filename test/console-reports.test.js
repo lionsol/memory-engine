@@ -137,6 +137,9 @@ test("reports view stays read-only and contains no destructive action buttons or
     "does not trigger autoRecall",
     "Long Input Decision Trace",
     "data-report-decision-trace",
+    "Memory Card Preview",
+    "data-report-memory-card-preview",
+    "Read-only preview only",
   ]) {
     assert.equal(view.includes(required), true, `missing required token: ${required}`);
   }
@@ -153,6 +156,12 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "should_recall",
     "intent_reason",
     "focused_query",
+    "data-report-memory-card-preview",
+    "renderMemoryCardPreview",
+    "memory_card_preview",
+    "get token",
+    "risk_flags",
+    "source_hint",
   ]) {
     assert.equal(charts.includes(required), true, `missing required token: ${required}`);
   }
@@ -167,6 +176,86 @@ test("reports service reads only whitelisted files and classifies kinds", withTe
   const file = readReportFile("annotation-candidates-20260627-111111.jsonl");
   assert.equal(file.content, "{\"sample\":1}\n");
   assert.equal(file.format, "jsonl");
+}));
+
+test("reports service adds memory_card_preview for turn gold-set replay json reports via pure mapping", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "auto-recall-turn-gold-set-replay-20260702-101010.json", JSON.stringify({
+    replay: {
+      summary: {
+        mode: "read_only_turn_gold_set_replay",
+        total_count: 2,
+        card_expected_count: 1,
+        card_projection_count: 1,
+      },
+      results: [
+        {
+          turn_id: "seed_long_project_review_001",
+          line_number: 9,
+          card_projection: {
+            memory_card: {
+              card_id: "memcard_turn_gold_seed_long_project_review_001",
+              memory_id: "turn_gold_seed_long_project_review_001",
+              title: "Expected memory card for seed_long_project_review_001",
+              summary: "Expected memory_card disclosure.",
+              salience_reason: "Gold-set expected disclosure for review_plan.",
+              source_hint: "test/fixtures/auto-recall-turn-gold-set.seed.jsonl:9-9",
+              category: "project",
+              kind: "decision",
+              confidence_score: 1,
+              risk_flags: [],
+              disclosure_level: "memory_card",
+              get_token: "memory_engine_get:turn_gold_seed_long_project_review_001",
+            },
+          },
+        },
+        {
+          turn_id: "seed_long_rewrite_001",
+          line_number: 1,
+          card_projection: {
+            memory_card: null,
+          },
+        },
+      ],
+    },
+  }, null, 2), Date.UTC(2026, 6, 2, 10, 10, 10));
+
+  const file = readReportFile("auto-recall-turn-gold-set-replay-20260702-101010.json");
+  assert.equal(file.kind, "auto_recall_turn_gold_set_replay");
+  assert.equal(file.memory_card_preview.summary.mode, "read_only_memory_card_preview");
+  assert.equal(file.memory_card_preview.summary.total_count, 2);
+  assert.equal(file.memory_card_preview.summary.card_expected_count, 1);
+  assert.equal(file.memory_card_preview.summary.card_projection_count, 1);
+  assert.equal(file.memory_card_preview.cards.length, 1);
+  assert.deepEqual(file.memory_card_preview.cards[0], {
+    turn_id: "seed_long_project_review_001",
+    line_number: 9,
+    card_id: "memcard_turn_gold_seed_long_project_review_001",
+    memory_id: "turn_gold_seed_long_project_review_001",
+    title: "Expected memory card for seed_long_project_review_001",
+    summary: "Expected memory_card disclosure.",
+    salience_reason: "Gold-set expected disclosure for review_plan.",
+    source_hint: "test/fixtures/auto-recall-turn-gold-set.seed.jsonl:9-9",
+    category: "project",
+    kind: "decision",
+    confidence_score: 1,
+    risk_flags: [],
+    disclosure_level: "memory_card",
+    get_token: "memory_engine_get:turn_gold_seed_long_project_review_001",
+  });
+  assert.deepEqual(file.memory_card_preview.side_effects, {
+    db_writes: false,
+    memory_file_mutation: false,
+    dataset_file_mutation: false,
+    retrieval: false,
+    injection: false,
+    cleanup_apply: false,
+    archive: false,
+    quarantine: false,
+    reinforce: false,
+    llm: false,
+    network: false,
+    runtime_report_files: false,
+  });
 }));
 
 test("reports service adds decision_trace for autoRecall long-input json reports via pure mapping", withTempReports(({ reportsDir }) => {
@@ -220,4 +309,5 @@ test("reports latest helper returns null for missing families", withTempReports(
   assert.equal(latest.annotation_summary, null);
   assert.equal(latest.annotation_eligibility_preview, null);
   assert.equal(latest.auto_recall_safety_smoke, null);
+  assert.equal(latest.auto_recall_turn_gold_set_replay, null);
 }));
