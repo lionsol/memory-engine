@@ -107,6 +107,87 @@ node bin/run-turn-gold-set-replay.js --summary
 - P3 已形成 turn-level gold set replay、feedback、expansion plan、manual commit gate、freeze contract 与 dataset growth observation 的完整非 ML 数据闭环。
 - 下一步建议进入提交整理：将 runtime gate、Console decision trace、P3 dataset lifecycle 分为清晰逻辑 commit；提交前可再补一次 `git diff --check` 与相关测试。
 
+### Memory quality baseline / snapshot / introspection
+
+新增 memory quality baseline 观测链路，用于把 memory quality 的关键诊断结果固化为可检查、可回归、可对比的 baseline snapshot。
+
+本轮新增文件：
+
+* `bin/run-memory-quality-baseline-smoke.js`
+* `bin/inspect-memory-quality-baseline.js`
+* `lib/quality/memory-quality-baseline-contracts.js`
+* `lib/quality/memory-quality-baseline-introspection.js`
+* `lib/quality/memory-quality-baseline-snapshot.js`
+* `test/memory-quality-baseline-smoke.test.js`
+* `test/memory-quality-baseline-introspection.test.js`
+* `test/memory-quality-baseline-snapshot.test.js`
+
+该链路目标：
+
+* 提供 memory quality baseline 的 smoke 检查入口。
+* 支持 baseline snapshot 的结构化生成与检查。
+* 支持 introspection，便于解释当前 baseline 中包含哪些 quality 维度、diagnostic 字段和 contract 约束。
+* 将 baseline 输出与 contract 检查拆开，避免后续质量治理时只依赖人工读 report。
+* 为后续长期追踪 quality drift、ownership-aware flags、unknown path、chunks without confidence 等指标提供稳定检查点。
+
+安全边界：
+
+* baseline / snapshot / introspection 只用于观测和验证。
+* 不执行 archive。
+* 不执行 delete。
+* 不执行 quarantine。
+* 不执行 reinforce。
+* 不修改 memory 文件。
+* 不调用 LLM。
+* 不访问网络。
+
+验证建议：
+
+* `node --test test/memory-quality-baseline-smoke.test.js test/memory-quality-baseline-introspection.test.js test/memory-quality-baseline-snapshot.test.js`
+
+结论：
+
+* memory quality 现在有了更明确的 baseline 检查入口。
+* 后续质量治理可以先看 baseline 是否漂移，再决定是否进入具体 cleanup / apply 流程。
+* 该能力属于观测层增强，不改变现有 memory lifecycle 行为。
+
+### Smart-add duplicate cleanup apply design
+
+补充 smart-add duplicate cleanup apply 设计文档与静态测试，为后续从 preview / manifest 进入受控 apply 做准备。
+
+本轮新增文件：
+
+* `docs/smart-add-duplicate-cleanup-apply-design.md`
+* `test/smart-add-duplicate-cleanup-apply-design.test.js`
+
+该设计明确 smart-add duplicate cleanup 的 apply 边界：
+
+* apply 前必须基于 preview / manifest。
+* apply 必须区分 dry-run、preview、confirm、apply。
+* apply 不应越过 ownership boundary。
+* 只允许处理 memory-engine lifecycle-owned smart-add duplicate。
+* 涉及非 scope path、unknown owner、generated/diagnostic owner 时必须 hard stop 或 manual review。
+* 删除或归档前必须保留可审计记录。
+* apply 流程必须可回滚或至少可追溯。
+
+设计重点：
+
+* 将 duplicate cleanup 从“检测到重复”推进到“可控 apply”之前，先固定安全协议。
+* 避免 cleanup 工具误删 non-lifecycle memory、generated artifact 或历史诊断数据。
+* 要求 apply 入口具备显式确认、manifest 校验、scope 校验和 side-effect 记录。
+* 后续实现 apply mode 时，测试应先覆盖 safety contract，再允许真实写入。
+
+验证建议：
+
+* `node --test test/smart-add-duplicate-cleanup-apply-design.test.js`
+
+结论：
+
+* smart-add duplicate cleanup 的 apply 阶段暂未直接落地真实写入。
+* 当前完成的是 apply design 和安全约束固化。
+* 后续如实现 apply，应严格按该设计推进，避免把 duplicate cleanup 做成不可审计的批量删除工具。
+
+
 ## 2026-06-30
 
 ### 质量治理 / Smart-Add 重复清理确认清单校验
