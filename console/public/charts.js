@@ -169,6 +169,8 @@ function reportKindLabel(kind) {
     annotation_summary: 'Annotation Summary',
     annotation_eligibility_preview: 'Eligibility Preview',
     auto_recall_safety_smoke: 'AutoRecall Safety Smoke',
+    auto_recall_long_input_smoke: 'AutoRecall Long Input Smoke',
+    auto_recall_turn_gold_set_replay: 'Turn Gold Replay Cards',
     annotation_candidates: 'Annotation Candidates',
     annotation_labels: 'Annotation Labels',
   })[kind] || kind || 'unknown';
@@ -371,11 +373,13 @@ function renderReportDetail(report) {
   const node = $('[data-report-detail]');
   const traceNode = $('[data-report-decision-trace]');
   const previewNode = $('[data-report-memory-card-preview]');
+  const primaryPreviewNode = $('[data-report-memory-card-preview-primary]');
   if (!node) return;
   if (!report || report.error) {
     node.innerHTML = `<div class="muted">${esc(report?.error || 'Report unavailable')}</div>`;
     if (traceNode) traceNode.innerHTML = `<div class="muted">Decision trace unavailable.</div>`;
     if (previewNode) previewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
+    if (primaryPreviewNode) primaryPreviewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
     return;
   }
   node.innerHTML = `<div class="detail">
@@ -394,12 +398,14 @@ function renderReportDetail(report) {
     </div>` : `<div class="muted">Decision trace unavailable for this report.</div>`;
   }
   renderMemoryCardPreview(previewNode, report.memory_card_preview);
+  renderMemoryCardPreview(primaryPreviewNode, report.memory_card_preview);
 }
 
 function initReports() {
   if (!$('[data-reports-table]')) return;
   const latest = pageData.latest || {};
   const latestItems = [
+    latest.auto_recall_turn_gold_set_replay,
     latest.annotation_summary,
     latest.annotation_eligibility_preview,
     latest.auto_recall_safety_smoke,
@@ -427,7 +433,7 @@ function initReports() {
     { label: 'Size', value: r => r.size ?? 0 },
   ], files.map(row => ({ ...row, click: row.name })));
 
-  const defaultReport = latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
+  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
   if (defaultReport?.name) {
     api(`/api/reports/file?name=${encodeURIComponent(defaultReport.name)}`).then(renderReportDetail);
   }

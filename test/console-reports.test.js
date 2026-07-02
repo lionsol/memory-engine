@@ -138,7 +138,9 @@ test("reports view stays read-only and contains no destructive action buttons or
     "Long Input Decision Trace",
     "data-report-decision-trace",
     "Memory Card Preview",
+    "Memory Card Preview Details",
     "data-report-memory-card-preview",
+    "data-report-memory-card-preview-primary",
     "Read-only preview only",
   ]) {
     assert.equal(view.includes(required), true, `missing required token: ${required}`);
@@ -157,11 +159,15 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "intent_reason",
     "focused_query",
     "data-report-memory-card-preview",
+    "data-report-memory-card-preview-primary",
     "renderMemoryCardPreview",
     "memory_card_preview",
     "get token",
     "risk_flags",
     "source_hint",
+    "auto_recall_turn_gold_set_replay",
+    "Turn Gold Replay Cards",
+    "latest.auto_recall_turn_gold_set_replay",
   ]) {
     assert.equal(charts.includes(required), true, `missing required token: ${required}`);
   }
