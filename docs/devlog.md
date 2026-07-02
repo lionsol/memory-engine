@@ -1,5 +1,221 @@
 ## 2026-07-02
 
+### Cron maintenance command 化与 archived raw_log rescue 标注闭环
+
+本轮围绕 nightly cron 漂移风险、archive 事故止血和 archived raw_log rescue 标注闭环做了一轮收敛。核心目标是：把纯脚本类 cron 从 `agentTurn` 退回 `command`，冻结会产生 lifecycle side effect 的 nightly maintenance，并建立 read-only 的 archived raw_log rescue 标注路径，避免把 6319 条 accidental archive 结果简单全量 rollback。
+
+#### Cron runtime 修正与冻结
+
+运行态确认 `Memory Daily Stats` 已保持 `command` payload，04:00 自然调度成功，不再依赖外层 LLM agent 启动。
+
+进一步检查发现 `Memory Engine Nightly Maintenance` 虽然被改成 `deepseek/deepseek-v4-flash` 并清空 `toolsAllow` 后可手动标记成功，但 cron summary 只显示读取 skill，没有证据证明实际执行了 `detect-conflicts -> archive -> kg-bridge -> status`。同时 `memory-weekly-p2-stats` 被重建为 `agentTurn`，暴露全工具列表，这会重新引入 Episode Drift / 权限膨胀 / 模型 allowlist 依赖风险。
+
+本轮将运行态 cron 收敛为：
+
+* `Memory Daily Stats`：保持 `command`，直接运行 `memory-stats.js`。
+* `memory-weekly-p2-stats`：改回 `command`，直接运行 `memory-weekly-stats.js`。
+* `Memory Engine Nightly Maintenance`：改为 command 指向 repo 内 `bin/nightly-maintenance-command.cjs`，随后冻结为 `--dry-run`，等待 archive 策略审计完成后再允许 apply。
+
+新增 `bin/nightly-maintenance-command.cjs`，作为 command-safe maintenance runner。设计边界：
+
+* 只写 memory-engine DB 生命周期表。
+* `ATTACH` core DB 只读，并通过 core write guard 防止误写 `core.*`。
+* 输出 JSON summary。
+* 支持 `--dry-run`。
+* 步骤覆盖 `detect_conflicts`、`archive`、`kg_bridge`、`status`。
+
+手动 apply 时触发了实际 lifecycle side effect：
+
+* `archive.scanned = 7141`
+* `archive.archived = 6319`
+* archived rows 主要来自 `memory/smart-add/*` 的 `raw_log`
+
+随后立即将 nightly cron 冻结为 dry-run，避免下一次自然调度继续写入。
+
+#### Archived raw_log rescue 审计与候选导出
+
+只读审计确认 6319 条 archived memory 主要是 smart-add raw_log，覆盖 `2026-05-09` 到 `2026-06-22`。抽样与关键词审计显示其中大部分是 raw log / debug / execution trace，但也混有 project、decision、preference、todo 等高价值信息。因此决定不做全量 rollback，而是走小样本人工标注 + 规则放大的 rescue 路径。
+
+新增 archived raw_log rescue candidate exporter：
+
+* `bin/export-archived-raw-log-rescue-candidates.cjs`
+* `bin/export-archived-raw-log-rescue-candidates.js`
+
+Exporter 保持 read-only：
+
+* 不写 DB。
+* 不 unarchive。
+* 不更新 category。
+* 不 delete / quarantine / reinforce。
+* 只输出 annotation-ready JSONL / Markdown candidate report。
+
+默认候选关键词：
+
+* `决定`
+* `结论`
+* `修复`
+* `偏好`
+* `待办`
+* `memory-engine`
+* `OpenClaw`
+
+候选导出采用 stratified bucket，默认覆盖：
+
+* `archived_raw_log_decision`
+* `archived_raw_log_preference`
+* `archived_raw_log_todo`
+* `archived_raw_log_project`
+* `archived_raw_log_keyword`
+
+已生成本地标注候选：
+
+* `reports/archived-raw-log-rescue-candidates-latest.jsonl`
+
+该 reports 产物属于本地运行数据，不纳入提交。
+
+#### Annotation UI 扩展
+
+扩展 Console `/annotations` 本地标注页，继续保持 browser File API local-only，不增加任何 DB write / apply / upload 能力。
+
+新增 archived raw_log rescue 相关字段：
+
+* `keep_active`
+* `target_category`
+* `rescue_confidence`
+
+保留并复用原有字段：
+
+* `quality`
+* `currency`
+* `auto_recall_eligible`
+* `preferred_action`
+* `reason`
+* `notes`
+
+标注流程确认：
+
+* candidate JSONL 由本地浏览器读取。
+* labels JSONL 由本地浏览器导出。
+* server 不接收 label upload。
+* 不产生 restore / unarchive / category update / delete / quarantine / reinforce side effect。
+
+用户已完成第一批 seed labels，导出到：
+
+* `reports/archived-raw-log-rescue_labels_seed_v0.1_20samples_20260702.jsonl`
+
+后续检查发现该文件实际包含 23 条 label，其中至少一条 `keep_active` 为空。因此后续 evaluator 必须区分 valid / invalid label，不能把空标注用于阈值校准。
+
+#### v0.1 policy 与 v0.2 scoring 复盘
+
+基于第一批标注，暂定 v0.1 rescue policy：
+
+* `archived_raw_log_keyword` terminal drop。
+* 只有 project-related decision 才保留。
+* preference 是稳定正信号。
+* todo 不是 category，而是 lifecycle / temporal state，需要弱化并分级。
+* `keep_active=no` 优先于 `target_category`。
+* `rescue_confidence=low` 默认压制。
+* `unsure` 默认不进入自动 apply。
+
+本轮 review 后明确：v0.1 deterministic rules 尚未工程化，不能视为已实现。后续应抽出独立 rule engine，再让 preview / evaluator / sampler 共用。
+
+#### v0.4 active sampler MVP 与 v0.2 scoring rebalancing
+
+新增实验性 sampler：
+
+* `bin/v4-active-sampler.cjs`
+
+当前定位是 annotation sampling prototype，不是 production apply tool。它读取 archived raw log rescue candidates，计算 v0.2 scoring，并按 `abs(score - threshold)` 选择最接近边界的样本，帮助提高下一轮人工标注的信息密度。
+
+第一版 sampler 暴露出 scoring 缺陷：
+
+* `project 45 + todo 15 = 60`，刚好撞上 threshold。
+* top20 中 todo 占 11 条。
+* 多条 sample `computed_score = 60`，出现 threshold collapse。
+
+随后修正 v0.2 scoring：
+
+* `threshold = 55`
+* `unsure_threshold = 30`
+* `project = +44`
+* `projectDecision = +18`
+* `preference = +46`
+* `projectTodo = +6`
+* `nonProjectTodo = -8`
+* `keywordHardDrop = -55`
+* `rawLogPenalty = -6`
+* `toolOutputPenalty = -16`
+* `positiveCap = 70`
+
+修正后回跑 sampler：
+
+```text
+selected = 20
+threshold = 55
+buckets:
+  archived_raw_log_decision = 9
+  archived_raw_log_preference = 10
+  archived_raw_log_todo = 1
+predictions:
+  unsure = 13
+  yes = 7
+score_min = 44
+score_max = 64
+```
+
+结论：todo 过度入选和 threshold collapse 已修正；keyword 不再进入 boundary top20。但纯 boundary sampling 现在偏向 decision / preference，project bucket 覆盖不足。这属于 sampler diversity 问题，不应继续通过调整 v0.2 scoring 解决。
+
+#### 当前成熟度判断
+
+当前真实状态应定义为：
+
+* Candidate exporter：稳定，read-only。
+* Annotation UI：稳定-ish，仍需 label completeness 校验。
+* v0.1 rules：policy 已定，尚未工程化。
+* v0.2 scoring：alpha，目前仍内嵌在 sampler。
+* v0.3 online feedback：设计讨论阶段，暂停实现。
+* v0.4 sampler：MVP / prototype，尚未提交为稳定工具。
+
+下一步计划：
+
+1. 抽出 `lib/annotation/archived-raw-log-rescue-rules.cjs`。
+2. 抽出 `lib/annotation/archived-raw-log-rescue-scoring.cjs`。
+3. 新增 `bin/evaluate-archived-raw-log-rescue-labels.cjs`。
+4. 用第一批 seed labels 回放 v0.1 / v0.2。
+5. 为 v4 sampler 增加 diversity quota，避免下一批样本偏向 decision / preference。
+6. 暂不实现 v0.3 online feedback，避免在 seed labels 太少且有 incomplete labels 的情况下引入 feedback loop corruption。
+
+#### 验证
+
+已执行 targeted checks：
+
+```bash
+node --check bin/nightly-maintenance-command.cjs
+node --check bin/export-archived-raw-log-rescue-candidates.cjs
+node --check bin/export-archived-raw-log-rescue-candidates.js
+node --check bin/v4-active-sampler.cjs
+node --test test/annotation-reviewer-static.test.js test/console-annotations.test.js
+```
+
+已执行 read-only/manual validation：
+
+```bash
+node bin/export-archived-raw-log-rescue-candidates.cjs --limit 100 --preview-chars 1000 --out reports/archived-raw-log-rescue-candidates-latest.jsonl
+node bin/v4-active-sampler.cjs --input reports/archived-raw-log-rescue-candidates-latest.jsonl --limit 20
+```
+
+测试结果：
+
+* annotation reviewer / console annotations targeted tests：7 pass, 0 fail。
+* exporter dry-run summary 明确 `db_writes=false`、`unarchive=false`、`category_update=false`、`delete=false`、`quarantine=false`、`reinforce=false`。
+* sampler 回跑显示 todo collapse 已修正，但 sampling diversity 仍待补齐。
+
+未执行项：
+
+* 未运行全量 `npm test`。
+* 未对 archived rows 执行 restore / unarchive / category update。
+* 未把 seed labels / candidate reports 提交入库。
+
 ### AutoRecall P4 Memory Card / Object Model 与 card-first runtime 收敛
 
 完成 AutoRecall P4 memory card / memory object model 工作流。目标是把 autoRecall 从“直接把召回命中文本注入 prompt”推进到“先投影为可审计、可预览、可渐进披露的 memory card”，同时保持 runtime 默认行为不变。P4 全阶段仍不引入 DB migration、storage rewrite、retrieval ranking 变更、自动 `memory_engine_get`、full-content 默认注入或 card-render reinforcement。
