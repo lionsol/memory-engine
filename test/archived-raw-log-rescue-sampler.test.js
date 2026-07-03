@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,4 +162,74 @@ test("CLI accepts --input path and emits diversity sampler summary", () => {
   assert.equal(parsed.mode, "v0.4_active_sampler_diversity_mvp");
   assert.equal(parsed.selected_count, 3);
   assert.ok(parsed.summary.conflict_pool_count >= 1);
+});
+
+test("CLI can write annotation-ready JSONL with full sample rows and sampling metadata", () => {
+  const dir = mkdtempSync(resolve(tmpdir(), "archived-rescue-sampler-out-"));
+  const inputPath = resolve(dir, "candidates.jsonl");
+  const outPath = resolve(dir, "active-samples.jsonl");
+  const rows = [
+    sample("conflict", {
+      annotation: {
+        quality: null,
+        currency: null,
+        auto_recall_eligible: null,
+        preferred_action: null,
+        keep_active: null,
+        target_category: null,
+        rescue_confidence: null,
+        reason: null,
+        notes: null,
+      },
+      content_preview: "engineering evidence with conflicting runtime noise",
+      risk_signals: ["project:memory-engine", "engineering_evidence_signal", "transient_runtime_noise_signal"],
+      signal_polarity: {
+        positive_evidence: ["engineering_evidence_signal"],
+        negative_evidence: ["transient_runtime_noise_signal"],
+      },
+    }),
+    sample("transient", {
+      primary_bucket: "archived_raw_log_transient",
+      annotation: { keep_active: null },
+      content_preview: "cron healthcheck prompt",
+      risk_signals: ["project:openclaw", "transient_runtime_noise_signal"],
+      signal_polarity: {
+        positive_evidence: [],
+        negative_evidence: ["transient_runtime_noise_signal"],
+      },
+    }),
+  ];
+  writeFileSync(inputPath, `${rows.map(row => JSON.stringify(row)).join("\n")}\n`, "utf8");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolve(repoRoot, "bin/v4-active-sampler.cjs"),
+      "--input",
+      inputPath,
+      "--limit",
+      "2",
+      "--format",
+      "jsonl",
+      "--out",
+      outPath,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(outPath), true);
+  const writeSummary = JSON.parse(result.stdout);
+  assert.equal(writeSummary.safety.output_file_write, true);
+  assert.equal(writeSummary.safety.db_writes, false);
+  assert.equal(writeSummary.safety.unarchive, false);
+  assert.equal(writeSummary.safety.category_update, false);
+  const selectedRows = readFileSync(outPath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(selectedRows.length, 2);
+  assert.equal(selectedRows[0].sample_id.startsWith("rescue:"), true);
+  assert.equal(typeof selectedRows[0].content_preview, "string");
+  assert.ok(selectedRows[0].annotation);
+  assert.ok(selectedRows[0].sampling);
+  assert.ok(selectedRows[0].sampling.selection_reason);
+  assert.equal(typeof selectedRows[0].sampling.computed_score, "number");
 });

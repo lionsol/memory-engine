@@ -29,6 +29,10 @@
         <span>View filter</span>
         <span class="row"><input id="annotationUnlabeledOnly" type="checkbox"><span>Unlabeled only</span></span>
       </label>
+      <div id="annotationFilterStatus" class="muted">Filters: none</div>
+      <div class="row">
+        <button id="annotationClearFiltersButton" type="button">Clear Filters</button>
+      </div>
       <div class="row">
         <button id="annotationPrevButton" type="button">Previous</button>
         <button id="annotationNextButton" type="button">Next</button>
@@ -197,6 +201,8 @@
       bucketFilter: document.getElementById("annotationBucketFilter"),
       pathPrefixFilter: document.getElementById("annotationPathPrefixFilter"),
       unlabeledOnly: document.getElementById("annotationUnlabeledOnly"),
+      filterStatus: document.getElementById("annotationFilterStatus"),
+      clearFiltersButton: document.getElementById("annotationClearFiltersButton"),
       prevButton: document.getElementById("annotationPrevButton"),
       nextButton: document.getElementById("annotationNextButton"),
       exportButton: document.getElementById("annotationExportButton"),
@@ -414,6 +420,24 @@
       updateProgress();
     }
 
+    function updateFilterStatus() {
+      const filters = [];
+      if (els.bucketFilter.value.trim()) filters.push(`bucket=${els.bucketFilter.value.trim()}`);
+      if (els.pathPrefixFilter.value.trim()) filters.push(`path starts with ${els.pathPrefixFilter.value.trim()}`);
+      if (els.unlabeledOnly.checked) filters.push("unlabeled only");
+      els.filterStatus.textContent = filters.length
+        ? `Filters: ${filters.join(" · ")} · showing ${state.filteredSamples.length} / ${state.samples.length}`
+        : `Filters: none · showing ${state.filteredSamples.length} / ${state.samples.length}`;
+    }
+
+    function clearFilters() {
+      els.bucketFilter.value = "";
+      els.pathPrefixFilter.value = "";
+      els.unlabeledOnly.checked = false;
+      state.currentIndex = 0;
+      applyFilters();
+    }
+
     function applyFilters() {
       const bucket = els.bucketFilter.value.trim();
       const prefix = els.pathPrefixFilter.value.trim();
@@ -428,6 +452,7 @@
         return true;
       });
       if (state.currentIndex >= state.filteredSamples.length) state.currentIndex = Math.max(0, state.filteredSamples.length - 1);
+      updateFilterStatus();
       render();
     }
 
@@ -467,9 +492,10 @@
       state.labels.clear();
       state.currentIndex = 0;
       syncBucketFilterOptions();
-      applyFilters();
+      clearFilters();
     });
     els.bucketFilter.addEventListener("change", applyFilters);
+    els.clearFiltersButton.addEventListener("click", clearFilters);
     els.pathPrefixFilter.addEventListener("input", applyFilters);
     els.unlabeledOnly.addEventListener("change", applyFilters);
     els.prevButton.addEventListener("click", () => {

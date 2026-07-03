@@ -36,6 +36,21 @@ test("console annotations page contains File API loader and export labels flow",
   }
 });
 
+test("console annotations page resets stale filters after loading a new file", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "annotationClearFiltersButton",
+    "Filters: none",
+    "function clearFilters()",
+    "els.bucketFilter.value = \"\";",
+    "els.pathPrefixFilter.value = \"\";",
+    "els.unlabeledOnly.checked = false;",
+    "clearFilters();",
+  ]) {
+    assert.equal(page.includes(token), true, `missing filter reset token: ${token}`);
+  }
+});
+
 test("console annotations page exposes no destructive action entrypoints", () => {
   const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
   for (const forbidden of [
