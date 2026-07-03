@@ -51,6 +51,20 @@
             "type": "number",
             "default": 8000,
             "description": "Timeout for auto recall before_prompt_build hook in milliseconds"
+          },
+          "cardFirstRuntime": {
+            "type": "object",
+            "additionalProperties": false,
+            "default": {
+              "enabled": false
+            },
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "default": false,
+                "description": "Enable experimental edi-only card-first auto recall prompt supplement"
+              }
+            }
           }
         }
       }
