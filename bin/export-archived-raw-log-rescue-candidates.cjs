@@ -12,11 +12,16 @@ const Database = require('better-sqlite3');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { homedir } = require('node:os');
 const { dirname, resolve } = require('node:path');
+const {
+  DEFAULT_RESCUE_KEYWORDS,
+  describeSignalPolarity,
+  inferArchivedRawLogRescueSignals,
+} = require('../lib/annotation/archived-raw-log-rescue-signals.cjs');
 
 const HOME = homedir();
 const DEFAULT_ENGINE_DB = resolve(HOME, '.openclaw/memory/memory-engine/memory-engine.sqlite');
 const DEFAULT_CORE_DB = resolve(HOME, '.openclaw/memory/main.sqlite');
-const DEFAULT_KEYWORDS = ['决定', '结论', '修复', '偏好', '待办', 'memory-engine', 'OpenClaw'];
+const DEFAULT_KEYWORDS = DEFAULT_RESCUE_KEYWORDS;
 const ALLOWED_FORMATS = new Set(['jsonl', 'md']);
 
 function readFlag(argv, name, fallback = null) {
@@ -67,20 +72,6 @@ function readablePreview(text, maxLength = 900) {
   return `${normalized.slice(0, Math.max(0, maxLength - 1))}…`;
 }
 
-function inferSignals(text, keywords) {
-  const value = String(text || '');
-  const hits = keywords.filter(keyword => value.toLowerCase().includes(String(keyword).toLowerCase()));
-  const signals = hits.map(hit => `keyword:${hit}`);
-  if (/\b(memory-engine|Memory Engine)\b/i.test(value)) signals.push('project:memory-engine');
-  if (/\bOpenClaw\b/i.test(value)) signals.push('project:openclaw');
-  if (/决定|结论|最终选择|定下来|确认了/.test(value)) signals.push('decision_signal');
-  if (/修复|实现|新增|完成|通过|测试/.test(value)) signals.push('project_progress_signal');
-  if (/偏好|习惯|以后|下次|不要|需要/.test(value)) signals.push('preference_signal');
-  if (/待办|后续|TODO|下一步/.test(value)) signals.push('todo_signal');
-  if (/```|\b(stdout|stderr|exitCode|command ok|sqlite|SQLITE)\b/i.test(value)) signals.push('tool_output_or_code_signal');
-  return Array.from(new Set(signals));
-}
-
 function riskScoreFor(row, signals) {
   let score = 0;
   score += Math.min(40, signals.length * 6);
@@ -90,15 +81,25 @@ function riskScoreFor(row, signals) {
   if (signals.includes('project:memory-engine')) score += 16;
   if (signals.includes('project:openclaw')) score += 12;
   if (signals.includes('project_progress_signal')) score += 10;
+  if (signals.includes('engineering_evidence_signal')) score += 18;
+  if (signals.includes('runtime_verification_signal')) score += 12;
+  if (signals.includes('test_result_summary_signal')) score += 10;
+  if (signals.includes('architecture_explanation_signal')) score += 12;
+  if (signals.includes('memory_policy_signal')) score += 14;
+  if (signals.includes('transient_runtime_noise_signal')) score -= 30;
+  if (signals.includes('pure_tool_output_signal')) score -= 10;
   score += Math.min(8, Number(row.text_length || 0) / 1000);
-  return Math.round(score * 10) / 10;
+  return Math.max(0, Math.round(score * 10) / 10);
 }
 
 function primaryBucket(signals) {
+  if (signals.includes('transient_runtime_noise_signal') && !signals.includes('engineering_evidence_signal')) {
+    return 'archived_raw_log_transient';
+  }
   if (signals.includes('decision_signal')) return 'archived_raw_log_decision';
   if (signals.includes('preference_signal')) return 'archived_raw_log_preference';
   if (signals.includes('todo_signal')) return 'archived_raw_log_todo';
-  if (signals.includes('project:memory-engine') || signals.includes('project:openclaw')) return 'archived_raw_log_project';
+  if (signals.includes('project:memory-engine') || signals.includes('project:openclaw') || signals.includes('engineering_evidence_signal')) return 'archived_raw_log_project';
   return 'archived_raw_log_keyword';
 }
 
@@ -145,8 +146,12 @@ function queryCandidates({ engineDbPath, coreDbPath, keywords, limit, offset }) 
 }
 
 function buildSample(row, { keywords, previewChars }) {
-  const signals = inferSignals(row.text, keywords);
+  const signals = inferArchivedRawLogRescueSignals(row.text, { keywords });
+  const signalPolarity = describeSignalPolarity(signals);
   const bucket = primaryBucket(signals);
+  const signalBuckets = [];
+  if (signalPolarity.positive_evidence.length) signalBuckets.push('archived_raw_log_engineering_evidence');
+  if (signalPolarity.negative_evidence.length) signalBuckets.push('archived_raw_log_transient_noise');
   const fileDateMatch = String(row.path || '').match(/memory\/smart-add\/(\d{4}-\d{2}-\d{2})\.md/);
   return {
     sample_type: 'memory',
@@ -167,8 +172,9 @@ function buildSample(row, { keywords, previewChars }) {
     updated_at: row.updated_at,
     text_length: Number(row.text_length || 0),
     primary_bucket: bucket,
-    sample_buckets: [bucket, 'archived_raw_log_rescue'],
+    sample_buckets: Array.from(new Set([bucket, ...signalBuckets, 'archived_raw_log_rescue'])),
     risk_signals: signals,
+    signal_polarity: signalPolarity,
     quality_flags: ['archived_raw_log', 'raw_log_leak'],
     risk_score: riskScoreFor(row, signals),
     content_preview: readablePreview(row.text, previewChars),
@@ -193,6 +199,7 @@ function pickStratifiedSamples(samples, limit) {
     'archived_raw_log_preference',
     'archived_raw_log_todo',
     'archived_raw_log_project',
+    'archived_raw_log_transient',
     'archived_raw_log_keyword',
   ];
   const selected = [];
