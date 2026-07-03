@@ -164,6 +164,49 @@ test("CLI accepts --input path and emits diversity sampler summary", () => {
   assert.ok(parsed.summary.conflict_pool_count >= 1);
 });
 
+test("CLI excludes sample ids already present in label JSONL files", () => {
+  const dir = mkdtempSync(resolve(tmpdir(), "archived-rescue-sampler-exclude-"));
+  const inputPath = resolve(dir, "candidates.jsonl");
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const rows = [
+    sample("already-labeled", {
+      primary_bucket: "archived_raw_log_project",
+      risk_signals: ["project:memory-engine", "engineering_evidence_signal"],
+      signal_polarity: {
+        positive_evidence: ["engineering_evidence_signal"],
+        negative_evidence: [],
+      },
+    }),
+    sample("fresh", {
+      primary_bucket: "archived_raw_log_decision",
+      risk_signals: ["project:memory-engine", "decision_signal"],
+    }),
+  ];
+  writeFileSync(inputPath, `${rows.map(row => JSON.stringify(row)).join("\n")}\n`, "utf8");
+  writeFileSync(labelsPath, `${JSON.stringify({ sample_id: "rescue:already-labeled", annotation: { keep_active: "yes" } })}\n`, "utf8");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolve(repoRoot, "bin/v4-active-sampler.cjs"),
+      "--input",
+      inputPath,
+      "--exclude-labels",
+      labelsPath,
+      "--limit",
+      "2",
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.excluded_count, 1);
+  assert.deepEqual(parsed.exclude_labels, [labelsPath]);
+  assert.equal(parsed.selected_count, 1);
+  assert.equal(parsed.samples[0].sample_id, "rescue:fresh");
+});
+
 test("CLI can write annotation-ready JSONL with full sample rows and sampling metadata", () => {
   const dir = mkdtempSync(resolve(tmpdir(), "archived-rescue-sampler-out-"));
   const inputPath = resolve(dir, "candidates.jsonl");

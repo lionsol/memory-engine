@@ -47,7 +47,37 @@ function hasFlag(args, name) {
 }
 
 function usage() {
-  return `Usage:\n  node bin/v4-active-sampler.cjs [options]\n\nOptions:\n  --input <path>       Candidate JSONL input (default: reports/archived-raw-log-rescue-candidates-latest.jsonl)\n  --limit <n>          Number of samples to select (default: 20)\n  --threshold <n>      Scoring threshold (default: ${DEFAULT_RESCUE_SCORING_THRESHOLD})\n  --format <json|jsonl> Output format (default: json)\n  --out <path>         Optional output path\n\nFormats:\n  json   Summary JSON with compact selected sample metadata.\n  jsonl  Full selected sample rows with a sampling metadata object, suitable for /annotations.\n\nSafety:\n  Lifecycle read-only: no DB writes, unarchive, category update, delete, quarantine, or reinforce.\n  File output is written only when --out is explicitly provided.`;
+  return `Usage:\n  node bin/v4-active-sampler.cjs [options]\n\nOptions:\n  --input <path>       Candidate JSONL input (default: reports/archived-raw-log-rescue-candidates-latest.jsonl)\n  --limit <n>          Number of samples to select (default: 20)\n  --threshold <n>      Scoring threshold (default: ${DEFAULT_RESCUE_SCORING_THRESHOLD})\n  --exclude-labels <path[,path...]> Exclude sample_ids already present in label JSONL files\n  --format <json|jsonl> Output format (default: json)\n  --out <path>         Optional output path\n\nFormats:\n  json   Summary JSON with compact selected sample metadata.\n  jsonl  Full selected sample rows with a sampling metadata object, suitable for /annotations.\n\nSafety:\n  Lifecycle read-only: no DB writes, unarchive, category update, delete, quarantine, or reinforce.\n  File output is written only when --out is explicitly provided.`;
+}
+
+function splitPathList(value) {
+  return String(value || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function sampleIdOf(row = {}) {
+  return String(row.sample_id || row.sampleId || row.chunk_id || row.memory_id || '');
+}
+
+function readExcludedSampleIds(labelPaths = []) {
+  const ids = new Set();
+  for (const filePath of labelPaths) {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`exclude labels file not found: ${filePath}`);
+    }
+    for (const row of readJsonl(filePath)) {
+      const id = sampleIdOf(row);
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
+function applyExclusions(samples = [], excludedSampleIds = new Set()) {
+  if (!excludedSampleIds.size) return samples;
+  return samples.filter(sample => !excludedSampleIds.has(sampleIdOf(sample)));
 }
 
 function serializeCompactSample(sample) {
@@ -94,7 +124,7 @@ function serializeAnnotationSample(sample, threshold) {
   };
 }
 
-function buildJsonOutput({ input, limit, threshold, selection }) {
+function buildJsonOutput({ input, limit, threshold, selection, exclusions = {} }) {
   const selected = selection.selected;
   return {
     mode: selection.mode,
@@ -105,19 +135,21 @@ function buildJsonOutput({ input, limit, threshold, selection }) {
     quotas: selection.quotas,
     limit,
     input_count: selection.input_count,
+    excluded_count: exclusions.excluded_count || 0,
+    exclude_labels: exclusions.exclude_labels || [],
     selected_count: selected.length,
     summary: selection.summary,
     samples: selected.map(serializeCompactSample),
   };
 }
 
-function renderOutput({ input, limit, threshold, selection, format }) {
+function renderOutput({ input, limit, threshold, selection, format, exclusions = {} }) {
   if (format === 'jsonl') {
     return `${selection.selected
       .map(sample => JSON.stringify(serializeAnnotationSample(sample, threshold)))
       .join('\n')}\n`;
   }
-  return `${JSON.stringify(buildJsonOutput({ input, limit, threshold, selection }), null, 2)}\n`;
+  return `${JSON.stringify(buildJsonOutput({ input, limit, threshold, selection, exclusions }), null, 2)}\n`;
 }
 
 function writeOrPrint(output, outPath) {
@@ -156,6 +188,7 @@ function main() {
   const threshold = parseInt(argValue(args, '--threshold', String(DEFAULT_RESCUE_SCORING_THRESHOLD)), 10);
   const format = String(argValue(args, '--format', 'json')).toLowerCase();
   const out = argValue(args, '--out', null);
+  const excludeLabelPaths = splitPathList(argValue(args, '--exclude-labels', ''));
 
   if (!ALLOWED_FORMATS.has(format)) {
     console.error('[v4-sampler] --format must be json or jsonl');
@@ -168,8 +201,20 @@ function main() {
   }
 
   const samples = readJsonl(input);
-  const selection = selectActiveSamplerSamples(samples, { threshold, limit });
-  const output = renderOutput({ input, limit, threshold, selection, format });
+  let excludedSampleIds;
+  try {
+    excludedSampleIds = readExcludedSampleIds(excludeLabelPaths);
+  } catch (error) {
+    console.error(`[v4-sampler] ${error.message}`);
+    process.exit(1);
+  }
+  const filteredSamples = applyExclusions(samples, excludedSampleIds);
+  const selection = selectActiveSamplerSamples(filteredSamples, { threshold, limit });
+  const exclusions = {
+    excluded_count: samples.length - filteredSamples.length,
+    exclude_labels: excludeLabelPaths,
+  };
+  const output = renderOutput({ input, limit, threshold, selection, format, exclusions });
   writeOrPrint(output, out);
 }
 
