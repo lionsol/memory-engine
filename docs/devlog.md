@@ -73,6 +73,88 @@ node --test \
 - P5 canary plan 已就绪，但 card-first runtime 仍保持默认关闭。
 - 下一步可以在工作区干净、active-memory 确认关闭、autoRecall 显式启用且仅限 `edi` 的前提下，做一次短 canary session，并用事件 SQL 对照 raw_text / memory_card disclosure mode。
 
+### Archived raw_log rescue active sampler JSONL 与 annotation filter UX
+
+补齐 archived raw_log rescue 标注闭环中的两处 UX / workflow 缺口：一是 active sampler 能直接输出 `/annotations` 可加载的 JSONL，二是 Console annotations 页面在切换候选文件时清理旧 filter，避免 stale filter 让新文件看起来没有内容。
+
+#### v4 active sampler JSONL 输出
+
+- 扩展 `bin/v4-active-sampler.cjs`。
+- 新增 `--format <json|jsonl>`：
+  - `json`：继续输出 compact sampler summary。
+  - `jsonl`：输出 annotation-ready full sample rows。
+- 新增 `--out <path>`：显式写入 sampler output file。
+- JSONL row 保留原 candidate/sample 字段，并新增 `sampling` metadata：
+  - `sampler_version`
+  - `selection_reason`
+  - `sampler_tags`
+  - `threshold`
+  - `computed_score`
+  - `predicted_keep_active`
+  - `boundary_distance`
+  - `score_parts`
+  - `score_signals`
+- `readJsonl()` 现在会过滤空行，减少手工处理 JSONL 时的脆弱性。
+- Sampler helper 增加 CommonJS exports，便于测试 `serializeAnnotationSample()` / `serializeCompactSample()` / `renderOutput()`。
+- 修正文案边界：sampler 不再笼统称为 read-only，而是明确为 lifecycle read-only；只有传入 `--out` 时才写 annotation output file，仍不写 DB、不 unarchive、不 category update、不 delete/quarantine/reinforce。
+
+示例：
+
+```bash
+node bin/v4-active-sampler.cjs \
+  --input reports/archived-raw-log-rescue-candidates-latest.jsonl \
+  --limit 20 \
+  --format jsonl \
+  --out reports/archived-raw-log-rescue-active-samples.jsonl
+```
+
+#### Console `/annotations` filter reset
+
+- 扩展 `console/views/annotations.ejs`。
+- 新增 filter status：显示当前 bucket/path/unlabeled filter 和 `showing X / Y`。
+- 新增 `Clear Filters` 按钮。
+- 加载新 candidate file 后调用 `clearFilters()`，自动清空 stale bucket/path/unlabeled filter。
+- 继续保持 browser File API local-only：server 不接收 labels upload，不写 DB，不执行 apply/delete/archive/quarantine/reinforce。
+
+#### 测试
+
+- 扩展 `test/archived-raw-log-rescue-sampler.test.js`：覆盖 `--format jsonl --out`、annotation-ready full rows、`sampling` metadata、输出文件写入标记和 lifecycle side-effect false。
+- 扩展 `test/console-annotations.test.js`：覆盖 filter status、clear filters 按钮、加载新文件后清理 stale filters。
+
+已执行 targeted tests：
+
+```bash
+git diff --check
+node --check bin/v4-active-sampler.cjs
+node --test \
+  test/archived-raw-log-rescue-sampler.test.js \
+  test/archived-raw-log-rescue-rules-scoring.test.js \
+  test/archived-raw-log-rescue-evaluator.test.js \
+  test/console-annotations.test.js \
+  test/annotation-reviewer-static.test.js
+```
+
+结果：
+
+```text
+# tests 24
+# pass 24
+# fail 0
+```
+
+未执行项：
+
+- 未运行全量 `npm test`。
+- 未写入真实 DB。
+- 未执行 unarchive / category update / delete / quarantine / reinforce。
+- 未提交 sampler 生成的本地 reports artifact。
+
+结论：
+
+- Active sampler 现在可以直接产出下一轮人工标注可用的 JSONL。
+- `/annotations` 在切换候选文件时不再受旧 filter 污染。
+- 这一步仍属于标注工作流增强，不是 archived memory 自动恢复或 apply。
+
 ## 2026-07-02
 
 ### Cron maintenance command 化与 archived raw_log rescue 标注闭环
