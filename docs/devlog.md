@@ -1,3 +1,78 @@
+## 2026-07-03
+
+### AutoRecall P5 card-first runtime canary plan
+
+在 P4 closeout 之后，补齐 P5 opt-in canary plan。目标不是直接打开 card-first runtime，而是让下一次真实 `edi` canary 有明确的 schema、preflight、观测 SQL、通过/失败标准和回滚步骤。
+
+#### Config schema 开关补齐
+
+- `openclaw.plugin.json` 的 `autoRecall` schema 仍保持 `additionalProperties=false`。
+- 新增 `autoRecall.cardFirstRuntime.enabled` schema，使本地 config 可以显式 opt-in，而不会被 manifest schema 拒绝。
+- 默认值仍为：
+  - `autoRecall.enabled=false`
+  - `autoRecall.cardFirstRuntime.enabled=false`
+- schema 只暴露开关，不改变 runtime 默认行为。
+- runtime 仍由 `shouldUseAutoRecallCardRuntime()` 额外限制为 `agentId=edi`；`task-planner`、Codex CLI、缺失 agent id、非 user role、非 interactive chat 都不应进入 card-first。
+
+#### Canary plan 文档
+
+- 新增 `docs/auto-recall-card-runtime-canary-plan.md`。
+- 文档明确 P5 是 local-only / opt-in canary，不建议 broad rollout。
+- 记录 non-goals：不启用 task-planner / Codex CLI、不同时启用 active-memory 与 memory-engine autoRecall、不改 retrieval ranking、不自动调用 `memory_engine_get`、不注入 full content、不因 card render/search result/Console preview reinforcement。
+- 记录 preflight checklist：`git diff --check`、`node --check index.js`、`node bin/run-auto-recall-card-runtime-smoke.js --json`、以及 autoRecall/runtime/card 相关 targeted tests。
+- 记录 5 类 canary prompts：project continuation、P4 decision recall、history-aware debug、generic rewrite skip、generic log summarize skip。
+- 记录事件观测 SQL：检查 `auto_recall_debug` 中的 `card_first_runtime_enabled` / `auto_recall_disclosure_mode`，以及 `memory_injected` 中的 `card_first_runtime_enabled` / `disclosure_mode` / `reinforcement_allowed`。
+- 记录 pass criteria：只在 `edi` interactive user turn 出现 `card_first_runtime_enabled=true`，generic long-input rewrite/summarize 仍跳过 recall，card-first context 不包含 full memory body，raw-log/tool-output withheld，citation/reinforcement 仍保持 cited-id-only。
+- 记录 fail criteria：card-first 跑到 task-planner/Codex/missing agent/non-user/non-interactive，prompt supplement 泄露 full raw body/stack/timestamp/tool output，assistant 机械引用 memory id，无 cited id reinforcement，active-memory 与 memory-engine autoRecall 双重注入，或 disclosure-mode observability 缺失。
+- 记录 rollback：将 `autoRecall.cardFirstRuntime.enabled=false` 或删除 `cardFirstRuntime`，重启/重载 OpenClaw gateway/plugin runtime，再用 smoke 和 event 查询确认回到 raw_text。
+- 记录 canary decision template，方便后续决定 keep disabled / repeat canary / expand edi canary / reject card-first default。
+
+#### 静态测试
+
+- 新增 `test/auto-recall-card-runtime-canary-plan.test.js`。
+- 测试覆盖：
+  - canary plan 文档存在；
+  - `openclaw.plugin.json` schema 暴露 `cardFirstRuntime.enabled`；
+  - manifest 默认不启用 autoRecall 或 card-first runtime；
+  - schema 暴露开关后 runtime 仍保持 edi-only；
+  - canary plan 明确 opt-in / local-only / no broad rollout；
+  - non-goals、安全边界、schema 样例、rollback config、preflight commands、event inspection SQL、pass/fail criteria、decision record template 均存在。
+
+#### 验证
+
+已执行 targeted tests：
+
+```bash
+git diff --check
+node --test \
+  test/auto-recall-card-runtime-canary-plan.test.js \
+  test/auto-recall-card-runtime-smoke.test.js \
+  test/auto-recall-memory-card-runtime-runbook.test.js \
+  test/auto-recall-runtime-gate.test.js \
+  test/config-runtime.test.js \
+  test/review-findings.test.js
+```
+
+结果：
+
+```text
+# tests 48
+# pass 48
+# fail 0
+```
+
+未执行项：
+
+- 未修改真实 OpenClaw runtime config。
+- 未启用 `cardFirstRuntime.enabled`。
+- 未运行真实 `edi` canary session。
+- 未运行全量 `npm test`。
+
+结论：
+
+- P5 canary plan 已就绪，但 card-first runtime 仍保持默认关闭。
+- 下一步可以在工作区干净、active-memory 确认关闭、autoRecall 显式启用且仅限 `edi` 的前提下，做一次短 canary session，并用事件 SQL 对照 raw_text / memory_card disclosure mode。
+
 ## 2026-07-02
 
 ### Cron maintenance command 化与 archived raw_log rescue 标注闭环
