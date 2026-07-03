@@ -276,4 +276,9 @@ test("CLI can write annotation-ready JSONL with full sample rows and sampling me
   assert.ok(selectedRows[0].sampling.selection_reason);
   assert.equal(typeof selectedRows[0].sampling.computed_score, "number");
   assert.ok(Array.isArray(selectedRows[0].sampling.manual_review_flags));
+  const conflictRow = selectedRows.find(row => row.sample_id === "rescue:conflict");
+  assert.ok(conflictRow);
+  assert.equal(conflictRow.sampling.raw_predicted_keep_active, "yes");
+  assert.equal(conflictRow.sampling.predicted_keep_active, "unsure");
+  assert.deepEqual(conflictRow.sampling.manual_review_flags, ["positive_negative_conflict"]);
 });

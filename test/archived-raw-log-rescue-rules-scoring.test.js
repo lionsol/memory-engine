@@ -198,7 +198,7 @@ test("v0.2 scoring gives engineering evidence sampling boost", () => {
   assert.equal(result.parts.some(p => p.name === "tool_output_penalty"), false);
 });
 
-test("v0.2 scoring treats positive/negative conflict as manual-review priority", () => {
+test("v0.2 scoring caps positive/negative conflict predictions to unsure", () => {
   const result = computeArchivedRawLogRescueScore(sample({
     primary_bucket: "archived_raw_log_project",
     risk_signals: [
@@ -209,9 +209,11 @@ test("v0.2 scoring treats positive/negative conflict as manual-review priority",
   }));
 
   assert.equal(result.score, 55);
-  assert.equal(result.predicted_keep_active, "yes");
+  assert.equal(result.raw_predicted_keep_active, "yes");
+  assert.equal(result.predicted_keep_active, "unsure");
   assert.deepEqual(result.manual_review_flags, ["positive_negative_conflict"]);
   assert.ok(result.parts.some(p => p.name === "positive_negative_conflict_penalty" && p.value === -5));
+  assert.ok(result.parts.some(p => p.name === "positive_negative_conflict_prediction_cap" && p.value === 0));
   assert.equal(result.parts.some(p => p.name === "transient_runtime_noise_penalty"), false);
 });
 
