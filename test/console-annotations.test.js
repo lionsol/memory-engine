@@ -51,6 +51,19 @@ test("console annotations page resets stale filters after loading a new file", (
   }
 });
 
+test("console annotations page makes filtered bucket views explicit", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "All buckets (${state.samples.length})",
+    "function bucketTotals()",
+    "filtered (${state.samples.length} total)",
+    "filtered view",
+    "state.currentIndex = 0;",
+  ]) {
+    assert.equal(page.includes(token), true, `missing filtered-view token: ${token}`);
+  }
+});
+
 test("console annotations page exposes no destructive action entrypoints", () => {
   const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
   for (const forbidden of [

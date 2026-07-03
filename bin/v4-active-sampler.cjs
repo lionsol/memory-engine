@@ -89,6 +89,7 @@ function serializeAnnotationSample(sample, threshold) {
       boundary_distance: _boundary,
       score_parts: _score_parts,
       score_signals: _score_signals,
+      manual_review_flags: sample._score_manual_review_flags || [],
     },
   };
 }

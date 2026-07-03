@@ -153,6 +153,33 @@ test("refined signals identify transient cron and healthcheck noise", () => {
   assert.ok(polarity.negative_evidence.includes("transient_runtime_noise_signal"));
 });
 
+test("refined signals identify OpenClaw heartbeat config decisions as positive evidence", () => {
+  const signals = inferArchivedRawLogRescueSignals(`
+    OpenClaw heartbeat poll. 设置变更为 target: "last", every: "0m"。
+    config change detected → heartbeat: disabled → hot reload applied。
+    以后想启用时改成 "30m" 之类的就行。
+  `);
+  const polarity = describeSignalPolarity(signals);
+
+  assert.ok(signals.includes("openclaw_config_signal"));
+  assert.ok(signals.includes("engineering_evidence_signal"));
+  assert.ok(polarity.positive_evidence.includes("openclaw_config_signal"));
+});
+
+test("refined signals identify memory-engine code audit reports", () => {
+  const signals = inferArchivedRawLogRescueSignals(`
+    config/key 解析符号全在 bin/session-checkpoint.js：
+    getSFKey()、getDSKey()、getSFBaseUrl()、getDSBaseUrl()。
+    消费点：llmComplete() 和 nightlyCheckpoint()。
+  `);
+  const polarity = describeSignalPolarity(signals);
+
+  assert.ok(signals.includes("project:memory-engine"));
+  assert.ok(signals.includes("memory_engine_code_audit_signal"));
+  assert.ok(signals.includes("engineering_evidence_signal"));
+  assert.ok(polarity.positive_evidence.includes("memory_engine_code_audit_signal"));
+});
+
 test("v0.2 scoring gives engineering evidence sampling boost", () => {
   const result = computeArchivedRawLogRescueScore(sample({
     primary_bucket: "archived_raw_log_project",
@@ -171,7 +198,24 @@ test("v0.2 scoring gives engineering evidence sampling boost", () => {
   assert.equal(result.parts.some(p => p.name === "tool_output_penalty"), false);
 });
 
-test("v0.2 scoring penalizes transient runtime noise", () => {
+test("v0.2 scoring treats positive/negative conflict as manual-review priority", () => {
+  const result = computeArchivedRawLogRescueScore(sample({
+    primary_bucket: "archived_raw_log_project",
+    risk_signals: [
+      "project:memory-engine",
+      "engineering_evidence_signal",
+      "transient_runtime_noise_signal",
+    ],
+  }));
+
+  assert.equal(result.score, 55);
+  assert.equal(result.predicted_keep_active, "yes");
+  assert.deepEqual(result.manual_review_flags, ["positive_negative_conflict"]);
+  assert.ok(result.parts.some(p => p.name === "positive_negative_conflict_penalty" && p.value === -5));
+  assert.equal(result.parts.some(p => p.name === "transient_runtime_noise_penalty"), false);
+});
+
+test("v0.2 scoring penalizes pure transient runtime noise", () => {
   const result = computeArchivedRawLogRescueScore(sample({
     primary_bucket: "archived_raw_log_transient",
     risk_signals: [
@@ -183,5 +227,6 @@ test("v0.2 scoring penalizes transient runtime noise", () => {
   }));
 
   assert.equal(result.predicted_keep_active, "no");
+  assert.deepEqual(result.manual_review_flags, []);
   assert.ok(result.parts.some(p => p.name === "transient_runtime_noise_penalty" && p.value === -35));
 });

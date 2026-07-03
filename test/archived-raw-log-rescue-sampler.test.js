@@ -232,4 +232,5 @@ test("CLI can write annotation-ready JSONL with full sample rows and sampling me
   assert.ok(selectedRows[0].sampling);
   assert.ok(selectedRows[0].sampling.selection_reason);
   assert.equal(typeof selectedRows[0].sampling.computed_score, "number");
+  assert.ok(Array.isArray(selectedRows[0].sampling.manual_review_flags));
 });

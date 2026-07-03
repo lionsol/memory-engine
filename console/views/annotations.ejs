@@ -286,14 +286,24 @@
       return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
     }
 
+    function bucketTotals() {
+      const counts = new Map();
+      for (const sample of state.samples) {
+        const bucket = sample.primary_bucket || "unknown";
+        counts.set(bucket, (counts.get(bucket) || 0) + 1);
+      }
+      return counts;
+    }
+
     function syncBucketFilterOptions() {
-      const buckets = Array.from(new Set(state.samples.map(sample => sample.primary_bucket).filter(Boolean))).sort();
+      const totals = bucketTotals();
+      const buckets = Array.from(totals.keys()).sort();
       const current = els.bucketFilter.value;
-      els.bucketFilter.innerHTML = '<option value="">All buckets</option>';
+      els.bucketFilter.innerHTML = `<option value="">All buckets (${state.samples.length})</option>`;
       for (const bucket of buckets) {
         const option = document.createElement("option");
         option.value = bucket;
-        option.textContent = bucket;
+        option.textContent = `${bucket} (${totals.get(bucket) || 0})`;
         els.bucketFilter.appendChild(option);
       }
       els.bucketFilter.value = buckets.includes(current) ? current : "";
@@ -382,8 +392,13 @@
 
       els.emptyState.hidden = true;
       els.reviewState.hidden = false;
-      els.recordTitle.textContent = `${state.currentIndex + 1} / ${state.filteredSamples.length}`;
-      els.recordSubtitle.textContent = sample.primary_bucket || "memory sample";
+      const filtered = state.filteredSamples.length !== state.samples.length;
+      els.recordTitle.textContent = filtered
+        ? `${state.currentIndex + 1} / ${state.filteredSamples.length} filtered (${state.samples.length} total)`
+        : `${state.currentIndex + 1} / ${state.filteredSamples.length}`;
+      els.recordSubtitle.textContent = filtered
+        ? `${sample.primary_bucket || "memory sample"} · filtered view`
+        : (sample.primary_bucket || "memory sample");
       els.sampleId.textContent = sample.sample_id;
       els.memoryId.textContent = sample.memory_id;
       els.chunkId.textContent = sample.chunk_id;
@@ -494,7 +509,10 @@
       syncBucketFilterOptions();
       clearFilters();
     });
-    els.bucketFilter.addEventListener("change", applyFilters);
+    els.bucketFilter.addEventListener("change", () => {
+      state.currentIndex = 0;
+      applyFilters();
+    });
     els.clearFiltersButton.addEventListener("click", clearFilters);
     els.pathPrefixFilter.addEventListener("input", applyFilters);
     els.unlabeledOnly.addEventListener("change", applyFilters);
