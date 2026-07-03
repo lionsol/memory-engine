@@ -1,5 +1,263 @@
 ## 2026-07-03
 
+### Archived raw_log rescue active learning closeout: P3.5 → P6
+
+今天继续推进 archived raw_log rescue 标注闭环，重点从“能抽样、能标注”推进到“能用两轮人工标签校准 scoring / manual-review 策略”。本轮仍保持 safety boundary：只读评估、只写 annotation/report 文件，不写 DB，不执行 unarchive / category update / delete / quarantine / reinforce。
+
+#### P3.5：conflict scoring refinement
+
+P2 第一轮 20 条 active samples 标注完成后，回放发现 `positive_negative_conflict` 样本在第一轮里 4/4 都被标成 `keep_active=yes`。因此先做了一版 conflict scoring refinement：
+
+- `positive_negative_conflict_penalty` 从纯 transient penalty 中拆出来，设置为弱负分 `-5`。
+- `engineering_evidence_signal + transient_runtime_noise_signal` 不再直接吃 `transient_runtime_noise_penalty=-35`。
+- scoring 增加 `manual_review_flags=["positive_negative_conflict"]`。
+- sampler JSONL 输出增加 `sampling.manual_review_flags`。
+
+P3.5 在 P2 上显著提升 recall，但这个判断后来被 P4 第二轮标注修正。
+
+#### P4：排除已标注样本并生成第二轮 active samples
+
+完成 P3.5 后提交，再新增 sampler exclude 能力：
+
+- `bin/v4-active-sampler.cjs` 新增 `--exclude-labels <path[,path...]>`。
+- Sampler 会读取 labels JSONL 中的 `sample_id`，从候选池里排除已标注样本，再做 active sampling。
+- 新增测试覆盖已标注样本不重复抽取。
+
+生成第二轮候选与样本：
+
+```bash
+node bin/export-archived-raw-log-rescue-candidates.cjs \
+  --limit 1000 \
+  --preview-chars 1000 \
+  --out reports/archived-raw-log-rescue-candidates-active-p4-pool.jsonl
+
+node bin/v4-active-sampler.cjs \
+  --input reports/archived-raw-log-rescue-candidates-active-p4-pool.jsonl \
+  --exclude-labels reports/archived-raw-log-rescue_labels_active_p2_20samples_20260703.jsonl \
+  --limit 20 \
+  --format jsonl \
+  --out reports/archived-raw-log-rescue-active-samples-p4-20samples.jsonl
+```
+
+P4 样本检查：
+
+```text
+rows = 20
+overlap_with_p2_labels = 0
+all_have_sampling = true
+all_have_annotation = true
+```
+
+P4 标注结果保存到：
+
+```text
+reports/archived-raw-log-rescue_labels_active_p4_20samples_20260703.jsonl
+```
+
+第二轮人工标签分布与 P2 完全不同：
+
+```text
+P4 labels: yes = 5, no = 15
+```
+
+其中大量 `positive_negative_conflict` 实际是 `raw_log` / `episodic` / polluted dialogue summary，应当 drop 或保留人工复核，而不是自动 keep。
+
+#### P5：把 conflict prediction cap 到 unsure
+
+P4 回放证明 P3.5 的弱负分策略会产生大量 false positive：
+
+```text
+P3.5 on P4:
+yes_false_positive = 15
+yes_precision ≈ 0.118
+```
+
+因此 P5 改为更安全的策略：
+
+```text
+positive_negative_conflict = high-priority manual review
+positive_negative_conflict != automatic keep
+```
+
+实现：
+
+- `computeArchivedRawLogRescueScore()` 增加 `raw_predicted_keep_active`。
+- 如果 `hasPositiveNegativeConflict && raw_predicted_keep_active === "yes"`，则最终 `predicted_keep_active` cap 为 `unsure`。
+- `score` / `boundary_distance` 仍保留，用于 sampler 排序与 boundary analysis。
+- `parts` 增加 `positive_negative_conflict_prediction_cap:0`，便于解释。
+- sampler JSON / JSONL 输出增加 `sampling.raw_predicted_keep_active`。
+
+P5 回放：
+
+```text
+P2:
+labels_valid = 20
+yes_false_positive = 0
+yes_false_negative = 7
+yes_precision = 1.0
+yes_recall ≈ 0.588
+
+P4:
+labels_valid = 20
+yes_false_positive = 0
+yes_false_negative = 4
+yes_precision = 1.0
+yes_recall = 0.2
+```
+
+结论：P5 牺牲了一部分 recall，但消除了 P4 暴露出的 raw_log false positive；这是当前 rescue pipeline 更安全的方向。
+
+#### P6：P2 + P4 combined label report
+
+新增 combined report 工具：
+
+- `bin/report-archived-raw-log-rescue-labels.cjs`
+- `test/report-archived-raw-log-rescue-labels.test.js`
+
+功能：
+
+- 支持多轮 `--pair name=labels:candidates`。
+- 合并多轮 labels/candidates。
+- 去重并报告 duplicate / missing candidate / invalid keep_active。
+- 输出 JSON 和 Markdown。
+- 单独统计 `manual_review` 与 `non_manual`。
+- 按 round / bucket / selection_reason 统计 metrics。
+- 明确 `write_db=false`、`memory_side_effects=false`、`reinforcement_side_effects=false`。
+
+P6 生成的报告：
+
+```text
+reports/archived-raw-log-rescue-combined-report-p2-p4-20260703.json
+reports/archived-raw-log-rescue-combined-report-p2-p4-20260703.md
+```
+
+由于 P2 active samples 文件曾缺失，先用 P2 pool 重新生成，并验证与 P2 labels 20/20 对齐后保存回：
+
+```text
+reports/archived-raw-log-rescue-active-samples-p2-20samples.jsonl
+```
+
+最终 combined report 关键结果：
+
+```text
+valid labels = 40
+invalid labels = 0
+actual yes = 22
+actual no = 18
+predicted yes = 11
+predicted unsure = 23
+predicted no = 6
+yes_false_positive = 0
+yes_false_negative = 11
+yes_precision = 1.0
+yes_recall = 0.5
+```
+
+Manual review bucket：
+
+```text
+manual_review total = 23
+actual yes = 7
+actual no = 16
+predicted unsure = 23
+raw predicted yes = 20
+```
+
+Selection reason 观察：
+
+```text
+positive_negative_conflict:
+  total = 9
+  actual yes = 4
+  actual no = 5
+  predicted unsure = 9
+
+boundary:
+  total = 15
+  actual yes = 7
+  actual no = 8
+  yes_precision = 1.0
+  yes_recall = 1.0
+
+bucket_diversity:
+  total = 12
+  actual yes = 10
+  actual no = 2
+  yes_precision = 1.0
+  yes_recall = 0.4
+
+transient_sanity_check:
+  total = 4
+  actual yes = 1
+  actual no = 3
+```
+
+核心结论：
+
+- `positive_negative_conflict` 不是 yes，也不是 no，而是稳定的 manual-review queue。
+- P5 cap 后，overall yes precision 保持 1.0，当前没有 false positive。
+- `manual_review` 里 no 多于 yes，不能自动 restore。
+- `boundary` 批次表现最好，可作为后续提升 recall 的优先分析对象。
+- `keyword` / `transient` 仍存在少量人工 yes，但应优先从 signal refinement 修正，不应放宽 hard-drop。
+
+#### 已提交节点
+
+今天已提交：
+
+```text
+5912320 feat(annotation): refine raw log rescue active sampling
+cd2b784 feat(annotation): exclude labeled samples in rescue sampler
+a6a703d fix(annotation): cap conflict rescue predictions to unsure
+```
+
+P6 当前尚未提交，新增未提交文件：
+
+```text
+bin/report-archived-raw-log-rescue-labels.cjs
+test/report-archived-raw-log-rescue-labels.test.js
+```
+
+#### 验证
+
+P6 最终 targeted suite：
+
+```bash
+node --check bin/report-archived-raw-log-rescue-labels.cjs
+git diff --check
+node --test \
+  test/annotation-reviewer-static.test.js \
+  test/console-annotations.test.js \
+  test/archived-raw-log-rescue-rules-scoring.test.js \
+  test/archived-raw-log-rescue-sampler.test.js \
+  test/evaluate-archived-raw-log-rescue-labels.test.js \
+  test/report-archived-raw-log-rescue-labels.test.js
+```
+
+结果：
+
+```text
+# tests 35
+# pass 35
+# fail 0
+```
+
+未执行项：
+
+- 未运行全量 `npm test`。
+- 未写入真实 DB。
+- 未执行 unarchive / category update / delete / quarantine / reinforce。
+- 未把 reports runtime artifacts 加入 commit。
+
+#### 明天继续：P7 manual-review queue design
+
+建议下一步从 P6 结论继续做 P7：
+
+- 生成稳定的 manual-review queue artifact，而不是继续混在普通 active samples 中。
+- queue 输入优先来自：`positive_negative_conflict`、`raw_predicted_keep_active=yes && predicted_keep_active=unsure`、boundary near-threshold。
+- queue 输出应包含：raw/capped prediction、manual_review_flags、selection_reason、target_category / rescue_confidence 分布、source bucket、compact reasons。
+- 保持 read-only，只产出 JSONL / Markdown，不做 lifecycle apply。
+- 后续再用更多人工标签判断是否需要拆分 conflict 子类，例如 `autorecall_log_noise`、`polluted_dialogue_summary`、`project_decision_with_noise`、`config_change_with_noise`。
+
 ### AutoRecall P5 card-first runtime canary plan
 
 在 P4 closeout 之后，补齐 P5 opt-in canary plan。目标不是直接打开 card-first runtime，而是让下一次真实 `edi` canary 有明确的 schema、preflight、观测 SQL、通过/失败标准和回滚步骤。
