@@ -14,6 +14,11 @@
         <input id="annotationCandidateFile" type="file" accept=".jsonl,.txt">
       </div>
       <div class="annotation-field">
+        <label for="annotationLabelFile">Load labels JSONL to resume</label>
+        <input id="annotationLabelFile" type="file" accept=".jsonl,.txt">
+        <div id="annotationLabelImportStatus" class="muted">No labels loaded</div>
+      </div>
+      <div class="annotation-field">
         <label for="annotationAnnotator">Annotator</label>
         <input id="annotationAnnotator" type="text" placeholder="name or handle">
       </div>
@@ -222,6 +227,8 @@
     const state = { samples: [], filteredSamples: [], labels: new Map(), currentIndex: 0 };
     const els = {
       candidateFile: document.getElementById("annotationCandidateFile"),
+      labelFile: document.getElementById("annotationLabelFile"),
+      labelImportStatus: document.getElementById("annotationLabelImportStatus"),
       annotator: document.getElementById("annotationAnnotator"),
       bucketFilter: document.getElementById("annotationBucketFilter"),
       pathPrefixFilter: document.getElementById("annotationPathPrefixFilter"),
@@ -313,6 +320,89 @@
     function isAnnotationFilled(annotation) {
       if (!annotation) return false;
       return Boolean(annotation.quality || annotation.currency || annotation.auto_recall_eligible || annotation.preferred_action || annotation.keep_active || annotation.target_category || annotation.rescue_confidence || annotation.reason);
+    }
+
+    function normalizeAnnotation(annotation) {
+      if (!annotation || typeof annotation !== "object") return {};
+      return {
+        quality: annotation.quality || null,
+        currency: annotation.currency || null,
+        auto_recall_eligible: annotation.auto_recall_eligible || null,
+        preferred_action: annotation.preferred_action || null,
+        keep_active: annotation.keep_active || null,
+        target_category: annotation.target_category || null,
+        rescue_confidence: annotation.rescue_confidence || null,
+        reason: annotation.reason || annotation.notes || null,
+      };
+    }
+
+    function parseLabelJsonl(text) {
+      const rows = [];
+      const invalid = [];
+      String(text || "")
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .forEach((line, index) => {
+          try {
+            const row = JSON.parse(line);
+            rows.push({ row, lineNumber: index + 1 });
+          } catch (error) {
+            invalid.push({ lineNumber: index + 1, error: String(error?.message || error) });
+          }
+        });
+      return { rows, invalid };
+    }
+
+    function labelMatchesSampleIdentity(label, sample) {
+      if (!label || !sample) return false;
+      if (String(label.sample_id || "") !== sample.sample_id) return false;
+      for (const key of ["memory_id", "chunk_id", "primary_bucket", "source_path"]) {
+        if (label[key] && String(label[key]) !== String(sample[key] || "")) return false;
+      }
+      return true;
+    }
+
+    function importLabelsFromText(text) {
+      const samplesById = new Map(state.samples.map(sample => [sample.sample_id, sample]));
+      const parsed = parseLabelJsonl(text);
+      let imported = 0;
+      let skippedEmpty = 0;
+      let skippedNotInCandidates = 0;
+      let skippedIdentityMismatch = 0;
+      for (const { row } of parsed.rows) {
+        const sampleId = String(row?.sample_id || "");
+        const sample = samplesById.get(sampleId);
+        if (!sample) {
+          skippedNotInCandidates += 1;
+          continue;
+        }
+        if (!labelMatchesSampleIdentity(row, sample)) {
+          skippedIdentityMismatch += 1;
+          continue;
+        }
+        const annotation = normalizeAnnotation(row.annotation);
+        if (!isAnnotationFilled(annotation)) {
+          skippedEmpty += 1;
+          continue;
+        }
+        state.labels.set(sample.sample_id, {
+          schema_version: 1,
+          sample_id: sample.sample_id,
+          sample_type: sample.sample_type,
+          memory_id: sample.memory_id,
+          chunk_id: sample.chunk_id,
+          primary_bucket: sample.primary_bucket,
+          source_path: sample.source_path,
+          annotation,
+          annotator: row.annotator || els.annotator.value.trim() || null,
+          labeled_at: row.labeled_at || new Date().toISOString(),
+        });
+        imported += 1;
+      }
+      els.labelImportStatus.textContent = `Imported ${imported} label(s); skipped ${parsed.invalid.length} invalid, ${skippedNotInCandidates} not in candidates, ${skippedIdentityMismatch} identity mismatch, ${skippedEmpty} empty.`;
+      state.currentIndex = 0;
+      applyFilters();
     }
 
     function currentSample() {
@@ -586,8 +676,21 @@
       state.samples = parseJsonl(text);
       state.labels.clear();
       state.currentIndex = 0;
+      els.labelFile.value = "";
+      els.labelImportStatus.textContent = "No labels loaded";
       syncBucketFilterOptions();
       clearFilters();
+    });
+    els.labelFile.addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      if (!state.samples.length) {
+        els.labelImportStatus.textContent = "Load candidate JSONL before loading labels.";
+        event.target.value = "";
+        return;
+      }
+      const text = await file.text();
+      importLabelsFromText(text);
     });
     els.bucketFilter.addEventListener("change", () => {
       state.currentIndex = 0;

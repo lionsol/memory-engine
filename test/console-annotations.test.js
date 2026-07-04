@@ -45,9 +45,30 @@ test("console annotations page resets stale filters after loading a new file", (
     "els.bucketFilter.value = \"\";",
     "els.pathPrefixFilter.value = \"\";",
     "els.unlabeledOnly.checked = false;",
+    "els.labelFile.value = \"\";",
+    "No labels loaded",
     "clearFilters();",
   ]) {
     assert.equal(page.includes(token), true, `missing filter reset token: ${token}`);
+  }
+});
+
+test("console annotations page can import existing labels locally to resume review", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "annotationLabelFile",
+    "Load labels JSONL to resume",
+    "annotationLabelImportStatus",
+    "parseLabelJsonl",
+    "normalizeAnnotation",
+    "labelMatchesSampleIdentity",
+    "importLabelsFromText",
+    "skippedNotInCandidates",
+    "skippedIdentityMismatch",
+    "Load candidate JSONL before loading labels.",
+    "Imported ${imported} label(s)",
+  ]) {
+    assert.equal(page.includes(token), true, `missing label import token: ${token}`);
   }
 });
 

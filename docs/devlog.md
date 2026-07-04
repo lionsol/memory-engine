@@ -1,5 +1,36 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P11: Console local label resume support
+
+After P10 was committed as `a2ade05 feat(console): show rescue review queue metadata`, P11 fixed the next GUI workflow gap: `/annotations` could export labels but could not reload an existing labels JSONL to resume a partially completed manual review.
+
+Implemented:
+
+- Added `Load labels JSONL to resume` to `/annotations`.
+- The label import remains browser-local and uses File API only; no upload, DB write, apply, archive, delete, quarantine, or reinforce path was added.
+- Labels can only be imported after candidate JSONL is loaded.
+- Imported labels are matched to the current candidate set by `sample_id` and identity fields:
+  - `memory_id`
+  - `chunk_id`
+  - `primary_bucket`
+  - `source_path`
+- Labels that do not belong to the current candidate set are skipped and counted.
+- Labels with identity mismatches are skipped and counted.
+- Empty labels and parse-invalid rows are skipped and counted.
+- Loading a new candidate file clears any imported labels and resets the label-file input, preventing stale cross-queue progress from leaking into a new review.
+- Imported labels populate the existing local label map, so progress counts and `Unlabeled only` filtering work across resumed sessions.
+- Export schema remains unchanged.
+
+Verification:
+
+```text
+node --test test/console-annotations.test.js
+# 8/8 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 29/29 pass
+```
+
 ### Archived raw_log rescue P10: Console review queue metadata display
 
 After P9 was committed as `7f7426c feat(console): list rescue review queue reports`, P10 fixed the next Console handoff gap: `/annotations` could load the P7 queue JSONL, but the page normalized samples down to generic annotation fields and discarded review-queue context that annotators need.
