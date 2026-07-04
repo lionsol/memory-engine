@@ -51,6 +51,7 @@ function parseArgs(argv) {
     includeCalibrationGrid: args.includes('--include-calibration-grid'),
     includeConflictCapDiagnostics: args.includes('--include-conflict-cap-diagnostics'),
     includeTieredCapCalibration: args.includes('--include-tiered-cap-calibration'),
+    includeSignalDiversityDiagnostics: args.includes('--include-signal-diversity-diagnostics'),
     threshold: parseNumber(valueFor('--threshold'), DEFAULT_RESCUE_SCORING_THRESHOLD),
     unsureThreshold: parseNumber(valueFor('--unsure-threshold'), DEFAULT_RESCUE_UNSURE_THRESHOLD),
     sweepMin: parseNumber(valueFor('--sweep-min'), 30),
@@ -430,6 +431,192 @@ function buildConflictCapDiagnostics(rows) {
   };
 }
 
+function summarizeNumeric(values) {
+  return {
+    min: values.length > 0 ? Math.min(...values) : null,
+    max: values.length > 0 ? Math.max(...values) : null,
+    average: average(values),
+  };
+}
+
+function summarizeBoolean(rows, fields) {
+  const out = {};
+  for (const field of fields) {
+    out[field] = {
+      true: rows.filter(row => row[field] === true).length,
+      false: rows.filter(row => row[field] === false).length,
+    };
+  }
+  return out;
+}
+
+function summarizePatternFlags(rows) {
+  return {
+    project_only_pattern: {
+      true: rows.filter(row => row.pattern_flags.project_only_pattern).length,
+      false: rows.filter(row => !row.pattern_flags.project_only_pattern).length,
+    },
+    project_plus_noise_only_pattern: {
+      true: rows.filter(row => row.pattern_flags.project_plus_noise_only_pattern).length,
+      false: rows.filter(row => !row.pattern_flags.project_plus_noise_only_pattern).length,
+    },
+    high_value_multi_signal_pattern: {
+      true: rows.filter(row => row.pattern_flags.high_value_multi_signal_pattern).length,
+      false: rows.filter(row => !row.pattern_flags.high_value_multi_signal_pattern).length,
+    },
+  };
+}
+
+function signalFamiliesFromRow(row) {
+  const signals = Array.isArray(row.prediction_sample?.risk_signals) ? row.prediction_sample.risk_signals : [];
+  const qualityFlags = Array.isArray(row.prediction_sample?.quality_flags) ? row.prediction_sample.quality_flags : [];
+  const families = new Set();
+
+  if (signals.some(signal => signal.startsWith('project:'))) families.add('project');
+  if (signals.includes('decision_signal')) families.add('decision');
+  if (signals.includes('preference_signal')) families.add('preference');
+  if (signals.includes('todo_signal')) families.add('todo');
+  if (signals.includes('architecture_explanation_signal')) families.add('architecture');
+  if (signals.includes('memory_policy_signal')) families.add('memory_policy');
+  if (signals.includes('engineering_evidence_signal')) families.add('engineering_evidence');
+  if (signals.includes('transient_runtime_noise_signal')) families.add('transient_runtime_noise');
+  if (signals.includes('pure_tool_output_signal')) families.add('pure_tool_output');
+  if (signals.includes('tool_output_or_code_signal')) families.add('tool_output');
+  if (qualityFlags.includes('raw_log_leak') || qualityFlags.includes('archived_raw_log')) families.add('raw_log');
+
+  return Array.from(families).sort();
+}
+
+function buildSignalDiversityFeatureRow(row) {
+  const signalFamilies = signalFamiliesFromRow(row);
+  const positiveFamilies = signalFamilies.filter(family => [
+    'project',
+    'decision',
+    'preference',
+    'todo',
+    'architecture',
+    'memory_policy',
+    'engineering_evidence',
+  ].includes(family));
+  const positiveNonProjectFamilies = positiveFamilies.filter(family => family !== 'project');
+  const negativeFamilies = signalFamilies.filter(family => [
+    'transient_runtime_noise',
+    'pure_tool_output',
+    'tool_output',
+    'keyword_hard_drop',
+    'raw_log',
+    'low_confidence',
+  ].includes(family));
+  const highValueBooleans = {
+    has_project_signal: signalFamilies.includes('project'),
+    has_decision_signal: signalFamilies.includes('decision'),
+    has_preference_signal: signalFamilies.includes('preference'),
+    has_todo_signal: signalFamilies.includes('todo'),
+    has_architecture_signal: signalFamilies.includes('architecture'),
+    has_memory_policy_signal: signalFamilies.includes('memory_policy'),
+    has_engineering_evidence_signal: signalFamilies.includes('engineering_evidence'),
+    has_transient_runtime_noise_signal: signalFamilies.includes('transient_runtime_noise'),
+    has_pure_tool_output_signal: signalFamilies.includes('pure_tool_output'),
+    has_tool_output_signal: signalFamilies.includes('tool_output'),
+  };
+  const noiseFamilies = negativeFamilies;
+  const nonProjectFamilies = signalFamilies.filter(family => family !== 'project');
+  const nonProjectNonNoiseFamilies = nonProjectFamilies.filter(family => !noiseFamilies.includes(family));
+  const patternFlags = {
+    project_only_pattern:
+      signalFamilies.includes('project') &&
+      nonProjectNonNoiseFamilies.length === 0,
+    project_plus_noise_only_pattern:
+      signalFamilies.includes('project') &&
+      nonProjectFamilies.length > 0 &&
+      nonProjectNonNoiseFamilies.length === 0,
+    high_value_multi_signal_pattern:
+      positiveNonProjectFamilies.length >= 2 || positiveFamilies.length >= 3,
+  };
+
+  return {
+    ...row,
+    risk_signals: Array.isArray(row.prediction_sample?.risk_signals) ? row.prediction_sample.risk_signals.slice() : [],
+    signal_families: signalFamilies,
+    risk_signal_count: Array.isArray(row.prediction_sample?.risk_signals) ? row.prediction_sample.risk_signals.length : 0,
+    unique_signal_family_count: signalFamilies.length,
+    positive_signal_family_count: positiveFamilies.length,
+    negative_signal_family_count: negativeFamilies.length,
+    ...highValueBooleans,
+    pattern_flags: patternFlags,
+  };
+}
+
+function compareSignalDiversityExamples(a, b) {
+  if (a.positive_signal_family_count !== b.positive_signal_family_count) return b.positive_signal_family_count - a.positive_signal_family_count;
+  if (a.risk_signal_count !== b.risk_signal_count) return b.risk_signal_count - a.risk_signal_count;
+  if (a.score !== b.score) return b.score - a.score;
+  return a.sample_id.localeCompare(b.sample_id);
+}
+
+function compactSignalDiversityExample(row) {
+  return {
+    sample_id: row.sample_id,
+    primary_bucket: row.primary_bucket,
+    actual_keep_active: row.actual_keep_active,
+    score: row.score,
+    risk_signals: row.risk_signals,
+    signal_families: row.signal_families,
+    risk_signal_count: row.risk_signal_count,
+    unique_signal_family_count: row.unique_signal_family_count,
+    positive_signal_family_count: row.positive_signal_family_count,
+    negative_signal_family_count: row.negative_signal_family_count,
+    pattern_flags: row.pattern_flags,
+  };
+}
+
+function buildSignalDiversityGroup(rows) {
+  const booleanFields = [
+    'has_project_signal',
+    'has_decision_signal',
+    'has_preference_signal',
+    'has_todo_signal',
+    'has_architecture_signal',
+    'has_memory_policy_signal',
+    'has_engineering_evidence_signal',
+    'has_transient_runtime_noise_signal',
+    'has_pure_tool_output_signal',
+    'has_tool_output_signal',
+  ];
+
+  return {
+    count: rows.length,
+    risk_signal_count_summary: summarizeNumeric(rows.map(row => row.risk_signal_count)),
+    unique_signal_family_count_summary: summarizeNumeric(rows.map(row => row.unique_signal_family_count)),
+    positive_signal_family_count_summary: summarizeNumeric(rows.map(row => row.positive_signal_family_count)),
+    negative_signal_family_count_summary: summarizeNumeric(rows.map(row => row.negative_signal_family_count)),
+    high_value_signal_distributions: summarizeBoolean(rows, booleanFields),
+    pattern_flag_distributions: summarizePatternFlags(rows),
+    primary_bucket_distribution: buildDistribution(rows, ['primary_bucket']).primary_bucket,
+    score_bucket_distribution: buildDistribution(rows, [Object.assign(row => scoreBucket(row.score), { fieldName: 'score_bucket' })]).score_bucket,
+    examples: rows.slice().sort(compareSignalDiversityExamples).slice(0, 5).map(compactSignalDiversityExample),
+  };
+}
+
+function buildSignalDiversityDiagnostics(rows) {
+  const cappedRows = rows.filter(row => row.is_conflict_capped).map(buildSignalDiversityFeatureRow);
+  const cappedFalsePositiveAvoided = cappedRows.filter(row => row.actual_keep_active === 'no');
+  const cappedFalseNegativeCaused = cappedRows.filter(row => row.actual_keep_active === 'yes');
+  const cappedUnsureActual = cappedRows.filter(row => row.actual_keep_active === 'unsure');
+
+  return {
+    capped_false_positive_avoided: buildSignalDiversityGroup(cappedFalsePositiveAvoided),
+    capped_false_negative_caused: buildSignalDiversityGroup(cappedFalseNegativeCaused),
+    capped_unsure_actual: buildSignalDiversityGroup(cappedUnsureActual),
+    candidate_rules_preview: {
+      uncap_if_positive_family_count_gte_2: cappedRows.filter(row => row.positive_signal_family_count >= 2).length,
+      uncap_if_risk_signal_count_gte_4: cappedRows.filter(row => row.risk_signal_count >= 4).length,
+      uncap_if_has_decision_or_preference: cappedRows.filter(row => row.has_decision_signal || row.has_preference_signal).length,
+      cap_if_project_plus_noise_only: cappedRows.filter(row => row.pattern_flags.project_plus_noise_only_pattern).length,
+    },
+  };
+}
+
 function tieredCapCalibrationVariants() {
   return [
     {
@@ -668,6 +855,10 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
     report.tiered_cap_calibration = tieredCapCalibrationVariants().map(variant =>
       evaluateTieredCapCalibrationVariant(scoringRows, variant)
     );
+  }
+
+  if (options.includeSignalDiversityDiagnostics) {
+    report.signal_diversity_diagnostics = buildSignalDiversityDiagnostics(scoringRows);
   }
 
   if (options.out) writeJson(options.out, report);

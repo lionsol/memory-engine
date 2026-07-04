@@ -112,6 +112,7 @@ test("evaluates joined labels against v0.1 rules and v0.2 scoring", () => {
   assert.equal(report.calibration_grid, undefined);
   assert.equal(report.conflict_cap_diagnostics, undefined);
   assert.equal(report.tiered_cap_calibration, undefined);
+  assert.equal(report.signal_diversity_diagnostics, undefined);
 });
 
 test("does not leak label annotations into v0.1 rule predictions", () => {
@@ -853,6 +854,167 @@ test("tiered cap calibration is candidate-only and unaffected by label target ca
   );
 });
 
+test("includes signal diversity diagnostics when requested without changing default metrics", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:diversity-fn",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "decision_signal",
+        "preference_signal",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+    candidate({
+      sample_id: "rescue:diversity-fp",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log", "raw_log_leak"],
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+    candidate({
+      sample_id: "rescue:diversity-unsure",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log", "raw_log_leak"],
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:diversity-fn",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "high",
+      },
+    }),
+    label({
+      sample_id: "rescue:diversity-fp",
+      annotation: {
+        keep_active: "no",
+        target_category: "raw_log",
+        rescue_confidence: "low",
+      },
+    }),
+    label({
+      sample_id: "rescue:diversity-unsure",
+      annotation: {
+        keep_active: "unsure",
+        target_category: "project",
+        rescue_confidence: "medium",
+      },
+    }),
+  ]);
+
+  const baseline = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+  });
+  const report = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+    includeSignalDiversityDiagnostics: true,
+  });
+
+  assert.equal(report.v0_1_rules.exact_match, baseline.v0_1_rules.exact_match);
+  assert.equal(report.v0_2_scoring.exact_match, baseline.v0_2_scoring.exact_match);
+  assert.equal(report.v0_2_scoring.yes_false_negative, baseline.v0_2_scoring.yes_false_negative);
+  assert.ok(report.signal_diversity_diagnostics);
+  assert.equal(report.signal_diversity_diagnostics.capped_false_positive_avoided.count, 1);
+  assert.equal(report.signal_diversity_diagnostics.capped_false_negative_caused.count, 1);
+  assert.equal(report.signal_diversity_diagnostics.capped_unsure_actual.count, 1);
+
+  const fnExample = report.signal_diversity_diagnostics.capped_false_negative_caused.examples[0];
+  const fpExample = report.signal_diversity_diagnostics.capped_false_positive_avoided.examples[0];
+  assert.equal(fnExample.sample_id, "rescue:diversity-fn");
+  assert.equal(fpExample.sample_id, "rescue:diversity-fp");
+  assert.ok(fnExample.positive_signal_family_count > fpExample.positive_signal_family_count);
+  assert.equal(fnExample.pattern_flags.high_value_multi_signal_pattern, true);
+  assert.equal(fpExample.pattern_flags.project_plus_noise_only_pattern, false);
+  assert.equal(report.signal_diversity_diagnostics.capped_false_negative_caused.high_value_signal_distributions.has_decision_signal.true, 1);
+  assert.equal(report.signal_diversity_diagnostics.capped_false_positive_avoided.high_value_signal_distributions.has_decision_signal.true, 0);
+  assert.equal(report.signal_diversity_diagnostics.candidate_rules_preview.uncap_if_has_decision_or_preference, 1);
+  assert.equal(report.signal_diversity_diagnostics.candidate_rules_preview.cap_if_project_plus_noise_only, 0);
+});
+
+test("signal diversity diagnostics are candidate-only and unaffected by label target category or rescue confidence", () => {
+  const dir = fixtureDir();
+  const labelsPathA = resolve(dir, "labels-a.jsonl");
+  const labelsPathB = resolve(dir, "labels-b.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:diversity-fn",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "decision_signal",
+        "preference_signal",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPathA, [
+    label({
+      sample_id: "rescue:diversity-fn",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "low",
+      },
+    }),
+  ]);
+  writeJsonl(labelsPathB, [
+    label({
+      sample_id: "rescue:diversity-fn",
+      annotation: {
+        keep_active: "yes",
+        target_category: "raw_log",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const reportA = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathA,
+    candidatesInputPath: candidatesPath,
+    includeSignalDiversityDiagnostics: true,
+  });
+  const reportB = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathB,
+    candidatesInputPath: candidatesPath,
+    includeSignalDiversityDiagnostics: true,
+  });
+
+  assert.deepEqual(
+    {
+      capped_false_negative_caused: reportA.signal_diversity_diagnostics.capped_false_negative_caused,
+      candidate_rules_preview: reportA.signal_diversity_diagnostics.candidate_rules_preview,
+    },
+    {
+      capped_false_negative_caused: reportB.signal_diversity_diagnostics.capped_false_negative_caused,
+      candidate_rules_preview: reportB.signal_diversity_diagnostics.candidate_rules_preview,
+    },
+  );
+});
+
 test("writes JSON report only when out is specified", () => {
   const dir = fixtureDir();
   const labelsPath = resolve(dir, "labels.jsonl");
@@ -1056,4 +1218,54 @@ test("CLI prints tiered cap calibration when requested", () => {
   assert.equal(Array.isArray(parsed.tiered_cap_calibration), true);
   assert.ok(parsed.tiered_cap_calibration.some(row => row.variant_id === "baseline_current_cap"));
   assert.ok(parsed.tiered_cap_calibration.some(row => row.variant_id === "cap_only_when_raw_log_leak"));
+});
+
+test("CLI prints signal diversity diagnostics when requested", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+  const stdoutPath = resolve(dir, "stdout-signal-diversity.json");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:diversity-fn",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "decision_signal",
+        "preference_signal",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:diversity-fn",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const result = spawnSync(
+    "bash",
+    [
+      "-lc",
+      `${shellQuote(process.execPath)} ${shellQuote(resolve(repoRoot, "bin/evaluate-archived-raw-log-rescue-labels.cjs"))} --labels ${shellQuote(labelsPath)} --candidates ${shellQuote(candidatesPath)} --include-signal-diversity-diagnostics > ${shellQuote(stdoutPath)}`,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+
+  assert.equal(
+    result.status,
+    0,
+    `status=${result.status} signal=${result.signal} stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+  );
+  const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
+  assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
+  assert.equal(parsed.signal_diversity_diagnostics.capped_false_negative_caused.count, 1);
 });
