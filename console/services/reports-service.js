@@ -16,6 +16,7 @@ const REPORT_PATTERNS = [
   { kind: "annotation_labels", regex: /^annotation-labels-.*\.jsonl$/ },
   { kind: "annotation_summary", regex: /^annotation-summary-\d{8}-\d{6}\.(json|md)$/ },
   { kind: "annotation_eligibility_preview", regex: /^annotation-eligibility-preview-\d{8}-\d{6}\.(json|md)$/ },
+  { kind: "annotation_local_qc_report", regex: /^annotation-local-qc-report-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:\.\d{3})?Z\.json$/ },
   { kind: "archived_raw_log_rescue_combined_report", regex: /^archived-raw-log-rescue-combined-report-p\d+(?:-p\d+)*-\d{8}\.(json|md)$/ },
   { kind: "archived_raw_log_rescue_review_queue", regex: /^archived-raw-log-rescue-manual-review-queue-p\d+-\d{8}\.(jsonl|md)$/ },
   { kind: "archived_raw_log_rescue_review_queue_label_report", regex: /^archived-raw-log-rescue-review-queue-label-report-p\d+(?:-[a-z0-9_]+)*-\d{8}\.(json|md)$/ },
@@ -27,6 +28,7 @@ const REPORT_PATTERNS = [
 const LATEST_KIND_KEYS = [
   "annotation_summary",
   "annotation_eligibility_preview",
+  "annotation_local_qc_report",
   "archived_raw_log_rescue_combined_report",
   "archived_raw_log_rescue_review_queue_label_report",
   "auto_recall_safety_smoke",

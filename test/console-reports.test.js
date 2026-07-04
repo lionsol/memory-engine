@@ -45,6 +45,7 @@ test("reports API lists only whitelisted report files", withTempReports(({ repor
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl", "{\"sample\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 27));
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.jsonl", "{\"sample\":2}\n", Date.UTC(2026, 5, 28, 2, 27, 28));
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628.md", "# legacy", Date.UTC(2026, 5, 28, 2, 27, 29));
+  writeReport(reportsDir, "annotation-local-qc-report-2026-07-04T10-00-00.000Z.json", "{\"mode\":\"annotation_local_qc_report\"}", Date.UTC(2026, 6, 4, 8, 0, 0));
   writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl", "{\"sample_id\":\"rescue:a\"}\n", Date.UTC(2026, 6, 4, 9, 0, 0));
   writeReport(reportsDir, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json", "{\"mode\":\"archived_raw_log_rescue_review_queue_label_report\"}", Date.UTC(2026, 6, 4, 10, 0, 0));
   writeReport(reportsDir, "not-allowed.txt", "nope", Date.UTC(2026, 5, 27, 1, 0, 0));
@@ -63,6 +64,7 @@ test("reports API lists only whitelisted report files", withTempReports(({ repor
     [
       "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json",
       "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl",
+      "annotation-local-qc-report-2026-07-04T10-00-00.000Z.json",
       "annotation-candidates-dreaming_duplicate-20260628.md",
       "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.jsonl",
       "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl",
@@ -120,6 +122,7 @@ test("reports latest API picks latest summary eligibility preview and smoke file
   assert.equal(result.status, 200);
   assert.equal(result.body.annotation_summary?.name, "annotation-summary-20260627-121212.json");
   assert.equal(result.body.annotation_eligibility_preview?.name, "annotation-eligibility-preview-20260627-141414.json");
+  assert.equal(result.body.annotation_local_qc_report, null);
   assert.equal(result.body.archived_raw_log_rescue_combined_report, null);
   assert.equal(result.body.archived_raw_log_rescue_review_queue_label_report, null);
   assert.equal(result.body.auto_recall_safety_smoke?.name, "auto-recall-safety-smoke-20260627-150000.md");
@@ -309,9 +312,11 @@ test("reports service allows bucket-slug, rescue queue, and rescue label report 
   writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl", "{\"sample_id\":\"rescue:a\"}\n", Date.UTC(2026, 6, 4, 1, 0, 0));
   writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.md", "# queue", Date.UTC(2026, 6, 4, 1, 0, 1));
   writeReport(reportsDir, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json", "{\"ok\":true}", Date.UTC(2026, 6, 4, 1, 0, 2));
+  writeReport(reportsDir, "annotation-local-qc-report-2026-07-04T12-34-56.789Z.json", "{\"mode\":\"annotation_local_qc_report\"}", Date.UTC(2026, 6, 4, 1, 0, 3));
 
   const names = listReports().map(file => file.name);
   assert.deepEqual(names, [
+    "annotation-local-qc-report-2026-07-04T12-34-56.789Z.json",
     "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json",
     "archived-raw-log-rescue-manual-review-queue-p7-20260704.md",
     "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl",
@@ -326,6 +331,29 @@ test("reports service allows bucket-slug, rescue queue, and rescue label report 
   assert.equal(getAllowedReportKind("archived-raw-log-rescue-combined-report-p2-p4-20260703.md"), "archived_raw_log_rescue_combined_report");
   assert.equal(getAllowedReportKind("archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl"), "archived_raw_log_rescue_review_queue");
   assert.equal(getAllowedReportKind("archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json"), "archived_raw_log_rescue_review_queue_label_report");
+  assert.equal(getAllowedReportKind("annotation-local-qc-report-2026-07-04T12-34-56.789Z.json"), "annotation_local_qc_report");
+}));
+
+test("reports latest helper tracks browser-local annotation QC reports", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "annotation-local-qc-report-2026-07-04T12-34-56.789Z.json", "{\"old\":true}", Date.UTC(2026, 6, 4, 12, 34, 56));
+  writeReport(reportsDir, "annotation-local-qc-report-2026-07-04T13-00-00.000Z.json", "{\"new\":true}", Date.UTC(2026, 6, 4, 13, 0, 0));
+
+  const latest = latestReports();
+  assert.equal(latest.annotation_local_qc_report?.name, "annotation-local-qc-report-2026-07-04T13-00-00.000Z.json");
+  const file = readReportFile("annotation-local-qc-report-2026-07-04T13-00-00.000Z.json");
+  assert.equal(file.kind, "annotation_local_qc_report");
+  assert.equal(file.format, "json");
+  assert.equal(file.content, "{\"new\":true}");
+}));
+
+test("annotations snapshot excludes local QC reports from candidate and label lists", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "annotation-candidates-20260628-022727.jsonl", "{\"sample\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 27));
+  writeReport(reportsDir, "annotation-labels-20260704-p7.jsonl", "{\"sample_id\":\"rescue:a\"}\n", Date.UTC(2026, 6, 4, 1, 0, 0));
+  writeReport(reportsDir, "annotation-local-qc-report-2026-07-04T12-34-56.789Z.json", "{\"mode\":\"annotation_local_qc_report\"}", Date.UTC(2026, 6, 4, 1, 0, 1));
+
+  const snapshot = annotationReportsSnapshot();
+  assert.deepEqual(snapshot.available_candidates.map(file => file.name), ["annotation-candidates-20260628-022727.jsonl"]);
+  assert.deepEqual(snapshot.available_labels.map(file => file.name), ["annotation-labels-20260704-p7.jsonl"]);
 }));
 
 test("annotations snapshot lists rescue review queue JSONL as loadable candidate", withTempReports(({ reportsDir }) => {
@@ -347,6 +375,7 @@ test("reports latest helper returns null for missing families", withTempReports(
   const latest = latestReports();
   assert.equal(latest.annotation_summary, null);
   assert.equal(latest.annotation_eligibility_preview, null);
+  assert.equal(latest.annotation_local_qc_report, null);
   assert.equal(latest.archived_raw_log_rescue_combined_report, null);
   assert.equal(latest.archived_raw_log_rescue_review_queue_label_report, null);
   assert.equal(latest.auto_recall_safety_smoke, null);

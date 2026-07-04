@@ -1,5 +1,31 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P13: Console reports handoff for local QC report
+
+After P12 was committed as `069ca24 feat(console): export local annotation qc report`, P13 closed the archive/handoff gap for browser-local QC reports. The browser can download `annotation-local-qc-report-*.json`; now if that file is moved into `reports/`, the Console reports service recognizes it without treating it as a candidate or labels file.
+
+Implemented:
+
+- Added `annotation_local_qc_report` to `console/services/reports-service.js` allowlist.
+- Supported downloaded browser timestamp filenames:
+  - `annotation-local-qc-report-YYYY-MM-DDTHH-MM-SS.mmmZ.json`
+  - `annotation-local-qc-report-YYYY-MM-DDTHH-MM-SSZ.json`
+- Added `annotation_local_qc_report` to latest report tracking.
+- Confirmed `/reports/file` can read the QC JSON as a whitelisted report.
+- Confirmed `/annotations` does not list local QC reports as loadable candidates.
+- Confirmed `/annotations` does not list local QC reports as labels.
+- Safety boundary remains unchanged: listing/reading reports only; no DB write, memory mutation, apply, archive, delete, quarantine, or reinforce.
+
+Verification:
+
+```text
+node --test test/console-reports.test.js
+# 14/14 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 32/32 pass
+```
+
 ### Archived raw_log rescue P12: Console browser-local QC report export
 
 After P11 was committed as `7cc7b69 feat(console): resume annotation labels locally`, P12 reduced the remaining command-line dependency in the manual review loop: `/annotations` can now export a browser-local QC report from the currently loaded candidate/queue and labels.
