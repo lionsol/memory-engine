@@ -1,5 +1,44 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P16: Console annotation local QC report preview
+
+After P15 was committed as `59a7d4e feat(console): load annotation labels from reports`, P16 added a structured `/reports` preview for browser-local annotation QC reports. Previously `annotation-local-qc-report-*.json` could be listed and read, but the detail view was a raw JSON `<pre>` only.
+
+Implemented:
+
+- Added `annotation_local_qc_preview` derivation in `console/services/reports-service.js` for `annotation_local_qc_report` JSON files.
+- The preview is a read-only projection of the QC JSON and extracts:
+  - total candidates
+  - unique sample ids
+  - duplicate candidate sample ids
+  - labeled count
+  - unlabeled count
+  - coverage rate
+  - last label-import skipped counts
+  - top candidate bucket distribution
+  - top queue reason distribution
+  - quality distribution
+  - keep_active distribution
+  - preferred_action distribution
+  - target_category distribution
+  - rescue_confidence distribution
+  - first 10 unlabeled samples
+  - first 10 duplicate sample ids
+- Added `Annotation QC Preview` panel to `/reports`.
+- Added `renderAnnotationQcPreview()` in `console/public/charts.js`.
+- Added latest-card/default-report preference for `latest.annotation_local_qc_report`, behind turn gold-set replay but ahead of generic annotation summary.
+- Safety boundary remains explicit in the derived preview: no DB writes, memory file mutation, upload, apply, archive, delete, quarantine, reinforce, LLM, or network side effects.
+
+Verification:
+
+```text
+node --test test/console-reports.test.js
+# 15/15 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 35/35 pass
+```
+
 ### Archived raw_log rescue P15: Console one-click load for whitelisted label reports
 
 After P14 was committed as `e7ab763 feat(console): load annotation candidates from reports`, P15 completed the matching one-click resume path for label reports. `/annotations` can now load whitelisted labels JSONL from the Console list after a candidate/queue report is loaded.

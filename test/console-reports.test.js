@@ -151,6 +151,8 @@ test("reports view stays read-only and contains no destructive action buttons or
     "Memory Card Preview Details",
     "data-report-memory-card-preview",
     "data-report-memory-card-preview-primary",
+    "Annotation QC Preview",
+    "data-report-annotation-qc-preview",
     "Read-only preview only",
   ]) {
     assert.equal(view.includes(required), true, `missing required token: ${required}`);
@@ -178,6 +180,10 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "auto_recall_turn_gold_set_replay",
     "Turn Gold Replay Cards",
     "latest.auto_recall_turn_gold_set_replay",
+    "data-report-annotation-qc-preview",
+    "renderAnnotationQcPreview",
+    "annotation_local_qc_preview",
+    "annotation_local_qc_report",
   ]) {
     assert.equal(charts.includes(required), true, `missing required token: ${required}`);
   }
@@ -271,6 +277,74 @@ test("reports service adds memory_card_preview for turn gold-set replay json rep
     llm: false,
     network: false,
     runtime_report_files: false,
+  });
+}));
+
+test("reports service adds annotation_local_qc_preview for local QC reports via pure mapping", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "annotation-local-qc-report-2026-07-04T13-00-00.000Z.json", JSON.stringify({
+    mode: "annotation_local_qc_report",
+    schema_version: 1,
+    generated_at: "2026-07-04T13:00:00.000Z",
+    summary: {
+      total_candidates: 50,
+      unique_candidate_sample_ids: 50,
+      duplicate_candidate_sample_ids: 0,
+      labeled_count: 37,
+      unlabeled_count: 13,
+      coverage_rate: 0.74,
+      candidate_bucket_distribution: { archived_raw_log_project: 50 },
+      queue_reason_distribution: { positive_negative_conflict: 40, near_decision_boundary: 10 },
+      quality_distribution: { usable: 20, good: 10, low_quality: 7 },
+      keep_active_distribution: { yes: 12, no: 20, unsure: 5 },
+      preferred_action_distribution: { keep: 18, archive: 12, delete: 7 },
+      target_category_distribution: { project: 24, raw_log: 13 },
+      rescue_confidence_distribution: { high: 8, medium: 20, low: 9 },
+      last_label_import: {
+        imported: 37,
+        parse_invalid: 1,
+        skipped_not_in_candidates: 2,
+        skipped_identity_mismatch: 3,
+        skipped_empty: 4,
+      },
+    },
+    duplicate_candidate_sample_ids: ["dup-a", "dup-b"],
+    unlabeled_samples: [
+      { sample_id: "sample-a", primary_bucket: "archived_raw_log_project", queue_priority: 1, review_reasons: ["positive_negative_conflict"] },
+      { sample_id: "sample-b", primary_bucket: "archived_raw_log_project", queue_priority: 2, review_reasons: ["near_decision_boundary"] },
+    ],
+  }, null, 2), Date.UTC(2026, 6, 4, 13, 0, 0));
+
+  const file = readReportFile("annotation-local-qc-report-2026-07-04T13-00-00.000Z.json");
+  assert.equal(file.kind, "annotation_local_qc_report");
+  assert.equal(file.annotation_local_qc_preview.summary.mode, "read_only_annotation_local_qc_preview");
+  assert.equal(file.annotation_local_qc_preview.summary.total_candidates, 50);
+  assert.equal(file.annotation_local_qc_preview.summary.labeled_count, 37);
+  assert.equal(file.annotation_local_qc_preview.summary.unlabeled_count, 13);
+  assert.equal(file.annotation_local_qc_preview.summary.coverage_rate, 0.74);
+  assert.deepEqual(file.annotation_local_qc_preview.summary.last_label_import, {
+    imported: 37,
+    parse_invalid: 1,
+    skipped_not_in_candidates: 2,
+    skipped_identity_mismatch: 3,
+    skipped_empty: 4,
+  });
+  assert.deepEqual(file.annotation_local_qc_preview.distributions.queue_reason_distribution, [
+    { label: "positive_negative_conflict", count: 40 },
+    { label: "near_decision_boundary", count: 10 },
+  ]);
+  assert.deepEqual(file.annotation_local_qc_preview.unlabeled_samples.map(sample => sample.sample_id), ["sample-a", "sample-b"]);
+  assert.deepEqual(file.annotation_local_qc_preview.duplicate_candidate_sample_ids, ["dup-a", "dup-b"]);
+  assert.deepEqual(file.annotation_local_qc_preview.safety, {
+    db_writes: false,
+    memory_file_mutation: false,
+    upload: false,
+    apply: false,
+    archive: false,
+    delete: false,
+    quarantine: false,
+    reinforce: false,
+    llm: false,
+    network: false,
   });
 }));
 

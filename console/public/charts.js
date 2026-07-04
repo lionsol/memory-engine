@@ -369,17 +369,54 @@ function renderMemoryCardPreview(previewNode, preview) {
   </div>`;
 }
 
+function renderAnnotationQcPreview(previewNode, preview) {
+  if (!previewNode) return;
+  if (!preview || !preview.summary) {
+    previewNode.innerHTML = `<div class="muted">Annotation QC preview unavailable for this report.</div>`;
+    return;
+  }
+  const summary = preview.summary || {};
+  const distSection = (title, rows) => `<div class="status-row annotation-qc-dist">
+    <strong>${esc(title)}</strong>
+    <div class="dist-list">${(rows || []).length
+    ? rows.map(row => `<div class="dist-item"><span>${esc(row.label)}</span><strong>${fmt(row.count)}</strong></div>`).join('')
+    : '<span class="muted">No data</span>'}</div>
+  </div>`;
+  previewNode.innerHTML = `<div class="detail">
+    <div><span class="badge">annotation_local_qc_preview</span> <span class="badge">coverage ${pct1(summary.coverage_rate ?? 0)}</span> <span class="badge">read-only</span></div>
+    <div class="diversity-kpis">
+      <div><span>Total</span><strong>${fmt(summary.total_candidates ?? 0)}</strong></div>
+      <div><span>Labeled</span><strong>${fmt(summary.labeled_count ?? 0)}</strong></div>
+      <div><span>Unlabeled</span><strong>${fmt(summary.unlabeled_count ?? 0)}</strong></div>
+      <div><span>Duplicates</span><strong>${fmt(summary.duplicate_candidate_sample_ids ?? 0)}</strong></div>
+    </div>
+    ${summary.generated_at ? `<div class="muted">generated_at: ${esc(summary.generated_at)}</div>` : ''}
+    ${summary.last_label_import ? `<pre>${esc(JSON.stringify({ last_label_import: summary.last_label_import }, null, 2))}</pre>` : ''}
+    ${distSection('Candidate buckets', preview.distributions?.candidate_bucket_distribution)}
+    ${distSection('Queue reasons', preview.distributions?.queue_reason_distribution)}
+    ${distSection('Quality', preview.distributions?.quality_distribution)}
+    ${distSection('Keep active', preview.distributions?.keep_active_distribution)}
+    ${distSection('Preferred action', preview.distributions?.preferred_action_distribution)}
+    ${distSection('Target category', preview.distributions?.target_category_distribution)}
+    ${distSection('Rescue confidence', preview.distributions?.rescue_confidence_distribution)}
+    ${(preview.unlabeled_samples || []).length ? `<div class="status-row"><strong>Unlabeled samples</strong>${preview.unlabeled_samples.map(sample => `<div class="muted id">${esc(sample.sample_id || '')} · ${esc(sample.primary_bucket || '')} · priority ${esc(sample.queue_priority ?? '-')}</div>`).join('')}</div>` : ''}
+    ${(preview.duplicate_candidate_sample_ids || []).length ? `<div class="status-row"><strong>Duplicate sample ids</strong>${preview.duplicate_candidate_sample_ids.map(id => `<div class="muted id">${esc(id)}</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
 function renderReportDetail(report) {
   const node = $('[data-report-detail]');
   const traceNode = $('[data-report-decision-trace]');
   const previewNode = $('[data-report-memory-card-preview]');
   const primaryPreviewNode = $('[data-report-memory-card-preview-primary]');
+  const annotationQcPreviewNode = $('[data-report-annotation-qc-preview]');
   if (!node) return;
   if (!report || report.error) {
     node.innerHTML = `<div class="muted">${esc(report?.error || 'Report unavailable')}</div>`;
     if (traceNode) traceNode.innerHTML = `<div class="muted">Decision trace unavailable.</div>`;
     if (previewNode) previewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
     if (primaryPreviewNode) primaryPreviewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
+    if (annotationQcPreviewNode) annotationQcPreviewNode.innerHTML = `<div class="muted">Annotation QC preview unavailable.</div>`;
     return;
   }
   node.innerHTML = `<div class="detail">
@@ -399,6 +436,7 @@ function renderReportDetail(report) {
   }
   renderMemoryCardPreview(previewNode, report.memory_card_preview);
   renderMemoryCardPreview(primaryPreviewNode, report.memory_card_preview);
+  renderAnnotationQcPreview(annotationQcPreviewNode, report.annotation_local_qc_preview);
 }
 
 function initReports() {
@@ -406,6 +444,7 @@ function initReports() {
   const latest = pageData.latest || {};
   const latestItems = [
     latest.auto_recall_turn_gold_set_replay,
+    latest.annotation_local_qc_report,
     latest.annotation_summary,
     latest.annotation_eligibility_preview,
     latest.auto_recall_safety_smoke,
@@ -433,7 +472,7 @@ function initReports() {
     { label: 'Size', value: r => r.size ?? 0 },
   ], files.map(row => ({ ...row, click: row.name })));
 
-  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
+  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.annotation_local_qc_report || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
   if (defaultReport?.name) {
     api(`/api/reports/file?name=${encodeURIComponent(defaultReport.name)}`).then(renderReportDetail);
   }

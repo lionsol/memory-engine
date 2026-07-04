@@ -182,6 +182,57 @@ function extractMemoryCardPreview(entry, content, format) {
   return selectMemoryCardPreviewPayload(parseJsonContent(content));
 }
 
+function topDistributionEntries(distribution, limit = 8) {
+  return Object.entries(distribution || {})
+    .map(([label, count]) => ({ label, count: Number(count) || 0 }))
+    .sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label)))
+    .slice(0, Math.max(1, Number(limit) || 1));
+}
+
+function extractAnnotationLocalQcPreview(entry, content, format) {
+  if (entry?.kind !== "annotation_local_qc_report") return null;
+  if (format !== "json") return null;
+  const payload = parseJsonContent(content);
+  if (!payload || payload.mode !== "annotation_local_qc_report") return null;
+  const summary = payload.summary || {};
+  return {
+    summary: {
+      mode: "read_only_annotation_local_qc_preview",
+      generated_at: payload.generated_at || null,
+      total_candidates: Number(summary.total_candidates || 0),
+      unique_candidate_sample_ids: Number(summary.unique_candidate_sample_ids || 0),
+      duplicate_candidate_sample_ids: Number(summary.duplicate_candidate_sample_ids || 0),
+      labeled_count: Number(summary.labeled_count || 0),
+      unlabeled_count: Number(summary.unlabeled_count || 0),
+      coverage_rate: Number(summary.coverage_rate || 0),
+      last_label_import: summary.last_label_import || null,
+    },
+    distributions: {
+      candidate_bucket_distribution: topDistributionEntries(summary.candidate_bucket_distribution),
+      queue_reason_distribution: topDistributionEntries(summary.queue_reason_distribution),
+      quality_distribution: topDistributionEntries(summary.quality_distribution),
+      keep_active_distribution: topDistributionEntries(summary.keep_active_distribution),
+      preferred_action_distribution: topDistributionEntries(summary.preferred_action_distribution),
+      target_category_distribution: topDistributionEntries(summary.target_category_distribution),
+      rescue_confidence_distribution: topDistributionEntries(summary.rescue_confidence_distribution),
+    },
+    unlabeled_samples: Array.isArray(payload.unlabeled_samples) ? payload.unlabeled_samples.slice(0, 10) : [],
+    duplicate_candidate_sample_ids: Array.isArray(payload.duplicate_candidate_sample_ids) ? payload.duplicate_candidate_sample_ids.slice(0, 10) : [],
+    safety: {
+      db_writes: false,
+      memory_file_mutation: false,
+      upload: false,
+      apply: false,
+      archive: false,
+      delete: false,
+      quarantine: false,
+      reinforce: false,
+      llm: false,
+      network: false,
+    },
+  };
+}
+
 export function listReports() {
   const dir = getReportsDir();
   if (!fs.existsSync(dir)) return [];
@@ -227,6 +278,7 @@ export function readReportFile(name) {
     format: path.extname(validName).replace(/^\./, ""),
     decision_trace: extractAutoRecallDecisionTrace(entry, content, path.extname(validName).replace(/^\./, "")),
     memory_card_preview: extractMemoryCardPreview(entry, content, path.extname(validName).replace(/^\./, "")),
+    annotation_local_qc_preview: extractAnnotationLocalQcPreview(entry, content, path.extname(validName).replace(/^\./, "")),
   };
 }
 
