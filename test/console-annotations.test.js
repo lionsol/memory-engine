@@ -93,6 +93,26 @@ test("console annotations page can load whitelisted candidate reports through re
   }
 });
 
+test("console annotations page can load whitelisted label reports after candidates", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "Available Label Reports",
+    "annotationAvailableLabels",
+    "annotationLabelReportLoadStatus",
+    "No server label report loaded",
+    "renderAvailableLabels",
+    "button.dataset.labelReportName",
+    "loadLabelReportFromServer",
+    "Load candidate JSONL before loading server labels.",
+    "Only JSONL label reports can be loaded here.",
+    "Loaded labels from ${reportName}",
+    "Failed to load ${reportName}",
+    "renderReportList",
+  ]) {
+    assert.equal(page.includes(token), true, `missing server label load token: ${token}`);
+  }
+});
+
 test("console annotations page exports a browser-local QC report", () => {
   const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
   for (const token of [

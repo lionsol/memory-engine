@@ -1,5 +1,38 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P15: Console one-click load for whitelisted label reports
+
+After P14 was committed as `e7ab763 feat(console): load annotation candidates from reports`, P15 completed the matching one-click resume path for label reports. `/annotations` can now load whitelisted labels JSONL from the Console list after a candidate/queue report is loaded.
+
+Implemented:
+
+- Added `Available Label Reports` to `/annotations`.
+- Added `Load` buttons for whitelisted labels JSONL listed by `annotationReportsSnapshot().available_labels`.
+- Added read-only fetch path through `/api/reports/file?name=<label-report>`.
+- Labels can only be server-loaded after a candidate/queue JSONL is already loaded.
+- Only JSONL label reports can be loaded through this UI path.
+- Server-loaded labels reuse the existing `importLabelsFromText()` flow.
+- Existing identity alignment remains in force:
+  - `sample_id`
+  - `memory_id`
+  - `chunk_id`
+  - `primary_bucket`
+  - `source_path`
+- Wrong-queue labels, identity mismatches, empty labels, and parse-invalid lines are still skipped and counted.
+- Added shared `renderReportList()` helper for candidate and label report lists.
+- Loading a new candidate report resets the server label-report status so stale label import state cannot carry across queues.
+- Read-only boundary remains unchanged: no upload, DB write, apply, archive, delete, quarantine, reinforce, or memory mutation path was added.
+
+Verification:
+
+```text
+node --test test/console-annotations.test.js
+# 11/11 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 34/34 pass
+```
+
 ### Archived raw_log rescue P14: Console one-click load for whitelisted candidate reports
 
 After P13 was committed as `ec14e9a feat(console): list local annotation qc reports`, P14 removed the last manual file-picking step for reports already visible in `/annotations`. Available candidate reports can now be loaded directly from the Console list through the existing read-only reports API.

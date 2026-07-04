@@ -68,6 +68,13 @@
       <div id="annotationCandidateLoadStatus" class="muted">No server report loaded</div>
       <ul id="annotationAvailableCandidates" class="annotation-file-list"></ul>
     </section>
+
+    <section class="panel annotation-card">
+      <h2>Available Label Reports</h2>
+      <div class="muted">Load a whitelisted labels JSONL after a candidate report is loaded. Imported labels are still identity-aligned to the current candidate set.</div>
+      <div id="annotationLabelReportLoadStatus" class="muted">No server label report loaded</div>
+      <ul id="annotationAvailableLabels" class="annotation-file-list"></ul>
+    </section>
   </aside>
 
   <main class="annotation-content">
@@ -247,6 +254,8 @@
       bucketCounts: document.getElementById("annotationBucketCounts"),
       availableCandidates: document.getElementById("annotationAvailableCandidates"),
       candidateLoadStatus: document.getElementById("annotationCandidateLoadStatus"),
+      availableLabels: document.getElementById("annotationAvailableLabels"),
+      labelReportLoadStatus: document.getElementById("annotationLabelReportLoadStatus"),
       emptyState: document.getElementById("annotationEmptyState"),
       reviewState: document.getElementById("annotationReviewState"),
       recordTitle: document.getElementById("annotationRecordTitle"),
@@ -501,6 +510,7 @@
       state.lastLabelImportSummary = null;
       els.labelFile.value = "";
       els.labelImportStatus.textContent = "No labels loaded";
+      els.labelReportLoadStatus.textContent = "No server label report loaded";
       els.candidateLoadStatus.textContent = sourceLabel ? `Loaded ${state.samples.length} sample(s) from ${sourceLabel}` : `Loaded ${state.samples.length} sample(s)`;
       syncBucketFilterOptions();
       clearFilters();
@@ -521,6 +531,29 @@
         resetCandidateSamplesFromText(String(payload.content || ""), reportName);
       } catch (error) {
         els.candidateLoadStatus.textContent = `Failed to load ${reportName}: ${String(error?.message || error)}`;
+      }
+    }
+
+    async function loadLabelReportFromServer(name) {
+      const reportName = String(name || "");
+      if (!state.samples.length) {
+        els.labelReportLoadStatus.textContent = "Load candidate JSONL before loading server labels.";
+        return;
+      }
+      if (!reportName.endsWith(".jsonl")) {
+        els.labelReportLoadStatus.textContent = "Only JSONL label reports can be loaded here.";
+        return;
+      }
+      els.labelReportLoadStatus.textContent = `Loading ${reportName}...`;
+      try {
+        const response = await fetch(`/api/reports/file?name=${encodeURIComponent(reportName)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+        if (payload?.format !== "jsonl") throw new Error("selected report is not JSONL");
+        importLabelsFromText(String(payload.content || ""));
+        els.labelReportLoadStatus.textContent = `Loaded labels from ${reportName}`;
+      } catch (error) {
+        els.labelReportLoadStatus.textContent = `Failed to load ${reportName}: ${String(error?.message || error)}`;
       }
     }
 
@@ -655,14 +688,13 @@
       }
     }
 
-    function renderAvailableCandidates() {
-      const rows = Array.isArray(pageData.available_candidates) ? pageData.available_candidates : [];
-      els.availableCandidates.innerHTML = "";
+    function renderReportList(container, rows, emptyText, dataKey) {
+      container.innerHTML = "";
       if (!rows.length) {
         const li = document.createElement("li");
-        li.textContent = "No candidate reports listed";
+        li.textContent = emptyText;
         li.className = "muted";
-        els.availableCandidates.appendChild(li);
+        container.appendChild(li);
         return;
       }
       for (const file of rows) {
@@ -671,7 +703,7 @@
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = "Load";
-        button.dataset.reportName = name;
+        button.dataset[dataKey] = name;
         const title = document.createElement("div");
         const strong = document.createElement("strong");
         strong.textContent = name;
@@ -682,8 +714,18 @@
         li.appendChild(title);
         li.appendChild(meta);
         li.appendChild(button);
-        els.availableCandidates.appendChild(li);
+        container.appendChild(li);
       }
+    }
+
+    function renderAvailableCandidates() {
+      const rows = Array.isArray(pageData.available_candidates) ? pageData.available_candidates : [];
+      renderReportList(els.availableCandidates, rows, "No candidate reports listed", "reportName");
+    }
+
+    function renderAvailableLabels() {
+      const rows = Array.isArray(pageData.available_labels) ? pageData.available_labels : [];
+      renderReportList(els.availableLabels, rows, "No label reports listed", "labelReportName");
     }
 
     function render() {
@@ -824,6 +866,11 @@
       if (!button) return;
       loadCandidateReportFromServer(button.dataset.reportName);
     });
+    els.availableLabels.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-label-report-name]");
+      if (!button) return;
+      loadLabelReportFromServer(button.dataset.labelReportName);
+    });
     els.bucketFilter.addEventListener("change", () => {
       state.currentIndex = 0;
       applyFilters();
@@ -855,6 +902,7 @@
     });
 
     renderAvailableCandidates();
+    renderAvailableLabels();
     updateProgress();
   })();
 </script>
