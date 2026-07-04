@@ -1,5 +1,200 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P11-P18：scoring diagnostics 闭环与 tiered conflict cap 默认实现
+
+P10 之后，archived raw_log rescue 的核心问题从“采样与标注”转向“如何解释并改进 v0.2 scoring 的误判”。这批工作从 label leakage 修复后的真实 replay 出发，逐步建立 diagnostics、what-if calibration、scoring parts 分析，最后把验证过的 tiered conflict cap 规则落到默认 scoring 行为中。
+
+背景问题：
+
+* 早期 v0.1 rules replay 暴露出 evaluator 存在 label leakage：label annotation 被合并进 prediction sample，导致 v0.1 看起来达到 100% accuracy。
+* 修复 leakage 后，真实结果显示：
+
+  * v0.1 对 seed/P2/P4 的表现不稳定，尤其 P4 false positive 很高；
+  * v0.2 precision 很高，但 recall 被 positive/negative conflict cap 明显压低；
+  * P2 中 cap 造成多个 false negative；
+  * P4 中 cap 又确实挡住大量 false positive。
+* 因此不能简单取消 conflict cap，需要找到 candidate-only discriminator。
+
+本轮提交链路：
+
+* `9272af1 fix(annotation): prevent rescue label evaluation leakage`
+
+  * 修复 evaluator 中 label annotation 泄漏到 prediction input 的问题。
+  * `target_category`、`rescue_confidence` 只能用于 diagnostics / ground truth 分析，不再进入 rules/scoring prediction path。
+* `ea8d4a9 feat(evaluate): add rescue mismatch diagnostics`
+
+  * 为 v0.1 rules 和 v0.2 scoring 增加 mismatch diagnostics。
+  * 输出 prediction/actual/mismatch/FP/FN distributions，帮助定位错误来源。
+* `32557dd feat(evaluate): add candidate-only what-if calibration diagnostics`
+
+  * 增加 opt-in `--include-calibration`。
+  * 对 threshold、rawLogPenalty、toolOutputPenalty 等 candidate-only scoring 参数做 what-if。
+* `debb55c feat(evaluate): add candidate-only what-if calibration grid`
+
+  * 增加 opt-in `--include-calibration-grid`。
+  * 扩展为 threshold × rawLogPenalty × toolOutputPenalty grid。
+  * 结论：threshold 有影响，但权重调整无法单独解决 conflict cap 带来的 recall loss。
+* `0316424 feat(evaluate): add opt-in conflict cap diagnostics`
+
+  * 增加 opt-in `--include-conflict-cap-diagnostics`。
+  * 量化当前 cap 的收益与代价：
+
+    * P2：cap 造成 4 个 FN，几乎没有 FP protection；
+    * P4：cap 保护 15 个 FP，但也造成 1 个 FN。
+* `f42aa18 feat(evaluate): add opt-in tiered conflict cap calibration`
+
+  * 增加 opt-in tiered cap what-if。
+  * 证伪 `raw_log_leak` 作为 discriminator；它只是 archived raw_log rescue 的背景标记。
+* `1deae30 feat(evaluate): add opt-in signal diversity diagnostics`
+
+  * 增加 opt-in `--include-signal-diversity-diagnostics`。
+  * 发现 risk_signals 区分度不足：P2 正例和 P4 噪音样本都带有大量 high-value-looking signals。
+  * `risk_signal_count`、`positive_signal_family_count`、`project_plus_noise_only_pattern` 都不足以作为默认规则。
+* `0d85c38 feat(evaluate): add opt-in scoring parts diagnostics`
+
+  * 增加 opt-in `--include-scoring-parts-diagnostics`。
+  * 直接分析 `scoring.parts` 的正负分数组成。
+  * 找到第一个有效 discriminator：
+
+    * `high_value_positive_parts_pattern` 更倾向 P2 capped FN；
+    * `project_plus_engineering_only_positive_parts_pattern` 更倾向 P4 capped FP。
+* `633379a feat(evaluate): add opt-in scoring-parts tiered cap calibration`
+
+  * 增加 opt-in `--include-scoring-parts-tiered-cap-calibration`。
+  * 比较 7 个 scoring-parts tiered cap variants：
+
+    * `baseline_current_cap`
+    * `no_conflict_cap`
+    * `uncap_if_high_value_positive_parts`
+    * `uncap_if_has_preference_signal_part`
+    * `uncap_if_has_project_decision_or_preference_part`
+    * `uncap_if_has_preference_decision_or_todo_part`
+    * `cap_unless_project_plus_engineering_only`
+  * replay 证明 `uncap_if_high_value_positive_parts` 是当前最好的 tradeoff。
+* `c27a4ef feat(scoring): implement tiered conflict cap for archived raw log rescue`
+
+  * 把 P17 验证过的 `high_value_positive_parts_pattern` 落到默认 v0.2 scoring 行为中。
+  * 默认 conflict cap 从“一刀切 yes → unsure”改成 tiered cap。
+
+最终 scoring 行为：
+
+* 当存在 positive/negative conflict 且 raw prediction 为 `yes` 时：
+
+  * 如果 positive scoring parts 满足 high-value 条件，最终 prediction 保持 `yes`；
+  * 否则仍然 cap 成 `unsure`。
+* high-value 条件完全基于 candidate-only scoring parts：
+
+  * `project_decision_signal`
+  * `preference_signal`
+  * `project_todo_signal`
+  * 或至少 2 个 non-project positive parts。
+* `manual_review_flags` 仍然保留 `positive_negative_conflict`，即使最终 prediction 保持 `yes`。
+* `positive_negative_conflict_prediction_cap` 只在实际执行 cap 时写入 scoring parts。
+* 不使用 label-derived `target_category` / `rescue_confidence`。
+* 不改 threshold、weights、rawLogPenalty、toolOutputPenalty。
+* 不触碰 DB、reports artifact、AutoRecall P5/card-first runtime 或 `openclaw.plugin.json`。
+
+P18 replay 结果：
+
+Seed：
+
+* 0 capped rows。
+* 新旧 scoring 行为一致。
+* recall 仍为 0，说明 seed 的问题不是 conflict cap，而是 scoring weights/threshold 侧的问题。
+
+P2：
+
+* 旧 always-cap baseline：
+
+  * exact_accuracy 0.600
+  * yes_precision 1.000
+  * yes_recall 0.588
+  * yes_f1 0.741
+  * yes_false_positive 0
+  * yes_false_negative 7
+  * capped_count 4
+* 新 default tiered cap：
+
+  * exact_accuracy 0.700
+  * yes_precision 1.000
+  * yes_recall 0.706
+  * yes_f1 0.828
+  * yes_false_positive 0
+  * yes_false_negative 5
+  * capped_count 2
+* 效果：
+
+  * recall +11.8pp
+  * f1 +8.7pp
+  * FP 仍为 0
+
+P4：
+
+* 旧 always-cap baseline：
+
+  * exact_accuracy 0.050
+  * yes_precision 1.000
+  * yes_recall 0.200
+  * yes_f1 0.333
+  * yes_false_positive 0
+  * yes_false_negative 4
+  * capped_count 16
+* 新 default tiered cap：
+
+  * exact_accuracy 0.100
+  * yes_precision 0.500
+  * yes_recall 0.400
+  * yes_f1 0.444
+  * yes_false_positive 2
+  * yes_false_negative 3
+  * capped_count 13
+* 效果：
+
+  * recall +20.0pp
+  * f1 +11.1pp
+  * 释放 1 个原本被 cap 的 TP
+  * 新增 2 个 FP
+  * 仍保留 13/15 的 FP protection
+
+Diagnostics 语义变化：
+
+* P18 后，conflict-capped diagnostics 只会看到仍被 cap 的 rows。
+* high-value conflict rows 现在默认保持 `yes`，因此不再出现在 capped-row diagnostics 中。
+* P17 calibration 的 `baseline_current_cap` 在 P18 后表示“新默认 cap”，不再表示旧 always-cap。
+* 如需长期保留旧 always-cap 对照，可后续低优先级增加 `legacy_always_cap` / `always_conflict_cap` what-if variant。
+
+验证：
+
+* Rules/scoring targeted tests：
+
+  * 19/19 pass
+* Evaluator targeted tests：
+
+  * 26/26 pass
+* Syntax / whitespace：
+
+  * `node --check bin/evaluate-archived-raw-log-rescue-labels.cjs` pass
+  * `git diff --check` pass
+* All diagnostic/calibration flags 共存正常：
+
+  * `--include-calibration`
+  * `--include-calibration-grid`
+  * `--include-conflict-cap-diagnostics`
+  * `--include-tiered-cap-calibration`
+  * `--include-signal-diversity-diagnostics`
+  * `--include-scoring-parts-diagnostics`
+  * `--include-scoring-parts-tiered-cap-calibration`
+
+安全边界：
+
+* 没有 DB write。
+* 没有 unarchive / category update / delete / quarantine / reinforce。
+* 没有生成 reports artifact。
+* 没有触碰 AutoRecall P5 / card-first runtime。
+* 没有修改 `openclaw.plugin.json`。
+* 只改变 archived raw_log rescue v0.2 scoring 的 conflict cap 默认行为。
+
+
 ### Session checkpoint P33：raw_log 事件时间基准与状态优先级
 
 P32 提交为 `c253255 docs(readme): mention annotation handoff smoke command` 后，原本准备进入 release/tag。但 7 月 3 日对比 edi 实时总结与 checkpoint 生成的 episode 摘要后，发现 checkpoint 质量上还有两个更高优先级的问题，因此暂停打 tag，先修这条线：
