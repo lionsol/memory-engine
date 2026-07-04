@@ -1,5 +1,72 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P8: review queue label alignment report
+
+After P7 was committed as `07a5eee feat(annotation): add rescue manual review queue`, P8 added a queue-aware label report so future manual-review labels cannot accidentally be summarized without verifying they belong to the exact P7 queue.
+
+Implemented:
+
+- Added `bin/report-archived-raw-log-rescue-review-queue-labels.cjs`.
+- Added `test/report-archived-raw-log-rescue-review-queue-labels.test.js`.
+- Report validates queue rows first, including explicit safety fields:
+  - `db_writes=false`
+  - `unarchive=false`
+  - `category_update=false`
+  - `delete=false`
+  - `quarantine=false`
+  - `reinforce=false`
+- Report validates labels against the queue by `sample_id` and identity fields:
+  - `memory_id`
+  - `chunk_id`
+  - `primary_bucket`
+  - `source_path`
+- Duplicate label `sample_id`s are treated as blocking issues and do not count toward aligned coverage. This avoids inflated coverage from repeated labels.
+- Report supports a preflight mode with no labels: it validates queue integrity and reports all queue rows as unlabeled.
+- Report outputs both JSON and Markdown.
+
+Generated P8 preflight artifacts:
+
+```text
+reports/archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json
+reports/archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.md
+```
+
+Preflight command:
+
+```bash
+node bin/report-archived-raw-log-rescue-review-queue-labels.cjs \
+  --queue reports/archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl \
+  --out-json reports/archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json \
+  --out-md reports/archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.md \
+  --sample-limit 10
+```
+
+Preflight summary:
+
+```text
+queue_total = 50
+queue_valid = 50
+queue_unique_sample_ids = 50
+queue_invalid = 0
+queue_duplicate_sample_ids = 0
+labels_total = 0
+labels_valid_aligned = 0
+queue_unlabeled = 50
+coverage_rate = 0
+queue_reason_distribution = positive_negative_conflict: 50
+queue_bucket_distribution = archived_raw_log_project: 50
+```
+
+Verification:
+
+```text
+node --test test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 9/9 pass
+
+node --test test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js test/report-archived-raw-log-rescue-labels.test.js test/evaluate-archived-raw-log-rescue-labels.test.js test/archived-raw-log-rescue-rules-scoring.test.js test/archived-raw-log-rescue-sampler.test.js
+# 35/35 pass
+```
+
 ### Archived raw_log rescue P7: manual-review queue artifact
 
 P7 started and implemented the manual-review queue design for archived raw_log rescue. The queue is intentionally separate from the P6 combined label report: the combined report measures scoring quality, while the P7 queue produces the next stable human-review artifact.
