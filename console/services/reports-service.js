@@ -30,6 +30,7 @@ const LATEST_KIND_KEYS = [
   "annotation_eligibility_preview",
   "annotation_local_qc_report",
   "archived_raw_log_rescue_combined_report",
+  "archived_raw_log_rescue_review_queue",
   "archived_raw_log_rescue_review_queue_label_report",
   "auto_recall_safety_smoke",
   "auto_recall_long_input_smoke",
@@ -464,11 +465,18 @@ export function listReports() {
     .sort(sortReports);
 }
 
+function isLatestStructuredPreviewCandidate(file) {
+  if (file.kind === "archived_raw_log_rescue_combined_report") return file.name.endsWith(".json");
+  if (file.kind === "archived_raw_log_rescue_review_queue") return file.name.endsWith(".jsonl");
+  if (file.kind === "archived_raw_log_rescue_review_queue_label_report") return file.name.endsWith(".json");
+  return true;
+}
+
 export function latestReports() {
   const files = listReports();
   const latest = Object.fromEntries(LATEST_KIND_KEYS.map(kind => [kind, null]));
   for (const file of files) {
-    if (LATEST_KIND_KEYS.includes(file.kind) && !latest[file.kind]) latest[file.kind] = file;
+    if (LATEST_KIND_KEYS.includes(file.kind) && !latest[file.kind] && isLatestStructuredPreviewCandidate(file)) latest[file.kind] = file;
   }
   return latest;
 }

@@ -197,6 +197,7 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "data-report-review-queue-preview",
     "renderReviewQueuePreview",
     "review_queue_preview",
+    "latest.archived_raw_log_rescue_review_queue",
     "data-report-review-queue-label-preview",
     "renderReviewQueueLabelPreview",
     "review_queue_label_preview",
@@ -723,6 +724,30 @@ test("reports latest helper tracks browser-local annotation QC reports", withTem
   assert.equal(file.content, "{\"new\":true}");
 }));
 
+test("reports latest helper tracks archived raw-log rescue review queue reports", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl", "{\"queue_type\":\"archived_raw_log_rescue_manual_review\",\"sample_id\":\"old\"}\n", Date.UTC(2026, 6, 4, 12, 0, 0));
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p8-20260705.jsonl", "{\"queue_type\":\"archived_raw_log_rescue_manual_review\",\"sample_id\":\"new\"}\n", Date.UTC(2026, 6, 5, 12, 0, 0));
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p8-20260705.md", "# queue", Date.UTC(2026, 6, 5, 12, 0, 1));
+
+  const latest = latestReports();
+  assert.equal(latest.archived_raw_log_rescue_review_queue?.name, "archived-raw-log-rescue-manual-review-queue-p8-20260705.jsonl");
+  const file = readReportFile("archived-raw-log-rescue-manual-review-queue-p8-20260705.jsonl");
+  assert.equal(file.kind, "archived_raw_log_rescue_review_queue");
+  assert.equal(file.format, "jsonl");
+  assert.equal(file.review_queue_preview.summary.total_rows, 1);
+}));
+
+test("reports latest helper prefers structured rescue preview formats over newer markdown", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "archived-raw-log-rescue-combined-report-p2-p4-20260703.json", "{\"mode\":\"archived_raw_log_rescue_combined_label_report\"}", Date.UTC(2026, 6, 3, 12, 0, 0));
+  writeReport(reportsDir, "archived-raw-log-rescue-combined-report-p2-p4-20260703.md", "# combined", Date.UTC(2026, 6, 3, 12, 0, 1));
+  writeReport(reportsDir, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json", "{\"mode\":\"archived_raw_log_rescue_review_queue_label_report\"}", Date.UTC(2026, 6, 4, 12, 0, 0));
+  writeReport(reportsDir, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.md", "# labels", Date.UTC(2026, 6, 4, 12, 0, 1));
+
+  const latest = latestReports();
+  assert.equal(latest.archived_raw_log_rescue_combined_report?.name, "archived-raw-log-rescue-combined-report-p2-p4-20260703.json");
+  assert.equal(latest.archived_raw_log_rescue_review_queue_label_report?.name, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json");
+}));
+
 test("annotations snapshot excludes local QC reports from candidate and label lists", withTempReports(({ reportsDir }) => {
   writeReport(reportsDir, "annotation-candidates-20260628-022727.jsonl", "{\"sample\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 27));
   writeReport(reportsDir, "annotation-labels-20260704-p7.jsonl", "{\"sample_id\":\"rescue:a\"}\n", Date.UTC(2026, 6, 4, 1, 0, 0));
@@ -754,6 +779,7 @@ test("reports latest helper returns null for missing families", withTempReports(
   assert.equal(latest.annotation_eligibility_preview, null);
   assert.equal(latest.annotation_local_qc_report, null);
   assert.equal(latest.archived_raw_log_rescue_combined_report, null);
+  assert.equal(latest.archived_raw_log_rescue_review_queue, null);
   assert.equal(latest.archived_raw_log_rescue_review_queue_label_report, null);
   assert.equal(latest.auto_recall_safety_smoke, null);
   assert.equal(latest.auto_recall_turn_gold_set_replay, null);

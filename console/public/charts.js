@@ -601,6 +601,7 @@ function initReports() {
   const latestItems = [
     latest.auto_recall_turn_gold_set_replay,
     latest.archived_raw_log_rescue_combined_report,
+    latest.archived_raw_log_rescue_review_queue,
     latest.annotation_local_qc_report,
     latest.archived_raw_log_rescue_review_queue_label_report,
     latest.annotation_summary,
@@ -630,7 +631,7 @@ function initReports() {
     { label: 'Size', value: r => r.size ?? 0 },
   ], files.map(row => ({ ...row, click: row.name })));
 
-  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.archived_raw_log_rescue_combined_report || latest.annotation_local_qc_report || latest.archived_raw_log_rescue_review_queue_label_report || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
+  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.archived_raw_log_rescue_combined_report || latest.archived_raw_log_rescue_review_queue || latest.annotation_local_qc_report || latest.archived_raw_log_rescue_review_queue_label_report || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
   if (defaultReport?.name) {
     api(`/api/reports/file?name=${encodeURIComponent(defaultReport.name)}`).then(renderReportDetail);
   }

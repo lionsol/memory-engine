@@ -1,5 +1,31 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P20: Reports latest/default structured rescue artifacts
+
+After P19 was committed as `90bd2ca feat(console): preview rescue combined reports`, P20 closed a latest/default routing gap in `/reports`. The structured previews existed for combined rescue reports, P7 queue JSONL, P8 queue-label reports, and local QC reports, but P7 queue was not part of latest tracking and Markdown companions could win latest selection for preview-capable rescue families.
+
+Implemented:
+
+- Added `archived_raw_log_rescue_review_queue` to latest report tracking.
+- Added `latest.archived_raw_log_rescue_review_queue` to `/reports` latest cards.
+- Added P7 queue report into default report preference, behind turn gold-set replay and combined rescue reports but ahead of local QC and queue-label reports.
+- Added structured-format preference for preview-capable rescue families:
+  - `archived_raw_log_rescue_combined_report` latest prefers `.json`.
+  - `archived_raw_log_rescue_review_queue` latest prefers `.jsonl`.
+  - `archived_raw_log_rescue_review_queue_label_report` latest prefers `.json`.
+- This prevents newer Markdown companion files from taking over latest/default selection and showing no structured preview.
+- Read-only boundary remains unchanged: latest selection and rendering only; no DB writes, memory mutation, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effects.
+
+Verification:
+
+```text
+node --test test/console-reports.test.js
+# 20/20 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 40/40 pass
+```
+
 ### Archived raw_log rescue P19: Console archived raw-log rescue combined report preview
 
 After P18 was committed as `d957d95 feat(console): preview rescue review queue reports`, P19 added a structured `/reports` preview for the P2/P4 archived raw-log rescue combined label report. Combined reports were already whitelisted and tracked as latest, but selecting them still required reading raw JSON/Markdown for scoring and breakdowns.
