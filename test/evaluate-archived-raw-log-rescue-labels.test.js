@@ -111,6 +111,7 @@ test("evaluates joined labels against v0.1 rules and v0.2 scoring", () => {
   assert.equal(report.what_if_calibration, undefined);
   assert.equal(report.calibration_grid, undefined);
   assert.equal(report.conflict_cap_diagnostics, undefined);
+  assert.equal(report.tiered_cap_calibration, undefined);
 });
 
 test("does not leak label annotations into v0.1 rule predictions", () => {
@@ -665,6 +666,193 @@ test("conflict cap diagnostics are candidate-only and unaffected by label target
   );
 });
 
+test("includes tiered cap calibration when requested without changing default metrics", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:cap-no-leak",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+    candidate({
+      sample_id: "rescue:cap-leak",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log", "raw_log_leak"],
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:cap-no-leak",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "high",
+      },
+    }),
+    label({
+      sample_id: "rescue:cap-leak",
+      annotation: {
+        keep_active: "no",
+        target_category: "raw_log",
+        rescue_confidence: "low",
+      },
+    }),
+  ]);
+
+  const baseline = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+  });
+  const report = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+    includeTieredCapCalibration: true,
+  });
+
+  assert.equal(report.v0_1_rules.exact_match, baseline.v0_1_rules.exact_match);
+  assert.equal(report.v0_2_scoring.exact_match, baseline.v0_2_scoring.exact_match);
+  assert.equal(report.v0_2_scoring.yes_false_negative, baseline.v0_2_scoring.yes_false_negative);
+  assert.equal(Array.isArray(report.tiered_cap_calibration), true);
+
+  const variantIds = report.tiered_cap_calibration.map(row => row.variant_id);
+  assert.deepEqual(variantIds, [
+    "baseline_current_cap",
+    "no_conflict_cap",
+    "cap_only_when_raw_log_leak",
+    "cap_when_raw_log_leak_or_score_below_60",
+    "cap_when_raw_log_leak_or_primary_bucket_project",
+  ]);
+
+  const baselineVariant = report.tiered_cap_calibration.find(row => row.variant_id === "baseline_current_cap");
+  assert.ok(baselineVariant);
+  assert.equal(baselineVariant.exact_match, report.v0_2_scoring.exact_match);
+  assert.equal(baselineVariant.exact_accuracy, report.v0_2_scoring.exact_accuracy);
+  assert.equal(baselineVariant.yes_true_positive, report.v0_2_scoring.yes_true_positive);
+  assert.equal(baselineVariant.yes_false_positive, report.v0_2_scoring.yes_false_positive);
+  assert.equal(baselineVariant.yes_false_negative, report.v0_2_scoring.yes_false_negative);
+  assert.equal(baselineVariant.yes_precision, report.v0_2_scoring.yes_precision);
+  assert.equal(baselineVariant.yes_recall, report.v0_2_scoring.yes_recall);
+  assert.equal(baselineVariant.yes_f1, report.v0_2_scoring.yes_f1);
+
+  const leakOnly = report.tiered_cap_calibration.find(row => row.variant_id === "cap_only_when_raw_log_leak");
+  assert.ok(leakOnly);
+  assert.equal(leakOnly.capped_count, 1);
+  assert.equal(leakOnly.capped_false_positive_avoided_count, 1);
+  assert.equal(leakOnly.capped_false_negative_caused_count, 0);
+  assert.equal(leakOnly.uncapped_yes_count, 1);
+  assert.equal(leakOnly.yes_false_positive, 0);
+  assert.equal(leakOnly.yes_false_negative, 0);
+  assert.equal(leakOnly.false_positive_examples.length, 0);
+  assert.equal(leakOnly.false_negative_examples.length, 0);
+  assert.ok(leakOnly.diagnostics.prediction_distribution.score_bucket["55+"] >= 1);
+
+  const noCap = report.tiered_cap_calibration.find(row => row.variant_id === "no_conflict_cap");
+  assert.ok(noCap);
+  assert.equal(noCap.capped_count, 0);
+  assert.equal(noCap.uncapped_yes_count, 2);
+  assert.equal(noCap.yes_false_positive, 1);
+  assert.equal(noCap.yes_false_negative, 0);
+});
+
+test("tiered cap calibration is candidate-only and unaffected by label target category or rescue confidence", () => {
+  const dir = fixtureDir();
+  const labelsPathA = resolve(dir, "labels-a.jsonl");
+  const labelsPathB = resolve(dir, "labels-b.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:cap-no-leak",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPathA, [
+    label({
+      sample_id: "rescue:cap-no-leak",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "low",
+      },
+    }),
+  ]);
+  writeJsonl(labelsPathB, [
+    label({
+      sample_id: "rescue:cap-no-leak",
+      annotation: {
+        keep_active: "yes",
+        target_category: "raw_log",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const reportA = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathA,
+    candidatesInputPath: candidatesPath,
+    includeTieredCapCalibration: true,
+  });
+  const reportB = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathB,
+    candidatesInputPath: candidatesPath,
+    includeTieredCapCalibration: true,
+  });
+
+  assert.deepEqual(
+    reportA.tiered_cap_calibration.map(row => ({
+      variant_id: row.variant_id,
+      exact_match: row.exact_match,
+      yes_false_positive: row.yes_false_positive,
+      yes_false_negative: row.yes_false_negative,
+      capped_count: row.capped_count,
+      capped_false_positive_avoided_count: row.capped_false_positive_avoided_count,
+      capped_false_negative_caused_count: row.capped_false_negative_caused_count,
+      uncapped_yes_count: row.uncapped_yes_count,
+      false_negative_distribution: {
+        predicted_keep_active: row.false_negative_distribution.predicted_keep_active,
+        rule_id: row.false_negative_distribution.rule_id,
+        primary_bucket: row.false_negative_distribution.primary_bucket,
+        score_bucket: row.false_negative_distribution.score_bucket,
+      },
+    })),
+    reportB.tiered_cap_calibration.map(row => ({
+      variant_id: row.variant_id,
+      exact_match: row.exact_match,
+      yes_false_positive: row.yes_false_positive,
+      yes_false_negative: row.yes_false_negative,
+      capped_count: row.capped_count,
+      capped_false_positive_avoided_count: row.capped_false_positive_avoided_count,
+      capped_false_negative_caused_count: row.capped_false_negative_caused_count,
+      uncapped_yes_count: row.uncapped_yes_count,
+      false_negative_distribution: {
+        predicted_keep_active: row.false_negative_distribution.predicted_keep_active,
+        rule_id: row.false_negative_distribution.rule_id,
+        primary_bucket: row.false_negative_distribution.primary_bucket,
+        score_bucket: row.false_negative_distribution.score_bucket,
+      },
+    })),
+  );
+});
+
 test("writes JSON report only when out is specified", () => {
   const dir = fixtureDir();
   const labelsPath = resolve(dir, "labels.jsonl");
@@ -818,4 +1006,54 @@ test("CLI prints conflict cap diagnostics when requested", () => {
   assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
   assert.equal(parsed.conflict_cap_diagnostics.capped_count, 1);
   assert.equal(parsed.conflict_cap_diagnostics.capped_false_negative_caused_count, 1);
+});
+
+test("CLI prints tiered cap calibration when requested", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+  const stdoutPath = resolve(dir, "stdout-tiered-cap-calibration.json");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:cap-no-leak",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:cap-no-leak",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const result = spawnSync(
+    "bash",
+    [
+      "-lc",
+      `${shellQuote(process.execPath)} ${shellQuote(resolve(repoRoot, "bin/evaluate-archived-raw-log-rescue-labels.cjs"))} --labels ${shellQuote(labelsPath)} --candidates ${shellQuote(candidatesPath)} --include-tiered-cap-calibration > ${shellQuote(stdoutPath)}`,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+
+  assert.equal(
+    result.status,
+    0,
+    `status=${result.status} signal=${result.signal} stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+  );
+  const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
+  assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
+  assert.equal(Array.isArray(parsed.tiered_cap_calibration), true);
+  assert.ok(parsed.tiered_cap_calibration.some(row => row.variant_id === "baseline_current_cap"));
+  assert.ok(parsed.tiered_cap_calibration.some(row => row.variant_id === "cap_only_when_raw_log_leak"));
 });

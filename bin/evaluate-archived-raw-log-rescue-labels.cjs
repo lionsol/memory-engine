@@ -50,6 +50,7 @@ function parseArgs(argv) {
     includeCalibration: args.includes('--include-calibration'),
     includeCalibrationGrid: args.includes('--include-calibration-grid'),
     includeConflictCapDiagnostics: args.includes('--include-conflict-cap-diagnostics'),
+    includeTieredCapCalibration: args.includes('--include-tiered-cap-calibration'),
     threshold: parseNumber(valueFor('--threshold'), DEFAULT_RESCUE_SCORING_THRESHOLD),
     unsureThreshold: parseNumber(valueFor('--unsure-threshold'), DEFAULT_RESCUE_UNSURE_THRESHOLD),
     sweepMin: parseNumber(valueFor('--sweep-min'), 30),
@@ -429,6 +430,83 @@ function buildConflictCapDiagnostics(rows) {
   };
 }
 
+function tieredCapCalibrationVariants() {
+  return [
+    {
+      variant_id: 'baseline_current_cap',
+      shouldCap: row => row.is_conflict_capped,
+    },
+    {
+      variant_id: 'no_conflict_cap',
+      shouldCap: () => false,
+    },
+    {
+      variant_id: 'cap_only_when_raw_log_leak',
+      shouldCap: row => row.prediction_sample.quality_flags.includes('raw_log_leak'),
+    },
+    {
+      variant_id: 'cap_when_raw_log_leak_or_score_below_60',
+      shouldCap: row => row.prediction_sample.quality_flags.includes('raw_log_leak') || row.score < 60,
+    },
+    {
+      variant_id: 'cap_when_raw_log_leak_or_primary_bucket_project',
+      shouldCap: row => row.prediction_sample.quality_flags.includes('raw_log_leak') || row.primary_bucket === 'archived_raw_log_project',
+    },
+  ];
+}
+
+function evaluateTieredCapCalibrationVariant(rows, variant) {
+  const metrics = emptyMetrics();
+  const variantRows = [];
+
+  for (const row of rows) {
+    const keepCap = row.is_conflict_capped ? variant.shouldCap(row) : false;
+    const predictedKeepActive = row.is_conflict_capped
+      ? (keepCap ? row.predicted_keep_active : row.raw_predicted_keep_active)
+      : row.predicted_keep_active;
+    const variantRow = {
+      sample_id: row.sample_id,
+      primary_bucket: row.primary_bucket,
+      target_category: row.target_category,
+      rescue_confidence: row.rescue_confidence,
+      actual_keep_active: row.actual_keep_active,
+      raw_predicted_keep_active: row.raw_predicted_keep_active,
+      predicted_keep_active: predictedKeepActive,
+      rule_id: variant.variant_id,
+      score: row.score,
+      reasons: row.reasons,
+    };
+    updateMetrics(metrics, variantRow);
+    variantRows.push({
+      ...variantRow,
+      was_conflict_capped: row.is_conflict_capped,
+      cap_applied: row.is_conflict_capped ? keepCap : false,
+      uncapped_yes: row.is_conflict_capped && !keepCap && row.raw_predicted_keep_active === 'yes' && predictedKeepActive === 'yes',
+    });
+  }
+
+  finalizeMetrics(metrics);
+  const diagnostics = buildMismatchDiagnostics(variantRows, { includeScoreBucket: true });
+  const cappedRows = variantRows.filter(row => row.cap_applied);
+  const uncappedYesRows = variantRows.filter(row => row.uncapped_yes);
+
+  return {
+    variant_id: variant.variant_id,
+    ...metrics,
+    capped_count: cappedRows.length,
+    capped_false_positive_avoided_count: cappedRows.filter(row => row.actual_keep_active !== 'yes').length,
+    capped_false_negative_caused_count: cappedRows.filter(row => row.actual_keep_active === 'yes').length,
+    uncapped_yes_count: uncappedYesRows.length,
+    false_positives: metrics.false_positives.map(compactMismatch),
+    false_negatives: metrics.false_negatives.map(compactMismatch),
+    false_positive_examples: metrics.false_positives.slice().sort(compareConflictExamples).slice(0, 5).map(compactMismatch),
+    false_negative_examples: metrics.false_negatives.slice().sort(compareConflictExamples).slice(0, 5).map(compactMismatch),
+    false_positive_distribution: diagnostics.false_positive_distribution,
+    false_negative_distribution: diagnostics.false_negative_distribution,
+    diagnostics,
+  };
+}
+
 function evaluateArchivedRawLogRescueLabels(options = {}) {
   const labelsInputPath = options.labelsInputPath || 'reports/archived-raw-log-rescue_labels_seed_v0.1_20samples_20260702.jsonl';
   const candidatesInputPath = options.candidatesInputPath || 'reports/archived-raw-log-rescue-candidates-latest.jsonl';
@@ -495,6 +573,11 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
       rule_id: scoring.scoring_version,
       manual_review_flags: scoring.manual_review_flags,
       reasons: scoring.parts.map(p => `${p.name}:${p.value}`),
+      prediction_sample: predictionSample,
+      is_conflict_capped:
+        scoring.raw_predicted_keep_active === 'yes' &&
+        scoring.predicted_keep_active === 'unsure' &&
+        scoring.manual_review_flags.includes('positive_negative_conflict'),
     };
 
     updateMetrics(ruleMetrics, ruleRow);
@@ -579,6 +662,12 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
 
   if (options.includeConflictCapDiagnostics) {
     report.conflict_cap_diagnostics = buildConflictCapDiagnostics(scoringRows);
+  }
+
+  if (options.includeTieredCapCalibration) {
+    report.tiered_cap_calibration = tieredCapCalibrationVariants().map(variant =>
+      evaluateTieredCapCalibrationVariant(scoringRows, variant)
+    );
   }
 
   if (options.out) writeJson(options.out, report);
