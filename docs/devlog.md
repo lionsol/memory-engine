@@ -1,5 +1,37 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P9: Console reports handoff for P7/P8 artifacts
+
+After P8 was committed as `e40296e feat(annotation): add rescue review queue label report`, P9 closed a Console handoff gap: P7/P8 artifacts existed on disk, but the Console reports allowlist did not recognize the archived raw_log rescue artifact names, and `/annotations` would not list the P7 queue as a loadable candidate.
+
+Implemented:
+
+- Updated `console/services/reports-service.js` allowlist for:
+  - `archived-raw-log-rescue-combined-report-p*-*.{json,md}`
+  - `archived-raw-log-rescue-manual-review-queue-p*-*.{jsonl,md}`
+  - `archived-raw-log-rescue-review-queue-label-report-p*-*.{json,md}`
+- Added rescue combined report and review queue label report to latest report tracking.
+- Updated `annotationReportsSnapshot()` so `/annotations` lists P7 manual-review queue JSONL as a loadable candidate.
+- Kept Markdown queue files and label reports out of `available_candidates`, so the annotation UI does not accidentally offer non-sample artifacts as candidate files.
+- Added Console reports tests covering classification, latest null defaults, and the annotation snapshot candidate list.
+
+Real repo snapshot after the change:
+
+```text
+p7_kind = archived_raw_log_rescue_review_queue
+p8_kind = archived_raw_log_rescue_review_queue_label_report
+available_candidates includes archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl
+latest_rescue_combined = archived-raw-log-rescue-combined-report-p2-p4-20260703.md
+latest_rescue_label_report = archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.md
+```
+
+Verification:
+
+```text
+node --test test/console-reports.test.js test/console-annotations.test.js
+# 18/18 pass
+```
+
 ### Archived raw_log rescue P8: review queue label alignment report
 
 After P7 was committed as `07a5eee feat(annotation): add rescue manual review queue`, P8 added a queue-aware label report so future manual-review labels cannot accidentally be summarized without verifying they belong to the exact P7 queue.

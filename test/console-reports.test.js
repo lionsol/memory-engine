@@ -6,6 +6,7 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 
 import {
+  annotationReportsSnapshot,
   getAllowedReportKind,
   latestReports,
   listReports,
@@ -44,6 +45,8 @@ test("reports API lists only whitelisted report files", withTempReports(({ repor
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl", "{\"sample\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 27));
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.jsonl", "{\"sample\":2}\n", Date.UTC(2026, 5, 28, 2, 27, 28));
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628.md", "# legacy", Date.UTC(2026, 5, 28, 2, 27, 29));
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl", "{\"sample_id\":\"rescue:a\"}\n", Date.UTC(2026, 6, 4, 9, 0, 0));
+  writeReport(reportsDir, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json", "{\"mode\":\"archived_raw_log_rescue_review_queue_label_report\"}", Date.UTC(2026, 6, 4, 10, 0, 0));
   writeReport(reportsDir, "not-allowed.txt", "nope", Date.UTC(2026, 5, 27, 1, 0, 0));
   fs.mkdirSync(path.join(reportsDir, "nested"), { recursive: true });
   fs.writeFileSync(path.join(reportsDir, "nested", "annotation-summary-20260627-101010.md"), "nested", "utf8");
@@ -58,6 +61,8 @@ test("reports API lists only whitelisted report files", withTempReports(({ repor
   assert.deepEqual(
     result.body.files.map(file => file.name),
     [
+      "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json",
+      "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl",
       "annotation-candidates-dreaming_duplicate-20260628.md",
       "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.jsonl",
       "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl",
@@ -115,6 +120,8 @@ test("reports latest API picks latest summary eligibility preview and smoke file
   assert.equal(result.status, 200);
   assert.equal(result.body.annotation_summary?.name, "annotation-summary-20260627-121212.json");
   assert.equal(result.body.annotation_eligibility_preview?.name, "annotation-eligibility-preview-20260627-141414.json");
+  assert.equal(result.body.archived_raw_log_rescue_combined_report, null);
+  assert.equal(result.body.archived_raw_log_rescue_review_queue_label_report, null);
   assert.equal(result.body.auto_recall_safety_smoke?.name, "auto-recall-safety-smoke-20260627-150000.md");
 }));
 
@@ -294,13 +301,21 @@ test("reports service adds decision_trace for autoRecall long-input json reports
   });
 }));
 
-test("reports service allows bucket-slug and multi-bucket annotation candidate filenames", withTempReports(({ reportsDir }) => {
+test("reports service allows bucket-slug, rescue queue, and rescue label report filenames", withTempReports(({ reportsDir }) => {
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl", "{\"sample\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 27));
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.md", "# sample", Date.UTC(2026, 5, 28, 2, 27, 28));
   writeReport(reportsDir, "annotation-candidates-dreaming_duplicate-20260628.jsonl", "{\"legacy\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 29));
+  writeReport(reportsDir, "archived-raw-log-rescue-combined-report-p2-p4-20260703.md", "# combined", Date.UTC(2026, 6, 3, 1, 0, 0));
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl", "{\"sample_id\":\"rescue:a\"}\n", Date.UTC(2026, 6, 4, 1, 0, 0));
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.md", "# queue", Date.UTC(2026, 6, 4, 1, 0, 1));
+  writeReport(reportsDir, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json", "{\"ok\":true}", Date.UTC(2026, 6, 4, 1, 0, 2));
 
   const names = listReports().map(file => file.name);
   assert.deepEqual(names, [
+    "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json",
+    "archived-raw-log-rescue-manual-review-queue-p7-20260704.md",
+    "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl",
+    "archived-raw-log-rescue-combined-report-p2-p4-20260703.md",
     "annotation-candidates-dreaming_duplicate-20260628.jsonl",
     "annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.md",
     "annotation-candidates-dreaming_duplicate-20260628-022727.jsonl",
@@ -308,12 +323,32 @@ test("reports service allows bucket-slug and multi-bucket annotation candidate f
   assert.equal(getAllowedReportKind("annotation-candidates-dreaming_duplicate-20260628-022727.jsonl"), "annotation_candidates");
   assert.equal(getAllowedReportKind("annotation-candidates-dreaming_duplicate-dreaming_maintenance_log-dreaming_candidate_staging-20260628-022727.md"), "annotation_candidates");
   assert.equal(getAllowedReportKind("annotation-candidates-dreaming_duplicate-20260628.jsonl"), "annotation_candidates");
+  assert.equal(getAllowedReportKind("archived-raw-log-rescue-combined-report-p2-p4-20260703.md"), "archived_raw_log_rescue_combined_report");
+  assert.equal(getAllowedReportKind("archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl"), "archived_raw_log_rescue_review_queue");
+  assert.equal(getAllowedReportKind("archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json"), "archived_raw_log_rescue_review_queue_label_report");
+}));
+
+test("annotations snapshot lists rescue review queue JSONL as loadable candidate", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "annotation-candidates-20260628-022727.jsonl", "{\"sample\":1}\n", Date.UTC(2026, 5, 28, 2, 27, 27));
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl", "{\"sample_id\":\"rescue:a\"}\n", Date.UTC(2026, 6, 4, 1, 0, 0));
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.md", "# queue", Date.UTC(2026, 6, 4, 1, 0, 1));
+  writeReport(reportsDir, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json", "{\"ok\":true}", Date.UTC(2026, 6, 4, 1, 0, 2));
+
+  const snapshot = annotationReportsSnapshot();
+  assert.deepEqual(snapshot.available_candidates.map(file => file.name), [
+    "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl",
+    "annotation-candidates-20260628-022727.jsonl",
+  ]);
+  assert.equal(snapshot.available_candidates.every(file => file.name.endsWith(".jsonl")), true);
+  assert.equal(snapshot.available_labels.length, 0);
 }));
 
 test("reports latest helper returns null for missing families", withTempReports(() => {
   const latest = latestReports();
   assert.equal(latest.annotation_summary, null);
   assert.equal(latest.annotation_eligibility_preview, null);
+  assert.equal(latest.archived_raw_log_rescue_combined_report, null);
+  assert.equal(latest.archived_raw_log_rescue_review_queue_label_report, null);
   assert.equal(latest.auto_recall_safety_smoke, null);
   assert.equal(latest.auto_recall_turn_gold_set_replay, null);
 }));

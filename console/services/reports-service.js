@@ -16,6 +16,9 @@ const REPORT_PATTERNS = [
   { kind: "annotation_labels", regex: /^annotation-labels-.*\.jsonl$/ },
   { kind: "annotation_summary", regex: /^annotation-summary-\d{8}-\d{6}\.(json|md)$/ },
   { kind: "annotation_eligibility_preview", regex: /^annotation-eligibility-preview-\d{8}-\d{6}\.(json|md)$/ },
+  { kind: "archived_raw_log_rescue_combined_report", regex: /^archived-raw-log-rescue-combined-report-p\d+(?:-p\d+)*-\d{8}\.(json|md)$/ },
+  { kind: "archived_raw_log_rescue_review_queue", regex: /^archived-raw-log-rescue-manual-review-queue-p\d+-\d{8}\.(jsonl|md)$/ },
+  { kind: "archived_raw_log_rescue_review_queue_label_report", regex: /^archived-raw-log-rescue-review-queue-label-report-p\d+(?:-[a-z0-9_]+)*-\d{8}\.(json|md)$/ },
   { kind: "auto_recall_safety_smoke", regex: /^auto-recall-safety-smoke-\d{8}-\d{6}\.md$/ },
   { kind: "auto_recall_long_input_smoke", regex: /^auto-recall-long-input-smoke-\d{8}-\d{6}\.(json|md)$/ },
   { kind: "auto_recall_turn_gold_set_replay", regex: /^auto-recall-turn-gold-set-replay-\d{8}-\d{6}\.json$/ },
@@ -24,6 +27,8 @@ const REPORT_PATTERNS = [
 const LATEST_KIND_KEYS = [
   "annotation_summary",
   "annotation_eligibility_preview",
+  "archived_raw_log_rescue_combined_report",
+  "archived_raw_log_rescue_review_queue_label_report",
   "auto_recall_safety_smoke",
   "auto_recall_long_input_smoke",
   "auto_recall_turn_gold_set_replay",
@@ -251,7 +256,10 @@ export function reportsPageSnapshot() {
 export function annotationReportsSnapshot() {
   const files = listReports();
   return {
-    available_candidates: files.filter(file => file.kind === "annotation_candidates"),
+    available_candidates: files.filter(file => (
+      file.kind === "annotation_candidates"
+      || (file.kind === "archived_raw_log_rescue_review_queue" && file.name.endsWith(".jsonl"))
+    )),
     available_labels: files.filter(file => file.kind === "annotation_labels"),
   };
 }
