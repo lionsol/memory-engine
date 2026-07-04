@@ -48,6 +48,7 @@ function parseArgs(argv) {
     candidatesInputPath: valueFor('--candidates') || valueFor('--candidates-input') || 'reports/archived-raw-log-rescue-candidates-latest.jsonl',
     out: valueFor('--out'),
     includeCalibration: args.includes('--include-calibration'),
+    includeCalibrationGrid: args.includes('--include-calibration-grid'),
     threshold: parseNumber(valueFor('--threshold'), DEFAULT_RESCUE_SCORING_THRESHOLD),
     unsureThreshold: parseNumber(valueFor('--unsure-threshold'), DEFAULT_RESCUE_UNSURE_THRESHOLD),
     sweepMin: parseNumber(valueFor('--sweep-min'), 30),
@@ -262,6 +263,31 @@ function calibrationVariants() {
   ];
 }
 
+function calibrationGridVariants() {
+  const thresholds = [35, 40, 45, 50];
+  const rawLogPenalties = [-6, -10, -15];
+  const toolOutputPenalties = [-16, -12, -8];
+  const variants = [];
+
+  for (const threshold of thresholds) {
+    for (const rawLogPenalty of rawLogPenalties) {
+      for (const toolOutputPenalty of toolOutputPenalties) {
+        variants.push({
+          variant_id: `v0_2_grid_t${threshold}_raw${Math.abs(rawLogPenalty)}_tool${Math.abs(toolOutputPenalty)}`,
+          threshold,
+          unsureThreshold: DEFAULT_RESCUE_UNSURE_THRESHOLD,
+          weights: {
+            rawLogPenalty,
+            toolOutputPenalty,
+          },
+        });
+      }
+    }
+  }
+
+  return variants;
+}
+
 function evaluateCalibrationVariant(rows, variant) {
   const metrics = emptyMetrics();
   const variantRows = [];
@@ -303,6 +329,35 @@ function evaluateCalibrationVariant(rows, variant) {
     false_negative_distribution: diagnostics.false_negative_distribution,
     diagnostics,
   };
+}
+
+function calibrationGridTopVariants(variants) {
+  function compareNullableDesc(a, b) {
+    const aValue = a == null ? Number.NEGATIVE_INFINITY : a;
+    const bValue = b == null ? Number.NEGATIVE_INFINITY : b;
+    return bValue - aValue;
+  }
+
+  return variants
+    .slice()
+    .sort((a, b) => {
+      const f1Diff = compareNullableDesc(a.yes_f1, b.yes_f1);
+      if (f1Diff !== 0) return f1Diff;
+      if (a.yes_false_positive !== b.yes_false_positive) return a.yes_false_positive - b.yes_false_positive;
+      const recallDiff = compareNullableDesc(a.yes_recall, b.yes_recall);
+      if (recallDiff !== 0) return recallDiff;
+      if (a.exact_accuracy !== b.exact_accuracy) return b.exact_accuracy - a.exact_accuracy;
+      return a.variant_id.localeCompare(b.variant_id);
+    })
+    .slice(0, 10)
+    .map(variant => ({
+      variant_id: variant.variant_id,
+      threshold: variant.threshold,
+      yes_f1: variant.yes_f1,
+      yes_false_positive: variant.yes_false_positive,
+      yes_recall: variant.yes_recall,
+      exact_accuracy: variant.exact_accuracy,
+    }));
 }
 
 function evaluateArchivedRawLogRescueLabels(options = {}) {
@@ -439,6 +494,16 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
     report.what_if_calibration = calibrationVariants().map(variant =>
       evaluateCalibrationVariant(calibrationRows, variant)
     );
+  }
+
+  if (options.includeCalibrationGrid) {
+    const variants = calibrationGridVariants().map(variant =>
+      evaluateCalibrationVariant(calibrationRows, variant)
+    );
+    report.calibration_grid = {
+      variants,
+      top_variants: calibrationGridTopVariants(variants),
+    };
   }
 
   if (options.out) writeJson(options.out, report);
