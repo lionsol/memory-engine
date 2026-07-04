@@ -80,7 +80,10 @@
       <h2>Current Deep Link</h2>
       <div class="muted">Shown only for server-loaded candidate/queue reports. Local browser files do not get server deep links.</div>
       <div id="annotationDeepLinkStatus" class="muted">No server-loaded candidate report</div>
-      <a id="annotationDeepLink" hidden class="button" href="#">Open this review</a>
+      <div class="row">
+        <a id="annotationDeepLink" hidden class="button" href="#">Open this review</a>
+        <button id="annotationCopyDeepLinkButton" hidden type="button">Copy Link</button>
+      </div>
     </section>
   </aside>
 
@@ -264,6 +267,7 @@
       availableLabels: document.getElementById("annotationAvailableLabels"),
       labelReportLoadStatus: document.getElementById("annotationLabelReportLoadStatus"),
       deepLink: document.getElementById("annotationDeepLink"),
+      copyDeepLinkButton: document.getElementById("annotationCopyDeepLinkButton"),
       deepLinkStatus: document.getElementById("annotationDeepLinkStatus"),
       emptyState: document.getElementById("annotationEmptyState"),
       reviewState: document.getElementById("annotationReviewState"),
@@ -515,6 +519,7 @@
     function updateCurrentDeepLink() {
       if (!state.serverCandidateReportName) {
         els.deepLink.hidden = true;
+        els.copyDeepLinkButton.hidden = true;
         els.deepLink.removeAttribute("href");
         els.deepLinkStatus.textContent = "No server-loaded candidate report";
         return;
@@ -523,10 +528,26 @@
       if (state.serverLabelReportName) params.set("labels", state.serverLabelReportName);
       const href = `/annotations?${params.toString()}`;
       els.deepLink.href = href;
+      els.copyDeepLinkButton.hidden = false;
       els.deepLink.hidden = false;
       els.deepLinkStatus.textContent = state.serverLabelReportName
         ? `Server deep link includes labels: ${state.serverLabelReportName}`
         : "Server deep link includes candidate only";
+    }
+
+    async function copyCurrentDeepLink() {
+      const href = els.deepLink.getAttribute("href");
+      if (!href) {
+        els.deepLinkStatus.textContent = "No server deep link to copy";
+        return;
+      }
+      const absolute = new URL(href, window.location.origin).href;
+      try {
+        await navigator.clipboard.writeText(absolute);
+        els.deepLinkStatus.textContent = "Copied current deep link";
+      } catch {
+        els.deepLinkStatus.textContent = `Copy unavailable; manually copy: ${absolute}`;
+      }
     }
 
     function resetCandidateSamplesFromText(text, sourceLabel) {
@@ -942,6 +963,7 @@
       persistCurrentForm();
       exportLabels();
     });
+    els.copyDeepLinkButton.addEventListener("click", copyCurrentDeepLink);
     els.exportReportButton.addEventListener("click", () => {
       persistCurrentForm();
       downloadJson(`annotation-local-qc-report-${new Date().toISOString().replace(/[:]/g, "-")}.json`, buildLocalQcReport());

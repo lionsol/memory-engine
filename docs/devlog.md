@@ -1,5 +1,30 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P26: Copy current annotation deep link
+
+After P25 was committed as `add58ec feat(console): show current annotation deep link`, P26 added a copy action for the current `/annotations` deep link. This makes the server-loaded candidate/labels resume link easier to reuse without manually selecting the anchor URL.
+
+Implemented:
+
+- Added `Copy Link` button to the `Current Deep Link` panel.
+- The copy button is hidden until a server-loaded candidate/queue report creates a reusable deep link.
+- Added `copyCurrentDeepLink()`.
+- Copy uses `navigator.clipboard.writeText()` with an absolute URL derived from the current origin.
+- Clipboard failures fall back to showing the full link in the status text for manual copy.
+- Candidate-only and candidate+labels links both use the same copy path.
+- Local browser files still do not generate server deep links.
+- No server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+
+Verification:
+
+```text
+node --test test/console-annotations.test.js
+# 13/13 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 42/42 pass
+```
+
 ### Archived raw_log rescue P25: Annotations current review deep link
 
 After P24 was committed as `783cd84 feat(console): open annotations with latest labels`, P25 added a current-review deep-link panel to `/annotations`. When a candidate/queue report and optional labels report are loaded through the server allowlist, the page now shows a reusable link for the same review session.

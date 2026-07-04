@@ -151,6 +151,14 @@ test("console annotations page exposes current server deep link for loaded repor
     "state.serverCandidateReportName = reportName",
     "state.serverLabelReportName = reportName",
     "Local browser files do not get server deep links.",
+    "annotationCopyDeepLinkButton",
+    "Copy Link",
+    "copyCurrentDeepLink",
+    "navigator.clipboard.writeText",
+    "new URL(href, window.location.origin).href",
+    "Copied current deep link",
+    "Copy unavailable; manually copy:",
+    "No server deep link to copy",
   ]) {
     assert.equal(page.includes(token), true, `missing current deep link token: ${token}`);
   }
