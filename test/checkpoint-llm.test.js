@@ -134,6 +134,39 @@ test("llmComplete preserves non-2xx error-body behavior", async () => {
   });
 });
 
+test("llmNightlyExtract prompt tells model to prefer later verified status", async () => {
+  let observedPrompt = "";
+  await withPatched(checkpointConfig, "resolveCheckpointProviders", () => ({
+    primaryProvider: "deepseek",
+    fallbackProvider: "none",
+    warnings: [],
+  }), async () => {
+    await withPatched(checkpointConfig, "resolveCheckpointLlmRequestConfig", () => ({
+      maxInputChars: 45000,
+      maxTokens: 4096,
+      timeoutMs: 120000,
+      warnings: [],
+    }), async () => {
+    await withPatched(checkpointConfig, "getDSKey", () => "ds-key", async () => {
+      await withPatched(checkpointConfig, "getDSBaseUrl", () => "https://ds.example", async () => {
+        await withPatched(https, "request", createRequestStub(({ callback, req }) => {
+          observedPrompt = JSON.parse(req.body).messages.at(-1).content;
+          emitJsonResponse(callback, {
+            choices: [{ message: { content: "{\"episode_summary\":\"ok\",\"smart_memories\":[],\"configs\":[]}" } }],
+          });
+        }), async () => {
+          const result = await checkpointLlm.llmNightlyExtract("09:00 需修复\n10:00 已修复并验证");
+          assert.equal(result.episode_summary, "ok");
+        });
+      });
+    });
+    });
+  });
+
+  assert.match(observedPrompt, /以时间顺序中更晚的验证结果、测试结果或用户确认作为当前状态/);
+  assert.match(observedPrompt, /不要把较早的“待修复\/需修复”覆盖较晚的“已修复\/已验证”/);
+});
+
 test("llmNightlyExtract keeps default deepseek then siliconflow order", async () => {
   const calls = [];
   await withPatched(checkpointConfig, "resolveCheckpointProviders", () => ({

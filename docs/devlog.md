@@ -1,5 +1,49 @@
 ## 2026-07-04
 
+### Session checkpoint P33: Raw-log event time basis and status precedence
+
+After P32 was committed as `c253255 docs(readme): mention annotation handoff smoke command`, the release/tag step was paused because a July 3 comparison between edi's live summary and checkpoint-generated episode summaries showed two higher-priority checkpoint quality issues:
+
+1. old raw-log conversations could be pulled into the target day when re-flushed because `updated_at` represented flush/update time instead of original event time;
+2. the nightly LLM prompt could summarize an earlier `needs fix` state even when later target-day evidence had already verified the fix.
+
+Implemented:
+
+- Updated `lib/checkpoint/raw-log.js` DB raw-log collection:
+  - detects `chunks.created_at` when available;
+  - uses `created_at` as the preferred raw-log event-time basis;
+  - falls back to `updated_at_event_time` only when the core `chunks` schema has no `created_at` column;
+  - updates `rawLogTimeBasis`, `rawLogTimeBasisNote`, and `evidenceDateFilter` diagnostics accordingly.
+- Updated `bin/flush-session-rawlog.js`:
+  - raw-log DB writes now store the session message event timestamp in `updated_at` because current core `chunks` has no `created_at` column;
+  - no longer writes `Date.now()` as raw-log `updated_at` for flushed session messages;
+  - keeps `memory_confidence.last_confidence_update` aligned to the raw-log event timestamp.
+- Updated `bin/session-checkpoint.js` and `bin/run-session-checkpoint-direct.sh` fallback diagnostics to use `created_at/event_time` wording instead of pretending `updated_at` is original event time.
+- Updated `lib/checkpoint/llm.js` nightly prompt:
+  - if the same item appears with multiple statuses, the later verification/test/user confirmation wins;
+  - earlier `待修复/需修复` must not override later `已修复/已验证`.
+- Added/updated tests:
+  - `test/checkpoint-raw-log.test.js` now covers created_at-vs-updated_at pollution: old created_at with target-day updated_at is excluded, while target-day created_at with later updated_at is included.
+  - `test/flush-session-rawlog-static.test.js` guards against restoring flush-time `updated_at` writes.
+  - `test/checkpoint-llm.test.js` guards the latest-status prompt rule.
+  - Episode/session integration tests now expect the new raw-log time-basis metadata.
+- No DB mutation or cleanup was run against real data.
+
+Verification:
+
+```text
+node --test test/checkpoint-raw-log.test.js test/flush-session-rawlog-static.test.js test/checkpoint-llm.test.js test/checkpoint-episode-writer.test.js test/session-checkpoint.integration.test.js test/smart-add-propagation-audit.test.js
+# 67/67 pass
+
+node --check bin/flush-session-rawlog.js
+node --check bin/session-checkpoint.js
+node --check lib/checkpoint/raw-log.js
+node --check lib/checkpoint/llm.js
+# pass
+```
+
+Note: the current real OpenClaw core `chunks` schema has no `created_at` column, so this patch cannot literally read `created_at` from production core DB yet. Instead, it uses `created_at` when the column exists and fixes the current fallback path by ensuring `flush-session-rawlog.js` writes original event time into `updated_at`. The diagnostics expose this as `updated_at_event_time` when the fallback is active.
+
 ### Archived raw_log rescue P32: README mentions Console annotation smoke command
 
 After P31 was committed as `bc61522 test(console): add annotation handoff smoke script`, P32 added the targeted smoke command to the top-level README Console annotation workflow entry. The README now links the docs and shows the exact regression command.

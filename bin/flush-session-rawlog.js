@@ -173,6 +173,19 @@ function parseSessionMessages(filePath) {
  * Write conversation messages directly as raw_log entries in the DB.
  * Creates chunks in main.sqlite + memory_confidence entries in memory-engine DB.
  */
+function toEventTimestampSec(value, fallbackSec) {
+  if (value === null || value === undefined || value === "") return fallbackSec;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.floor(value > 1e12 ? value / 1000 : value);
+  const raw = String(value).trim();
+  if (!raw) return fallbackSec;
+  if (/^\d+$/.test(raw)) {
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric)) return Math.floor(numeric > 1e12 ? numeric / 1000 : numeric);
+  }
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : fallbackSec;
+}
+
 function writeToDb(dateStr, messages, mainDb, meDb) {
   if (!mainDb || !meDb) {
     log("  DB not available, skipping SQLite write");
@@ -180,10 +193,11 @@ function writeToDb(dateStr, messages, mainDb, meDb) {
   }
 
   const smartAddPath = `memory/smart-add/${dateStr}.md`;
-  const nowSec = Math.floor(Date.now() / 1000);
+  const fallbackSec = Math.floor(Date.now() / 1000);
   let written = 0;
 
   for (const m of messages) {
+    const eventSec = toEventTimestampSec(m.ts, fallbackSec);
     const chunkId = hash(m.text + m.ts + dateStr);
 
     // Only check memory_confidence (fastest dedup)
@@ -191,18 +205,19 @@ function writeToDb(dateStr, messages, mainDb, meDb) {
     if (existing) continue;
 
     try {
-      // Insert into chunks table (main.sqlite)
+      // Insert into chunks table (main.sqlite). The core chunks schema currently has no created_at column,
+      // so raw_log event time is stored in updated_at. Do not use flush time here.
       mainDb.prepare(`
         INSERT OR IGNORE INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at)
         VALUES (?, ?, 'memory', 0, 0, ?, 'flush-script', ?, '', ?)
-      `).run(chunkId, smartAddPath, hash(m.text), m.text, nowSec);
+      `).run(chunkId, smartAddPath, hash(m.text), m.text, eventSec);
 
       // Insert into memory_confidence table (memory-engine.sqlite)
       meDb.prepare(`
         INSERT OR IGNORE INTO memory_confidence
         (chunk_id, initial_confidence, confidence, last_confidence_update, base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
         VALUES (?, 0.5, 0.5, ?, 7.0, 0, 0, 0, 0, 'raw_log')
-      `).run(chunkId, nowSec);
+      `).run(chunkId, eventSec);
 
       written++;
     } catch (e) {

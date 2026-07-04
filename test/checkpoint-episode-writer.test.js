@@ -32,10 +32,10 @@ test("writeEpisodeFiles writes memory/episodes file", async () => {
       configs: [],
       diagnostics: {
         timeZone: "Asia/Shanghai",
-        rawLogTimeBasis: "updated_at",
+        rawLogTimeBasis: "created_at",
         rawLogIncluded: 2,
         resetDirectParseEnabled: false,
-        evidenceDateFilter: "targetDate=2026-06-17",
+        evidenceDateFilter: "targetDate=2026-06-17; raw_log=created_at bounded to targetDate",
       },
     });
   });
@@ -48,10 +48,10 @@ test("writeEpisodeFiles writes memory/episodes file", async () => {
   assert.match(content, /timeZone: Asia\/Shanghai/);
   assert.match(content, /category: episodic/);
   assert.match(content, /source_type: checkpoint_llm/);
-  assert.match(content, /rawLogTimeBasis: updated_at/);
+  assert.match(content, /rawLogTimeBasis: created_at/);
   assert.match(content, /rawLogIncluded: 2/);
   assert.match(content, /resetDirectParseEnabled: false/);
-  assert.match(content, /evidenceDateFilter: targetDate=2026-06-17/);
+  assert.match(content, /evidenceDateFilter: targetDate=2026-06-17; raw_log=created_at bounded to targetDate/);
   assert.match(content, /---\n_Generated at 2026-06-18T01:23:45.000Z_/);
 });
 
@@ -69,10 +69,10 @@ test("episode metadata contains targetDate, generatedAt, category, source_type",
       configs: [],
       diagnostics: {
         timeZone: "Asia/Shanghai",
-        rawLogTimeBasis: "updated_at",
+        rawLogTimeBasis: "created_at",
         rawLogIncluded: 2,
         resetDirectParseEnabled: false,
-        evidenceDateFilter: "targetDate=2026-06-17",
+        evidenceDateFilter: "targetDate=2026-06-17; raw_log=created_at bounded to targetDate",
       },
     });
   });
@@ -82,7 +82,7 @@ test("episode metadata contains targetDate, generatedAt, category, source_type",
   assert.match(content, /generatedAt: 2026-06-18T01:23:45.000Z/);
   assert.match(content, /category: episodic/);
   assert.match(content, /source_type: checkpoint_llm/);
-  assert.match(content, /rawLogTimeBasis: updated_at/);
+  assert.match(content, /rawLogTimeBasis: created_at/);
   assert.match(content, /rawLogIncluded: 2/);
   assert.match(content, /resetDirectParseEnabled: false/);
 });

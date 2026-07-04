@@ -123,7 +123,7 @@ test("audit skips clean canonical checkpoint episode even when recap discusses o
     "smartAddSkippedCheckpointGenerated: 0",
     "rawLogIncluded: 83",
     "rawLogSkippedOutOfTargetDate: 0",
-    "evidenceDateFilter: targetDate=2026-06-27; raw_log=updated_at bounded to targetDate",
+    "evidenceDateFilter: targetDate=2026-06-27; raw_log=created_at bounded to targetDate",
     "",
     "今天确认 opencode provider 配置修复实际发生在 2026-06-10，而不是 2026-06-24 / 2026-06-25。",
     "并继续审计 memory/smart-add/2026-06-24.md 和 memory/episodes/2026-06-25.md。",

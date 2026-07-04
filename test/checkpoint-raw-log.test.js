@@ -34,6 +34,7 @@ function createFixture() {
       CREATE TABLE chunks (
         id TEXT PRIMARY KEY,
         text TEXT,
+        created_at INTEGER,
         updated_at INTEGER
       )
     `);
@@ -63,11 +64,11 @@ function createFixture() {
   };
 }
 
-function insertRawLogChunk(fixture, { id, text, updatedAt, category = "raw_log" }) {
+function insertRawLogChunk(fixture, { id, text, updatedAt, createdAt = updatedAt, category = "raw_log" }) {
   const coreDb = new Database(fixture.coreDbPath);
   const engineDb = new Database(fixture.engineDbPath);
   try {
-    coreDb.prepare("INSERT INTO chunks (id, text, updated_at) VALUES (?, ?, ?)").run(id, text, updatedAt);
+    coreDb.prepare("INSERT INTO chunks (id, text, created_at, updated_at) VALUES (?, ?, ?, ?)").run(id, text, createdAt, updatedAt);
     engineDb.prepare("INSERT INTO memory_confidence (chunk_id, category) VALUES (?, ?)").run(id, category);
   } finally {
     coreDb.close();
@@ -256,6 +257,29 @@ test("DB raw_log entries outside targetDate are excluded and kept in chronologic
     "**User:** first on target day",
     "**Assistant:** second on target day",
   ]);
+});
+
+test("DB raw_log date filter prefers created_at over later updated_at", async () => {
+  const fixture = createFixture();
+  insertRawLogChunk(fixture, {
+    id: "chunk-old-reflushed",
+    text: "**User:** old conversation reflushed today should be excluded",
+    createdAt: Date.parse("2026-06-10T09:00:00.000+08:00") / 1000,
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+  });
+  insertRawLogChunk(fixture, {
+    id: "chunk-real-target",
+    text: "**User:** real target-day conversation should be included",
+    createdAt: Date.parse("2026-06-17T10:00:00.000+08:00") / 1000,
+    updatedAt: Date.parse("2026-06-18T10:00:00.000+08:00") / 1000,
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  const conversationTexts = logs.filter((log) => log.source === "conversation").map((log) => log.text);
+  assert.deepEqual(conversationTexts, ["**User:** real target-day conversation should be included"]);
+  assert.equal(stats.rawLogTimeBasis, "created_at");
+  assert.match(stats.evidenceDateFilter, /raw_log=created_at bounded to targetDate/);
 });
 
 test("timezone-aware boundary includes start and excludes end for Asia/Shanghai targetDate", async () => {

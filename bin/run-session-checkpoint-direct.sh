@@ -61,12 +61,12 @@ source_type: checkpoint_fallback
 smartAddPath: $smart_add_file
 smartAddInputPolicy: trusted_only:manual,agent_smart_add
 smartAddIncluded: 0
-rawLogTimeBasis: updated_at
-rawLogTimeBasisNote: updated_at may reflect write/update time, not original event time
+rawLogTimeBasis: created_at/event_time
+rawLogTimeBasisNote: prefer original event creation time; fallback requires updated_at to carry event time, not flush time
 rawLogIncluded: unknown
 rawLogSkippedOutOfTargetDate: unknown
 resetDirectParseEnabled: false
-evidenceDateFilter: targetDate=$target_date; timeZone=$TIME_ZONE; smartAdd=$smart_add_file; raw_log=updated_at bounded to targetDate
+evidenceDateFilter: targetDate=$target_date; timeZone=$TIME_ZONE; smartAdd=$smart_add_file; raw_log=created_at/event_time bounded to targetDate
 
 ⚠️ checkpoint 未完成 — 已写入 direct cron fallback marker
 

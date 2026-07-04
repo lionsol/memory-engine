@@ -289,7 +289,7 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
     assert.match(episode, /smartAddIncluded: 0/);
     assert.match(episode, /smartAddSkippedUnknownProvenance: 0/);
     assert.match(episode, /smartAddSkippedCheckpointGenerated: 0/);
-    assert.match(episode, /rawLogTimeBasis: updated_at/);
+    assert.match(episode, /rawLogTimeBasis: created_at\/event_time/);
     assert.match(episode, /rawLogIncluded: 0|rawLogIncluded: 1/);
     assert.match(episode, /resetDirectParseEnabled: false/);
     assert.match(smartAdd, /## 2026-06-16_episodic_nightly_generated_013000/);
