@@ -271,6 +271,83 @@ function extractReviewQueuePreview(entry, content, format) {
   };
 }
 
+function compactMetricSummary(metrics = {}) {
+  return {
+    total: Number(metrics.total || 0),
+    exact_match: Number(metrics.exact_match || 0),
+    exact_accuracy: metrics.exact_accuracy ?? null,
+    yes_true_positive: Number(metrics.yes_true_positive || 0),
+    yes_false_positive: Number(metrics.yes_false_positive || 0),
+    yes_false_negative: Number(metrics.yes_false_negative || 0),
+    yes_true_negative: Number(metrics.yes_true_negative || 0),
+    yes_precision: metrics.yes_precision ?? null,
+    yes_recall: metrics.yes_recall ?? null,
+    yes_f1: metrics.yes_f1 ?? null,
+  };
+}
+
+function topMetricBreakdowns(groups = {}, limit = 8) {
+  return Object.entries(groups || {})
+    .map(([label, metrics]) => ({ label, ...compactMetricSummary(metrics) }))
+    .sort((a, b) => b.total - a.total || String(a.label).localeCompare(String(b.label)))
+    .slice(0, Math.max(1, Number(limit) || 1));
+}
+
+function extractRescueCombinedPreview(entry, content, format) {
+  if (entry?.kind !== "archived_raw_log_rescue_combined_report") return null;
+  if (format !== "json") return null;
+  const payload = parseJsonContent(content);
+  if (!payload || payload.mode !== "archived_raw_log_rescue_combined_label_report") return null;
+  const scoring = payload.scoring || {};
+  const manualReview = payload.manual_review || {};
+  const nonManual = payload.non_manual || {};
+  return {
+    summary: {
+      mode: "read_only_rescue_combined_preview",
+      threshold: payload.threshold ?? null,
+      unsure_threshold: payload.unsure_threshold ?? null,
+      labels_valid: Number(payload.summary?.labels_valid || 0),
+      labels_invalid: Number(payload.summary?.labels_invalid || 0),
+      ...compactMetricSummary(scoring),
+      manual_review_total: Number(manualReview.total || 0),
+      non_manual_total: Number(nonManual.total || 0),
+    },
+    distributions: {
+      predicted_distribution: topDistributionEntries(scoring.predicted_distribution),
+      actual_distribution: topDistributionEntries(scoring.actual_distribution),
+      manual_review_predicted_distribution: topDistributionEntries(manualReview.predicted_distribution),
+      manual_review_raw_predicted_distribution: topDistributionEntries(manualReview.raw_predicted_distribution),
+      manual_review_flag_distribution: topDistributionEntries(manualReview.flag_distribution),
+      manual_review_selection_reason_distribution: topDistributionEntries(manualReview.selection_reason_distribution),
+      manual_review_target_category_distribution: topDistributionEntries(manualReview.target_category_distribution),
+      manual_review_rescue_confidence_distribution: topDistributionEntries(manualReview.rescue_confidence_distribution),
+      non_manual_predicted_distribution: topDistributionEntries(nonManual.predicted_distribution),
+      non_manual_selection_reason_distribution: topDistributionEntries(nonManual.selection_reason_distribution),
+    },
+    breakdowns: {
+      by_round: topMetricBreakdowns(payload.by_round),
+      by_bucket: topMetricBreakdowns(payload.by_bucket),
+      by_selection_reason: topMetricBreakdowns(payload.by_selection_reason),
+      manual_review_metrics: compactMetricSummary(manualReview.metrics || {}),
+      non_manual_metrics: compactMetricSummary(nonManual.metrics || {}),
+    },
+    false_positives: Array.isArray(scoring.false_positives) ? scoring.false_positives.slice(0, 10) : [],
+    false_negatives: Array.isArray(scoring.false_negatives) ? scoring.false_negatives.slice(0, 10) : [],
+    invalid_labels: Array.isArray(payload.invalid_labels) ? payload.invalid_labels.slice(0, 10) : [],
+    safety: {
+      db_writes: false,
+      memory_file_mutation: false,
+      unarchive: false,
+      category_update: false,
+      delete: false,
+      quarantine: false,
+      reinforce: false,
+      llm: false,
+      network: false,
+    },
+  };
+}
+
 function extractAnnotationLocalQcPreview(entry, content, format) {
   if (entry?.kind !== "annotation_local_qc_report") return null;
   if (format !== "json") return null;
@@ -416,6 +493,7 @@ export function readReportFile(name) {
     format: path.extname(validName).replace(/^\./, ""),
     decision_trace: extractAutoRecallDecisionTrace(entry, content, path.extname(validName).replace(/^\./, "")),
     memory_card_preview: extractMemoryCardPreview(entry, content, path.extname(validName).replace(/^\./, "")),
+    rescue_combined_preview: extractRescueCombinedPreview(entry, content, path.extname(validName).replace(/^\./, "")),
     review_queue_preview: extractReviewQueuePreview(entry, content, path.extname(validName).replace(/^\./, "")),
     annotation_local_qc_preview: extractAnnotationLocalQcPreview(entry, content, path.extname(validName).replace(/^\./, "")),
     review_queue_label_preview: extractReviewQueueLabelPreview(entry, content, path.extname(validName).replace(/^\./, "")),

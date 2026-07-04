@@ -151,6 +151,8 @@ test("reports view stays read-only and contains no destructive action buttons or
     "Memory Card Preview Details",
     "data-report-memory-card-preview",
     "data-report-memory-card-preview-primary",
+    "Archived Raw-log Rescue Combined Preview",
+    "data-report-rescue-combined-preview",
     "Annotation QC Preview",
     "data-report-annotation-qc-preview",
     "Review Queue Preview",
@@ -184,6 +186,10 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "auto_recall_turn_gold_set_replay",
     "Turn Gold Replay Cards",
     "latest.auto_recall_turn_gold_set_replay",
+    "data-report-rescue-combined-preview",
+    "renderRescueCombinedPreview",
+    "rescue_combined_preview",
+    "archived_raw_log_rescue_combined_report",
     "data-report-annotation-qc-preview",
     "renderAnnotationQcPreview",
     "annotation_local_qc_preview",
@@ -288,6 +294,121 @@ test("reports service adds memory_card_preview for turn gold-set replay json rep
     llm: false,
     network: false,
     runtime_report_files: false,
+  });
+}));
+
+test("reports service adds rescue_combined_preview for combined rescue reports via pure mapping", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "archived-raw-log-rescue-combined-report-p2-p4-20260703.json", JSON.stringify({
+    mode: "archived_raw_log_rescue_combined_label_report",
+    write_db: false,
+    memory_side_effects: false,
+    reinforcement_side_effects: false,
+    threshold: 55,
+    unsure_threshold: 30,
+    summary: {
+      labels_valid: 40,
+      labels_invalid: 1,
+      invalid_reasons: { schema_version: 1 },
+    },
+    scoring: {
+      total: 40,
+      exact_match: 13,
+      exact_accuracy: 0.325,
+      yes_true_positive: 11,
+      yes_false_positive: 0,
+      yes_false_negative: 11,
+      yes_true_negative: 18,
+      yes_precision: 1,
+      yes_recall: 0.5,
+      yes_f1: 0.6666666667,
+      predicted_distribution: { unsure: 23, yes: 11, no: 6 },
+      actual_distribution: { yes: 22, no: 18 },
+      false_positives: [{ sample_id: "fp-a", score: 99 }],
+      false_negatives: [{ sample_id: "fn-a", score: 54, predicted_keep_active: "unsure" }],
+    },
+    manual_review: {
+      total: 23,
+      predicted_distribution: { unsure: 23 },
+      raw_predicted_distribution: { yes: 20, unsure: 3 },
+      flag_distribution: { positive_negative_conflict: 20 },
+      selection_reason_distribution: { boundary: 8, positive_negative_conflict: 9 },
+      target_category_distribution: { project: 5, raw_log: 14 },
+      rescue_confidence_distribution: { low: 19, medium: 3 },
+      metrics: {
+        total: 23,
+        exact_match: 0,
+        exact_accuracy: 0,
+        yes_true_positive: 0,
+        yes_false_positive: 0,
+        yes_false_negative: 7,
+        yes_true_negative: 16,
+        yes_precision: null,
+        yes_recall: 0,
+        yes_f1: null,
+      },
+    },
+    non_manual: {
+      total: 17,
+      predicted_distribution: { yes: 11, no: 6 },
+      selection_reason_distribution: { boundary: 7, bucket_diversity: 8 },
+      metrics: {
+        total: 17,
+        exact_match: 13,
+        exact_accuracy: 0.7647,
+        yes_true_positive: 11,
+        yes_false_positive: 0,
+        yes_false_negative: 4,
+        yes_true_negative: 2,
+        yes_precision: 1,
+        yes_recall: 0.7333,
+        yes_f1: 0.8461,
+      },
+    },
+    by_round: {
+      p2: { total: 20, exact_match: 12, exact_accuracy: 0.6, yes_precision: 1, yes_recall: 0.5882, yes_f1: 0.7407 },
+      p4: { total: 20, exact_match: 1, exact_accuracy: 0.05, yes_precision: 1, yes_recall: 0.2, yes_f1: 0.3333 },
+    },
+    by_bucket: {
+      archived_raw_log_project: { total: 23, exact_match: 8, exact_accuracy: 0.3478, yes_precision: 1, yes_recall: 0.8, yes_f1: 0.8889 },
+      archived_raw_log_decision: { total: 6, exact_match: 1, exact_accuracy: 0.1667, yes_precision: 1, yes_recall: 0.3333, yes_f1: 0.5 },
+    },
+    by_selection_reason: {
+      boundary: { total: 15, exact_match: 7, exact_accuracy: 0.4667, yes_precision: 1, yes_recall: 1, yes_f1: 1 },
+      bucket_diversity: { total: 12, exact_match: 5, exact_accuracy: 0.4167, yes_precision: 1, yes_recall: 0.4, yes_f1: 0.5714 },
+    },
+    invalid_labels: [{ sample_id: "invalid-a", errors: ["schema_version"] }],
+  }, null, 2), Date.UTC(2026, 6, 3, 13, 0, 0));
+
+  const file = readReportFile("archived-raw-log-rescue-combined-report-p2-p4-20260703.json");
+  assert.equal(file.kind, "archived_raw_log_rescue_combined_report");
+  assert.equal(file.rescue_combined_preview.summary.mode, "read_only_rescue_combined_preview");
+  assert.equal(file.rescue_combined_preview.summary.labels_valid, 40);
+  assert.equal(file.rescue_combined_preview.summary.labels_invalid, 1);
+  assert.equal(file.rescue_combined_preview.summary.total, 40);
+  assert.equal(file.rescue_combined_preview.summary.exact_match, 13);
+  assert.equal(file.rescue_combined_preview.summary.yes_false_negative, 11);
+  assert.equal(file.rescue_combined_preview.summary.manual_review_total, 23);
+  assert.deepEqual(file.rescue_combined_preview.distributions.predicted_distribution, [
+    { label: "unsure", count: 23 },
+    { label: "yes", count: 11 },
+    { label: "no", count: 6 },
+  ]);
+  assert.deepEqual(file.rescue_combined_preview.breakdowns.by_round.map(row => row.label), ["p2", "p4"]);
+  assert.equal(file.rescue_combined_preview.breakdowns.manual_review_metrics.total, 23);
+  assert.equal(file.rescue_combined_preview.breakdowns.non_manual_metrics.total, 17);
+  assert.equal(file.rescue_combined_preview.false_negatives[0].sample_id, "fn-a");
+  assert.equal(file.rescue_combined_preview.false_positives[0].sample_id, "fp-a");
+  assert.equal(file.rescue_combined_preview.invalid_labels[0].sample_id, "invalid-a");
+  assert.deepEqual(file.rescue_combined_preview.safety, {
+    db_writes: false,
+    memory_file_mutation: false,
+    unarchive: false,
+    category_update: false,
+    delete: false,
+    quarantine: false,
+    reinforce: false,
+    llm: false,
+    network: false,
   });
 }));
 

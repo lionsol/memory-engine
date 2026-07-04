@@ -1,5 +1,51 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P19: Console archived raw-log rescue combined report preview
+
+After P18 was committed as `d957d95 feat(console): preview rescue review queue reports`, P19 added a structured `/reports` preview for the P2/P4 archived raw-log rescue combined label report. Combined reports were already whitelisted and tracked as latest, but selecting them still required reading raw JSON/Markdown for scoring and breakdowns.
+
+Implemented:
+
+- Added `rescue_combined_preview` derivation in `console/services/reports-service.js` for `archived_raw_log_rescue_combined_report` JSON files.
+- The preview extracts:
+  - threshold and unsure threshold
+  - labels valid/invalid counts
+  - total scored labels
+  - exact match / exact accuracy
+  - yes true/false positive/negative counts
+  - yes precision / recall / F1
+  - manual review count
+  - non-manual count
+  - predicted keep_active distribution
+  - actual keep_active distribution
+  - manual-review raw/final prediction distributions
+  - manual-review flag distribution
+  - manual-review selection reason distribution
+  - manual-review target category distribution
+  - manual-review rescue confidence distribution
+  - non-manual prediction distribution
+  - non-manual selection reason distribution
+  - by-round metrics
+  - by-bucket metrics
+  - by-selection-reason metrics
+  - first 10 false positives
+  - first 10 false negatives
+  - first 10 invalid labels
+- Added `Archived Raw-log Rescue Combined Preview` panel to `/reports`.
+- Added `renderRescueCombinedPreview()` in `console/public/charts.js`.
+- Added latest-card/default-report preference for `latest.archived_raw_log_rescue_combined_report`, behind turn gold-set replay but ahead of local QC and queue label reports.
+- Safety boundary remains explicit: no DB writes, memory file mutation, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effects.
+
+Verification:
+
+```text
+node --test test/console-reports.test.js
+# 18/18 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 38/38 pass
+```
+
 ### Archived raw_log rescue P18: Console review queue JSONL preview
 
 After P17 was committed as `65c3b7d feat(console): preview rescue queue label reports`, P18 added the remaining structured `/reports` preview for the P7 manual-review queue JSONL itself. Queue JSONL files were already whitelisted and loadable in `/annotations`, but selecting them in `/reports` still showed raw JSONL only.

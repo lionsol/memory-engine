@@ -369,6 +369,65 @@ function renderMemoryCardPreview(previewNode, preview) {
   </div>`;
 }
 
+function renderRescueCombinedPreview(previewNode, preview) {
+  if (!previewNode) return;
+  if (!preview || !preview.summary) {
+    previewNode.innerHTML = `<div class="muted">Archived raw-log rescue combined preview unavailable for this report.</div>`;
+    return;
+  }
+  const summary = preview.summary || {};
+  const distSection = (title, rows) => `<div class="status-row rescue-combined-dist">
+    <strong>${esc(title)}</strong>
+    <div class="dist-list">${(rows || []).length
+    ? rows.map(row => `<div class="dist-item"><span>${esc(row.label)}</span><strong>${fmt(row.count)}</strong></div>`).join('')
+    : '<span class="muted">No data</span>'}</div>
+  </div>`;
+  const breakdownSection = (title, rows) => `<div class="status-row rescue-combined-breakdown">
+    <strong>${esc(title)}</strong>
+    ${(rows || []).length
+    ? `<table class="top-memories"><thead><tr><th>Name</th><th>Total</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th></tr></thead><tbody>${rows.map(row => `<tr><td>${esc(row.label)}</td><td>${fmt(row.total)}</td><td>${row.exact_accuracy == null ? '-' : pct1(row.exact_accuracy)}</td><td>${row.yes_precision == null ? '-' : pct1(row.yes_precision)}</td><td>${row.yes_recall == null ? '-' : pct1(row.yes_recall)}</td><td>${row.yes_f1 == null ? '-' : pct1(row.yes_f1)}</td></tr>`).join('')}</tbody></table>`
+    : '<div class="muted">No data</div>'}
+  </div>`;
+  const errorSection = (title, rows) => `<div class="status-row">
+    <strong>${esc(title)}</strong>
+    ${(rows || []).length
+    ? rows.map(row => `<pre>${esc(JSON.stringify(row, null, 2))}</pre>`).join('')
+    : '<div class="muted">None</div>'}
+  </div>`;
+  previewNode.innerHTML = `<div class="detail">
+    <div><span class="badge">rescue_combined_preview</span> <span class="badge">accuracy ${summary.exact_accuracy == null ? '-' : pct1(summary.exact_accuracy)}</span> <span class="badge">read-only</span></div>
+    <div class="diversity-kpis">
+      <div><span>Labels valid</span><strong>${fmt(summary.labels_valid ?? 0)}</strong></div>
+      <div><span>Labels invalid</span><strong>${fmt(summary.labels_invalid ?? 0)}</strong></div>
+      <div><span>Total scored</span><strong>${fmt(summary.total ?? 0)}</strong></div>
+      <div><span>Exact match</span><strong>${fmt(summary.exact_match ?? 0)}</strong></div>
+    </div>
+    <div class="diversity-kpis">
+      <div><span>Precision</span><strong>${summary.yes_precision == null ? '-' : pct1(summary.yes_precision)}</strong></div>
+      <div><span>Recall</span><strong>${summary.yes_recall == null ? '-' : pct1(summary.yes_recall)}</strong></div>
+      <div><span>F1</span><strong>${summary.yes_f1 == null ? '-' : pct1(summary.yes_f1)}</strong></div>
+      <div><span>Manual review</span><strong>${fmt(summary.manual_review_total ?? 0)}</strong></div>
+    </div>
+    <div class="muted">threshold=${esc(summary.threshold ?? '-')} · unsure_threshold=${esc(summary.unsure_threshold ?? '-')} · non_manual=${esc(summary.non_manual_total ?? 0)}</div>
+    ${distSection('Predicted keep_active', preview.distributions?.predicted_distribution)}
+    ${distSection('Actual keep_active', preview.distributions?.actual_distribution)}
+    ${distSection('Manual review raw prediction', preview.distributions?.manual_review_raw_predicted_distribution)}
+    ${distSection('Manual review final prediction', preview.distributions?.manual_review_predicted_distribution)}
+    ${distSection('Manual review flags', preview.distributions?.manual_review_flag_distribution)}
+    ${distSection('Manual review selection reasons', preview.distributions?.manual_review_selection_reason_distribution)}
+    ${distSection('Manual review target category', preview.distributions?.manual_review_target_category_distribution)}
+    ${distSection('Manual review rescue confidence', preview.distributions?.manual_review_rescue_confidence_distribution)}
+    ${distSection('Non-manual prediction', preview.distributions?.non_manual_predicted_distribution)}
+    ${distSection('Non-manual selection reasons', preview.distributions?.non_manual_selection_reason_distribution)}
+    ${breakdownSection('By round', preview.breakdowns?.by_round)}
+    ${breakdownSection('By bucket', preview.breakdowns?.by_bucket)}
+    ${breakdownSection('By selection reason', preview.breakdowns?.by_selection_reason)}
+    ${errorSection('False positives', preview.false_positives)}
+    ${errorSection('False negatives', preview.false_negatives)}
+    ${errorSection('Invalid labels', preview.invalid_labels)}
+  </div>`;
+}
+
 function renderAnnotationQcPreview(previewNode, preview) {
   if (!previewNode) return;
   if (!preview || !preview.summary) {
@@ -497,6 +556,7 @@ function renderReportDetail(report) {
   const traceNode = $('[data-report-decision-trace]');
   const previewNode = $('[data-report-memory-card-preview]');
   const primaryPreviewNode = $('[data-report-memory-card-preview-primary]');
+  const rescueCombinedPreviewNode = $('[data-report-rescue-combined-preview]');
   const annotationQcPreviewNode = $('[data-report-annotation-qc-preview]');
   const reviewQueuePreviewNode = $('[data-report-review-queue-preview]');
   const reviewQueueLabelPreviewNode = $('[data-report-review-queue-label-preview]');
@@ -506,6 +566,7 @@ function renderReportDetail(report) {
     if (traceNode) traceNode.innerHTML = `<div class="muted">Decision trace unavailable.</div>`;
     if (previewNode) previewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
     if (primaryPreviewNode) primaryPreviewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
+    if (rescueCombinedPreviewNode) rescueCombinedPreviewNode.innerHTML = `<div class="muted">Archived raw-log rescue combined preview unavailable.</div>`;
     if (annotationQcPreviewNode) annotationQcPreviewNode.innerHTML = `<div class="muted">Annotation QC preview unavailable.</div>`;
     if (reviewQueuePreviewNode) reviewQueuePreviewNode.innerHTML = `<div class="muted">Review queue preview unavailable.</div>`;
     if (reviewQueueLabelPreviewNode) reviewQueueLabelPreviewNode.innerHTML = `<div class="muted">Review queue label preview unavailable.</div>`;
@@ -528,6 +589,7 @@ function renderReportDetail(report) {
   }
   renderMemoryCardPreview(previewNode, report.memory_card_preview);
   renderMemoryCardPreview(primaryPreviewNode, report.memory_card_preview);
+  renderRescueCombinedPreview(rescueCombinedPreviewNode, report.rescue_combined_preview);
   renderAnnotationQcPreview(annotationQcPreviewNode, report.annotation_local_qc_preview);
   renderReviewQueuePreview(reviewQueuePreviewNode, report.review_queue_preview);
   renderReviewQueueLabelPreview(reviewQueueLabelPreviewNode, report.review_queue_label_preview);
@@ -538,6 +600,7 @@ function initReports() {
   const latest = pageData.latest || {};
   const latestItems = [
     latest.auto_recall_turn_gold_set_replay,
+    latest.archived_raw_log_rescue_combined_report,
     latest.annotation_local_qc_report,
     latest.archived_raw_log_rescue_review_queue_label_report,
     latest.annotation_summary,
@@ -567,7 +630,7 @@ function initReports() {
     { label: 'Size', value: r => r.size ?? 0 },
   ], files.map(row => ({ ...row, click: row.name })));
 
-  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.annotation_local_qc_report || latest.archived_raw_log_rescue_review_queue_label_report || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
+  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.archived_raw_log_rescue_combined_report || latest.annotation_local_qc_report || latest.archived_raw_log_rescue_review_queue_label_report || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
   if (defaultReport?.name) {
     api(`/api/reports/file?name=${encodeURIComponent(defaultReport.name)}`).then(renderReportDetail);
   }
