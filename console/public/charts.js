@@ -8,6 +8,12 @@ function cards(target, items) {
   if (!node) return;
   node.innerHTML = items.map(item => `<article class="metric"><div class="label">${esc(item.label)}</div><div class="value">${fmt(item.value)}</div></article>`).join("");
 }
+
+function reportLatestCards(target, items) {
+  const node = $(target);
+  if (!node) return;
+  node.innerHTML = items.map(item => `<button type="button" class="metric report-latest-card" data-report-latest-name="${esc(item.name)}"><div class="label">${esc(item.label)}</div><div class="value">${fmt(item.value)}</div><div class="muted id">${esc(item.name)}</div></button>`).join("");
+}
 function table(target, headers, rows) {
   const node = $(target);
   if (!node) return;
@@ -609,10 +615,16 @@ function initReports() {
     latest.auto_recall_safety_smoke,
     latest.auto_recall_long_input_smoke,
   ].filter(Boolean);
-  cards('[data-report-latest-cards]', latestItems.map(item => ({
+  reportLatestCards('[data-report-latest-cards]', latestItems.map(item => ({
     label: reportKindLabel(item.kind),
     value: item.updated_at ? item.updated_at.slice(0, 10) : item.name,
+    name: item.name,
   })));
+  $('[data-report-latest-cards]')?.addEventListener('click', async event => {
+    const card = event.target.closest('[data-report-latest-name]');
+    if (!card) return;
+    renderReportDetail(await api(`/api/reports/file?name=${encodeURIComponent(card.dataset.reportLatestName)}`));
+  });
 
   const status = pageData.safety_status || {};
   const statusNode = $('[data-report-status]');

@@ -202,6 +202,10 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "renderReviewQueueLabelPreview",
     "review_queue_label_preview",
     "archived_raw_log_rescue_review_queue_label_report",
+    "reportLatestCards",
+    "report-latest-card",
+    "data-report-latest-name",
+    "dataset.reportLatestName",
   ]) {
     assert.equal(charts.includes(required), true, `missing required token: ${required}`);
   }

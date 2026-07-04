@@ -1,5 +1,28 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P21: Clickable reports latest cards
+
+After P20 was committed as `1239f9d fix(console): prefer structured rescue latest reports`, P21 made `/reports` latest cards actionable. The latest cards now open their corresponding whitelisted report directly, instead of only displaying the date/name and requiring a second lookup in the reports table.
+
+Implemented:
+
+- Added `reportLatestCards()` in `console/public/charts.js`.
+- Latest report cards render as buttons with `data-report-latest-name`.
+- Clicking a latest card fetches the report through the existing read-only `/api/reports/file?name=<report>` endpoint.
+- Click handling reuses `renderReportDetail()`, so all structured preview panels continue to be driven by the same read-only report payload.
+- Card labels still use `reportKindLabel()` and show the latest date plus report filename.
+- No new route, mutation path, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+
+Verification:
+
+```text
+node --test test/console-reports.test.js
+# 20/20 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 40/40 pass
+```
+
 ### Archived raw_log rescue P20: Reports latest/default structured rescue artifacts
 
 After P19 was committed as `90bd2ca feat(console): preview rescue combined reports`, P20 closed a latest/default routing gap in `/reports`. The structured previews existed for combined rescue reports, P7 queue JSONL, P8 queue-label reports, and local QC reports, but P7 queue was not part of latest tracking and Markdown companions could win latest selection for preview-capable rescue families.
