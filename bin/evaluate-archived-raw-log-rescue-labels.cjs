@@ -150,6 +150,63 @@ function compactMismatch(row) {
   };
 }
 
+function incrementCount(map, key) {
+  const normalizedKey = key == null || key === '' ? '(missing)' : String(key);
+  map[normalizedKey] = (map[normalizedKey] || 0) + 1;
+}
+
+function scoreBucket(score) {
+  if (!Number.isFinite(score)) return '(missing)';
+  if (score < 0) return '<0';
+  if (score <= 29) return '0-29';
+  if (score <= 54) return '30-54';
+  return '55+';
+}
+
+function buildDistribution(rows, fields) {
+  const out = {};
+  for (const field of fields) {
+    const key = typeof field === 'function'
+      ? field.fieldName
+      : field;
+    out[key] = {};
+  }
+  for (const row of rows) {
+    for (const field of fields) {
+      const value = typeof field === 'function'
+        ? field(row)
+        : row[field];
+      const key = typeof field === 'function'
+        ? field.fieldName
+        : field;
+      incrementCount(out[key], value);
+    }
+  }
+  return out;
+}
+
+function buildMismatchDiagnostics(rows, options = {}) {
+  const sharedFields = [
+    'primary_bucket',
+    'target_category',
+    'rescue_confidence',
+    ...(options.includeScoreBucket ? [Object.assign(row => scoreBucket(row.score), { fieldName: 'score_bucket' })] : []),
+  ];
+  const predictionFields = ['predicted_keep_active', 'rule_id', ...sharedFields];
+  const actualFields = ['actual_keep_active', ...sharedFields];
+  const mismatches = rows.filter(row => row.actual_keep_active !== row.predicted_keep_active);
+  const falsePositives = rows.filter(row => row.actual_keep_active !== 'yes' && row.predicted_keep_active === 'yes');
+  const falseNegatives = rows.filter(row => row.actual_keep_active === 'yes' && row.predicted_keep_active !== 'yes');
+
+  return {
+    prediction_distribution: buildDistribution(rows, predictionFields),
+    actual_distribution: buildDistribution(rows, actualFields),
+    mismatch_distribution: buildDistribution(mismatches, predictionFields),
+    false_positive_distribution: buildDistribution(falsePositives, predictionFields),
+    false_negative_distribution: buildDistribution(falseNegatives, predictionFields),
+  };
+}
+
 function buildThresholdSweep(validRows, thresholdOptions) {
   const out = [];
   for (let threshold = thresholdOptions.sweepMin; threshold <= thresholdOptions.sweepMax; threshold += thresholdOptions.sweepStep) {
@@ -187,6 +244,8 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
 
   const invalid = [];
   const validRows = [];
+  const ruleRows = [];
+  const scoringRows = [];
   const ruleMetrics = emptyMetrics();
   const scoringMetrics = emptyMetrics();
 
@@ -217,8 +276,8 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
     const rule = evaluateArchivedRawLogRescueRules(predictionSample);
     const scoring = computeArchivedRawLogRescueScore(predictionSample, { threshold, unsureThreshold });
     const base = {
-      sample_id: merged.sample_id,
-      primary_bucket: merged.primary_bucket,
+      sample_id: predictionSample.sample_id,
+      primary_bucket: predictionSample.primary_bucket,
       target_category: annotation.target_category,
       rescue_confidence: annotation.rescue_confidence,
       actual_keep_active: actual,
@@ -240,6 +299,8 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
 
     updateMetrics(ruleMetrics, ruleRow);
     updateMetrics(scoringMetrics, scoringRow);
+    ruleRows.push(ruleRow);
+    scoringRows.push(scoringRow);
     validRows.push({
       ...base,
       rule_prediction: rule.keep_active,
@@ -276,6 +337,7 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
       ...ruleMetrics,
       false_positives: ruleMetrics.false_positives.map(compactMismatch),
       false_negatives: ruleMetrics.false_negatives.map(compactMismatch),
+      diagnostics: buildMismatchDiagnostics(ruleRows),
     },
     v0_2_scoring: {
       threshold,
@@ -284,6 +346,7 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
       ...scoringMetrics,
       false_positives: scoringMetrics.false_positives.map(compactMismatch),
       false_negatives: scoringMetrics.false_negatives.map(compactMismatch),
+      diagnostics: buildMismatchDiagnostics(scoringRows, { includeScoreBucket: true }),
       threshold_sweep: buildThresholdSweep(validRows, {
         sweepMin: options.sweepMin ?? 30,
         sweepMax: options.sweepMax ?? 80,

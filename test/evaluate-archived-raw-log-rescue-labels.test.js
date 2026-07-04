@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -142,6 +142,13 @@ test("does not leak label annotations into v0.1 rule predictions", () => {
   assert.equal(report.v0_1_rules.yes_false_negative, 1);
   assert.equal(report.v0_1_rules.false_negatives[0].sample_id, "rescue:label-only-yes");
   assert.equal(report.v0_1_rules.false_negatives[0].rule_id, "S2_DEFAULT_DROP");
+  assert.equal(report.v0_1_rules.diagnostics.prediction_distribution.primary_bucket.archived_raw_log_project, 1);
+  assert.equal(report.v0_1_rules.diagnostics.actual_distribution.actual_keep_active.yes, 1);
+  assert.equal(report.v0_1_rules.diagnostics.mismatch_distribution.rule_id.S2_DEFAULT_DROP, 1);
+  assert.equal(report.v0_1_rules.diagnostics.false_negative_distribution.target_category.project, 1);
+  assert.equal(report.v0_1_rules.diagnostics.false_negative_distribution.rescue_confidence.medium, 1);
+  assert.equal(report.v0_2_scoring.diagnostics.mismatch_distribution.score_bucket["<0"], 1);
+  assert.equal(report.v0_2_scoring.diagnostics.false_negative_distribution.rule_id["archived_raw_log_rescue_v0.2"], 1);
 });
 
 test("reports invalid labels and missing candidates without using them for metrics", () => {
@@ -225,7 +232,15 @@ test("CLI prints a JSON report", () => {
     { cwd: repoRoot, encoding: "utf8" },
   );
 
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.status,
+    0,
+    `status=${result.status} signal=${result.signal} stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+  );
+  assert.ok(
+    result.stdout && result.stdout.trim(),
+    `empty stdout: status=${result.status} signal=${result.signal} stderr=${JSON.stringify(result.stderr)}`,
+  );
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
   assert.equal(parsed.summary.labels_valid, 1);
