@@ -113,6 +113,7 @@ test("evaluates joined labels against v0.1 rules and v0.2 scoring", () => {
   assert.equal(report.conflict_cap_diagnostics, undefined);
   assert.equal(report.tiered_cap_calibration, undefined);
   assert.equal(report.signal_diversity_diagnostics, undefined);
+  assert.equal(report.scoring_parts_diagnostics, undefined);
 });
 
 test("does not leak label annotations into v0.1 rule predictions", () => {
@@ -1015,6 +1016,168 @@ test("signal diversity diagnostics are candidate-only and unaffected by label ta
   );
 });
 
+test("includes scoring parts diagnostics when requested without changing default metrics", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:parts-fn",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "decision_signal",
+        "preference_signal",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+    candidate({
+      sample_id: "rescue:parts-fp",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+    candidate({
+      sample_id: "rescue:parts-unsure",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:parts-fn",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "high",
+      },
+    }),
+    label({
+      sample_id: "rescue:parts-fp",
+      annotation: {
+        keep_active: "no",
+        target_category: "raw_log",
+        rescue_confidence: "low",
+      },
+    }),
+    label({
+      sample_id: "rescue:parts-unsure",
+      annotation: {
+        keep_active: "unsure",
+        target_category: "project",
+        rescue_confidence: "medium",
+      },
+    }),
+  ]);
+
+  const baseline = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+  });
+  const report = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+    includeScoringPartsDiagnostics: true,
+  });
+
+  assert.equal(report.v0_1_rules.exact_match, baseline.v0_1_rules.exact_match);
+  assert.equal(report.v0_2_scoring.exact_match, baseline.v0_2_scoring.exact_match);
+  assert.equal(report.v0_2_scoring.yes_false_negative, baseline.v0_2_scoring.yes_false_negative);
+  assert.ok(report.scoring_parts_diagnostics);
+  assert.equal(report.scoring_parts_diagnostics.capped_false_positive_avoided.count, 1);
+  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.count, 1);
+  assert.equal(report.scoring_parts_diagnostics.capped_unsure_actual.count, 1);
+
+  const fnExample = report.scoring_parts_diagnostics.capped_false_negative_caused.examples[0];
+  const fpExample = report.scoring_parts_diagnostics.capped_false_positive_avoided.examples[0];
+  assert.equal(fnExample.sample_id, "rescue:parts-fn");
+  assert.equal(fpExample.sample_id, "rescue:parts-fp");
+  assert.equal(fnExample.pattern_flags.high_value_positive_parts_pattern, true);
+  assert.equal(fpExample.pattern_flags.project_plus_engineering_only_positive_parts_pattern, true);
+  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.boolean_scoring_part_distributions.has_project_decision_signal_part.true, 1);
+  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.boolean_scoring_part_distributions.has_preference_signal_part.true, 1);
+  assert.equal(report.scoring_parts_diagnostics.capped_false_positive_avoided.boolean_scoring_part_distributions.has_project_decision_signal_part.true, 0);
+  assert.equal(report.scoring_parts_diagnostics.candidate_rules_preview.uncap_if_has_project_decision_or_preference_part, 1);
+  assert.equal(report.scoring_parts_diagnostics.candidate_rules_preview.uncap_if_high_value_positive_parts_pattern, 1);
+  assert.equal(report.scoring_parts_diagnostics.candidate_rules_preview.cap_if_project_plus_engineering_only_positive_parts_pattern, 2);
+});
+
+test("scoring parts diagnostics are candidate-only and unaffected by label target category or rescue confidence", () => {
+  const dir = fixtureDir();
+  const labelsPathA = resolve(dir, "labels-a.jsonl");
+  const labelsPathB = resolve(dir, "labels-b.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:parts-fn",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "decision_signal",
+        "preference_signal",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPathA, [
+    label({
+      sample_id: "rescue:parts-fn",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "low",
+      },
+    }),
+  ]);
+  writeJsonl(labelsPathB, [
+    label({
+      sample_id: "rescue:parts-fn",
+      annotation: {
+        keep_active: "yes",
+        target_category: "raw_log",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const reportA = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathA,
+    candidatesInputPath: candidatesPath,
+    includeScoringPartsDiagnostics: true,
+  });
+  const reportB = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathB,
+    candidatesInputPath: candidatesPath,
+    includeScoringPartsDiagnostics: true,
+  });
+
+  assert.deepEqual(
+    {
+      capped_false_negative_caused: reportA.scoring_parts_diagnostics.capped_false_negative_caused,
+      candidate_rules_preview: reportA.scoring_parts_diagnostics.candidate_rules_preview,
+    },
+    {
+      capped_false_negative_caused: reportB.scoring_parts_diagnostics.capped_false_negative_caused,
+      candidate_rules_preview: reportB.scoring_parts_diagnostics.candidate_rules_preview,
+    },
+  );
+});
+
 test("writes JSON report only when out is specified", () => {
   const dir = fixtureDir();
   const labelsPath = resolve(dir, "labels.jsonl");
@@ -1268,4 +1431,54 @@ test("CLI prints signal diversity diagnostics when requested", () => {
   const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
   assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
   assert.equal(parsed.signal_diversity_diagnostics.capped_false_negative_caused.count, 1);
+});
+
+test("CLI prints scoring parts diagnostics when requested", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+  const stdoutPath = resolve(dir, "stdout-scoring-parts.json");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:parts-fn",
+      primary_bucket: "archived_raw_log_project",
+      quality_flags: ["archived_raw_log"],
+      risk_signals: [
+        "project:memory-engine",
+        "decision_signal",
+        "preference_signal",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:parts-fn",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const result = spawnSync(
+    "bash",
+    [
+      "-lc",
+      `${shellQuote(process.execPath)} ${shellQuote(resolve(repoRoot, "bin/evaluate-archived-raw-log-rescue-labels.cjs"))} --labels ${shellQuote(labelsPath)} --candidates ${shellQuote(candidatesPath)} --include-scoring-parts-diagnostics > ${shellQuote(stdoutPath)}`,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+
+  assert.equal(
+    result.status,
+    0,
+    `status=${result.status} signal=${result.signal} stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+  );
+  const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
+  assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
+  assert.equal(parsed.scoring_parts_diagnostics.capped_false_negative_caused.count, 1);
 });

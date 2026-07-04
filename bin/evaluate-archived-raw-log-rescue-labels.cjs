@@ -52,6 +52,7 @@ function parseArgs(argv) {
     includeConflictCapDiagnostics: args.includes('--include-conflict-cap-diagnostics'),
     includeTieredCapCalibration: args.includes('--include-tiered-cap-calibration'),
     includeSignalDiversityDiagnostics: args.includes('--include-signal-diversity-diagnostics'),
+    includeScoringPartsDiagnostics: args.includes('--include-scoring-parts-diagnostics'),
     threshold: parseNumber(valueFor('--threshold'), DEFAULT_RESCUE_SCORING_THRESHOLD),
     unsureThreshold: parseNumber(valueFor('--unsure-threshold'), DEFAULT_RESCUE_UNSURE_THRESHOLD),
     sweepMin: parseNumber(valueFor('--sweep-min'), 30),
@@ -617,6 +618,151 @@ function buildSignalDiversityDiagnostics(rows) {
   };
 }
 
+function buildScoringPartsFeatureRow(row) {
+  const scoringParts = Array.isArray(row.scoring_parts) ? row.scoring_parts.slice() : [];
+  const positiveParts = scoringParts.filter(part => Number(part.value) > 0);
+  const negativeParts = scoringParts.filter(part => Number(part.value) < 0);
+  const positivePartNames = positiveParts.map(part => part.name);
+  const negativePartNames = negativeParts.map(part => part.name);
+  const positiveScoreSum = positiveParts.reduce((sum, part) => sum + Number(part.value), 0);
+  const negativeScoreSum = negativeParts.reduce((sum, part) => sum + Number(part.value), 0);
+  const positiveNonProjectParts = positivePartNames.filter(name => name !== 'project_signal');
+  const patternFlags = {
+    project_only_positive_parts_pattern:
+      positivePartNames.length === 1 && positivePartNames[0] === 'project_signal',
+    project_plus_engineering_only_positive_parts_pattern:
+      positivePartNames.length === 2 &&
+      positivePartNames.includes('project_signal') &&
+      positivePartNames.includes('engineering_evidence_signal'),
+    high_value_positive_parts_pattern:
+      positivePartNames.includes('project_decision_signal') ||
+      positivePartNames.includes('preference_signal') ||
+      positivePartNames.includes('project_todo_signal') ||
+      positiveNonProjectParts.length >= 2,
+    penalty_dominated_pattern:
+      Math.abs(negativeScoreSum) >= positiveScoreSum * 0.5,
+  };
+
+  return {
+    ...row,
+    scoring_part_names: scoringParts.map(part => part.name),
+    positive_part_names: positivePartNames,
+    negative_part_names: negativePartNames,
+    positive_part_count: positiveParts.length,
+    negative_part_count: negativeParts.length,
+    positive_score_sum: positiveScoreSum,
+    negative_score_sum: negativeScoreSum,
+    net_score: row.score,
+    has_project_signal_part: positivePartNames.includes('project_signal'),
+    has_project_decision_signal_part: positivePartNames.includes('project_decision_signal'),
+    has_preference_signal_part: positivePartNames.includes('preference_signal'),
+    has_todo_signal_part: positivePartNames.includes('project_todo_signal'),
+    has_engineering_evidence_part: positivePartNames.includes('engineering_evidence_signal'),
+    has_transient_runtime_noise_penalty: negativePartNames.includes('transient_runtime_noise_penalty'),
+    has_tool_output_penalty: negativePartNames.includes('tool_output_penalty'),
+    has_raw_log_penalty: negativePartNames.includes('archived_raw_log_penalty'),
+    has_pure_tool_output_penalty: negativePartNames.includes('pure_tool_output_penalty'),
+    has_keyword_hard_drop_penalty: negativePartNames.includes('keyword_hard_drop'),
+    pattern_flags: patternFlags,
+  };
+}
+
+function compareScoringPartsExamples(a, b) {
+  if (a.pattern_flags.high_value_positive_parts_pattern !== b.pattern_flags.high_value_positive_parts_pattern) {
+    return a.pattern_flags.high_value_positive_parts_pattern ? -1 : 1;
+  }
+  if (a.positive_score_sum !== b.positive_score_sum) return b.positive_score_sum - a.positive_score_sum;
+  if (a.score !== b.score) return b.score - a.score;
+  return a.sample_id.localeCompare(b.sample_id);
+}
+
+function compactScoringPartsExample(row) {
+  return {
+    sample_id: row.sample_id,
+    primary_bucket: row.primary_bucket,
+    actual_keep_active: row.actual_keep_active,
+    score: row.score,
+    scoring_parts: row.scoring_parts,
+    positive_part_names: row.positive_part_names,
+    negative_part_names: row.negative_part_names,
+    positive_part_count: row.positive_part_count,
+    negative_part_count: row.negative_part_count,
+    positive_score_sum: row.positive_score_sum,
+    negative_score_sum: row.negative_score_sum,
+    pattern_flags: row.pattern_flags,
+  };
+}
+
+function summarizeScoringPartPatterns(rows) {
+  return {
+    project_only_positive_parts_pattern: {
+      true: rows.filter(row => row.pattern_flags.project_only_positive_parts_pattern).length,
+      false: rows.filter(row => !row.pattern_flags.project_only_positive_parts_pattern).length,
+    },
+    project_plus_engineering_only_positive_parts_pattern: {
+      true: rows.filter(row => row.pattern_flags.project_plus_engineering_only_positive_parts_pattern).length,
+      false: rows.filter(row => !row.pattern_flags.project_plus_engineering_only_positive_parts_pattern).length,
+    },
+    high_value_positive_parts_pattern: {
+      true: rows.filter(row => row.pattern_flags.high_value_positive_parts_pattern).length,
+      false: rows.filter(row => !row.pattern_flags.high_value_positive_parts_pattern).length,
+    },
+    penalty_dominated_pattern: {
+      true: rows.filter(row => row.pattern_flags.penalty_dominated_pattern).length,
+      false: rows.filter(row => !row.pattern_flags.penalty_dominated_pattern).length,
+    },
+  };
+}
+
+function buildScoringPartsGroup(rows) {
+  const booleanFields = [
+    'has_project_signal_part',
+    'has_project_decision_signal_part',
+    'has_preference_signal_part',
+    'has_todo_signal_part',
+    'has_engineering_evidence_part',
+    'has_transient_runtime_noise_penalty',
+    'has_tool_output_penalty',
+    'has_raw_log_penalty',
+    'has_pure_tool_output_penalty',
+    'has_keyword_hard_drop_penalty',
+  ];
+
+  return {
+    count: rows.length,
+    positive_part_count_summary: summarizeNumeric(rows.map(row => row.positive_part_count)),
+    negative_part_count_summary: summarizeNumeric(rows.map(row => row.negative_part_count)),
+    positive_score_sum_summary: summarizeNumeric(rows.map(row => row.positive_score_sum)),
+    negative_score_sum_summary: summarizeNumeric(rows.map(row => row.negative_score_sum)),
+    net_score_summary: summarizeNumeric(rows.map(row => row.net_score)),
+    boolean_scoring_part_distributions: summarizeBoolean(rows, booleanFields),
+    pattern_flag_distributions: summarizeScoringPartPatterns(rows),
+    primary_bucket_distribution: buildDistribution(rows, ['primary_bucket']).primary_bucket,
+    score_bucket_distribution: buildDistribution(rows, [Object.assign(row => scoreBucket(row.score), { fieldName: 'score_bucket' })]).score_bucket,
+    examples: rows.slice().sort(compareScoringPartsExamples).slice(0, 5).map(compactScoringPartsExample),
+  };
+}
+
+function buildScoringPartsDiagnostics(rows) {
+  const cappedRows = rows.filter(row => row.is_conflict_capped).map(buildScoringPartsFeatureRow);
+  const cappedFalsePositiveAvoided = cappedRows.filter(row => row.actual_keep_active === 'no');
+  const cappedFalseNegativeCaused = cappedRows.filter(row => row.actual_keep_active === 'yes');
+  const cappedUnsureActual = cappedRows.filter(row => row.actual_keep_active === 'unsure');
+
+  return {
+    capped_false_positive_avoided: buildScoringPartsGroup(cappedFalsePositiveAvoided),
+    capped_false_negative_caused: buildScoringPartsGroup(cappedFalseNegativeCaused),
+    capped_unsure_actual: buildScoringPartsGroup(cappedUnsureActual),
+    candidate_rules_preview: {
+      uncap_if_has_project_decision_or_preference_part: cappedRows.filter(row => row.has_project_decision_signal_part || row.has_preference_signal_part).length,
+      uncap_if_high_value_positive_parts_pattern: cappedRows.filter(row => row.pattern_flags.high_value_positive_parts_pattern).length,
+      cap_if_project_only_positive_parts_pattern: cappedRows.filter(row => row.pattern_flags.project_only_positive_parts_pattern).length,
+      cap_if_project_plus_engineering_only_positive_parts_pattern: cappedRows.filter(row => row.pattern_flags.project_plus_engineering_only_positive_parts_pattern).length,
+      cap_if_penalty_dominated_pattern: cappedRows.filter(row => row.pattern_flags.penalty_dominated_pattern).length,
+    },
+  };
+}
+
 function tieredCapCalibrationVariants() {
   return [
     {
@@ -759,6 +905,7 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
       predicted_keep_active: scoring.predicted_keep_active,
       rule_id: scoring.scoring_version,
       manual_review_flags: scoring.manual_review_flags,
+      scoring_parts: scoring.parts,
       reasons: scoring.parts.map(p => `${p.name}:${p.value}`),
       prediction_sample: predictionSample,
       is_conflict_capped:
@@ -859,6 +1006,10 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
 
   if (options.includeSignalDiversityDiagnostics) {
     report.signal_diversity_diagnostics = buildSignalDiversityDiagnostics(scoringRows);
+  }
+
+  if (options.includeScoringPartsDiagnostics) {
+    report.scoring_parts_diagnostics = buildScoringPartsDiagnostics(scoringRows);
   }
 
   if (options.out) writeJson(options.out, report);
