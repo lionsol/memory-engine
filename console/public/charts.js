@@ -557,6 +557,13 @@ function renderReviewQueueLabelPreview(previewNode, preview) {
   </div>`;
 }
 
+function annotationDeepLinkForReport(report) {
+  const name = String(report?.name || '');
+  if (report?.kind === 'annotation_candidates' && name.endsWith('.jsonl')) return `/annotations?candidate=${encodeURIComponent(name)}`;
+  if (report?.kind === 'archived_raw_log_rescue_review_queue' && name.endsWith('.jsonl')) return `/annotations?candidate=${encodeURIComponent(name)}`;
+  return null;
+}
+
 function renderReportDetail(report) {
   const node = $('[data-report-detail]');
   const traceNode = $('[data-report-decision-trace]');
@@ -578,8 +585,10 @@ function renderReportDetail(report) {
     if (reviewQueueLabelPreviewNode) reviewQueueLabelPreviewNode.innerHTML = `<div class="muted">Review queue label preview unavailable.</div>`;
     return;
   }
+  const annotationLink = annotationDeepLinkForReport(report);
   node.innerHTML = `<div class="detail">
     <div><span class="badge">${esc(reportKindLabel(report.kind))}</span> <span class="badge">${esc(report.name)}</span> <span class="badge">${esc(report.updated_at || '-')}</span></div>
+    ${annotationLink ? `<div><a class="button" data-open-in-annotations href="${esc(annotationLink)}">Open in Annotations</a></div>` : ''}
     <pre>${esc(report.content || '')}</pre>
   </div>`;
   if (traceNode) {

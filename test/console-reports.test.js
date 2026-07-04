@@ -206,6 +206,12 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "report-latest-card",
     "data-report-latest-name",
     "dataset.reportLatestName",
+    "annotationDeepLinkForReport",
+    "data-open-in-annotations",
+    "Open in Annotations",
+    "/annotations?candidate=",
+    "report?.kind === 'annotation_candidates'",
+    "report?.kind === 'archived_raw_log_rescue_review_queue'",
   ]) {
     assert.equal(charts.includes(required), true, `missing required token: ${required}`);
   }

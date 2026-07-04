@@ -1,5 +1,32 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P23: Reports to annotations deep-link handoff
+
+After P22 was committed as `376bc5d feat(console): auto-load annotation reports from query`, P23 exposed that deep-link capability from `/reports`. Candidate/queue JSONL reports can now be opened directly in `/annotations` from the report detail view.
+
+Implemented:
+
+- Added `annotationDeepLinkForReport()` in `console/public/charts.js`.
+- Report detail now shows `Open in Annotations` for loadable annotation input reports:
+  - `annotation_candidates` JSONL
+  - `archived_raw_log_rescue_review_queue` JSONL
+- The link target is `/annotations?candidate=<encoded-report-name>`.
+- The link is not shown for Markdown files, JSON summary/QC reports, label alignment reports, or other non-candidate artifacts.
+- Deep-link loading still uses the existing `/annotations` query auto-load path and read-only `/api/reports/file` report fetch.
+- No new server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+
+Verification:
+
+```text
+npm exec -- node --test test/console-reports.test.js
+# 20/20 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 41/41 pass
+```
+
+Note: the first direct `node --test test/console-reports.test.js` invocation was blocked once by an external safety check, so the single-file test was rerun through `npm exec -- node`. The combined test then used the system Node runtime (`/usr/bin/node`, v22.22.2) successfully.
+
 ### Archived raw_log rescue P22: Annotations report deep-link auto-load
 
 After P21 was committed as `7436ec9 feat(console): open reports from latest cards`, P22 added deep-link auto-load support to `/annotations`. The page can now load a whitelisted candidate/queue JSONL and optional labels JSONL directly from URL query parameters.
