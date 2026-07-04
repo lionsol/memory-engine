@@ -1,5 +1,31 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P14: Console one-click load for whitelisted candidate reports
+
+After P13 was committed as `ec14e9a feat(console): list local annotation qc reports`, P14 removed the last manual file-picking step for reports already visible in `/annotations`. Available candidate reports can now be loaded directly from the Console list through the existing read-only reports API.
+
+Implemented:
+
+- Updated `/annotations` to show a `Load` button for each available candidate report.
+- Added read-only fetch path through `/api/reports/file?name=<report>`.
+- Kept the server-side allowlist as the authority for what can be read.
+- Only JSONL reports can be loaded into the annotation UI.
+- Server-loaded reports reuse the same `parseJsonl()` and normalization path as local browser-selected files.
+- Loading a server report clears existing labels, resets label import state, refreshes bucket filters, and resets view filters, matching local file-load behavior.
+- Added status text for server candidate loading and failure states.
+- Updated safety copy: the page now supports browser-local file loading or whitelisted read-only report loading, but still does not upload labels, write DB, or mutate memory.
+- Read-only boundary remains unchanged: no apply, archive, delete, quarantine, reinforce, DB write, or memory mutation path was added.
+
+Verification:
+
+```text
+node --test test/console-annotations.test.js
+# 10/10 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 33/33 pass
+```
+
 ### Archived raw_log rescue P13: Console reports handoff for local QC report
 
 After P12 was committed as `069ca24 feat(console): export local annotation qc report`, P13 closed the archive/handoff gap for browser-local QC reports. The browser can download `annotation-local-qc-report-*.json`; now if that file is moved into `reports/`, the Console reports service recognizes it without treating it as a candidate or labels file.

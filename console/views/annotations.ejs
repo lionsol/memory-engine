@@ -7,7 +7,7 @@
     <section class="panel annotation-card">
       <div>
         <h2>Local Review</h2>
-        <div class="muted">This page uses browser File API only. It does not upload labels, does not write DB, and does not modify memory records.</div>
+        <div class="muted">This page loads local files through the browser or whitelisted reports through a read-only server API. It does not upload labels, does not write DB, and does not modify memory records.</div>
       </div>
       <div class="annotation-field">
         <label for="annotationCandidateFile">Load candidate JSONL</label>
@@ -64,7 +64,8 @@
 
     <section class="panel annotation-card">
       <h2>Available Candidate Reports</h2>
-      <div class="muted">The server only lists whitelisted `reports/` files. Loading still happens through your browser-selected local file.</div>
+      <div class="muted">The server only lists whitelisted `reports/` files. Use Load to fetch a listed JSONL report through the read-only reports API, or choose a local file above.</div>
+      <div id="annotationCandidateLoadStatus" class="muted">No server report loaded</div>
       <ul id="annotationAvailableCandidates" class="annotation-file-list"></ul>
     </section>
   </aside>
@@ -245,6 +246,7 @@
       remainingCount: document.getElementById("annotationRemainingCount"),
       bucketCounts: document.getElementById("annotationBucketCounts"),
       availableCandidates: document.getElementById("annotationAvailableCandidates"),
+      candidateLoadStatus: document.getElementById("annotationCandidateLoadStatus"),
       emptyState: document.getElementById("annotationEmptyState"),
       reviewState: document.getElementById("annotationReviewState"),
       recordTitle: document.getElementById("annotationRecordTitle"),
@@ -492,6 +494,36 @@
       URL.revokeObjectURL(url);
     }
 
+    function resetCandidateSamplesFromText(text, sourceLabel) {
+      state.samples = parseJsonl(text);
+      state.labels.clear();
+      state.currentIndex = 0;
+      state.lastLabelImportSummary = null;
+      els.labelFile.value = "";
+      els.labelImportStatus.textContent = "No labels loaded";
+      els.candidateLoadStatus.textContent = sourceLabel ? `Loaded ${state.samples.length} sample(s) from ${sourceLabel}` : `Loaded ${state.samples.length} sample(s)`;
+      syncBucketFilterOptions();
+      clearFilters();
+    }
+
+    async function loadCandidateReportFromServer(name) {
+      const reportName = String(name || "");
+      if (!reportName.endsWith(".jsonl")) {
+        els.candidateLoadStatus.textContent = "Only JSONL candidate reports can be loaded here.";
+        return;
+      }
+      els.candidateLoadStatus.textContent = `Loading ${reportName}...`;
+      try {
+        const response = await fetch(`/api/reports/file?name=${encodeURIComponent(reportName)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+        if (payload?.format !== "jsonl") throw new Error("selected report is not JSONL");
+        resetCandidateSamplesFromText(String(payload.content || ""), reportName);
+      } catch (error) {
+        els.candidateLoadStatus.textContent = `Failed to load ${reportName}: ${String(error?.message || error)}`;
+      }
+    }
+
     function currentSample() {
       return state.filteredSamples[state.currentIndex] || null;
     }
@@ -635,7 +667,21 @@
       }
       for (const file of rows) {
         const li = document.createElement("li");
-        li.innerHTML = `<div><strong>${file.name}</strong></div><div class="muted">${file.updated_at || "-"} · ${file.size || 0} bytes</div>`;
+        const name = String(file.name || "");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Load";
+        button.dataset.reportName = name;
+        const title = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = name;
+        title.appendChild(strong);
+        const meta = document.createElement("div");
+        meta.className = "muted";
+        meta.textContent = `${file.updated_at || "-"} · ${file.size || 0} bytes · ${file.kind || "report"}`;
+        li.appendChild(title);
+        li.appendChild(meta);
+        li.appendChild(button);
         els.availableCandidates.appendChild(li);
       }
     }
@@ -760,14 +806,7 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       const text = await file.text();
-      state.samples = parseJsonl(text);
-      state.labels.clear();
-      state.currentIndex = 0;
-      state.lastLabelImportSummary = null;
-      els.labelFile.value = "";
-      els.labelImportStatus.textContent = "No labels loaded";
-      syncBucketFilterOptions();
-      clearFilters();
+      resetCandidateSamplesFromText(text, file.name || "local file");
     });
     els.labelFile.addEventListener("change", async (event) => {
       const file = event.target.files && event.target.files[0];
@@ -779,6 +818,11 @@
       }
       const text = await file.text();
       importLabelsFromText(text);
+    });
+    els.availableCandidates.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-report-name]");
+      if (!button) return;
+      loadCandidateReportFromServer(button.dataset.reportName);
     });
     els.bucketFilter.addEventListener("change", () => {
       state.currentIndex = 0;

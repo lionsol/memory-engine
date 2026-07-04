@@ -73,6 +73,26 @@ test("console annotations page can import existing labels locally to resume revi
   }
 });
 
+test("console annotations page can load whitelisted candidate reports through read-only reports API", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "annotationCandidateLoadStatus",
+    "No server report loaded",
+    "read-only server API",
+    "button.dataset.reportName",
+    "loadCandidateReportFromServer",
+    "resetCandidateSamplesFromText",
+    "/api/reports/file?name=",
+    "encodeURIComponent(reportName)",
+    "payload?.format !== \"jsonl\"",
+    "Only JSONL candidate reports can be loaded here.",
+    "Failed to load ${reportName}",
+    "Loaded ${state.samples.length} sample(s) from ${sourceLabel}",
+  ]) {
+    assert.equal(page.includes(token), true, `missing server candidate load token: ${token}`);
+  }
+});
+
 test("console annotations page exports a browser-local QC report", () => {
   const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
   for (const token of [
@@ -141,7 +161,7 @@ test("console annotations page exposes no destructive action entrypoints", () =>
   ]) {
     assert.equal(page.includes(forbidden), false, `forbidden token present: ${forbidden}`);
   }
-  assert.equal(page.includes("browser File API only"), true);
+  assert.equal(page.includes("read-only server API"), true);
   assert.equal(page.includes("does not upload labels"), true);
   assert.equal(page.includes("does not write DB"), true);
 });
