@@ -1,5 +1,48 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P27: Console annotation/report handoff smoke runbook
+
+After P26 was committed as `0430052 feat(console): copy annotation deep link`, P27 added a smoke-test runbook for the `/reports` ↔ `/annotations` GUI handoff and a static regression test for the documented hooks and safety boundaries.
+
+Implemented:
+
+- Added `docs/smoke-tests/console-annotation-report-handoff.md`.
+- The smoke runbook covers:
+  - `/reports` latest cards
+  - structured report previews
+  - rescue combined preview
+  - review queue preview
+  - review queue label preview
+  - local QC preview
+  - `Open in Annotations`
+  - `Open with Latest Labels`
+  - `/annotations` query auto-load
+  - current review deep link
+  - `Copy Link`
+  - labels import identity alignment
+  - local labels/QC export
+- Added `test/console-annotation-report-handoff-doc.test.js`.
+- Static tests assert:
+  - smoke doc existence
+  - read-only safety boundaries
+  - required report families
+  - structured latest/default preference
+  - deep-link URL forms
+  - implementation hooks in `reports.ejs`, `annotations.ejs`, and `charts.js`
+  - lifecycle labels remain advisory only
+- No runtime code changed.
+- No server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+
+Verification:
+
+```text
+node --test test/console-annotation-report-handoff-doc.test.js
+# 6/6 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/console-annotation-report-handoff-doc.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 48/48 pass
+```
+
 ### Archived raw_log rescue P26: Copy current annotation deep link
 
 After P25 was committed as `add58ec feat(console): show current annotation deep link`, P26 added a copy action for the current `/annotations` deep link. This makes the server-loaded candidate/labels resume link easier to reuse without manually selecting the anchor URL.
