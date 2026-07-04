@@ -44,6 +44,7 @@
       </div>
       <div class="row">
         <button id="annotationExportButton" type="button">Export Labels JSONL</button>
+        <button id="annotationExportReportButton" type="button">Export QC Report JSON</button>
       </div>
     </section>
 
@@ -224,7 +225,7 @@
 <script>
   (() => {
     const pageData = JSON.parse(document.getElementById("page-data")?.textContent || "{}").payload || {};
-    const state = { samples: [], filteredSamples: [], labels: new Map(), currentIndex: 0 };
+    const state = { samples: [], filteredSamples: [], labels: new Map(), currentIndex: 0, lastLabelImportSummary: null };
     const els = {
       candidateFile: document.getElementById("annotationCandidateFile"),
       labelFile: document.getElementById("annotationLabelFile"),
@@ -238,6 +239,7 @@
       prevButton: document.getElementById("annotationPrevButton"),
       nextButton: document.getElementById("annotationNextButton"),
       exportButton: document.getElementById("annotationExportButton"),
+      exportReportButton: document.getElementById("annotationExportReportButton"),
       totalCount: document.getElementById("annotationTotalCount"),
       labeledCount: document.getElementById("annotationLabeledCount"),
       remainingCount: document.getElementById("annotationRemainingCount"),
@@ -400,9 +402,94 @@
         });
         imported += 1;
       }
+      state.lastLabelImportSummary = {
+        imported,
+        parse_invalid: parsed.invalid.length,
+        skipped_not_in_candidates: skippedNotInCandidates,
+        skipped_identity_mismatch: skippedIdentityMismatch,
+        skipped_empty: skippedEmpty,
+      };
       els.labelImportStatus.textContent = `Imported ${imported} label(s); skipped ${parsed.invalid.length} invalid, ${skippedNotInCandidates} not in candidates, ${skippedIdentityMismatch} identity mismatch, ${skippedEmpty} empty.`;
       state.currentIndex = 0;
       applyFilters();
+    }
+
+    function incrementCount(map, key) {
+      const normalized = String(key || "(empty)");
+      map[normalized] = (map[normalized] || 0) + 1;
+    }
+
+    function countBy(rows, getter) {
+      const counts = {};
+      for (const row of rows) incrementCount(counts, getter(row));
+      return counts;
+    }
+
+    function buildLocalQcReport() {
+      const seen = new Set();
+      const duplicateCandidateSampleIds = [];
+      for (const sample of state.samples) {
+        if (seen.has(sample.sample_id)) duplicateCandidateSampleIds.push(sample.sample_id);
+        else seen.add(sample.sample_id);
+      }
+      const labels = state.samples
+        .map(sample => ({ sample, label: state.labels.get(sample.sample_id) }))
+        .filter(item => item.label && isAnnotationFilled(item.label.annotation));
+      const labeledIds = new Set(labels.map(item => item.sample.sample_id));
+      const unlabeled = state.samples.filter(sample => !labeledIds.has(sample.sample_id));
+      const annotations = labels.map(item => item.label.annotation || {});
+      const generatedAt = new Date().toISOString();
+      return {
+        mode: "annotation_local_qc_report",
+        schema_version: 1,
+        generated_at: generatedAt,
+        write_db: false,
+        memory_side_effects: false,
+        reinforcement_side_effects: false,
+        safety: {
+          browser_local_only: true,
+          upload: false,
+          db_writes: false,
+          apply: false,
+          archive: false,
+          delete: false,
+          quarantine: false,
+          reinforce: false,
+        },
+        summary: {
+          total_candidates: state.samples.length,
+          unique_candidate_sample_ids: seen.size,
+          duplicate_candidate_sample_ids: duplicateCandidateSampleIds.length,
+          labeled_count: labels.length,
+          unlabeled_count: unlabeled.length,
+          coverage_rate: state.samples.length ? Number((labels.length / state.samples.length).toFixed(4)) : 0,
+          candidate_bucket_distribution: countBy(state.samples, sample => sample.primary_bucket || "unknown"),
+          queue_reason_distribution: countBy(state.samples, sample => sample.review_reasons?.[0] || "(empty)"),
+          quality_distribution: countBy(annotations, annotation => annotation.quality),
+          keep_active_distribution: countBy(annotations, annotation => annotation.keep_active),
+          preferred_action_distribution: countBy(annotations, annotation => annotation.preferred_action),
+          target_category_distribution: countBy(annotations, annotation => annotation.target_category),
+          rescue_confidence_distribution: countBy(annotations, annotation => annotation.rescue_confidence),
+          last_label_import: state.lastLabelImportSummary,
+        },
+        duplicate_candidate_sample_ids: duplicateCandidateSampleIds.slice(0, 25),
+        unlabeled_samples: unlabeled.slice(0, 25).map(sample => ({
+          sample_id: sample.sample_id,
+          primary_bucket: sample.primary_bucket,
+          queue_priority: sample.queue_priority,
+          review_reasons: sample.review_reasons,
+        })),
+      };
+    }
+
+    function downloadJson(filename, payload) {
+      const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
     }
 
     function currentSample() {
@@ -676,6 +763,7 @@
       state.samples = parseJsonl(text);
       state.labels.clear();
       state.currentIndex = 0;
+      state.lastLabelImportSummary = null;
       els.labelFile.value = "";
       els.labelImportStatus.textContent = "No labels loaded";
       syncBucketFilterOptions();
@@ -712,6 +800,10 @@
     els.exportButton.addEventListener("click", () => {
       persistCurrentForm();
       exportLabels();
+    });
+    els.exportReportButton.addEventListener("click", () => {
+      persistCurrentForm();
+      downloadJson(`annotation-local-qc-report-${new Date().toISOString().replace(/[:]/g, "-")}.json`, buildLocalQcReport());
     });
     [els.qualityInput, els.currencyInput, els.autoRecallEligibleInput, els.preferredActionInput, els.keepActiveInput, els.targetCategoryInput, els.rescueConfidenceInput, els.reasonInput, els.annotator].forEach((el) => {
       el.addEventListener("input", persistCurrentForm);

@@ -65,10 +65,34 @@ test("console annotations page can import existing labels locally to resume revi
     "importLabelsFromText",
     "skippedNotInCandidates",
     "skippedIdentityMismatch",
+    "lastLabelImportSummary",
     "Load candidate JSONL before loading labels.",
     "Imported ${imported} label(s)",
   ]) {
     assert.equal(page.includes(token), true, `missing label import token: ${token}`);
+  }
+});
+
+test("console annotations page exports a browser-local QC report", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "annotationExportReportButton",
+    "Export QC Report JSON",
+    "annotation_local_qc_report",
+    "browser_local_only",
+    "buildLocalQcReport",
+    "downloadJson",
+    "coverage_rate",
+    "candidate_bucket_distribution",
+    "queue_reason_distribution",
+    "keep_active_distribution",
+    "preferred_action_distribution",
+    "target_category_distribution",
+    "rescue_confidence_distribution",
+    "unlabeled_samples",
+    "annotation-local-qc-report-",
+  ]) {
+    assert.equal(page.includes(token), true, `missing local qc report token: ${token}`);
   }
 });
 

@@ -1,5 +1,45 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P12: Console browser-local QC report export
+
+After P11 was committed as `7cc7b69 feat(console): resume annotation labels locally`, P12 reduced the remaining command-line dependency in the manual review loop: `/annotations` can now export a browser-local QC report from the currently loaded candidate/queue and labels.
+
+Implemented:
+
+- Added `Export QC Report JSON` to `/annotations`.
+- The report is generated entirely in the browser from loaded candidate JSONL and local labels.
+- No upload, DB write, apply, archive, delete, quarantine, reinforce, LLM, network, or server-side report generation path was added.
+- Report mode: `annotation_local_qc_report`.
+- Report includes:
+  - candidate count
+  - unique candidate sample count
+  - duplicate candidate sample-id count
+  - labeled count
+  - unlabeled count
+  - coverage rate
+  - candidate bucket distribution
+  - queue reason distribution
+  - quality distribution
+  - keep_active distribution
+  - preferred_action distribution
+  - target_category distribution
+  - rescue_confidence distribution
+  - last label-import skipped counts
+  - first 25 duplicate sample ids
+  - first 25 unlabeled samples
+- Loading a new candidate file resets the last label-import summary, preventing stale skipped counts from carrying over.
+- Label export schema remains unchanged.
+
+Verification:
+
+```text
+node --test test/console-annotations.test.js
+# 9/9 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 30/30 pass
+```
+
 ### Archived raw_log rescue P11: Console local label resume support
 
 After P10 was committed as `a2ade05 feat(console): show rescue review queue metadata`, P11 fixed the next GUI workflow gap: `/annotations` could export labels but could not reload an existing labels JSONL to resume a partially completed manual review.
