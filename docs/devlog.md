@@ -1,5 +1,33 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P24: Reports to annotations with latest labels
+
+After P23 was committed as `9ff21dc feat(console): link reports to annotations`, P24 extended the report-to-annotation handoff with a resume shortcut. When `/reports` is showing a loadable candidate/queue JSONL report and a latest `annotation_labels` JSONL exists in the allowed report list, the detail view now offers an `Open with Latest Labels` link.
+
+Implemented:
+
+- Added `latestAnnotationLabelReportName()` in `console/public/charts.js`.
+- `annotationDeepLinkForReport()` now accepts an optional label report name.
+- The base link remains `/annotations?candidate=<report>`.
+- The resume link becomes `/annotations?candidate=<report>&labels=<latest-label-report>`.
+- The resume link is only shown for loadable annotation input reports:
+  - `annotation_candidates` JSONL
+  - `archived_raw_log_rescue_review_queue` JSONL
+- The resume link is only shown when a whitelisted `annotation_labels` JSONL exists in `pageData.files`.
+- `/annotations` still performs the actual read through the existing query auto-load path and read-only `/api/reports/file` endpoint.
+- Existing label identity alignment remains in force after navigation.
+- No server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+
+Verification:
+
+```text
+node --test test/console-reports.test.js
+# 20/20 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 41/41 pass
+```
+
 ### Archived raw_log rescue P23: Reports to annotations deep-link handoff
 
 After P22 was committed as `376bc5d feat(console): auto-load annotation reports from query`, P23 exposed that deep-link capability from `/reports`. Candidate/queue JSONL reports can now be opened directly in `/annotations` from the report detail view.

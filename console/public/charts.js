@@ -557,11 +557,18 @@ function renderReviewQueueLabelPreview(previewNode, preview) {
   </div>`;
 }
 
-function annotationDeepLinkForReport(report) {
+function latestAnnotationLabelReportName() {
+  return (pageData.files || []).find(file => file?.kind === 'annotation_labels' && String(file.name || '').endsWith('.jsonl'))?.name || null;
+}
+
+function annotationDeepLinkForReport(report, labelReportName = null) {
   const name = String(report?.name || '');
-  if (report?.kind === 'annotation_candidates' && name.endsWith('.jsonl')) return `/annotations?candidate=${encodeURIComponent(name)}`;
-  if (report?.kind === 'archived_raw_log_rescue_review_queue' && name.endsWith('.jsonl')) return `/annotations?candidate=${encodeURIComponent(name)}`;
-  return null;
+  const isCandidate = report?.kind === 'annotation_candidates' && name.endsWith('.jsonl');
+  const isReviewQueue = report?.kind === 'archived_raw_log_rescue_review_queue' && name.endsWith('.jsonl');
+  if (!isCandidate && !isReviewQueue) return null;
+  const params = new URLSearchParams({ candidate: name });
+  if (labelReportName) params.set('labels', labelReportName);
+  return `/annotations?${params.toString()}`;
 }
 
 function renderReportDetail(report) {
@@ -586,9 +593,11 @@ function renderReportDetail(report) {
     return;
   }
   const annotationLink = annotationDeepLinkForReport(report);
+  const labelReportName = latestAnnotationLabelReportName();
+  const annotationWithLabelsLink = labelReportName ? annotationDeepLinkForReport(report, labelReportName) : null;
   node.innerHTML = `<div class="detail">
     <div><span class="badge">${esc(reportKindLabel(report.kind))}</span> <span class="badge">${esc(report.name)}</span> <span class="badge">${esc(report.updated_at || '-')}</span></div>
-    ${annotationLink ? `<div><a class="button" data-open-in-annotations href="${esc(annotationLink)}">Open in Annotations</a></div>` : ''}
+    ${annotationLink ? `<div><a class="button" data-open-in-annotations href="${esc(annotationLink)}">Open in Annotations</a>${annotationWithLabelsLink ? ` <a class="button" data-open-in-annotations-with-labels href="${esc(annotationWithLabelsLink)}">Open with Latest Labels</a>` : ''}</div>` : ''}
     <pre>${esc(report.content || '')}</pre>
   </div>`;
   if (traceNode) {

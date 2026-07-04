@@ -209,7 +209,12 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "annotationDeepLinkForReport",
     "data-open-in-annotations",
     "Open in Annotations",
-    "/annotations?candidate=",
+    "Open with Latest Labels",
+    "/annotations?",
+    "new URLSearchParams({ candidate: name })",
+    "params.set('labels', labelReportName)",
+    "latestAnnotationLabelReportName",
+    "data-open-in-annotations-with-labels",
     "report?.kind === 'annotation_candidates'",
     "report?.kind === 'archived_raw_log_rescue_review_queue'",
   ]) {
