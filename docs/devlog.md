@@ -1,5 +1,46 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P10: Console review queue metadata display
+
+After P9 was committed as `7f7426c feat(console): list rescue review queue reports`, P10 fixed the next Console handoff gap: `/annotations` could load the P7 queue JSONL, but the page normalized samples down to generic annotation fields and discarded review-queue context that annotators need.
+
+Implemented:
+
+- Updated `console/views/annotations.ejs` to preserve P7 queue metadata while loading candidate JSONL:
+  - `queue_type`
+  - `queue_priority`
+  - `review_reasons`
+  - `raw_predicted_keep_active`
+  - `predicted_keep_active`
+  - `score`
+  - `boundary_distance`
+  - `manual_review_flags`
+  - `scoring_parts`
+  - `prior_sampling_reason`
+- Added a conditional `Review Queue Metadata` card on `/annotations`.
+- The card displays:
+  - queue priority
+  - raw → final prediction
+  - score / boundary distance
+  - prior sampling reason
+  - review reasons
+  - manual review flags
+  - risk signals
+  - scoring parts
+- The card is hidden for ordinary candidate JSONL rows without queue metadata.
+- Label export schema is unchanged; queue metadata remains display-only and is not written into label JSONL.
+- Read-only boundary remains unchanged: no upload, DB write, apply, archive, delete, quarantine, or reinforce.
+
+Verification:
+
+```text
+node --test test/console-annotations.test.js
+# 7/7 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 28/28 pass
+```
+
 ### Archived raw_log rescue P9: Console reports handoff for P7/P8 artifacts
 
 After P8 was committed as `e40296e feat(annotation): add rescue review queue label report`, P9 closed a Console handoff gap: P7/P8 artifacts existed on disk, but the Console reports allowlist did not recognize the archived raw_log rescue artifact names, and `/annotations` would not list the P7 queue as a loadable candidate.

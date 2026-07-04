@@ -96,6 +96,31 @@
           <h2>Sample Buckets</h2>
           <div id="annotationSampleBuckets" class="annotation-pills"></div>
         </article>
+        <article id="annotationReviewQueueCard" hidden class="panel annotation-card">
+          <h2>Review Queue Metadata</h2>
+          <ul class="annotation-list">
+            <li><span>queue_priority</span><strong id="annotationQueuePriority"></strong></li>
+            <li><span>prediction</span><strong id="annotationPrediction"></strong></li>
+            <li><span>score / boundary</span><strong id="annotationScoreBoundary"></strong></li>
+            <li><span>prior_sampling_reason</span><strong id="annotationPriorSamplingReason"></strong></li>
+          </ul>
+          <div class="annotation-field">
+            <label>review_reasons</label>
+            <div id="annotationReviewReasons" class="annotation-pills"></div>
+          </div>
+          <div class="annotation-field">
+            <label>manual_review_flags</label>
+            <div id="annotationManualReviewFlags" class="annotation-pills"></div>
+          </div>
+          <div class="annotation-field">
+            <label>risk_signals</label>
+            <div id="annotationRiskSignals" class="annotation-pills"></div>
+          </div>
+          <div class="annotation-field">
+            <label>scoring_parts</label>
+            <div id="annotationScoringParts" class="annotation-pills"></div>
+          </div>
+        </article>
       </section>
 
       <section class="panel annotation-card">
@@ -223,6 +248,15 @@
       sampleBuckets: document.getElementById("annotationSampleBuckets"),
       sourcePath: document.getElementById("annotationSourcePath"),
       riskScore: document.getElementById("annotationRiskScore"),
+      reviewQueueCard: document.getElementById("annotationReviewQueueCard"),
+      queuePriority: document.getElementById("annotationQueuePriority"),
+      prediction: document.getElementById("annotationPrediction"),
+      scoreBoundary: document.getElementById("annotationScoreBoundary"),
+      priorSamplingReason: document.getElementById("annotationPriorSamplingReason"),
+      reviewReasons: document.getElementById("annotationReviewReasons"),
+      manualReviewFlags: document.getElementById("annotationManualReviewFlags"),
+      riskSignals: document.getElementById("annotationRiskSignals"),
+      scoringParts: document.getElementById("annotationScoringParts"),
       contentPreview: document.getElementById("annotationContentPreview"),
       qualityInput: document.getElementById("annotationQualityInput"),
       currencyInput: document.getElementById("annotationCurrencyInput"),
@@ -254,6 +288,16 @@
         risk_score: Number(raw.risk_score || 0),
         content_preview: String(raw.content_preview || ""),
         risk_signals: Array.isArray(raw.risk_signals) ? raw.risk_signals.map(String) : [],
+        queue_type: String(raw.queue_type || ""),
+        queue_priority: raw.queue_priority ?? null,
+        review_reasons: Array.isArray(raw.review_reasons) ? raw.review_reasons.map(String) : [],
+        raw_predicted_keep_active: String(raw.raw_predicted_keep_active || ""),
+        predicted_keep_active: String(raw.predicted_keep_active || ""),
+        score: raw.score ?? null,
+        boundary_distance: raw.boundary_distance ?? null,
+        manual_review_flags: Array.isArray(raw.manual_review_flags) ? raw.manual_review_flags.map(String) : [],
+        scoring_parts: Array.isArray(raw.scoring_parts) ? raw.scoring_parts.map(String) : [],
+        prior_sampling_reason: raw.prior_sampling_reason ? String(raw.prior_sampling_reason) : "",
       };
     }
 
@@ -334,6 +378,47 @@
       };
     }
 
+    function renderPills(container, values, emptyText = "none") {
+      container.innerHTML = "";
+      const items = Array.isArray(values) ? values.filter(Boolean) : [];
+      if (!items.length) {
+        const span = document.createElement("span");
+        span.className = "muted";
+        span.textContent = emptyText;
+        container.appendChild(span);
+        return;
+      }
+      for (const item of items) {
+        const span = document.createElement("span");
+        span.className = "badge";
+        span.textContent = item;
+        container.appendChild(span);
+      }
+    }
+
+    function renderReviewQueueMetadata(sample) {
+      const hasQueueMetadata = Boolean(
+        sample.queue_type
+        || sample.queue_priority !== null
+        || sample.review_reasons.length
+        || sample.raw_predicted_keep_active
+        || sample.predicted_keep_active
+        || sample.manual_review_flags.length
+        || sample.scoring_parts.length
+      );
+      els.reviewQueueCard.hidden = !hasQueueMetadata;
+      if (!hasQueueMetadata) return;
+
+      els.queuePriority.textContent = sample.queue_priority == null ? "n/a" : String(sample.queue_priority);
+      els.prediction.textContent = `${sample.raw_predicted_keep_active || "n/a"} → ${sample.predicted_keep_active || "n/a"}`;
+      els.scoreBoundary.textContent = `${sample.score ?? "n/a"} / ${sample.boundary_distance ?? "n/a"}`;
+      els.priorSamplingReason.textContent = sample.prior_sampling_reason || "n/a";
+      renderPills(els.reviewReasons, sample.review_reasons);
+      renderPills(els.manualReviewFlags, sample.manual_review_flags);
+      renderPills(els.riskSignals, sample.risk_signals);
+      renderPills(els.scoringParts, sample.scoring_parts.slice(0, 12), sample.scoring_parts.length ? "" : "none");
+    }
+
     function updateProgress() {
       const total = state.samples.length;
       let labeled = 0;
@@ -406,13 +491,8 @@
       els.sourcePath.textContent = sample.source_path || "unknown";
       els.riskScore.textContent = String(sample.risk_score);
       els.contentPreview.textContent = sample.content_preview || "(empty)";
-      els.sampleBuckets.innerHTML = "";
-      for (const bucket of sample.sample_buckets) {
-        const span = document.createElement("span");
-        span.className = "badge";
-        span.textContent = bucket;
-        els.sampleBuckets.appendChild(span);
-      }
+      renderPills(els.sampleBuckets, sample.sample_buckets);
+      renderReviewQueueMetadata(sample);
       loadLabelIntoForm(sample);
     }
 

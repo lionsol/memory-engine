@@ -64,6 +64,27 @@ test("console annotations page makes filtered bucket views explicit", () => {
   }
 });
 
+test("console annotations page preserves and displays rescue review queue metadata", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "annotationReviewQueueCard",
+    "Review Queue Metadata",
+    "queue_priority",
+    "review_reasons",
+    "manual_review_flags",
+    "risk_signals",
+    "scoring_parts",
+    "raw_predicted_keep_active",
+    "predicted_keep_active",
+    "boundary_distance",
+    "prior_sampling_reason",
+    "renderReviewQueueMetadata",
+    "renderPills",
+  ]) {
+    assert.equal(page.includes(token), true, `missing rescue queue metadata token: ${token}`);
+  }
+});
+
 test("console annotations page exposes no destructive action entrypoints", () => {
   const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
   for (const forbidden of [
