@@ -73,6 +73,16 @@ function mergeCandidateAndLabel(candidate, label) {
   };
 }
 
+function buildPredictionSample(candidate = {}, label = {}) {
+  return {
+    ...candidate,
+    sample_id: candidate.sample_id || label.sample_id,
+    risk_signals: Array.isArray(candidate.risk_signals) ? candidate.risk_signals : [],
+    quality_flags: Array.isArray(candidate.quality_flags) ? candidate.quality_flags : [],
+    annotation: candidate.annotation || {},
+  };
+}
+
 function classifyForThreshold(score, threshold, unsureThreshold) {
   if (score >= threshold) return 'yes';
   if (score >= unsureThreshold) return 'unsure';
@@ -203,8 +213,9 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
       continue;
     }
 
-    const rule = evaluateArchivedRawLogRescueRules(merged);
-    const scoring = computeArchivedRawLogRescueScore(merged, { threshold, unsureThreshold });
+    const predictionSample = buildPredictionSample(candidate, label);
+    const rule = evaluateArchivedRawLogRescueRules(predictionSample);
+    const scoring = computeArchivedRawLogRescueScore(predictionSample, { threshold, unsureThreshold });
     const base = {
       sample_id: merged.sample_id,
       primary_bucket: merged.primary_bucket,

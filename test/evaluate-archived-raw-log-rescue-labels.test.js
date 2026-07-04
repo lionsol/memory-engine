@@ -106,6 +106,44 @@ test("evaluates joined labels against v0.1 rules and v0.2 scoring", () => {
   assert.ok(report.v0_2_scoring.threshold_sweep.some(row => row.threshold === 55));
 });
 
+test("does not leak label annotations into v0.1 rule predictions", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:label-only-yes",
+      primary_bucket: "archived_raw_log_project",
+      risk_signals: [],
+      quality_flags: ["archived_raw_log", "raw_log_leak"],
+      annotation: {},
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:label-only-yes",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "medium",
+      },
+    }),
+  ]);
+
+  const report = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+  });
+
+  assert.equal(report.summary.labels_valid, 1);
+  assert.equal(report.v0_1_rules.total, 1);
+  assert.equal(report.v0_1_rules.exact_match, 0);
+  assert.equal(report.v0_1_rules.yes_false_negative, 1);
+  assert.equal(report.v0_1_rules.false_negatives[0].sample_id, "rescue:label-only-yes");
+  assert.equal(report.v0_1_rules.false_negatives[0].rule_id, "S2_DEFAULT_DROP");
+});
+
 test("reports invalid labels and missing candidates without using them for metrics", () => {
   const dir = fixtureDir();
   const labelsPath = resolve(dir, "labels.jsonl");
