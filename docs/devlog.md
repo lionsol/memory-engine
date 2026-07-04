@@ -1,5 +1,35 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P31: Console annotation handoff npm smoke script
+
+After P30 was committed as `6046fe2 docs(smoke): index console annotation runbooks`, P31 added a targeted npm script for the Console annotation/report handoff smoke path. This makes the GUI handoff regression suite runnable without copying a long `node --test ...` command.
+
+Implemented:
+
+- Added `smoke:console-annotation-handoff` to `package.json`.
+- The script runs the Console annotation/report handoff test set:
+  - `test/console-reports.test.js`
+  - `test/console-annotations.test.js`
+  - `test/console-annotation-report-handoff-doc.test.js`
+  - `test/human-annotation-workflow-doc.test.js`
+  - `test/readme-console-annotation-workflow.test.js`
+  - `test/smoke-tests-index-doc.test.js`
+  - `test/report-archived-raw-log-rescue-review-queue-labels.test.js`
+  - `test/build-archived-raw-log-rescue-review-queue.test.js`
+- Updated `docs/smoke-tests/README.md` to use `npm run smoke:console-annotation-handoff` as the documented regression guard command.
+- Added `test/package-scripts.test.js` to protect the npm script and its included test files.
+- No runtime code changed.
+
+Verification:
+
+```text
+npm run smoke:console-annotation-handoff
+# 56/56 pass
+
+node --test test/package-scripts.test.js test/smoke-tests-index-doc.test.js
+# 5/5 pass
+```
+
 ### Archived raw_log rescue P30: Smoke tests index
 
 After P29 was committed as `8646190 docs(readme): link console annotation workflow`, P30 added a `docs/smoke-tests/README.md` index so smoke-test runbooks are discoverable from the smoke-test directory itself.

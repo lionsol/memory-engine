@@ -33,5 +33,6 @@ Run or review the OpenClaw memory tools smoke whenever changing:
 The runbooks are also covered by static tests so that key links, workflow steps, and safety boundaries remain discoverable:
 
 ```text
-node --test test/console-annotation-report-handoff-doc.test.js test/agent-memory-tool-strategy.test.js
+npm run smoke:console-annotation-handoff
+node --test test/agent-memory-tool-strategy.test.js
 ```

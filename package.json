@@ -22,6 +22,7 @@
     "preview:smart-add-duplicate-cleanup": "node bin/preview-smart-add-duplicate-cleanup-candidates.js",
     "memory:cleanup-orphan-confidence": "node bin/cleanup-orphan-confidence.js",
     "console": "node console/cli.js",
+    "smoke:console-annotation-handoff": "node --test test/console-reports.test.js test/console-annotations.test.js test/console-annotation-report-handoff-doc.test.js test/human-annotation-workflow-doc.test.js test/readme-console-annotation-workflow.test.js test/smoke-tests-index-doc.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js",
     "sync-index": "node bin/sync-memory-index.js --force"
   }
 }

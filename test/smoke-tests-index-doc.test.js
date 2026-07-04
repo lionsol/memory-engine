@@ -47,7 +47,8 @@ test("smoke tests index preserves Console handoff safety boundary", () => {
 test("smoke tests index records regression guard command", () => {
   const index = readIndex();
   for (const token of [
-    "node --test test/console-annotation-report-handoff-doc.test.js test/agent-memory-tool-strategy.test.js",
+    "npm run smoke:console-annotation-handoff",
+    "node --test test/agent-memory-tool-strategy.test.js",
     "key links, workflow steps, and safety boundaries remain discoverable",
   ]) {
     assert.equal(index.includes(token), true, `missing regression guard token: ${token}`);
