@@ -404,12 +404,64 @@ function renderAnnotationQcPreview(previewNode, preview) {
   </div>`;
 }
 
+function renderReviewQueueLabelPreview(previewNode, preview) {
+  if (!previewNode) return;
+  if (!preview || !preview.summary) {
+    previewNode.innerHTML = `<div class="muted">Review queue label preview unavailable for this report.</div>`;
+    return;
+  }
+  const summary = preview.summary || {};
+  const distSection = (title, rows) => `<div class="status-row review-queue-label-dist">
+    <strong>${esc(title)}</strong>
+    <div class="dist-list">${(rows || []).length
+    ? rows.map(row => `<div class="dist-item"><span>${esc(row.label)}</span><strong>${fmt(row.count)}</strong></div>`).join('')
+    : '<span class="muted">No data</span>'}</div>
+  </div>`;
+  const issueSection = (title, rows) => `<div class="status-row">
+    <strong>${esc(title)}</strong>
+    ${(rows || []).length
+    ? rows.map(row => `<pre>${esc(typeof row === 'string' ? row : JSON.stringify(row, null, 2))}</pre>`).join('')
+    : '<div class="muted">None</div>'}
+  </div>`;
+  previewNode.innerHTML = `<div class="detail">
+    <div><span class="badge">review_queue_label_preview</span> <span class="badge">coverage ${pct1(summary.coverage_rate ?? 0)}</span> <span class="badge">read-only</span></div>
+    <div class="diversity-kpis">
+      <div><span>Queue</span><strong>${fmt(summary.queue_unique_sample_ids ?? 0)}</strong></div>
+      <div><span>Aligned</span><strong>${fmt(summary.labels_valid_aligned ?? 0)}</strong></div>
+      <div><span>Unlabeled</span><strong>${fmt(summary.queue_unlabeled ?? 0)}</strong></div>
+      <div><span>Blockers</span><strong>${fmt((summary.queue_invalid || 0) + (summary.labels_invalid || 0) + (summary.labels_not_in_queue || 0) + (summary.labels_identity_mismatch || 0) + (summary.labels_duplicate_sample_ids || 0) + (summary.queue_duplicate_sample_ids || 0))}</strong></div>
+    </div>
+    <div class="diversity-kpis">
+      <div><span>Labels total</span><strong>${fmt(summary.labels_total ?? 0)}</strong></div>
+      <div><span>Invalid</span><strong>${fmt(summary.labels_invalid ?? 0)}</strong></div>
+      <div><span>Not in queue</span><strong>${fmt(summary.labels_not_in_queue ?? 0)}</strong></div>
+      <div><span>Identity mismatch</span><strong>${fmt(summary.labels_identity_mismatch ?? 0)}</strong></div>
+    </div>
+    ${distSection('Queue reasons', preview.distributions?.queue_reason_distribution)}
+    ${distSection('Queue buckets', preview.distributions?.queue_bucket_distribution)}
+    ${distSection('Quality', preview.distributions?.quality_distribution)}
+    ${distSection('Keep active', preview.distributions?.keep_active_distribution)}
+    ${distSection('Preferred action', preview.distributions?.preferred_action_distribution)}
+    ${distSection('Target category', preview.distributions?.target_category_distribution)}
+    ${distSection('Rescue confidence', preview.distributions?.rescue_confidence_distribution)}
+    ${issueSection('Queue errors', preview.blockers?.queue_errors)}
+    ${issueSection('Invalid labels', preview.blockers?.invalid_labels)}
+    ${issueSection('Labels not in queue', preview.blockers?.labels_not_in_queue)}
+    ${issueSection('Identity mismatches', preview.blockers?.identity_mismatch_labels)}
+    ${issueSection('Duplicate queue sample ids', preview.blockers?.duplicate_queue_sample_ids)}
+    ${issueSection('Duplicate label sample ids', preview.blockers?.duplicate_label_sample_ids)}
+    ${(preview.unlabeled_queue_samples || []).length ? `<div class="status-row"><strong>Unlabeled queue samples</strong>${preview.unlabeled_queue_samples.map(sample => `<div class="muted id">#${esc(sample.queue_priority ?? '-')} ${esc(sample.sample_id || '')} · ${esc(sample.primary_bucket || '')} · ${(sample.review_reasons || []).map(esc).join(', ')}</div>`).join('')}</div>` : ''}
+    ${(preview.valid_labels || []).length ? `<div class="status-row"><strong>Valid labels</strong>${preview.valid_labels.map(label => `<div class="muted id">#${esc(label.queue_priority ?? '-')} ${esc(label.sample_id || '')} · keep_active=${esc(label.keep_active || '')} · action=${esc(label.preferred_action || '')}</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
 function renderReportDetail(report) {
   const node = $('[data-report-detail]');
   const traceNode = $('[data-report-decision-trace]');
   const previewNode = $('[data-report-memory-card-preview]');
   const primaryPreviewNode = $('[data-report-memory-card-preview-primary]');
   const annotationQcPreviewNode = $('[data-report-annotation-qc-preview]');
+  const reviewQueueLabelPreviewNode = $('[data-report-review-queue-label-preview]');
   if (!node) return;
   if (!report || report.error) {
     node.innerHTML = `<div class="muted">${esc(report?.error || 'Report unavailable')}</div>`;
@@ -417,6 +469,7 @@ function renderReportDetail(report) {
     if (previewNode) previewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
     if (primaryPreviewNode) primaryPreviewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
     if (annotationQcPreviewNode) annotationQcPreviewNode.innerHTML = `<div class="muted">Annotation QC preview unavailable.</div>`;
+    if (reviewQueueLabelPreviewNode) reviewQueueLabelPreviewNode.innerHTML = `<div class="muted">Review queue label preview unavailable.</div>`;
     return;
   }
   node.innerHTML = `<div class="detail">
@@ -437,6 +490,7 @@ function renderReportDetail(report) {
   renderMemoryCardPreview(previewNode, report.memory_card_preview);
   renderMemoryCardPreview(primaryPreviewNode, report.memory_card_preview);
   renderAnnotationQcPreview(annotationQcPreviewNode, report.annotation_local_qc_preview);
+  renderReviewQueueLabelPreview(reviewQueueLabelPreviewNode, report.review_queue_label_preview);
 }
 
 function initReports() {
@@ -445,6 +499,7 @@ function initReports() {
   const latestItems = [
     latest.auto_recall_turn_gold_set_replay,
     latest.annotation_local_qc_report,
+    latest.archived_raw_log_rescue_review_queue_label_report,
     latest.annotation_summary,
     latest.annotation_eligibility_preview,
     latest.auto_recall_safety_smoke,
@@ -472,7 +527,7 @@ function initReports() {
     { label: 'Size', value: r => r.size ?? 0 },
   ], files.map(row => ({ ...row, click: row.name })));
 
-  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.annotation_local_qc_report || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
+  const defaultReport = latest.auto_recall_turn_gold_set_replay || latest.annotation_local_qc_report || latest.archived_raw_log_rescue_review_queue_label_report || latest.annotation_summary || latest.annotation_eligibility_preview || latest.auto_recall_long_input_smoke || latest.auto_recall_safety_smoke || files[0];
   if (defaultReport?.name) {
     api(`/api/reports/file?name=${encodeURIComponent(defaultReport.name)}`).then(renderReportDetail);
   }

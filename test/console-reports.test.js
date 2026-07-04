@@ -153,6 +153,8 @@ test("reports view stays read-only and contains no destructive action buttons or
     "data-report-memory-card-preview-primary",
     "Annotation QC Preview",
     "data-report-annotation-qc-preview",
+    "Review Queue Label Preview",
+    "data-report-review-queue-label-preview",
     "Read-only preview only",
   ]) {
     assert.equal(view.includes(required), true, `missing required token: ${required}`);
@@ -184,6 +186,10 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "renderAnnotationQcPreview",
     "annotation_local_qc_preview",
     "annotation_local_qc_report",
+    "data-report-review-queue-label-preview",
+    "renderReviewQueueLabelPreview",
+    "review_queue_label_preview",
+    "archived_raw_log_rescue_review_queue_label_report",
   ]) {
     assert.equal(charts.includes(required), true, `missing required token: ${required}`);
   }
@@ -340,6 +346,84 @@ test("reports service adds annotation_local_qc_preview for local QC reports via 
     upload: false,
     apply: false,
     archive: false,
+    delete: false,
+    quarantine: false,
+    reinforce: false,
+    llm: false,
+    network: false,
+  });
+}));
+
+test("reports service adds review_queue_label_preview for rescue label reports via pure mapping", withTempReports(({ reportsDir }) => {
+  writeReport(reportsDir, "archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json", JSON.stringify({
+    mode: "archived_raw_log_rescue_review_queue_label_report",
+    write_db: false,
+    memory_side_effects: false,
+    reinforcement_side_effects: false,
+    safety: {
+      db_writes: false,
+      unarchive: false,
+      category_update: false,
+      delete: false,
+      quarantine: false,
+      reinforce: false,
+    },
+    summary: {
+      queue_total: 50,
+      queue_valid: 50,
+      queue_unique_sample_ids: 50,
+      queue_invalid: 1,
+      queue_duplicate_sample_ids: 2,
+      labels_total: 38,
+      labels_valid_aligned: 37,
+      labels_invalid: 3,
+      labels_not_in_queue: 4,
+      labels_identity_mismatch: 5,
+      labels_duplicate_sample_ids: 6,
+      queue_unlabeled: 13,
+      coverage_rate: 0.74,
+      queue_reason_distribution: { positive_negative_conflict: 40, near_decision_boundary: 10 },
+      queue_bucket_distribution: { archived_raw_log_project: 50 },
+      quality_distribution: { usable: 20, low_quality: 17 },
+      keep_active_distribution: { yes: 11, no: 20, unsure: 6 },
+      preferred_action_distribution: { keep: 19, archive: 18 },
+      target_category_distribution: { project: 24, raw_log: 13 },
+      rescue_confidence_distribution: { high: 9, medium: 18, low: 10 },
+    },
+    queue_errors: [{ line_number: 1, sample_id: "bad-queue", errors: ["queue_type"] }],
+    invalid_labels: [{ line_number: 2, sample_id: "bad-label", errors: ["annotation.reason"] }],
+    labels_not_in_queue: [{ line_number: 3, sample_id: "foreign-label" }],
+    identity_mismatch_labels: [{ line_number: 4, sample_id: "mismatch-label", mismatches: ["memory_id"] }],
+    duplicate_queue_sample_ids: ["dup-queue"],
+    duplicate_label_sample_ids: ["dup-label"],
+    unlabeled_queue_samples: [
+      { queue_priority: 1, sample_id: "unlabeled-a", primary_bucket: "archived_raw_log_project", review_reasons: ["positive_negative_conflict"] },
+    ],
+    valid_labels: [
+      { sample_id: "valid-a", queue_priority: 2, keep_active: "yes", preferred_action: "keep", target_category: "project", rescue_confidence: "high", reason: "valid" },
+    ],
+  }, null, 2), Date.UTC(2026, 6, 4, 13, 0, 0));
+
+  const file = readReportFile("archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json");
+  assert.equal(file.kind, "archived_raw_log_rescue_review_queue_label_report");
+  assert.equal(file.review_queue_label_preview.summary.mode, "read_only_review_queue_label_preview");
+  assert.equal(file.review_queue_label_preview.summary.queue_unique_sample_ids, 50);
+  assert.equal(file.review_queue_label_preview.summary.labels_valid_aligned, 37);
+  assert.equal(file.review_queue_label_preview.summary.queue_unlabeled, 13);
+  assert.equal(file.review_queue_label_preview.summary.coverage_rate, 0.74);
+  assert.deepEqual(file.review_queue_label_preview.distributions.queue_reason_distribution, [
+    { label: "positive_negative_conflict", count: 40 },
+    { label: "near_decision_boundary", count: 10 },
+  ]);
+  assert.deepEqual(file.review_queue_label_preview.blockers.queue_errors[0], { line_number: 1, sample_id: "bad-queue", errors: ["queue_type"] });
+  assert.deepEqual(file.review_queue_label_preview.blockers.duplicate_queue_sample_ids, ["dup-queue"]);
+  assert.equal(file.review_queue_label_preview.unlabeled_queue_samples[0].sample_id, "unlabeled-a");
+  assert.equal(file.review_queue_label_preview.valid_labels[0].sample_id, "valid-a");
+  assert.deepEqual(file.review_queue_label_preview.safety, {
+    db_writes: false,
+    memory_file_mutation: false,
+    unarchive: false,
+    category_update: false,
     delete: false,
     quarantine: false,
     reinforce: false,

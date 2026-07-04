@@ -1,5 +1,52 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P17: Console review queue label report preview
+
+After P16 was committed as `526e57c feat(console): preview local annotation qc reports`, P17 added the matching structured `/reports` preview for P8 review queue label alignment reports. Previously `archived-raw-log-rescue-review-queue-label-report-*.json` was whitelisted and tracked as latest, but its detail view was still raw JSON/Markdown.
+
+Implemented:
+
+- Added `review_queue_label_preview` derivation in `console/services/reports-service.js` for `archived_raw_log_rescue_review_queue_label_report` JSON files.
+- The preview extracts:
+  - queue total/valid/unique counts
+  - queue invalid and duplicate sample-id counts
+  - labels total
+  - valid aligned labels
+  - invalid labels
+  - labels not in queue
+  - identity mismatches
+  - duplicate label sample ids
+  - unlabeled queue count
+  - coverage rate
+  - top queue reason distribution
+  - queue bucket distribution
+  - quality distribution
+  - keep_active distribution
+  - preferred_action distribution
+  - target_category distribution
+  - rescue_confidence distribution
+  - first 10 queue errors
+  - first 10 invalid labels
+  - first 10 labels not in queue
+  - first 10 identity mismatches
+  - first 10 duplicate queue/sample ids
+  - first 10 unlabeled queue samples
+  - first 10 valid labels
+- Added `Review Queue Label Preview` panel to `/reports`.
+- Added `renderReviewQueueLabelPreview()` in `console/public/charts.js`.
+- Added latest-card/default-report preference for `latest.archived_raw_log_rescue_review_queue_label_report`, behind turn gold-set replay and local QC reports but ahead of generic annotation summaries.
+- Safety boundary remains explicit: no DB writes, memory file mutation, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effects.
+
+Verification:
+
+```text
+node --test test/console-reports.test.js
+# 16/16 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 36/36 pass
+```
+
 ### Archived raw_log rescue P16: Console annotation local QC report preview
 
 After P15 was committed as `59a7d4e feat(console): load annotation labels from reports`, P16 added a structured `/reports` preview for browser-local annotation QC reports. Previously `annotation-local-qc-report-*.json` could be listed and read, but the detail view was a raw JSON `<pre>` only.

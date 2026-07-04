@@ -233,6 +233,62 @@ function extractAnnotationLocalQcPreview(entry, content, format) {
   };
 }
 
+function extractReviewQueueLabelPreview(entry, content, format) {
+  if (entry?.kind !== "archived_raw_log_rescue_review_queue_label_report") return null;
+  if (format !== "json") return null;
+  const payload = parseJsonContent(content);
+  if (!payload || payload.mode !== "archived_raw_log_rescue_review_queue_label_report") return null;
+  const summary = payload.summary || {};
+  return {
+    summary: {
+      mode: "read_only_review_queue_label_preview",
+      queue_total: Number(summary.queue_total || 0),
+      queue_valid: Number(summary.queue_valid || 0),
+      queue_unique_sample_ids: Number(summary.queue_unique_sample_ids || 0),
+      queue_invalid: Number(summary.queue_invalid || 0),
+      queue_duplicate_sample_ids: Number(summary.queue_duplicate_sample_ids || 0),
+      labels_total: Number(summary.labels_total || 0),
+      labels_valid_aligned: Number(summary.labels_valid_aligned || 0),
+      labels_invalid: Number(summary.labels_invalid || 0),
+      labels_not_in_queue: Number(summary.labels_not_in_queue || 0),
+      labels_identity_mismatch: Number(summary.labels_identity_mismatch || 0),
+      labels_duplicate_sample_ids: Number(summary.labels_duplicate_sample_ids || 0),
+      queue_unlabeled: Number(summary.queue_unlabeled || 0),
+      coverage_rate: Number(summary.coverage_rate || 0),
+    },
+    distributions: {
+      queue_reason_distribution: topDistributionEntries(summary.queue_reason_distribution),
+      queue_bucket_distribution: topDistributionEntries(summary.queue_bucket_distribution),
+      quality_distribution: topDistributionEntries(summary.quality_distribution),
+      keep_active_distribution: topDistributionEntries(summary.keep_active_distribution),
+      preferred_action_distribution: topDistributionEntries(summary.preferred_action_distribution),
+      target_category_distribution: topDistributionEntries(summary.target_category_distribution),
+      rescue_confidence_distribution: topDistributionEntries(summary.rescue_confidence_distribution),
+    },
+    blockers: {
+      queue_errors: Array.isArray(payload.queue_errors) ? payload.queue_errors.slice(0, 10) : [],
+      invalid_labels: Array.isArray(payload.invalid_labels) ? payload.invalid_labels.slice(0, 10) : [],
+      labels_not_in_queue: Array.isArray(payload.labels_not_in_queue) ? payload.labels_not_in_queue.slice(0, 10) : [],
+      identity_mismatch_labels: Array.isArray(payload.identity_mismatch_labels) ? payload.identity_mismatch_labels.slice(0, 10) : [],
+      duplicate_queue_sample_ids: Array.isArray(payload.duplicate_queue_sample_ids) ? payload.duplicate_queue_sample_ids.slice(0, 10) : [],
+      duplicate_label_sample_ids: Array.isArray(payload.duplicate_label_sample_ids) ? payload.duplicate_label_sample_ids.slice(0, 10) : [],
+    },
+    unlabeled_queue_samples: Array.isArray(payload.unlabeled_queue_samples) ? payload.unlabeled_queue_samples.slice(0, 10) : [],
+    valid_labels: Array.isArray(payload.valid_labels) ? payload.valid_labels.slice(0, 10) : [],
+    safety: {
+      db_writes: false,
+      memory_file_mutation: false,
+      unarchive: false,
+      category_update: false,
+      delete: false,
+      quarantine: false,
+      reinforce: false,
+      llm: false,
+      network: false,
+    },
+  };
+}
+
 export function listReports() {
   const dir = getReportsDir();
   if (!fs.existsSync(dir)) return [];
@@ -279,6 +335,7 @@ export function readReportFile(name) {
     decision_trace: extractAutoRecallDecisionTrace(entry, content, path.extname(validName).replace(/^\./, "")),
     memory_card_preview: extractMemoryCardPreview(entry, content, path.extname(validName).replace(/^\./, "")),
     annotation_local_qc_preview: extractAnnotationLocalQcPreview(entry, content, path.extname(validName).replace(/^\./, "")),
+    review_queue_label_preview: extractReviewQueueLabelPreview(entry, content, path.extname(validName).replace(/^\./, "")),
   };
 }
 
