@@ -1,5 +1,35 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P28: Human annotation workflow links Console handoff
+
+After P27 was committed as `d62dc10 docs(console): add annotation report handoff smoke`, P28 updated the main human-annotation workflow documentation so the new Console `/reports` ↔ `/annotations` GUI path is discoverable from the primary annotation doc instead of only from the smoke-test directory.
+
+Implemented:
+
+- Updated `docs/human-annotation-gold-set.md` `Annotation Workflow`.
+- The workflow now recommends Console `/annotations` for whitelisted report loading while still allowing browser File API local JSONL loading.
+- Added the `/reports` handoff path:
+  - `Open with Latest Labels`
+  - `/annotations?candidate=<report>&labels=<labels>`
+  - structured preview review in Console `/reports`
+- Added local outputs:
+  - labels JSONL export
+  - browser-local QC JSON export
+- Linked `docs/smoke-tests/console-annotation-report-handoff.md` from the main annotation workflow.
+- Preserved the GUI read-only safety boundary: server-side read-only whitelisted reports only; no label upload, DB write, memory mutation, apply, unarchive, category update, delete, quarantine, or reinforce.
+- Added `test/human-annotation-workflow-doc.test.js` to prevent the primary workflow doc from drifting back to the old standalone-only path.
+- No runtime code changed.
+
+Verification:
+
+```text
+node --test test/human-annotation-workflow-doc.test.js test/console-annotation-report-handoff-doc.test.js
+# 8/8 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/console-annotation-report-handoff-doc.test.js test/human-annotation-workflow-doc.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 50/50 pass
+```
+
 ### Archived raw_log rescue P27: Console annotation/report handoff smoke runbook
 
 After P26 was committed as `0430052 feat(console): copy annotation deep link`, P27 added a smoke-test runbook for the `/reports` ↔ `/annotations` GUI handoff and a static regression test for the documented hooks and safety boundaries.

@@ -218,11 +218,17 @@ MVP 阶段禁止：
 
 推荐流程：
 
-1. 先导出候选。
-2. 在 standalone reviewer 页面中加载 JSONL。
-3. 人工逐条标注。
-4. 单独 review 标注一致性。
-5. 再决定是否做 reinforcement、demotion、quarantine 或 schema 改造。
+1. 先导出候选或 archived raw-log rescue review queue。
+2. 优先在 Console `/annotations` 中加载 whitelisted report；也可以通过 browser File API 加载本地 JSONL。
+3. 如需续标，通过 `/reports` 的 `Open with Latest Labels` 或 `/annotations?candidate=<report>&labels=<labels>` deep link 加载 labels JSONL。
+4. 人工逐条标注。
+5. 导出 labels JSONL 和 browser-local QC JSON。
+6. 在 Console `/reports` 中查看 combined / queue / label / QC structured preview。
+7. 运行或参考 GUI handoff smoke runbook：`docs/smoke-tests/console-annotation-report-handoff.md`。
+8. 单独 review 标注一致性。
+9. 再决定是否做 reinforcement、demotion、quarantine 或 schema 改造。
+
+Console GUI 安全边界保持只读：server 侧只允许读取 whitelisted reports，不上传 labels，不写 DB，不修改 memory，不执行 apply / unarchive / category update / delete / quarantine / reinforce。
 
 ## Standalone Reviewer
 
