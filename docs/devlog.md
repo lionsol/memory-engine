@@ -1,5 +1,30 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P30: Smoke tests index
+
+After P29 was committed as `8646190 docs(readme): link console annotation workflow`, P30 added a `docs/smoke-tests/README.md` index so smoke-test runbooks are discoverable from the smoke-test directory itself.
+
+Implemented:
+
+- Added `docs/smoke-tests/README.md`.
+- Indexed available smoke runbooks:
+  - `console-annotation-report-handoff.md`
+  - `openclaw-memory-tools.md`
+- Documented when to run/review each smoke path.
+- Preserved the Console annotation/report handoff safety boundary in the index: read-only report fetches only; no label upload, DB write, memory mutation, apply, unarchive, category update, delete, quarantine, reinforce, or LLM call.
+- Added `test/smoke-tests-index-doc.test.js` to protect index discoverability, safety wording, and the documented regression guard command.
+- No runtime code changed.
+
+Verification:
+
+```text
+node --test test/smoke-tests-index-doc.test.js test/console-annotation-report-handoff-doc.test.js test/agent-memory-tool-strategy.test.js
+# 17/17 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/console-annotation-report-handoff-doc.test.js test/human-annotation-workflow-doc.test.js test/readme-console-annotation-workflow.test.js test/smoke-tests-index-doc.test.js test/agent-memory-tool-strategy.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 63/63 pass
+```
+
 ### Archived raw_log rescue P29: README Console annotation workflow entry
 
 After P28 was committed as `e04c377 docs(annotation): link console handoff workflow`, P29 added a top-level README entry for the Console annotation workflow so the GUI handoff docs are discoverable from the project landing page.
