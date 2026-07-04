@@ -128,6 +128,12 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - 面向 agent 的窄工具为 `memory_engine_search` 与 `memory_engine_get`；原有 `memory_engine` 保留以兼容既有调用。
 - `active-memory` 与 `memory-engine` 的 `autoRecall` 不应同时启用，除非显式做去重，否则会产生重复注入。
 
+## Console Annotation Workflow
+
+- 人工标注主流程见 `docs/human-annotation-gold-set.md`。
+- `/reports` ↔ `/annotations` GUI handoff smoke runbook 见 `docs/smoke-tests/console-annotation-report-handoff.md`。
+- 该 GUI 路径只读取 whitelisted reports，不上传 labels，不写 DB，不执行 apply / unarchive / category update / delete / quarantine / reinforce。
+
 ## Checkpoint Canonical Entry
 
 - 唯一 canonical checkpoint implementation 是 `bin/session-checkpoint.js` 与 `lib/checkpoint/*`。

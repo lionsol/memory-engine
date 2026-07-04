@@ -1,5 +1,28 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P29: README Console annotation workflow entry
+
+After P28 was committed as `e04c377 docs(annotation): link console handoff workflow`, P29 added a top-level README entry for the Console annotation workflow so the GUI handoff docs are discoverable from the project landing page.
+
+Implemented:
+
+- Added `Console Annotation Workflow` section to `README.md`.
+- Linked the primary annotation workflow doc: `docs/human-annotation-gold-set.md`.
+- Linked the GUI handoff smoke runbook: `docs/smoke-tests/console-annotation-report-handoff.md`.
+- Documented the top-level safety boundary: the GUI path only reads whitelisted reports, does not upload labels, does not write DB, and does not execute apply / unarchive / category update / delete / quarantine / reinforce.
+- Added `test/readme-console-annotation-workflow.test.js` to protect README discoverability and safety wording.
+- No runtime code changed.
+
+Verification:
+
+```text
+node --test test/readme-console-annotation-workflow.test.js test/human-annotation-workflow-doc.test.js test/console-annotation-report-handoff-doc.test.js
+# 10/10 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/console-annotation-report-handoff-doc.test.js test/human-annotation-workflow-doc.test.js test/readme-console-annotation-workflow.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 52/52 pass
+```
+
 ### Archived raw_log rescue P28: Human annotation workflow links Console handoff
 
 After P27 was committed as `d62dc10 docs(console): add annotation report handoff smoke`, P28 updated the main human-annotation workflow documentation so the new Console `/reports` ↔ `/annotations` GUI path is discoverable from the primary annotation doc instead of only from the smoke-test directory.
