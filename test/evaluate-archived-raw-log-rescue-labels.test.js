@@ -937,19 +937,15 @@ test("includes signal diversity diagnostics when requested without changing defa
   assert.equal(report.v0_2_scoring.yes_false_negative, baseline.v0_2_scoring.yes_false_negative);
   assert.ok(report.signal_diversity_diagnostics);
   assert.equal(report.signal_diversity_diagnostics.capped_false_positive_avoided.count, 1);
-  assert.equal(report.signal_diversity_diagnostics.capped_false_negative_caused.count, 1);
+  assert.equal(report.signal_diversity_diagnostics.capped_false_negative_caused.count, 0);
   assert.equal(report.signal_diversity_diagnostics.capped_unsure_actual.count, 1);
 
-  const fnExample = report.signal_diversity_diagnostics.capped_false_negative_caused.examples[0];
   const fpExample = report.signal_diversity_diagnostics.capped_false_positive_avoided.examples[0];
-  assert.equal(fnExample.sample_id, "rescue:diversity-fn");
   assert.equal(fpExample.sample_id, "rescue:diversity-fp");
-  assert.ok(fnExample.positive_signal_family_count > fpExample.positive_signal_family_count);
-  assert.equal(fnExample.pattern_flags.high_value_multi_signal_pattern, true);
   assert.equal(fpExample.pattern_flags.project_plus_noise_only_pattern, false);
-  assert.equal(report.signal_diversity_diagnostics.capped_false_negative_caused.high_value_signal_distributions.has_decision_signal.true, 1);
+  assert.equal(report.signal_diversity_diagnostics.capped_false_negative_caused.high_value_signal_distributions.has_decision_signal.true, 0);
   assert.equal(report.signal_diversity_diagnostics.capped_false_positive_avoided.high_value_signal_distributions.has_decision_signal.true, 0);
-  assert.equal(report.signal_diversity_diagnostics.candidate_rules_preview.uncap_if_has_decision_or_preference, 1);
+  assert.equal(report.signal_diversity_diagnostics.candidate_rules_preview.uncap_if_has_decision_or_preference, 0);
   assert.equal(report.signal_diversity_diagnostics.candidate_rules_preview.cap_if_project_plus_noise_only, 0);
 });
 
@@ -1098,20 +1094,17 @@ test("includes scoring parts diagnostics when requested without changing default
   assert.equal(report.v0_2_scoring.yes_false_negative, baseline.v0_2_scoring.yes_false_negative);
   assert.ok(report.scoring_parts_diagnostics);
   assert.equal(report.scoring_parts_diagnostics.capped_false_positive_avoided.count, 1);
-  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.count, 1);
+  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.count, 0);
   assert.equal(report.scoring_parts_diagnostics.capped_unsure_actual.count, 1);
 
-  const fnExample = report.scoring_parts_diagnostics.capped_false_negative_caused.examples[0];
   const fpExample = report.scoring_parts_diagnostics.capped_false_positive_avoided.examples[0];
-  assert.equal(fnExample.sample_id, "rescue:parts-fn");
   assert.equal(fpExample.sample_id, "rescue:parts-fp");
-  assert.equal(fnExample.pattern_flags.high_value_positive_parts_pattern, true);
   assert.equal(fpExample.pattern_flags.project_plus_engineering_only_positive_parts_pattern, true);
-  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.boolean_scoring_part_distributions.has_project_decision_signal_part.true, 1);
-  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.boolean_scoring_part_distributions.has_preference_signal_part.true, 1);
+  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.boolean_scoring_part_distributions.has_project_decision_signal_part.true, 0);
+  assert.equal(report.scoring_parts_diagnostics.capped_false_negative_caused.boolean_scoring_part_distributions.has_preference_signal_part.true, 0);
   assert.equal(report.scoring_parts_diagnostics.capped_false_positive_avoided.boolean_scoring_part_distributions.has_project_decision_signal_part.true, 0);
-  assert.equal(report.scoring_parts_diagnostics.candidate_rules_preview.uncap_if_has_project_decision_or_preference_part, 1);
-  assert.equal(report.scoring_parts_diagnostics.candidate_rules_preview.uncap_if_high_value_positive_parts_pattern, 1);
+  assert.equal(report.scoring_parts_diagnostics.candidate_rules_preview.uncap_if_has_project_decision_or_preference_part, 0);
+  assert.equal(report.scoring_parts_diagnostics.candidate_rules_preview.uncap_if_high_value_positive_parts_pattern, 0);
   assert.equal(report.scoring_parts_diagnostics.candidate_rules_preview.cap_if_project_plus_engineering_only_positive_parts_pattern, 2);
 });
 
@@ -1284,7 +1277,7 @@ test("includes scoring parts tiered cap calibration when requested without chang
 
   const preferenceVariant = report.scoring_parts_tiered_cap_calibration.find(row => row.variant_id === "uncap_if_has_preference_signal_part");
   assert.ok(preferenceVariant);
-  assert.equal(preferenceVariant.uncapped_yes_count, 1);
+  assert.equal(preferenceVariant.uncapped_yes_count, 0);
   assert.equal(preferenceVariant.capped_count, 2);
   assert.equal(preferenceVariant.yes_false_negative, 0);
   assert.equal(preferenceVariant.yes_false_positive, 0);
@@ -1294,12 +1287,12 @@ test("includes scoring parts tiered cap calibration when requested without chang
   assert.equal(conservativeVariant.capped_count, 2);
   assert.equal(conservativeVariant.capped_false_positive_avoided_count, 2);
   assert.equal(conservativeVariant.capped_false_negative_caused_count, 0);
-  assert.equal(conservativeVariant.uncapped_yes_count, 1);
+  assert.equal(conservativeVariant.uncapped_yes_count, 0);
 
   const noCapVariant = report.scoring_parts_tiered_cap_calibration.find(row => row.variant_id === "no_conflict_cap");
   assert.ok(noCapVariant);
   assert.equal(noCapVariant.capped_count, 0);
-  assert.equal(noCapVariant.uncapped_yes_count, 3);
+  assert.equal(noCapVariant.uncapped_yes_count, 2);
 });
 
 test("scoring parts tiered cap calibration is candidate-only and unaffected by label target category or rescue confidence", () => {
@@ -1642,7 +1635,7 @@ test("CLI prints signal diversity diagnostics when requested", () => {
   );
   const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
   assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
-  assert.equal(parsed.signal_diversity_diagnostics.capped_false_negative_caused.count, 1);
+  assert.equal(parsed.signal_diversity_diagnostics.capped_false_negative_caused.count, 0);
 });
 
 test("CLI prints scoring parts diagnostics when requested", () => {
@@ -1692,7 +1685,7 @@ test("CLI prints scoring parts diagnostics when requested", () => {
   );
   const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
   assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
-  assert.equal(parsed.scoring_parts_diagnostics.capped_false_negative_caused.count, 1);
+  assert.equal(parsed.scoring_parts_diagnostics.capped_false_negative_caused.count, 0);
 });
 
 test("CLI prints scoring parts tiered cap calibration when requested", () => {

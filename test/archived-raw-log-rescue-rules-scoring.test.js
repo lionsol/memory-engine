@@ -198,7 +198,7 @@ test("v0.2 scoring gives engineering evidence sampling boost", () => {
   assert.equal(result.parts.some(p => p.name === "tool_output_penalty"), false);
 });
 
-test("v0.2 scoring caps positive/negative conflict predictions to unsure", () => {
+test("v0.2 scoring still caps project plus engineering conflict to unsure", () => {
   const result = computeArchivedRawLogRescueScore(sample({
     primary_bucket: "archived_raw_log_project",
     risk_signals: [
@@ -215,6 +215,81 @@ test("v0.2 scoring caps positive/negative conflict predictions to unsure", () =>
   assert.ok(result.parts.some(p => p.name === "positive_negative_conflict_penalty" && p.value === -5));
   assert.ok(result.parts.some(p => p.name === "positive_negative_conflict_prediction_cap" && p.value === 0));
   assert.equal(result.parts.some(p => p.name === "transient_runtime_noise_penalty"), false);
+});
+
+test("v0.2 scoring keeps preference conflict predictions at yes", () => {
+  const result = computeArchivedRawLogRescueScore(sample({
+    primary_bucket: "archived_raw_log_project",
+    risk_signals: [
+      "project:memory-engine",
+      "preference_signal",
+      "engineering_evidence_signal",
+      "transient_runtime_noise_signal",
+    ],
+  }));
+
+  assert.equal(result.raw_predicted_keep_active, "yes");
+  assert.equal(result.predicted_keep_active, "yes");
+  assert.deepEqual(result.manual_review_flags, ["positive_negative_conflict"]);
+  assert.ok(result.parts.some(p => p.name === "preference_signal" && p.value === 46));
+  assert.equal(result.parts.some(p => p.name === "positive_negative_conflict_prediction_cap"), false);
+});
+
+test("v0.2 scoring keeps project decision conflict predictions at yes", () => {
+  const result = computeArchivedRawLogRescueScore(sample({
+    primary_bucket: "archived_raw_log_project",
+    risk_signals: [
+      "project:memory-engine",
+      "decision_signal",
+      "engineering_evidence_signal",
+      "transient_runtime_noise_signal",
+    ],
+  }));
+
+  assert.equal(result.raw_predicted_keep_active, "yes");
+  assert.equal(result.predicted_keep_active, "yes");
+  assert.deepEqual(result.manual_review_flags, ["positive_negative_conflict"]);
+  assert.ok(result.parts.some(p => p.name === "project_decision_signal" && p.value === 18));
+  assert.equal(result.parts.some(p => p.name === "positive_negative_conflict_prediction_cap"), false);
+});
+
+test("v0.2 scoring keeps project todo conflict predictions at yes", () => {
+  const result = computeArchivedRawLogRescueScore(sample({
+    primary_bucket: "archived_raw_log_project",
+    risk_signals: [
+      "project:memory-engine",
+      "todo_signal",
+      "engineering_evidence_signal",
+      "transient_runtime_noise_signal",
+    ],
+  }));
+
+  assert.equal(result.raw_predicted_keep_active, "yes");
+  assert.equal(result.predicted_keep_active, "yes");
+  assert.deepEqual(result.manual_review_flags, ["positive_negative_conflict"]);
+  assert.ok(result.parts.some(p => p.name === "project_todo_signal" && p.value === 6));
+  assert.equal(result.parts.some(p => p.name === "positive_negative_conflict_prediction_cap"), false);
+});
+
+test("v0.2 scoring keeps conflict predictions at yes with two positive non-project parts", () => {
+  const result = computeArchivedRawLogRescueScore(sample({
+    primary_bucket: "archived_raw_log_project",
+    risk_signals: [
+      "project:memory-engine",
+      "decision_signal",
+      "engineering_evidence_signal",
+      "transient_runtime_noise_signal",
+    ],
+  }));
+
+  assert.equal(result.raw_predicted_keep_active, "yes");
+  assert.equal(result.predicted_keep_active, "yes");
+  assert.deepEqual(result.manual_review_flags, ["positive_negative_conflict"]);
+  assert.deepEqual(
+    result.parts.filter(p => p.value > 0).map(p => p.name),
+    ["project_signal", "project_decision_signal", "engineering_evidence_signal"],
+  );
+  assert.equal(result.parts.some(p => p.name === "positive_negative_conflict_prediction_cap"), false);
 });
 
 test("v0.2 scoring penalizes pure transient runtime noise", () => {
