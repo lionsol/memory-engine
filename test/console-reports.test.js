@@ -153,6 +153,8 @@ test("reports view stays read-only and contains no destructive action buttons or
     "data-report-memory-card-preview-primary",
     "Annotation QC Preview",
     "data-report-annotation-qc-preview",
+    "Review Queue Preview",
+    "data-report-review-queue-preview",
     "Review Queue Label Preview",
     "data-report-review-queue-label-preview",
     "Read-only preview only",
@@ -186,6 +188,9 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "renderAnnotationQcPreview",
     "annotation_local_qc_preview",
     "annotation_local_qc_report",
+    "data-report-review-queue-preview",
+    "renderReviewQueuePreview",
+    "review_queue_preview",
     "data-report-review-queue-label-preview",
     "renderReviewQueueLabelPreview",
     "review_queue_label_preview",
@@ -283,6 +288,99 @@ test("reports service adds memory_card_preview for turn gold-set replay json rep
     llm: false,
     network: false,
     runtime_report_files: false,
+  });
+}));
+
+test("reports service adds review_queue_preview for rescue queue JSONL via pure mapping", withTempReports(({ reportsDir }) => {
+  const rows = [
+    {
+      schema_version: 1,
+      queue_type: "archived_raw_log_rescue_manual_review",
+      queue_priority: 1,
+      review_reasons: ["positive_negative_conflict"],
+      sample_id: "queue-a",
+      memory_id: "mem-a",
+      chunk_id: "chunk-a",
+      primary_bucket: "archived_raw_log_project",
+      is_archived: true,
+      risk_signals: ["raw_log_leak", "conflict"],
+      score: 77,
+      boundary_distance: 1,
+      raw_predicted_keep_active: "yes",
+      predicted_keep_active: "unsure",
+      manual_review_flags: ["positive_negative_conflict"],
+      content_preview: "sample a",
+    },
+    {
+      schema_version: 1,
+      queue_type: "archived_raw_log_rescue_manual_review",
+      queue_priority: 2,
+      review_reasons: ["near_boundary"],
+      sample_id: "queue-b",
+      memory_id: "mem-b",
+      chunk_id: "chunk-b",
+      primary_bucket: "archived_raw_log_project",
+      is_archived: true,
+      risk_signals: ["raw_log_leak"],
+      score: 71,
+      boundary_distance: 2,
+      raw_predicted_keep_active: "no",
+      predicted_keep_active: "no",
+      manual_review_flags: [],
+      content_missing_reason: "redacted",
+      content_preview: "sample b",
+    },
+    {
+      schema_version: 1,
+      queue_type: "archived_raw_log_rescue_manual_review",
+      queue_priority: 3,
+      review_reasons: ["near_boundary"],
+      sample_id: "queue-b",
+      memory_id: "mem-b2",
+      chunk_id: "chunk-b2",
+      primary_bucket: "archived_raw_log_preference",
+      is_archived: false,
+      risk_signals: [],
+      score: 70,
+      boundary_distance: 3,
+      raw_predicted_keep_active: "unsure",
+      predicted_keep_active: "unsure",
+      manual_review_flags: ["near_boundary"],
+      content_preview: "sample duplicate",
+    },
+  ];
+  writeReport(reportsDir, "archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl", `${rows.map(row => JSON.stringify(row)).join("\n")}\n`, Date.UTC(2026, 6, 4, 13, 0, 0));
+
+  const file = readReportFile("archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl");
+  assert.equal(file.kind, "archived_raw_log_rescue_review_queue");
+  assert.equal(file.review_queue_preview.summary.mode, "read_only_review_queue_preview");
+  assert.equal(file.review_queue_preview.summary.total_rows, 3);
+  assert.equal(file.review_queue_preview.summary.unique_sample_ids, 2);
+  assert.equal(file.review_queue_preview.summary.duplicate_sample_ids, 1);
+  assert.equal(file.review_queue_preview.summary.min_queue_priority, 1);
+  assert.equal(file.review_queue_preview.summary.max_queue_priority, 3);
+  assert.equal(file.review_queue_preview.summary.archived_count, 2);
+  assert.equal(file.review_queue_preview.summary.content_missing_count, 1);
+  assert.deepEqual(file.review_queue_preview.distributions.review_reason_distribution, [
+    { label: "near_boundary", count: 2 },
+    { label: "positive_negative_conflict", count: 1 },
+  ]);
+  assert.deepEqual(file.review_queue_preview.distributions.predicted_keep_active_distribution, [
+    { label: "unsure", count: 2 },
+    { label: "no", count: 1 },
+  ]);
+  assert.deepEqual(file.review_queue_preview.duplicate_sample_ids, ["queue-b"]);
+  assert.deepEqual(file.review_queue_preview.queue_samples.map(sample => sample.sample_id), ["queue-a", "queue-b", "queue-b"]);
+  assert.deepEqual(file.review_queue_preview.safety, {
+    db_writes: false,
+    memory_file_mutation: false,
+    unarchive: false,
+    category_update: false,
+    delete: false,
+    quarantine: false,
+    reinforce: false,
+    llm: false,
+    network: false,
   });
 }));
 

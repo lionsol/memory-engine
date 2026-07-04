@@ -189,6 +189,88 @@ function topDistributionEntries(distribution, limit = 8) {
     .slice(0, Math.max(1, Number(limit) || 1));
 }
 
+function incrementDistribution(distribution, key) {
+  const label = key == null || key === "" ? "(empty)" : String(key);
+  distribution[label] = (distribution[label] || 0) + 1;
+}
+
+function countDistribution(rows, getter) {
+  const distribution = {};
+  for (const row of rows) incrementDistribution(distribution, getter(row));
+  return distribution;
+}
+
+function parseJsonlContent(content) {
+  return String(content || "")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(row => row && typeof row === "object");
+}
+
+function extractReviewQueuePreview(entry, content, format) {
+  if (entry?.kind !== "archived_raw_log_rescue_review_queue") return null;
+  if (format !== "jsonl") return null;
+  const rows = parseJsonlContent(content)
+    .filter(row => row.queue_type === "archived_raw_log_rescue_manual_review");
+  if (!rows.length) return null;
+  const sampleIds = rows.map(row => String(row.sample_id || "")).filter(Boolean);
+  const uniqueSampleIds = new Set(sampleIds);
+  const duplicateSampleIds = sampleIds.filter((id, index) => sampleIds.indexOf(id) !== index);
+  return {
+    summary: {
+      mode: "read_only_review_queue_preview",
+      total_rows: rows.length,
+      unique_sample_ids: uniqueSampleIds.size,
+      duplicate_sample_ids: duplicateSampleIds.length,
+      min_queue_priority: Math.min(...rows.map(row => Number(row.queue_priority) || 0)),
+      max_queue_priority: Math.max(...rows.map(row => Number(row.queue_priority) || 0)),
+      archived_count: rows.filter(row => row.is_archived === true).length,
+      content_missing_count: rows.filter(row => row.content_missing_reason).length,
+    },
+    distributions: {
+      review_reason_distribution: topDistributionEntries(countDistribution(rows, row => Array.isArray(row.review_reasons) ? row.review_reasons[0] : "(empty)")),
+      primary_bucket_distribution: topDistributionEntries(countDistribution(rows, row => row.primary_bucket || "unknown")),
+      raw_predicted_keep_active_distribution: topDistributionEntries(countDistribution(rows, row => row.raw_predicted_keep_active || "(empty)")),
+      predicted_keep_active_distribution: topDistributionEntries(countDistribution(rows, row => row.predicted_keep_active || "(empty)")),
+      manual_review_flag_distribution: topDistributionEntries(countDistribution(rows.flatMap(row => Array.isArray(row.manual_review_flags) && row.manual_review_flags.length ? row.manual_review_flags : ["(empty)"]), flag => flag)),
+      risk_signal_distribution: topDistributionEntries(countDistribution(rows.flatMap(row => Array.isArray(row.risk_signals) && row.risk_signals.length ? row.risk_signals : ["(empty)"]), signal => signal)),
+    },
+    queue_samples: rows.slice(0, 10).map(row => ({
+      queue_priority: row.queue_priority ?? null,
+      sample_id: row.sample_id || null,
+      memory_id: row.memory_id || null,
+      chunk_id: row.chunk_id || null,
+      primary_bucket: row.primary_bucket || null,
+      review_reasons: Array.isArray(row.review_reasons) ? row.review_reasons : [],
+      raw_predicted_keep_active: row.raw_predicted_keep_active || null,
+      predicted_keep_active: row.predicted_keep_active || null,
+      score: row.score ?? null,
+      boundary_distance: row.boundary_distance ?? null,
+      content_preview: row.content_preview || "",
+    })),
+    duplicate_sample_ids: Array.from(new Set(duplicateSampleIds)).slice(0, 10),
+    safety: {
+      db_writes: false,
+      memory_file_mutation: false,
+      unarchive: false,
+      category_update: false,
+      delete: false,
+      quarantine: false,
+      reinforce: false,
+      llm: false,
+      network: false,
+    },
+  };
+}
+
 function extractAnnotationLocalQcPreview(entry, content, format) {
   if (entry?.kind !== "annotation_local_qc_report") return null;
   if (format !== "json") return null;
@@ -334,6 +416,7 @@ export function readReportFile(name) {
     format: path.extname(validName).replace(/^\./, ""),
     decision_trace: extractAutoRecallDecisionTrace(entry, content, path.extname(validName).replace(/^\./, "")),
     memory_card_preview: extractMemoryCardPreview(entry, content, path.extname(validName).replace(/^\./, "")),
+    review_queue_preview: extractReviewQueuePreview(entry, content, path.extname(validName).replace(/^\./, "")),
     annotation_local_qc_preview: extractAnnotationLocalQcPreview(entry, content, path.extname(validName).replace(/^\./, "")),
     review_queue_label_preview: extractReviewQueueLabelPreview(entry, content, path.extname(validName).replace(/^\./, "")),
   };

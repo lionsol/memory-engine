@@ -404,6 +404,43 @@ function renderAnnotationQcPreview(previewNode, preview) {
   </div>`;
 }
 
+function renderReviewQueuePreview(previewNode, preview) {
+  if (!previewNode) return;
+  if (!preview || !preview.summary) {
+    previewNode.innerHTML = `<div class="muted">Review queue preview unavailable for this report.</div>`;
+    return;
+  }
+  const summary = preview.summary || {};
+  const distSection = (title, rows) => `<div class="status-row review-queue-dist">
+    <strong>${esc(title)}</strong>
+    <div class="dist-list">${(rows || []).length
+    ? rows.map(row => `<div class="dist-item"><span>${esc(row.label)}</span><strong>${fmt(row.count)}</strong></div>`).join('')
+    : '<span class="muted">No data</span>'}</div>
+  </div>`;
+  previewNode.innerHTML = `<div class="detail">
+    <div><span class="badge">review_queue_preview</span> <span class="badge">rows ${fmt(summary.total_rows ?? 0)}</span> <span class="badge">read-only</span></div>
+    <div class="diversity-kpis">
+      <div><span>Total rows</span><strong>${fmt(summary.total_rows ?? 0)}</strong></div>
+      <div><span>Unique IDs</span><strong>${fmt(summary.unique_sample_ids ?? 0)}</strong></div>
+      <div><span>Duplicates</span><strong>${fmt(summary.duplicate_sample_ids ?? 0)}</strong></div>
+      <div><span>Archived</span><strong>${fmt(summary.archived_count ?? 0)}</strong></div>
+    </div>
+    <div class="diversity-kpis">
+      <div><span>Min priority</span><strong>${fmt(summary.min_queue_priority ?? 0)}</strong></div>
+      <div><span>Max priority</span><strong>${fmt(summary.max_queue_priority ?? 0)}</strong></div>
+      <div><span>Missing content</span><strong>${fmt(summary.content_missing_count ?? 0)}</strong></div>
+    </div>
+    ${distSection('Review reasons', preview.distributions?.review_reason_distribution)}
+    ${distSection('Primary buckets', preview.distributions?.primary_bucket_distribution)}
+    ${distSection('Raw keep_active', preview.distributions?.raw_predicted_keep_active_distribution)}
+    ${distSection('Final keep_active', preview.distributions?.predicted_keep_active_distribution)}
+    ${distSection('Manual flags', preview.distributions?.manual_review_flag_distribution)}
+    ${distSection('Risk signals', preview.distributions?.risk_signal_distribution)}
+    ${(preview.queue_samples || []).length ? `<div class="status-row"><strong>Queue samples</strong>${preview.queue_samples.map(sample => `<div class="muted id">#${esc(sample.queue_priority ?? '-')} ${esc(sample.sample_id || '')} · ${esc(sample.primary_bucket || '')} · ${esc((sample.review_reasons || []).join(', '))} · ${esc(sample.raw_predicted_keep_active || '')}→${esc(sample.predicted_keep_active || '')}</div>`).join('')}</div>` : ''}
+    ${(preview.duplicate_sample_ids || []).length ? `<div class="status-row"><strong>Duplicate sample ids</strong>${preview.duplicate_sample_ids.map(id => `<div class="muted id">${esc(id)}</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
 function renderReviewQueueLabelPreview(previewNode, preview) {
   if (!previewNode) return;
   if (!preview || !preview.summary) {
@@ -461,6 +498,7 @@ function renderReportDetail(report) {
   const previewNode = $('[data-report-memory-card-preview]');
   const primaryPreviewNode = $('[data-report-memory-card-preview-primary]');
   const annotationQcPreviewNode = $('[data-report-annotation-qc-preview]');
+  const reviewQueuePreviewNode = $('[data-report-review-queue-preview]');
   const reviewQueueLabelPreviewNode = $('[data-report-review-queue-label-preview]');
   if (!node) return;
   if (!report || report.error) {
@@ -469,6 +507,7 @@ function renderReportDetail(report) {
     if (previewNode) previewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
     if (primaryPreviewNode) primaryPreviewNode.innerHTML = `<div class="muted">Memory card preview unavailable.</div>`;
     if (annotationQcPreviewNode) annotationQcPreviewNode.innerHTML = `<div class="muted">Annotation QC preview unavailable.</div>`;
+    if (reviewQueuePreviewNode) reviewQueuePreviewNode.innerHTML = `<div class="muted">Review queue preview unavailable.</div>`;
     if (reviewQueueLabelPreviewNode) reviewQueueLabelPreviewNode.innerHTML = `<div class="muted">Review queue label preview unavailable.</div>`;
     return;
   }
@@ -490,6 +529,7 @@ function renderReportDetail(report) {
   renderMemoryCardPreview(previewNode, report.memory_card_preview);
   renderMemoryCardPreview(primaryPreviewNode, report.memory_card_preview);
   renderAnnotationQcPreview(annotationQcPreviewNode, report.annotation_local_qc_preview);
+  renderReviewQueuePreview(reviewQueuePreviewNode, report.review_queue_preview);
   renderReviewQueueLabelPreview(reviewQueueLabelPreviewNode, report.review_queue_label_preview);
 }
 

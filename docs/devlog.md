@@ -1,5 +1,42 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P18: Console review queue JSONL preview
+
+After P17 was committed as `65c3b7d feat(console): preview rescue queue label reports`, P18 added the remaining structured `/reports` preview for the P7 manual-review queue JSONL itself. Queue JSONL files were already whitelisted and loadable in `/annotations`, but selecting them in `/reports` still showed raw JSONL only.
+
+Implemented:
+
+- Added `review_queue_preview` derivation in `console/services/reports-service.js` for `archived_raw_log_rescue_review_queue` JSONL files.
+- The preview extracts:
+  - total queue rows
+  - unique sample ids
+  - duplicate sample-id count
+  - min/max queue priority
+  - archived count
+  - content-missing count
+  - review reason distribution
+  - primary bucket distribution
+  - raw predicted keep_active distribution
+  - final predicted keep_active distribution
+  - manual review flag distribution
+  - risk signal distribution
+  - first 10 queue samples
+  - first 10 duplicate sample ids
+- Added `Review Queue Preview` panel to `/reports`.
+- Added `renderReviewQueuePreview()` in `console/public/charts.js`.
+- Preview is available when selecting P7 queue JSONL from `/reports` table.
+- Safety boundary remains explicit: no DB writes, memory file mutation, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effects.
+
+Verification:
+
+```text
+node --test test/console-reports.test.js
+# 17/17 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 37/37 pass
+```
+
 ### Archived raw_log rescue P17: Console review queue label report preview
 
 After P16 was committed as `526e57c feat(console): preview local annotation qc reports`, P17 added the matching structured `/reports` preview for P8 review queue label alignment reports. Previously `archived-raw-log-rescue-review-queue-label-report-*.json` was whitelisted and tracked as latest, but its detail view was still raw JSON/Markdown.
