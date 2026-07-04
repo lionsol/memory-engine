@@ -529,8 +529,10 @@
         if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
         if (payload?.format !== "jsonl") throw new Error("selected report is not JSONL");
         resetCandidateSamplesFromText(String(payload.content || ""), reportName);
+        return true;
       } catch (error) {
         els.candidateLoadStatus.textContent = `Failed to load ${reportName}: ${String(error?.message || error)}`;
+        return false;
       }
     }
 
@@ -552,9 +554,24 @@
         if (payload?.format !== "jsonl") throw new Error("selected report is not JSONL");
         importLabelsFromText(String(payload.content || ""));
         els.labelReportLoadStatus.textContent = `Loaded labels from ${reportName}`;
+        return true;
       } catch (error) {
         els.labelReportLoadStatus.textContent = `Failed to load ${reportName}: ${String(error?.message || error)}`;
+        return false;
       }
+    }
+
+    async function autoLoadReportsFromQuery() {
+      const params = new URLSearchParams(window.location.search || "");
+      const candidate = params.get("candidate") || params.get("candidate_report");
+      const labels = params.get("labels") || params.get("label_report");
+      if (!candidate && !labels) return;
+      els.candidateLoadStatus.textContent = "Auto-load query detected";
+      if (candidate) {
+        const loadedCandidate = await loadCandidateReportFromServer(candidate);
+        if (!loadedCandidate) return;
+      }
+      if (labels) await loadLabelReportFromServer(labels);
     }
 
     function currentSample() {
@@ -904,5 +921,6 @@
     renderAvailableCandidates();
     renderAvailableLabels();
     updateProgress();
+    autoLoadReportsFromQuery();
   })();
 </script>

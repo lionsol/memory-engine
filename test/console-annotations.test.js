@@ -113,6 +113,27 @@ test("console annotations page can load whitelisted label reports after candidat
   }
 });
 
+test("console annotations page can auto-load candidate and label reports from query params", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "autoLoadReportsFromQuery",
+    "new URLSearchParams(window.location.search || \"\")",
+    "params.get(\"candidate\")",
+    "params.get(\"candidate_report\")",
+    "params.get(\"labels\")",
+    "params.get(\"label_report\")",
+    "Auto-load query detected",
+    "const loadedCandidate = await loadCandidateReportFromServer(candidate)",
+    "if (!loadedCandidate) return",
+    "await loadLabelReportFromServer(labels)",
+    "autoLoadReportsFromQuery();",
+    "return true",
+    "return false",
+  ]) {
+    assert.equal(page.includes(token), true, `missing query auto-load token: ${token}`);
+  }
+});
+
 test("console annotations page exports a browser-local QC report", () => {
   const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
   for (const token of [

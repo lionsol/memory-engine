@@ -1,5 +1,35 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P22: Annotations report deep-link auto-load
+
+After P21 was committed as `7436ec9 feat(console): open reports from latest cards`, P22 added deep-link auto-load support to `/annotations`. The page can now load a whitelisted candidate/queue JSONL and optional labels JSONL directly from URL query parameters.
+
+Implemented:
+
+- Added `/annotations` query auto-load support:
+  - `?candidate=<report.jsonl>`
+  - `?candidate_report=<report.jsonl>`
+  - `?labels=<labels.jsonl>`
+  - `?label_report=<labels.jsonl>`
+- Query auto-load uses the existing read-only `/api/reports/file?name=<report>` path.
+- Candidate report is loaded first; label report is loaded only after candidate load succeeds.
+- Candidate and label loaders now return success/failure booleans so the sequence can stop safely on candidate failure.
+- Existing format checks remain in force:
+  - candidate report must be JSONL
+  - label report must be JSONL
+- Existing identity alignment remains in force for labels; wrong queue labels and identity mismatches are still skipped and counted.
+- No new server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+
+Verification:
+
+```text
+node --test test/console-annotations.test.js
+# 12/12 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 41/41 pass
+```
+
 ### Archived raw_log rescue P21: Clickable reports latest cards
 
 After P20 was committed as `1239f9d fix(console): prefer structured rescue latest reports`, P21 made `/reports` latest cards actionable. The latest cards now open their corresponding whitelisted report directly, instead of only displaying the date/name and requiring a second lookup in the reports table.
