@@ -22,6 +22,10 @@ function writeJsonl(filePath, rows) {
   writeFileSync(filePath, `${rows.map(row => JSON.stringify(row)).join("\n")}\n`, "utf8");
 }
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
+}
+
 function candidate(overrides = {}) {
   return {
     sample_id: "rescue:1",
@@ -104,6 +108,7 @@ test("evaluates joined labels against v0.1 rules and v0.2 scoring", () => {
   assert.equal(report.v0_2_scoring.yes_false_negative, 0);
   assert.ok(Array.isArray(report.v0_2_scoring.threshold_sweep));
   assert.ok(report.v0_2_scoring.threshold_sweep.some(row => row.threshold === 55));
+  assert.equal(report.what_if_calibration, undefined);
 });
 
 test("does not leak label annotations into v0.1 rule predictions", () => {
@@ -192,6 +197,141 @@ test("reports invalid labels and missing candidates without using them for metri
   assert.equal(report.v0_2_scoring.total, 1);
 });
 
+test("includes candidate-only calibration variants when requested without changing default metrics", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({ sample_id: "rescue:project-decision" }),
+    candidate({
+      sample_id: "rescue:todo",
+      primary_bucket: "archived_raw_log_todo",
+      risk_signals: ["project:memory-engine", "todo_signal"],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({ sample_id: "rescue:project-decision" }),
+    label({
+      sample_id: "rescue:todo",
+      primary_bucket: "archived_raw_log_todo",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "medium",
+      },
+    }),
+  ]);
+
+  const baseline = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+  });
+  const report = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+    includeCalibration: true,
+  });
+
+  assert.equal(report.v0_1_rules.exact_match, baseline.v0_1_rules.exact_match);
+  assert.equal(report.v0_2_scoring.exact_match, baseline.v0_2_scoring.exact_match);
+  assert.equal(report.v0_2_scoring.yes_false_negative, baseline.v0_2_scoring.yes_false_negative);
+  assert.ok(Array.isArray(report.what_if_calibration));
+  assert.ok(report.what_if_calibration.length >= 1);
+
+  const threshold30 = report.what_if_calibration.find(row => row.variant_id === "v0_2_threshold_30");
+  assert.ok(threshold30);
+  assert.equal(threshold30.total, 2);
+  assert.equal(threshold30.yes_true_positive, 2);
+  assert.equal(threshold30.yes_false_positive, 0);
+  assert.equal(threshold30.yes_false_negative, 0);
+  assert.equal(threshold30.false_positive_distribution.rule_id["v0_2_threshold_30"], undefined);
+  assert.equal(threshold30.false_negative_distribution.primary_bucket.archived_raw_log_todo, undefined);
+  assert.equal(threshold30.diagnostics.prediction_distribution.score_bucket["30-54"], 1);
+
+  const rawLogPenalty25 = report.what_if_calibration.find(row => row.variant_id === "v0_2_raw_log_penalty_25");
+  assert.ok(rawLogPenalty25);
+  assert.equal(rawLogPenalty25.false_negative_distribution.rule_id["v0_2_raw_log_penalty_25"], 2);
+  assert.equal(rawLogPenalty25.false_negative_distribution.primary_bucket.archived_raw_log_todo, 1);
+  assert.equal(rawLogPenalty25.false_negative_distribution.primary_bucket.archived_raw_log_decision, 1);
+  assert.equal(rawLogPenalty25.diagnostics.false_negative_distribution.score_bucket["0-29"], 1);
+});
+
+test("candidate-only calibration is not affected by label target category or rescue confidence", () => {
+  const dir = fixtureDir();
+  const labelsPathA = resolve(dir, "labels-a.jsonl");
+  const labelsPathB = resolve(dir, "labels-b.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:label-only-yes",
+      primary_bucket: "archived_raw_log_project",
+      risk_signals: [],
+      quality_flags: ["archived_raw_log", "raw_log_leak"],
+      annotation: {},
+    }),
+  ]);
+  writeJsonl(labelsPathA, [
+    label({
+      sample_id: "rescue:label-only-yes",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "low",
+      },
+    }),
+  ]);
+  writeJsonl(labelsPathB, [
+    label({
+      sample_id: "rescue:label-only-yes",
+      annotation: {
+        keep_active: "yes",
+        target_category: "raw_log",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const reportA = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathA,
+    candidatesInputPath: candidatesPath,
+    includeCalibration: true,
+  });
+  const reportB = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathB,
+    candidatesInputPath: candidatesPath,
+    includeCalibration: true,
+  });
+
+  assert.deepEqual(
+    reportA.what_if_calibration.map(row => ({
+      variant_id: row.variant_id,
+      exact_match: row.exact_match,
+      yes_false_positive: row.yes_false_positive,
+      yes_false_negative: row.yes_false_negative,
+      false_negative_distribution: {
+        predicted_keep_active: row.false_negative_distribution.predicted_keep_active,
+        rule_id: row.false_negative_distribution.rule_id,
+        primary_bucket: row.false_negative_distribution.primary_bucket,
+        score_bucket: row.false_negative_distribution.score_bucket,
+      },
+    })),
+    reportB.what_if_calibration.map(row => ({
+      variant_id: row.variant_id,
+      exact_match: row.exact_match,
+      yes_false_positive: row.yes_false_positive,
+      yes_false_negative: row.yes_false_negative,
+      false_negative_distribution: {
+        predicted_keep_active: row.false_negative_distribution.predicted_keep_active,
+        rule_id: row.false_negative_distribution.rule_id,
+        primary_bucket: row.false_negative_distribution.primary_bucket,
+        score_bucket: row.false_negative_distribution.score_bucket,
+      },
+    })),
+  );
+});
+
 test("writes JSON report only when out is specified", () => {
   const dir = fixtureDir();
   const labelsPath = resolve(dir, "labels.jsonl");
@@ -216,18 +356,16 @@ test("CLI prints a JSON report", () => {
   const dir = fixtureDir();
   const labelsPath = resolve(dir, "labels.jsonl");
   const candidatesPath = resolve(dir, "candidates.jsonl");
+  const stdoutPath = resolve(dir, "stdout.json");
 
   writeJsonl(candidatesPath, [candidate()]);
   writeJsonl(labelsPath, [label()]);
 
   const result = spawnSync(
-    process.execPath,
+    "bash",
     [
-      resolve(repoRoot, "bin/evaluate-archived-raw-log-rescue-labels.cjs"),
-      "--labels",
-      labelsPath,
-      "--candidates",
-      candidatesPath,
+      "-lc",
+      `${shellQuote(process.execPath)} ${shellQuote(resolve(repoRoot, "bin/evaluate-archived-raw-log-rescue-labels.cjs"))} --labels ${shellQuote(labelsPath)} --candidates ${shellQuote(candidatesPath)} > ${shellQuote(stdoutPath)}`,
     ],
     { cwd: repoRoot, encoding: "utf8" },
   );
@@ -237,11 +375,36 @@ test("CLI prints a JSON report", () => {
     0,
     `status=${result.status} signal=${result.signal} stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
   );
-  assert.ok(
-    result.stdout && result.stdout.trim(),
-    `empty stdout: status=${result.status} signal=${result.signal} stderr=${JSON.stringify(result.stderr)}`,
-  );
-  const parsed = JSON.parse(result.stdout);
+  const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
   assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
   assert.equal(parsed.summary.labels_valid, 1);
+});
+
+test("CLI prints calibration when requested", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+  const stdoutPath = resolve(dir, "stdout-calibration.json");
+
+  writeJsonl(candidatesPath, [candidate()]);
+  writeJsonl(labelsPath, [label()]);
+
+  const result = spawnSync(
+    "bash",
+    [
+      "-lc",
+      `${shellQuote(process.execPath)} ${shellQuote(resolve(repoRoot, "bin/evaluate-archived-raw-log-rescue-labels.cjs"))} --labels ${shellQuote(labelsPath)} --candidates ${shellQuote(candidatesPath)} --include-calibration > ${shellQuote(stdoutPath)}`,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+
+  assert.equal(
+    result.status,
+    0,
+    `status=${result.status} signal=${result.signal} stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+  );
+  const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
+  assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
+  assert.equal(Array.isArray(parsed.what_if_calibration), true);
+  assert.ok(parsed.what_if_calibration.some(row => row.variant_id === "v0_2_threshold_30"));
 });

@@ -47,6 +47,7 @@ function parseArgs(argv) {
     labelsInputPath: valueFor('--labels') || valueFor('--labels-input') || 'reports/archived-raw-log-rescue_labels_seed_v0.1_20samples_20260702.jsonl',
     candidatesInputPath: valueFor('--candidates') || valueFor('--candidates-input') || 'reports/archived-raw-log-rescue-candidates-latest.jsonl',
     out: valueFor('--out'),
+    includeCalibration: args.includes('--include-calibration'),
     threshold: parseNumber(valueFor('--threshold'), DEFAULT_RESCUE_SCORING_THRESHOLD),
     unsureThreshold: parseNumber(valueFor('--unsure-threshold'), DEFAULT_RESCUE_UNSURE_THRESHOLD),
     sweepMin: parseNumber(valueFor('--sweep-min'), 30),
@@ -232,6 +233,78 @@ function buildThresholdSweep(validRows, thresholdOptions) {
   return out;
 }
 
+function calibrationVariants() {
+  return [
+    {
+      variant_id: 'v0_2_threshold_30',
+      threshold: 30,
+      unsureThreshold: DEFAULT_RESCUE_UNSURE_THRESHOLD,
+      weights: {},
+    },
+    {
+      variant_id: 'v0_2_raw_log_penalty_25',
+      threshold: DEFAULT_RESCUE_SCORING_THRESHOLD,
+      unsureThreshold: DEFAULT_RESCUE_UNSURE_THRESHOLD,
+      weights: { rawLogPenalty: -25 },
+    },
+    {
+      variant_id: 'v0_2_tool_output_penalty_8',
+      threshold: DEFAULT_RESCUE_SCORING_THRESHOLD,
+      unsureThreshold: DEFAULT_RESCUE_UNSURE_THRESHOLD,
+      weights: { toolOutputPenalty: -8 },
+    },
+    {
+      variant_id: 'v0_2_raw_log_penalty_25_threshold_30',
+      threshold: 30,
+      unsureThreshold: DEFAULT_RESCUE_UNSURE_THRESHOLD,
+      weights: { rawLogPenalty: -25 },
+    },
+  ];
+}
+
+function evaluateCalibrationVariant(rows, variant) {
+  const metrics = emptyMetrics();
+  const variantRows = [];
+  for (const row of rows) {
+    const scoring = computeArchivedRawLogRescueScore(row.prediction_sample, {
+      threshold: variant.threshold,
+      unsureThreshold: variant.unsureThreshold,
+      weights: variant.weights,
+    });
+    const variantRow = {
+      sample_id: row.sample_id,
+      primary_bucket: row.primary_bucket,
+      target_category: row.target_category,
+      rescue_confidence: row.rescue_confidence,
+      actual_keep_active: row.actual_keep_active,
+      predicted_keep_active: scoring.predicted_keep_active,
+      rule_id: variant.variant_id,
+      score: scoring.score,
+      reasons: scoring.parts.map(part => `${part.name}:${part.value}`),
+    };
+    updateMetrics(metrics, variantRow);
+    variantRows.push(variantRow);
+  }
+
+  finalizeMetrics(metrics);
+  const diagnostics = buildMismatchDiagnostics(variantRows, { includeScoreBucket: true });
+  return {
+    variant_id: variant.variant_id,
+    threshold: variant.threshold,
+    unsure_threshold: variant.unsureThreshold,
+    weights: {
+      ...DEFAULT_RESCUE_SCORING_WEIGHTS,
+      ...variant.weights,
+    },
+    ...metrics,
+    false_positives: metrics.false_positives.map(compactMismatch),
+    false_negatives: metrics.false_negatives.map(compactMismatch),
+    false_positive_distribution: diagnostics.false_positive_distribution,
+    false_negative_distribution: diagnostics.false_negative_distribution,
+    diagnostics,
+  };
+}
+
 function evaluateArchivedRawLogRescueLabels(options = {}) {
   const labelsInputPath = options.labelsInputPath || 'reports/archived-raw-log-rescue_labels_seed_v0.1_20samples_20260702.jsonl';
   const candidatesInputPath = options.candidatesInputPath || 'reports/archived-raw-log-rescue-candidates-latest.jsonl';
@@ -244,6 +317,7 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
 
   const invalid = [];
   const validRows = [];
+  const calibrationRows = [];
   const ruleRows = [];
   const scoringRows = [];
   const ruleMetrics = emptyMetrics();
@@ -308,6 +382,10 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
       scoring_prediction: scoring.predicted_keep_active,
       scoring_parts: scoring.parts,
     });
+    calibrationRows.push({
+      ...base,
+      prediction_sample: predictionSample,
+    });
   }
 
   finalizeMetrics(ruleMetrics);
@@ -356,6 +434,12 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
     },
     invalid_labels: invalid,
   };
+
+  if (options.includeCalibration) {
+    report.what_if_calibration = calibrationVariants().map(variant =>
+      evaluateCalibrationVariant(calibrationRows, variant)
+    );
+  }
 
   if (options.out) writeJson(options.out, report);
   return report;
