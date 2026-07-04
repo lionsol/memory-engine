@@ -1,35 +1,37 @@
 ## 2026-07-04
 
-### Session checkpoint P33: Raw-log event time basis and status precedence
+### Session checkpoint P33：raw_log 事件时间基准与状态优先级
 
-After P32 was committed as `c253255 docs(readme): mention annotation handoff smoke command`, the release/tag step was paused because a July 3 comparison between edi's live summary and checkpoint-generated episode summaries showed two higher-priority checkpoint quality issues:
+P32 提交为 `c253255 docs(readme): mention annotation handoff smoke command` 后，原本准备进入 release/tag。但 7 月 3 日对比 edi 实时总结与 checkpoint 生成的 episode 摘要后，发现 checkpoint 质量上还有两个更高优先级的问题，因此暂停打 tag，先修这条线：
 
-1. old raw-log conversations could be pulled into the target day when re-flushed because `updated_at` represented flush/update time instead of original event time;
-2. the nightly LLM prompt could summarize an earlier `needs fix` state even when later target-day evidence had already verified the fix.
+1. 旧 raw_log 对话在重新 flush 后可能被拉进目标日期，因为 `updated_at` 表示的是 flush/update 时间，而不是原始事件发生时间；
+2. nightly LLM prompt 可能会总结较早的“需修复”状态，即使目标日后续证据已经验证该问题“已修复”。
 
-Implemented:
+实现内容：
 
-- Updated `lib/checkpoint/raw-log.js` DB raw-log collection:
-  - detects `chunks.created_at` when available;
-  - uses `created_at` as the preferred raw-log event-time basis;
-  - falls back to `updated_at_event_time` only when the core `chunks` schema has no `created_at` column;
-  - updates `rawLogTimeBasis`, `rawLogTimeBasisNote`, and `evidenceDateFilter` diagnostics accordingly.
-- Updated `bin/flush-session-rawlog.js`:
-  - raw-log DB writes now store the session message event timestamp in `updated_at` because current core `chunks` has no `created_at` column;
-  - no longer writes `Date.now()` as raw-log `updated_at` for flushed session messages;
-  - keeps `memory_confidence.last_confidence_update` aligned to the raw-log event timestamp.
-- Updated `bin/session-checkpoint.js` and `bin/run-session-checkpoint-direct.sh` fallback diagnostics to use `created_at/event_time` wording instead of pretending `updated_at` is original event time.
-- Updated `lib/checkpoint/llm.js` nightly prompt:
-  - if the same item appears with multiple statuses, the later verification/test/user confirmation wins;
-  - earlier `待修复/需修复` must not override later `已修复/已验证`.
-- Added/updated tests:
-  - `test/checkpoint-raw-log.test.js` now covers created_at-vs-updated_at pollution: old created_at with target-day updated_at is excluded, while target-day created_at with later updated_at is included.
-  - `test/flush-session-rawlog-static.test.js` guards against restoring flush-time `updated_at` writes.
-  - `test/checkpoint-llm.test.js` guards the latest-status prompt rule.
-  - Episode/session integration tests now expect the new raw-log time-basis metadata.
-- No DB mutation or cleanup was run against real data.
+- 更新 `lib/checkpoint/raw-log.js` 的 DB raw-log 收集逻辑：
+  - 检测 `chunks.created_at` 是否存在；
+  - 有 `created_at` 时，优先把它作为 raw-log 事件时间基准；
+  - 只有当 core `chunks` schema 没有 `created_at` 列时，才 fallback 到 `updated_at_event_time`；
+  - 同步更新 `rawLogTimeBasis`、`rawLogTimeBasisNote` 和 `evidenceDateFilter` diagnostics。
+- 更新 `bin/flush-session-rawlog.js`：
+  - 由于当前 core `chunks` 还没有 `created_at` 列，raw-log DB 写入时把 session message 的事件 timestamp 写入 `updated_at`；
+  - 不再把 `Date.now()` 写成 flushed session message 的 raw-log `updated_at`；
+  - `memory_confidence.last_confidence_update` 也与 raw-log 事件 timestamp 对齐。
+- 更新 `bin/session-checkpoint.js` 与 `bin/run-session-checkpoint-direct.sh` 的 fallback diagnostics：
+  - 使用 `created_at/event_time` 语义；
+  - 不再把普通 `updated_at` 伪装成原始事件时间。
+- 更新 `lib/checkpoint/llm.js` nightly prompt：
+  - 同一事项出现多个状态时，以更晚的验证结果、测试结果或用户确认作为当前状态；
+  - 较早的 `待修复/需修复` 不能覆盖较晚的 `已修复/已验证`。
+- 新增/更新测试：
+  - `test/checkpoint-raw-log.test.js` 覆盖 created_at-vs-updated_at 污染链：旧 created_at + 目标日 updated_at 会被排除；目标日 created_at + 更晚 updated_at 会被纳入。
+  - `test/flush-session-rawlog-static.test.js` 防止未来把 flush-time `updated_at` 写法改回来。
+  - `test/checkpoint-llm.test.js` 保护“最新状态优先”的 prompt 规则。
+  - Episode/session integration tests 现在预期新的 raw-log time-basis metadata。
+- 没有对真实数据执行 DB mutation 或 cleanup。
 
-Verification:
+验证：
 
 ```text
 node --test test/checkpoint-raw-log.test.js test/flush-session-rawlog-static.test.js test/checkpoint-llm.test.js test/checkpoint-episode-writer.test.js test/session-checkpoint.integration.test.js test/smart-add-propagation-audit.test.js
@@ -42,20 +44,20 @@ node --check lib/checkpoint/llm.js
 # pass
 ```
 
-Note: the current real OpenClaw core `chunks` schema has no `created_at` column, so this patch cannot literally read `created_at` from production core DB yet. Instead, it uses `created_at` when the column exists and fixes the current fallback path by ensuring `flush-session-rawlog.js` writes original event time into `updated_at`. The diagnostics expose this as `updated_at_event_time` when the fallback is active.
+备注：当前真实 OpenClaw core `chunks` schema 没有 `created_at` 列，所以这个 patch 还不能在 production core DB 上直接读取 `created_at`。当前策略是：如果未来 schema 有 `created_at` 就优先使用；在当前 fallback 路径下，先确保 `flush-session-rawlog.js` 把原始事件时间写入 `updated_at`。fallback 生效时，diagnostics 会显式标为 `updated_at_event_time`。
 
-### Archived raw_log rescue P32: README mentions Console annotation smoke command
+### Archived raw_log rescue P32：README 补充 Console annotation smoke 命令
 
-After P31 was committed as `bc61522 test(console): add annotation handoff smoke script`, P32 added the targeted smoke command to the top-level README Console annotation workflow entry. The README now links the docs and shows the exact regression command.
+P31 提交为 `bc61522 test(console): add annotation handoff smoke script` 后，P32 把 targeted smoke 命令补到顶层 README 的 `Console Annotation Workflow` 小节。现在 README 不仅链接文档，也直接给出准确的回归验证命令。
 
-Implemented:
+实现内容：
 
-- Updated `README.md` `Console Annotation Workflow`.
-- Added `npm run smoke:console-annotation-handoff` beside the Console annotation/report handoff docs.
-- Updated `test/readme-console-annotation-workflow.test.js` to protect the README command mention.
-- No runtime code changed.
+- 更新 `README.md` 的 `Console Annotation Workflow` 小节。
+- 在 Console annotation/report handoff 文档旁补充 `npm run smoke:console-annotation-handoff`。
+- 更新 `test/readme-console-annotation-workflow.test.js`，保护 README 中的命令入口不会被删掉。
+- 没有 runtime code 改动。
 
-Verification:
+验证：
 
 ```text
 node --test test/readme-console-annotation-workflow.test.js test/package-scripts.test.js test/smoke-tests-index-doc.test.js
@@ -65,14 +67,14 @@ npm run smoke:console-annotation-handoff
 # 56/56 pass
 ```
 
-### Archived raw_log rescue P31: Console annotation handoff npm smoke script
+### Archived raw_log rescue P31：Console annotation handoff npm smoke 脚本
 
-After P30 was committed as `6046fe2 docs(smoke): index console annotation runbooks`, P31 added a targeted npm script for the Console annotation/report handoff smoke path. This makes the GUI handoff regression suite runnable without copying a long `node --test ...` command.
+P30 提交为 `6046fe2 docs(smoke): index console annotation runbooks` 后，P31 新增了 Console annotation/report handoff 的 targeted npm script。这样以后不需要复制很长的 `node --test ...` 命令，就能跑 GUI handoff 回归测试集。
 
-Implemented:
+实现内容：
 
-- Added `smoke:console-annotation-handoff` to `package.json`.
-- The script runs the Console annotation/report handoff test set:
+- 在 `package.json` 新增 `smoke:console-annotation-handoff`。
+- 该脚本运行 Console annotation/report handoff 测试集：
   - `test/console-reports.test.js`
   - `test/console-annotations.test.js`
   - `test/console-annotation-report-handoff-doc.test.js`
@@ -81,11 +83,11 @@ Implemented:
   - `test/smoke-tests-index-doc.test.js`
   - `test/report-archived-raw-log-rescue-review-queue-labels.test.js`
   - `test/build-archived-raw-log-rescue-review-queue.test.js`
-- Updated `docs/smoke-tests/README.md` to use `npm run smoke:console-annotation-handoff` as the documented regression guard command.
-- Added `test/package-scripts.test.js` to protect the npm script and its included test files.
-- No runtime code changed.
+- 更新 `docs/smoke-tests/README.md`，把 `npm run smoke:console-annotation-handoff` 作为文档化的 regression guard 命令。
+- 新增 `test/package-scripts.test.js`，保护 npm script 及其包含的测试文件。
+- 没有 runtime code 改动。
 
-Verification:
+验证：
 
 ```text
 npm run smoke:console-annotation-handoff
@@ -95,22 +97,22 @@ node --test test/package-scripts.test.js test/smoke-tests-index-doc.test.js
 # 5/5 pass
 ```
 
-### Archived raw_log rescue P30: Smoke tests index
+### Archived raw_log rescue P30：Smoke tests 索引
 
-After P29 was committed as `8646190 docs(readme): link console annotation workflow`, P30 added a `docs/smoke-tests/README.md` index so smoke-test runbooks are discoverable from the smoke-test directory itself.
+P29 提交为 `8646190 docs(readme): link console annotation workflow` 后，P30 新增 `docs/smoke-tests/README.md`，让 smoke-test runbook 可以从 smoke-test 目录本身发现。
 
-Implemented:
+实现内容：
 
-- Added `docs/smoke-tests/README.md`.
-- Indexed available smoke runbooks:
+- 新增 `docs/smoke-tests/README.md`。
+- 索引现有 smoke runbook：
   - `console-annotation-report-handoff.md`
   - `openclaw-memory-tools.md`
-- Documented when to run/review each smoke path.
-- Preserved the Console annotation/report handoff safety boundary in the index: read-only report fetches only; no label upload, DB write, memory mutation, apply, unarchive, category update, delete, quarantine, reinforce, or LLM call.
-- Added `test/smoke-tests-index-doc.test.js` to protect index discoverability, safety wording, and the documented regression guard command.
-- No runtime code changed.
+- 记录每条 smoke 路径什么时候需要 run/review。
+- 在索引中保留 Console annotation/report handoff 的安全边界：只读 report fetch；不上传 labels，不写 DB，不修改 memory，不执行 apply / unarchive / category update / delete / quarantine / reinforce，也不调用 LLM。
+- 新增 `test/smoke-tests-index-doc.test.js`，保护索引可发现性、安全措辞和文档化的 regression guard 命令。
+- 没有 runtime code 改动。
 
-Verification:
+验证：
 
 ```text
 node --test test/smoke-tests-index-doc.test.js test/console-annotation-report-handoff-doc.test.js test/agent-memory-tool-strategy.test.js
@@ -120,20 +122,20 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/c
 # 63/63 pass
 ```
 
-### Archived raw_log rescue P29: README Console annotation workflow entry
+### Archived raw_log rescue P29：README Console annotation workflow 入口
 
-After P28 was committed as `e04c377 docs(annotation): link console handoff workflow`, P29 added a top-level README entry for the Console annotation workflow so the GUI handoff docs are discoverable from the project landing page.
+P28 提交为 `e04c377 docs(annotation): link console handoff workflow` 后，P29 在 README 增加顶层 Console annotation workflow 入口，让 GUI handoff 文档可以从项目首页发现。
 
-Implemented:
+实现内容：
 
-- Added `Console Annotation Workflow` section to `README.md`.
-- Linked the primary annotation workflow doc: `docs/human-annotation-gold-set.md`.
-- Linked the GUI handoff smoke runbook: `docs/smoke-tests/console-annotation-report-handoff.md`.
-- Documented the top-level safety boundary: the GUI path only reads whitelisted reports, does not upload labels, does not write DB, and does not execute apply / unarchive / category update / delete / quarantine / reinforce.
-- Added `test/readme-console-annotation-workflow.test.js` to protect README discoverability and safety wording.
-- No runtime code changed.
+- 在 `README.md` 新增 `Console Annotation Workflow` 小节。
+- 链接主 annotation workflow 文档：`docs/human-annotation-gold-set.md`。
+- 链接 GUI handoff smoke runbook：`docs/smoke-tests/console-annotation-report-handoff.md`。
+- 记录顶层安全边界：GUI 路径只读取 whitelisted reports，不上传 labels，不写 DB，也不执行 apply / unarchive / category update / delete / quarantine / reinforce。
+- 新增 `test/readme-console-annotation-workflow.test.js`，保护 README 可发现性和安全措辞。
+- 没有 runtime code 改动。
 
-Verification:
+验证：
 
 ```text
 node --test test/readme-console-annotation-workflow.test.js test/human-annotation-workflow-doc.test.js test/console-annotation-report-handoff-doc.test.js
@@ -143,27 +145,27 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/c
 # 52/52 pass
 ```
 
-### Archived raw_log rescue P28: Human annotation workflow links Console handoff
+### Archived raw_log rescue P28：Human annotation workflow 链接 Console handoff
 
-After P27 was committed as `d62dc10 docs(console): add annotation report handoff smoke`, P28 updated the main human-annotation workflow documentation so the new Console `/reports` ↔ `/annotations` GUI path is discoverable from the primary annotation doc instead of only from the smoke-test directory.
+P27 提交为 `d62dc10 docs(console): add annotation report handoff smoke` 后，P28 更新主 human-annotation workflow 文档，把新的 Console `/reports` ↔ `/annotations` GUI 路径从 smoke-test 目录挂回主 annotation 文档，避免只在 smoke runbook 中可见。
 
-Implemented:
+实现内容：
 
-- Updated `docs/human-annotation-gold-set.md` `Annotation Workflow`.
-- The workflow now recommends Console `/annotations` for whitelisted report loading while still allowing browser File API local JSONL loading.
-- Added the `/reports` handoff path:
+- 更新 `docs/human-annotation-gold-set.md` 的 `Annotation Workflow`。
+- workflow 现在优先推荐 Console `/annotations` 加载 whitelisted report，同时仍允许通过 browser File API 加载本地 JSONL。
+- 增加 `/reports` handoff 路径：
   - `Open with Latest Labels`
   - `/annotations?candidate=<report>&labels=<labels>`
-  - structured preview review in Console `/reports`
-- Added local outputs:
+  - 在 Console `/reports` 中查看 structured preview
+- 增加本地输出说明：
   - labels JSONL export
   - browser-local QC JSON export
-- Linked `docs/smoke-tests/console-annotation-report-handoff.md` from the main annotation workflow.
-- Preserved the GUI read-only safety boundary: server-side read-only whitelisted reports only; no label upload, DB write, memory mutation, apply, unarchive, category update, delete, quarantine, or reinforce.
-- Added `test/human-annotation-workflow-doc.test.js` to prevent the primary workflow doc from drifting back to the old standalone-only path.
-- No runtime code changed.
+- 从主 annotation workflow 链接 `docs/smoke-tests/console-annotation-report-handoff.md`。
+- 保留 GUI 只读安全边界：server 侧只读 whitelisted reports；不上传 labels，不写 DB，不修改 memory，不执行 apply / unarchive / category update / delete / quarantine / reinforce。
+- 新增 `test/human-annotation-workflow-doc.test.js`，防止主 workflow 文档退回旧的 standalone-only 路径。
+- 没有 runtime code 改动。
 
-Verification:
+验证：
 
 ```text
 node --test test/human-annotation-workflow-doc.test.js test/console-annotation-report-handoff-doc.test.js
@@ -173,14 +175,14 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/c
 # 50/50 pass
 ```
 
-### Archived raw_log rescue P27: Console annotation/report handoff smoke runbook
+### Archived raw_log rescue P27：Console annotation/report handoff smoke runbook
 
-After P26 was committed as `0430052 feat(console): copy annotation deep link`, P27 added a smoke-test runbook for the `/reports` ↔ `/annotations` GUI handoff and a static regression test for the documented hooks and safety boundaries.
+P26 提交为 `0430052 feat(console): copy annotation deep link` 后，P27 增加 `/reports` ↔ `/annotations` GUI handoff 的 smoke-test runbook，并用静态回归测试保护文档化的 hooks 与安全边界。
 
-Implemented:
+实现内容：
 
-- Added `docs/smoke-tests/console-annotation-report-handoff.md`.
-- The smoke runbook covers:
+- 新增 `docs/smoke-tests/console-annotation-report-handoff.md`。
+- smoke runbook 覆盖：
   - `/reports` latest cards
   - structured report previews
   - rescue combined preview
@@ -194,19 +196,19 @@ Implemented:
   - `Copy Link`
   - labels import identity alignment
   - local labels/QC export
-- Added `test/console-annotation-report-handoff-doc.test.js`.
-- Static tests assert:
-  - smoke doc existence
-  - read-only safety boundaries
-  - required report families
-  - structured latest/default preference
-  - deep-link URL forms
-  - implementation hooks in `reports.ejs`, `annotations.ejs`, and `charts.js`
-  - lifecycle labels remain advisory only
-- No runtime code changed.
-- No server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+- 新增 `test/console-annotation-report-handoff-doc.test.js`。
+- 静态测试断言：
+  - smoke doc 存在
+  - read-only 安全边界存在
+  - required report families 存在
+  - structured latest/default preference 存在
+  - deep-link URL forms 存在
+  - `reports.ejs`、`annotations.ejs`、`charts.js` 中的实现 hooks 存在
+  - lifecycle labels 仍然只是 advisory
+- 没有 runtime code 改动。
+- 没有新增 server route、upload、DB write、apply、unarchive、category update、delete、quarantine、reinforce、LLM 或 network side effect。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-annotation-report-handoff-doc.test.js
@@ -216,48 +218,22 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/c
 # 48/48 pass
 ```
 
-### Archived raw_log rescue P26: Copy current annotation deep link
+### Archived raw_log rescue P26：复制当前 annotation deep link
 
-After P25 was committed as `add58ec feat(console): show current annotation deep link`, P26 added a copy action for the current `/annotations` deep link. This makes the server-loaded candidate/labels resume link easier to reuse without manually selecting the anchor URL.
+P25 提交为 `add58ec feat(console): show current annotation deep link` 后，P26 为当前 `/annotations` deep link 增加复制动作。这样 server-loaded candidate/labels 的续标链接可以直接复用，不需要手动选择 anchor URL。
 
-Implemented:
+实现内容：
 
-- Added `Copy Link` button to the `Current Deep Link` panel.
-- The copy button is hidden until a server-loaded candidate/queue report creates a reusable deep link.
-- Added `copyCurrentDeepLink()`.
-- Copy uses `navigator.clipboard.writeText()` with an absolute URL derived from the current origin.
-- Clipboard failures fall back to showing the full link in the status text for manual copy.
-- Candidate-only and candidate+labels links both use the same copy path.
-- Local browser files still do not generate server deep links.
-- No server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+- 在 `Current Deep Link` panel 中新增 `Copy Link` 按钮。
+- 只有 server-loaded candidate/queue report 生成可复用 deep link 后，copy button 才显示。
+- 新增 `copyCurrentDeepLink()`。
+- 复制逻辑使用 `navigator.clipboard.writeText()`，并基于当前 origin 生成 absolute URL。
+- Clipboard 失败时，会在状态文本中展示完整链接，方便手动复制。
+- candidate-only 与 candidate+labels 链接复用同一套 copy path。
+- 本地 browser files 仍然不会生成 server deep links。
+- 没有新增 server route、upload、DB write、apply、unarchive、category update、delete、quarantine、reinforce、LLM 或 network side effect。
 
-Verification:
-
-```text
-node --test test/console-annotations.test.js
-# 13/13 pass
-
-node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
-# 42/42 pass
-```
-
-### Archived raw_log rescue P25: Annotations current review deep link
-
-After P24 was committed as `783cd84 feat(console): open annotations with latest labels`, P25 added a current-review deep-link panel to `/annotations`. When a candidate/queue report and optional labels report are loaded through the server allowlist, the page now shows a reusable link for the same review session.
-
-Implemented:
-
-- Added `Current Deep Link` panel to `/annotations`.
-- Added `state.serverCandidateReportName` and `state.serverLabelReportName`.
-- Added `updateCurrentDeepLink()`.
-- Server-loaded candidate/queue JSONL now records the report name and shows `/annotations?candidate=<report>`.
-- Server-loaded labels JSONL now updates the same link to `/annotations?candidate=<report>&labels=<label-report>`.
-- Loading a new candidate report clears prior label state and resets the deep-link state before setting the new server candidate.
-- Local browser files do not generate server deep links, avoiding unusable links for files that were never available through the allowlisted reports API.
-- Existing query auto-load, JSONL format checks, and label identity alignment remain unchanged.
-- No server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
-
-Verification:
+验证：
 
 ```text
 node --test test/console-annotations.test.js
@@ -267,25 +243,51 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 42/42 pass
 ```
 
-### Archived raw_log rescue P24: Reports to annotations with latest labels
+### Archived raw_log rescue P25：Annotations 当前 review deep link
 
-After P23 was committed as `9ff21dc feat(console): link reports to annotations`, P24 extended the report-to-annotation handoff with a resume shortcut. When `/reports` is showing a loadable candidate/queue JSONL report and a latest `annotation_labels` JSONL exists in the allowed report list, the detail view now offers an `Open with Latest Labels` link.
+P24 提交为 `783cd84 feat(console): open annotations with latest labels` 后，P25 在 `/annotations` 增加当前 review deep-link panel。当 candidate/queue report 以及可选 labels report 通过 server allowlist 加载后，页面会显示同一 review session 的可复用链接。
 
-Implemented:
+实现内容：
 
-- Added `latestAnnotationLabelReportName()` in `console/public/charts.js`.
-- `annotationDeepLinkForReport()` now accepts an optional label report name.
-- The base link remains `/annotations?candidate=<report>`.
-- The resume link becomes `/annotations?candidate=<report>&labels=<latest-label-report>`.
-- The resume link is only shown for loadable annotation input reports:
+- 在 `/annotations` 新增 `Current Deep Link` panel。
+- 新增 `state.serverCandidateReportName` 和 `state.serverLabelReportName`。
+- 新增 `updateCurrentDeepLink()`。
+- server-loaded candidate/queue JSONL 会记录 report name，并显示 `/annotations?candidate=<report>`。
+- server-loaded labels JSONL 会把同一个链接更新为 `/annotations?candidate=<report>&labels=<label-report>`。
+- 加载新的 candidate report 会清空旧 label state，并在设置新 server candidate 前重置 deep-link state。
+- 本地 browser files 不生成 server deep links，避免为未通过 allowlisted reports API 暴露的文件生成不可用链接。
+- 现有 query auto-load、JSONL format checks 和 label identity alignment 保持不变。
+- 没有新增 server route、upload、DB write、apply、unarchive、category update、delete、quarantine、reinforce、LLM 或 network side effect。
+
+验证：
+
+```text
+node --test test/console-annotations.test.js
+# 13/13 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 42/42 pass
+```
+
+### Archived raw_log rescue P24：Reports 跳转 annotations 时携带最新 labels
+
+P23 提交为 `9ff21dc feat(console): link reports to annotations` 后，P24 为 report-to-annotation handoff 增加续标快捷入口。当 `/reports` 正在显示可加载的 candidate/queue JSONL report，且 allowlisted report list 中存在最新 `annotation_labels` JSONL 时，detail view 会提供 `Open with Latest Labels` 链接。
+
+实现内容：
+
+- 在 `console/public/charts.js` 新增 `latestAnnotationLabelReportName()`。
+- `annotationDeepLinkForReport()` 现在接受可选 label report name。
+- 基础链接仍是 `/annotations?candidate=<report>`。
+- 续标链接为 `/annotations?candidate=<report>&labels=<latest-label-report>`。
+- 续标链接只对可加载的 annotation input reports 显示：
   - `annotation_candidates` JSONL
   - `archived_raw_log_rescue_review_queue` JSONL
-- The resume link is only shown when a whitelisted `annotation_labels` JSONL exists in `pageData.files`.
-- `/annotations` still performs the actual read through the existing query auto-load path and read-only `/api/reports/file` endpoint.
-- Existing label identity alignment remains in force after navigation.
-- No server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+- 只有当 `pageData.files` 中存在 whitelisted `annotation_labels` JSONL 时才显示续标链接。
+- `/annotations` 仍通过现有 query auto-load 路径和只读 `/api/reports/file` endpoint 执行实际读取。
+- 导航后现有 label identity alignment 仍然生效。
+- 没有新增 server route、upload、DB write、apply、unarchive、category update、delete、quarantine、reinforce、LLM 或 network side effect。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-reports.test.js
@@ -295,22 +297,22 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 41/41 pass
 ```
 
-### Archived raw_log rescue P23: Reports to annotations deep-link handoff
+### Archived raw_log rescue P23：Reports 到 annotations 的 deep-link handoff
 
-After P22 was committed as `376bc5d feat(console): auto-load annotation reports from query`, P23 exposed that deep-link capability from `/reports`. Candidate/queue JSONL reports can now be opened directly in `/annotations` from the report detail view.
+P22 提交为 `376bc5d feat(console): auto-load annotation reports from query` 后，P23 把 `/annotations` 的 deep-link 能力暴露到 `/reports`。现在 candidate/queue JSONL report 可以从 report detail view 直接打开到 `/annotations`。
 
-Implemented:
+实现内容：
 
-- Added `annotationDeepLinkForReport()` in `console/public/charts.js`.
-- Report detail now shows `Open in Annotations` for loadable annotation input reports:
+- 在 `console/public/charts.js` 新增 `annotationDeepLinkForReport()`。
+- Report detail 现在会为可加载的 annotation input reports 显示 `Open in Annotations`：
   - `annotation_candidates` JSONL
   - `archived_raw_log_rescue_review_queue` JSONL
-- The link target is `/annotations?candidate=<encoded-report-name>`.
-- The link is not shown for Markdown files, JSON summary/QC reports, label alignment reports, or other non-candidate artifacts.
-- Deep-link loading still uses the existing `/annotations` query auto-load path and read-only `/api/reports/file` report fetch.
-- No new server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+- 链接目标为 `/annotations?candidate=<encoded-report-name>`。
+- Markdown 文件、JSON summary/QC reports、label alignment reports 和其他非 candidate artifacts 不显示该链接。
+- Deep-link loading 仍复用现有 `/annotations` query auto-load 路径，以及只读 `/api/reports/file` report fetch。
+- 没有新增 server route、upload、DB write、apply、unarchive、category update、delete、quarantine、reinforce、LLM 或 network side effect。
 
-Verification:
+验证：
 
 ```text
 npm exec -- node --test test/console-reports.test.js
@@ -320,29 +322,29 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 41/41 pass
 ```
 
-Note: the first direct `node --test test/console-reports.test.js` invocation was blocked once by an external safety check, so the single-file test was rerun through `npm exec -- node`. The combined test then used the system Node runtime (`/usr/bin/node`, v22.22.2) successfully.
+备注：第一次直接运行 `node --test test/console-reports.test.js` 被外部 safety check 拦截一次，因此单文件测试改用 `npm exec -- node` 重跑。组合测试随后使用系统 Node runtime（`/usr/bin/node`, v22.22.2）成功通过。
 
-### Archived raw_log rescue P22: Annotations report deep-link auto-load
+### Archived raw_log rescue P22：Annotations report deep-link auto-load
 
-After P21 was committed as `7436ec9 feat(console): open reports from latest cards`, P22 added deep-link auto-load support to `/annotations`. The page can now load a whitelisted candidate/queue JSONL and optional labels JSONL directly from URL query parameters.
+P21 提交为 `7436ec9 feat(console): open reports from latest cards` 后，P22 为 `/annotations` 增加 deep-link auto-load 支持。页面现在可以直接从 URL query parameters 加载 whitelisted candidate/queue JSONL 和可选 labels JSONL。
 
-Implemented:
+实现内容：
 
-- Added `/annotations` query auto-load support:
+- 增加 `/annotations` query auto-load 支持：
   - `?candidate=<report.jsonl>`
   - `?candidate_report=<report.jsonl>`
   - `?labels=<labels.jsonl>`
   - `?label_report=<labels.jsonl>`
-- Query auto-load uses the existing read-only `/api/reports/file?name=<report>` path.
-- Candidate report is loaded first; label report is loaded only after candidate load succeeds.
-- Candidate and label loaders now return success/failure booleans so the sequence can stop safely on candidate failure.
-- Existing format checks remain in force:
-  - candidate report must be JSONL
-  - label report must be JSONL
-- Existing identity alignment remains in force for labels; wrong queue labels and identity mismatches are still skipped and counted.
-- No new server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+- Query auto-load 使用现有只读 `/api/reports/file?name=<report>` 路径。
+- Candidate report 先加载；label report 只有在 candidate load 成功后才加载。
+- Candidate 与 label loaders 现在返回 success/failure booleans，因此 candidate failure 时可以安全停止加载序列。
+- 现有 format checks 继续生效：
+  - candidate report 必须是 JSONL
+  - label report 必须是 JSONL
+- labels 的 identity alignment 继续生效；wrong queue labels 和 identity mismatches 仍会被 skipped and counted。
+- 没有新增 server route、upload、DB write、apply、unarchive、category update、delete、quarantine、reinforce、LLM 或 network side effect。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-annotations.test.js
@@ -352,46 +354,20 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 41/41 pass
 ```
 
-### Archived raw_log rescue P21: Clickable reports latest cards
+### Archived raw_log rescue P21：Reports latest cards 可点击
 
-After P20 was committed as `1239f9d fix(console): prefer structured rescue latest reports`, P21 made `/reports` latest cards actionable. The latest cards now open their corresponding whitelisted report directly, instead of only displaying the date/name and requiring a second lookup in the reports table.
+P20 提交为 `1239f9d fix(console): prefer structured rescue latest reports` 后，P21 让 `/reports` latest cards 可直接点击。latest cards 现在会直接打开对应 whitelisted report，不再只是展示日期/名称并要求用户到 reports table 再查一次。
 
-Implemented:
+实现内容：
 
-- Added `reportLatestCards()` in `console/public/charts.js`.
-- Latest report cards render as buttons with `data-report-latest-name`.
-- Clicking a latest card fetches the report through the existing read-only `/api/reports/file?name=<report>` endpoint.
-- Click handling reuses `renderReportDetail()`, so all structured preview panels continue to be driven by the same read-only report payload.
-- Card labels still use `reportKindLabel()` and show the latest date plus report filename.
-- No new route, mutation path, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+- 在 `console/public/charts.js` 新增 `reportLatestCards()`。
+- Latest report cards 渲染为带 `data-report-latest-name` 的 buttons。
+- 点击 latest card 会通过现有只读 `/api/reports/file?name=<report>` endpoint 获取 report。
+- Click handling 复用 `renderReportDetail()`，因此所有 structured preview panels 仍由同一个只读 report payload 驱动。
+- Card labels 仍使用 `reportKindLabel()`，并显示 latest date 与 report filename。
+- 没有新增 route、mutation path、upload、DB write、apply、unarchive、category update、delete、quarantine、reinforce、LLM 或 network side effect。
 
-Verification:
-
-```text
-node --test test/console-reports.test.js
-# 20/20 pass
-
-node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
-# 40/40 pass
-```
-
-### Archived raw_log rescue P20: Reports latest/default structured rescue artifacts
-
-After P19 was committed as `90bd2ca feat(console): preview rescue combined reports`, P20 closed a latest/default routing gap in `/reports`. The structured previews existed for combined rescue reports, P7 queue JSONL, P8 queue-label reports, and local QC reports, but P7 queue was not part of latest tracking and Markdown companions could win latest selection for preview-capable rescue families.
-
-Implemented:
-
-- Added `archived_raw_log_rescue_review_queue` to latest report tracking.
-- Added `latest.archived_raw_log_rescue_review_queue` to `/reports` latest cards.
-- Added P7 queue report into default report preference, behind turn gold-set replay and combined rescue reports but ahead of local QC and queue-label reports.
-- Added structured-format preference for preview-capable rescue families:
-  - `archived_raw_log_rescue_combined_report` latest prefers `.json`.
-  - `archived_raw_log_rescue_review_queue` latest prefers `.jsonl`.
-  - `archived_raw_log_rescue_review_queue_label_report` latest prefers `.json`.
-- This prevents newer Markdown companion files from taking over latest/default selection and showing no structured preview.
-- Read-only boundary remains unchanged: latest selection and rendering only; no DB writes, memory mutation, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effects.
-
-Verification:
+验证：
 
 ```text
 node --test test/console-reports.test.js
@@ -401,14 +377,40 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 40/40 pass
 ```
 
-### Archived raw_log rescue P19: Console archived raw-log rescue combined report preview
+### Archived raw_log rescue P20：Reports latest/default 结构化 rescue artifacts
 
-After P18 was committed as `d957d95 feat(console): preview rescue review queue reports`, P19 added a structured `/reports` preview for the P2/P4 archived raw-log rescue combined label report. Combined reports were already whitelisted and tracked as latest, but selecting them still required reading raw JSON/Markdown for scoring and breakdowns.
+P19 提交为 `90bd2ca feat(console): preview rescue combined reports` 后，P20 修复 `/reports` latest/default routing 缺口。combined rescue reports、P7 queue JSONL、P8 queue-label reports 和 local QC reports 已经有 structured previews，但 P7 queue 没有纳入 latest tracking，而且较新的 Markdown companion 可能抢占 preview-capable rescue families 的 latest selection。
 
-Implemented:
+实现内容：
 
-- Added `rescue_combined_preview` derivation in `console/services/reports-service.js` for `archived_raw_log_rescue_combined_report` JSON files.
-- The preview extracts:
+- 把 `archived_raw_log_rescue_review_queue` 加入 latest report tracking。
+- 把 `latest.archived_raw_log_rescue_review_queue` 加入 `/reports` latest cards。
+- 把 P7 queue report 加入 default report preference：位于 turn gold-set replay 和 combined rescue reports 之后，local QC 和 queue-label reports 之前。
+- 为 preview-capable rescue families 增加 structured-format preference：
+  - `archived_raw_log_rescue_combined_report` latest 优先 `.json`。
+  - `archived_raw_log_rescue_review_queue` latest 优先 `.jsonl`。
+  - `archived_raw_log_rescue_review_queue_label_report` latest 优先 `.json`。
+- 这样可以防止较新的 Markdown companion files 抢占 latest/default selection，导致没有 structured preview。
+- 只读边界不变：只做 latest selection 与 rendering；不写 DB，不修改 memory，不执行 apply / unarchive / category update / delete / quarantine / reinforce，也不调用 LLM 或产生 network side effects。
+
+验证：
+
+```text
+node --test test/console-reports.test.js
+# 20/20 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 40/40 pass
+```
+
+### Archived raw_log rescue P19：Console archived raw-log rescue combined report preview
+
+P18 提交为 `d957d95 feat(console): preview rescue review queue reports` 后，P19 为 P2/P4 archived raw-log rescue combined label report 增加 `/reports` 结构化预览。combined reports 已经在 allowlist 中并被 latest tracking 识别，但此前选中后仍需要直接阅读 raw JSON/Markdown 才能看 scoring 与 breakdown。
+
+实现内容：
+
+- 在 `console/services/reports-service.js` 为 `archived_raw_log_rescue_combined_report` JSON files 增加 `rescue_combined_preview` derivation。
+- Preview 提取：
   - threshold and unsure threshold
   - labels valid/invalid counts
   - total scored labels
@@ -432,12 +434,12 @@ Implemented:
   - first 10 false positives
   - first 10 false negatives
   - first 10 invalid labels
-- Added `Archived Raw-log Rescue Combined Preview` panel to `/reports`.
-- Added `renderRescueCombinedPreview()` in `console/public/charts.js`.
-- Added latest-card/default-report preference for `latest.archived_raw_log_rescue_combined_report`, behind turn gold-set replay but ahead of local QC and queue label reports.
-- Safety boundary remains explicit: no DB writes, memory file mutation, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effects.
+- 在 `/reports` 新增 `Archived Raw-log Rescue Combined Preview` panel。
+- 在 `console/public/charts.js` 新增 `renderRescueCombinedPreview()`。
+- 为 `latest.archived_raw_log_rescue_combined_report` 增加 latest-card/default-report preference，位置在 turn gold-set replay 之后、local QC 与 queue label reports 之前。
+- 安全边界保持明确：不写 DB，不修改 memory file，不执行 unarchive / category update / delete / quarantine / reinforce，不调用 LLM，也不产生 network side effects。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-reports.test.js
@@ -447,14 +449,14 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 38/38 pass
 ```
 
-### Archived raw_log rescue P18: Console review queue JSONL preview
+### Archived raw_log rescue P18：Console review queue JSONL preview
 
-After P17 was committed as `65c3b7d feat(console): preview rescue queue label reports`, P18 added the remaining structured `/reports` preview for the P7 manual-review queue JSONL itself. Queue JSONL files were already whitelisted and loadable in `/annotations`, but selecting them in `/reports` still showed raw JSONL only.
+P17 提交为 `65c3b7d feat(console): preview rescue queue label reports` 后，P18 为 P7 manual-review queue JSONL 本身补上剩余的 `/reports` 结构化预览。Queue JSONL 已经 allowlisted 且可在 `/annotations` 加载，但此前在 `/reports` 中选中后只显示 raw JSONL。
 
-Implemented:
+实现内容：
 
-- Added `review_queue_preview` derivation in `console/services/reports-service.js` for `archived_raw_log_rescue_review_queue` JSONL files.
-- The preview extracts:
+- 在 `console/services/reports-service.js` 为 `archived_raw_log_rescue_review_queue` JSONL files 增加 `review_queue_preview` derivation。
+- Preview 提取：
   - total queue rows
   - unique sample ids
   - duplicate sample-id count
@@ -469,12 +471,12 @@ Implemented:
   - risk signal distribution
   - first 10 queue samples
   - first 10 duplicate sample ids
-- Added `Review Queue Preview` panel to `/reports`.
-- Added `renderReviewQueuePreview()` in `console/public/charts.js`.
-- Preview is available when selecting P7 queue JSONL from `/reports` table.
-- Safety boundary remains explicit: no DB writes, memory file mutation, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effects.
+- 在 `/reports` 新增 `Review Queue Preview` panel。
+- 在 `console/public/charts.js` 新增 `renderReviewQueuePreview()`。
+- 从 `/reports` table 选择 P7 queue JSONL 时可看到该 preview。
+- 安全边界保持明确：不写 DB，不修改 memory file，不执行 unarchive / category update / delete / quarantine / reinforce，不调用 LLM，也不产生 network side effects。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-reports.test.js
@@ -484,14 +486,14 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 37/37 pass
 ```
 
-### Archived raw_log rescue P17: Console review queue label report preview
+### Archived raw_log rescue P17：Console review queue label report preview
 
-After P16 was committed as `526e57c feat(console): preview local annotation qc reports`, P17 added the matching structured `/reports` preview for P8 review queue label alignment reports. Previously `archived-raw-log-rescue-review-queue-label-report-*.json` was whitelisted and tracked as latest, but its detail view was still raw JSON/Markdown.
+P16 提交为 `526e57c feat(console): preview local annotation qc reports` 后，P17 为 P8 review queue label alignment reports 增加对应的 `/reports` 结构化预览。此前 `archived-raw-log-rescue-review-queue-label-report-*.json` 已经 allowlisted 并纳入 latest tracking，但 detail view 仍只显示 raw JSON/Markdown。
 
-Implemented:
+实现内容：
 
-- Added `review_queue_label_preview` derivation in `console/services/reports-service.js` for `archived_raw_log_rescue_review_queue_label_report` JSON files.
-- The preview extracts:
+- 在 `console/services/reports-service.js` 为 `archived_raw_log_rescue_review_queue_label_report` JSON files 增加 `review_queue_label_preview` derivation。
+- Preview 提取：
   - queue total/valid/unique counts
   - queue invalid and duplicate sample-id counts
   - labels total
@@ -516,12 +518,12 @@ Implemented:
   - first 10 duplicate queue/sample ids
   - first 10 unlabeled queue samples
   - first 10 valid labels
-- Added `Review Queue Label Preview` panel to `/reports`.
-- Added `renderReviewQueueLabelPreview()` in `console/public/charts.js`.
-- Added latest-card/default-report preference for `latest.archived_raw_log_rescue_review_queue_label_report`, behind turn gold-set replay and local QC reports but ahead of generic annotation summaries.
-- Safety boundary remains explicit: no DB writes, memory file mutation, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effects.
+- 在 `/reports` 新增 `Review Queue Label Preview` panel。
+- 在 `console/public/charts.js` 新增 `renderReviewQueueLabelPreview()`。
+- 为 `latest.archived_raw_log_rescue_review_queue_label_report` 增加 latest-card/default-report preference，位置在 turn gold-set replay 和 local QC reports 之后、generic annotation summaries 之前。
+- 安全边界保持明确：不写 DB，不修改 memory file，不执行 unarchive / category update / delete / quarantine / reinforce，不调用 LLM，也不产生 network side effects。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-reports.test.js
@@ -531,14 +533,14 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 36/36 pass
 ```
 
-### Archived raw_log rescue P16: Console annotation local QC report preview
+### Archived raw_log rescue P16：Console annotation local QC report preview
 
-After P15 was committed as `59a7d4e feat(console): load annotation labels from reports`, P16 added a structured `/reports` preview for browser-local annotation QC reports. Previously `annotation-local-qc-report-*.json` could be listed and read, but the detail view was a raw JSON `<pre>` only.
+P15 提交为 `59a7d4e feat(console): load annotation labels from reports` 后，P16 为 browser-local annotation QC reports 增加 `/reports` 结构化预览。此前 `annotation-local-qc-report-*.json` 可以 list/read，但 detail view 只是 raw JSON `<pre>`。
 
-Implemented:
+实现内容：
 
-- Added `annotation_local_qc_preview` derivation in `console/services/reports-service.js` for `annotation_local_qc_report` JSON files.
-- The preview is a read-only projection of the QC JSON and extracts:
+- 在 `console/services/reports-service.js` 为 `annotation_local_qc_report` JSON files 增加 `annotation_local_qc_preview` derivation。
+- 该 preview 是 QC JSON 的只读投影，提取：
   - total candidates
   - unique sample ids
   - duplicate candidate sample ids
@@ -555,12 +557,12 @@ Implemented:
   - rescue_confidence distribution
   - first 10 unlabeled samples
   - first 10 duplicate sample ids
-- Added `Annotation QC Preview` panel to `/reports`.
-- Added `renderAnnotationQcPreview()` in `console/public/charts.js`.
-- Added latest-card/default-report preference for `latest.annotation_local_qc_report`, behind turn gold-set replay but ahead of generic annotation summary.
-- Safety boundary remains explicit in the derived preview: no DB writes, memory file mutation, upload, apply, archive, delete, quarantine, reinforce, LLM, or network side effects.
+- 在 `/reports` 新增 `Annotation QC Preview` panel。
+- 在 `console/public/charts.js` 新增 `renderAnnotationQcPreview()`。
+- 为 `latest.annotation_local_qc_report` 增加 latest-card/default-report preference，位置在 turn gold-set replay 之后、generic annotation summary 之前。
+- derived preview 的安全边界保持明确：不写 DB，不修改 memory file，不 upload，不执行 apply / archive / delete / quarantine / reinforce，不调用 LLM，也不产生 network side effects。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-reports.test.js
@@ -570,30 +572,30 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 35/35 pass
 ```
 
-### Archived raw_log rescue P15: Console one-click load for whitelisted label reports
+### Archived raw_log rescue P15：Console 一键加载 whitelisted label reports
 
-After P14 was committed as `e7ab763 feat(console): load annotation candidates from reports`, P15 completed the matching one-click resume path for label reports. `/annotations` can now load whitelisted labels JSONL from the Console list after a candidate/queue report is loaded.
+P14 提交为 `e7ab763 feat(console): load annotation candidates from reports` 后，P15 补齐 label reports 的一键续标路径。`/annotations` 现在可以在 candidate/queue report 已加载后，从 Console 列表加载 whitelisted labels JSONL。
 
-Implemented:
+实现内容：
 
-- Added `Available Label Reports` to `/annotations`.
-- Added `Load` buttons for whitelisted labels JSONL listed by `annotationReportsSnapshot().available_labels`.
-- Added read-only fetch path through `/api/reports/file?name=<label-report>`.
-- Labels can only be server-loaded after a candidate/queue JSONL is already loaded.
-- Only JSONL label reports can be loaded through this UI path.
-- Server-loaded labels reuse the existing `importLabelsFromText()` flow.
-- Existing identity alignment remains in force:
+- 在 `/annotations` 增加 `Available Label Reports`。
+- 为 `annotationReportsSnapshot().available_labels` 列出的 whitelisted labels JSONL 增加 `Load` 按钮。
+- 增加通过 `/api/reports/file?name=<label-report>` 的只读 fetch 路径。
+- Labels 只能在 candidate/queue JSONL 已加载后通过 server 加载。
+- 该 UI 路径只允许加载 JSONL label reports。
+- server-loaded labels 复用现有 `importLabelsFromText()` flow。
+- 现有 identity alignment 继续生效：
   - `sample_id`
   - `memory_id`
   - `chunk_id`
   - `primary_bucket`
   - `source_path`
-- Wrong-queue labels, identity mismatches, empty labels, and parse-invalid lines are still skipped and counted.
-- Added shared `renderReportList()` helper for candidate and label report lists.
-- Loading a new candidate report resets the server label-report status so stale label import state cannot carry across queues.
-- Read-only boundary remains unchanged: no upload, DB write, apply, archive, delete, quarantine, reinforce, or memory mutation path was added.
+- Wrong-queue labels、identity mismatches、empty labels 和 parse-invalid lines 仍会被 skipped and counted。
+- 为 candidate 和 label report lists 增加 shared `renderReportList()` helper。
+- 加载新的 candidate report 会重置 server label-report status，避免 stale label import state 跨 queue 泄漏。
+- 只读边界不变：没有新增 upload、DB write、apply、archive、delete、quarantine、reinforce 或 memory mutation path。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-annotations.test.js
@@ -603,23 +605,23 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 34/34 pass
 ```
 
-### Archived raw_log rescue P14: Console one-click load for whitelisted candidate reports
+### Archived raw_log rescue P14：Console 一键加载 whitelisted candidate reports
 
-After P13 was committed as `ec14e9a feat(console): list local annotation qc reports`, P14 removed the last manual file-picking step for reports already visible in `/annotations`. Available candidate reports can now be loaded directly from the Console list through the existing read-only reports API.
+P13 提交为 `ec14e9a feat(console): list local annotation qc reports` 后，P14 移除 `/annotations` 中已经可见 reports 的最后一步手动选文件操作。Available candidate reports 现在可以直接通过现有只读 reports API 从 Console 列表加载。
 
-Implemented:
+实现内容：
 
-- Updated `/annotations` to show a `Load` button for each available candidate report.
-- Added read-only fetch path through `/api/reports/file?name=<report>`.
-- Kept the server-side allowlist as the authority for what can be read.
-- Only JSONL reports can be loaded into the annotation UI.
-- Server-loaded reports reuse the same `parseJsonl()` and normalization path as local browser-selected files.
-- Loading a server report clears existing labels, resets label import state, refreshes bucket filters, and resets view filters, matching local file-load behavior.
-- Added status text for server candidate loading and failure states.
-- Updated safety copy: the page now supports browser-local file loading or whitelisted read-only report loading, but still does not upload labels, write DB, or mutate memory.
-- Read-only boundary remains unchanged: no apply, archive, delete, quarantine, reinforce, DB write, or memory mutation path was added.
+- 更新 `/annotations`，为每个 available candidate report 显示 `Load` 按钮。
+- 增加通过 `/api/reports/file?name=<report>` 的只读 fetch 路径。
+- server-side allowlist 仍是可读文件的唯一权威。
+- 只有 JSONL reports 可以加载进 annotation UI。
+- server-loaded reports 复用与本地 browser-selected files 相同的 `parseJsonl()` 和 normalization path。
+- 加载 server report 会清空现有 labels、重置 label import state、刷新 bucket filters、重置 view filters，与本地 file-load 行为一致。
+- 增加 server candidate loading / failure 状态文本。
+- 更新安全文案：页面现在支持 browser-local file loading 或 whitelisted read-only report loading，但仍不上传 labels、不写 DB、不修改 memory。
+- 只读边界不变：没有新增 apply、archive、delete、quarantine、reinforce、DB write 或 memory mutation path。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-annotations.test.js
@@ -629,23 +631,23 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 33/33 pass
 ```
 
-### Archived raw_log rescue P13: Console reports handoff for local QC report
+### Archived raw_log rescue P13：Console reports 对 local QC report 的 handoff
 
-After P12 was committed as `069ca24 feat(console): export local annotation qc report`, P13 closed the archive/handoff gap for browser-local QC reports. The browser can download `annotation-local-qc-report-*.json`; now if that file is moved into `reports/`, the Console reports service recognizes it without treating it as a candidate or labels file.
+P12 提交为 `069ca24 feat(console): export local annotation qc report` 后，P13 补齐 browser-local QC reports 的归档/handoff 缺口。浏览器可下载 `annotation-local-qc-report-*.json`；现在只要该文件移动到 `reports/`，Console reports service 就能识别它，而不会把它当成 candidate 或 labels file。
 
-Implemented:
+实现内容：
 
-- Added `annotation_local_qc_report` to `console/services/reports-service.js` allowlist.
-- Supported downloaded browser timestamp filenames:
+- 在 `console/services/reports-service.js` allowlist 中增加 `annotation_local_qc_report`。
+- 支持浏览器下载 timestamp 文件名：
   - `annotation-local-qc-report-YYYY-MM-DDTHH-MM-SS.mmmZ.json`
   - `annotation-local-qc-report-YYYY-MM-DDTHH-MM-SSZ.json`
-- Added `annotation_local_qc_report` to latest report tracking.
-- Confirmed `/reports/file` can read the QC JSON as a whitelisted report.
-- Confirmed `/annotations` does not list local QC reports as loadable candidates.
-- Confirmed `/annotations` does not list local QC reports as labels.
-- Safety boundary remains unchanged: listing/reading reports only; no DB write, memory mutation, apply, archive, delete, quarantine, or reinforce.
+- 把 `annotation_local_qc_report` 加入 latest report tracking。
+- 确认 `/reports/file` 可以把 QC JSON 作为 whitelisted report 读取。
+- 确认 `/annotations` 不会把 local QC reports 列为 loadable candidates。
+- 确认 `/annotations` 不会把 local QC reports 列为 labels。
+- 安全边界不变：只 list/read reports；不写 DB，不修改 memory，不执行 apply / archive / delete / quarantine / reinforce。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-reports.test.js
@@ -655,17 +657,17 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 32/32 pass
 ```
 
-### Archived raw_log rescue P12: Console browser-local QC report export
+### Archived raw_log rescue P12：Console browser-local QC report export
 
-After P11 was committed as `7cc7b69 feat(console): resume annotation labels locally`, P12 reduced the remaining command-line dependency in the manual review loop: `/annotations` can now export a browser-local QC report from the currently loaded candidate/queue and labels.
+P11 提交为 `7cc7b69 feat(console): resume annotation labels locally` 后，P12 降低 manual review loop 对命令行的依赖：`/annotations` 现在可以基于当前已加载的 candidate/queue 和 labels 导出 browser-local QC report。
 
-Implemented:
+实现内容：
 
-- Added `Export QC Report JSON` to `/annotations`.
-- The report is generated entirely in the browser from loaded candidate JSONL and local labels.
-- No upload, DB write, apply, archive, delete, quarantine, reinforce, LLM, network, or server-side report generation path was added.
-- Report mode: `annotation_local_qc_report`.
-- Report includes:
+- 在 `/annotations` 增加 `Export QC Report JSON`。
+- Report 完全在浏览器中由 loaded candidate JSONL 与 local labels 生成。
+- 没有新增 upload、DB write、apply、archive、delete、quarantine、reinforce、LLM、network 或 server-side report generation path。
+- Report mode 为 `annotation_local_qc_report`。
+- Report 包含：
   - candidate count
   - unique candidate sample count
   - duplicate candidate sample-id count
@@ -682,10 +684,10 @@ Implemented:
   - last label-import skipped counts
   - first 25 duplicate sample ids
   - first 25 unlabeled samples
-- Loading a new candidate file resets the last label-import summary, preventing stale skipped counts from carrying over.
-- Label export schema remains unchanged.
+- 加载新 candidate file 会重置 last label-import summary，避免 stale skipped counts 被带到新 review 中。
+- Label export schema 保持不变。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-annotations.test.js
@@ -695,28 +697,28 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 30/30 pass
 ```
 
-### Archived raw_log rescue P11: Console local label resume support
+### Archived raw_log rescue P11：Console local label resume support
 
-After P10 was committed as `a2ade05 feat(console): show rescue review queue metadata`, P11 fixed the next GUI workflow gap: `/annotations` could export labels but could not reload an existing labels JSONL to resume a partially completed manual review.
+P10 提交为 `a2ade05 feat(console): show rescue review queue metadata` 后，P11 修复下一个 GUI workflow 缺口：`/annotations` 能导出 labels，但不能重新加载已有 labels JSONL 来恢复未完成的 manual review。
 
-Implemented:
+实现内容：
 
-- Added `Load labels JSONL to resume` to `/annotations`.
-- The label import remains browser-local and uses File API only; no upload, DB write, apply, archive, delete, quarantine, or reinforce path was added.
-- Labels can only be imported after candidate JSONL is loaded.
-- Imported labels are matched to the current candidate set by `sample_id` and identity fields:
+- 在 `/annotations` 增加 `Load labels JSONL to resume`。
+- Label import 仍然是 browser-local，并且只使用 File API；没有新增 upload、DB write、apply、archive、delete、quarantine 或 reinforce path。
+- Labels 只能在 candidate JSONL 加载后导入。
+- Imported labels 会按 `sample_id` 和 identity fields 匹配当前 candidate set：
   - `memory_id`
   - `chunk_id`
   - `primary_bucket`
   - `source_path`
-- Labels that do not belong to the current candidate set are skipped and counted.
-- Labels with identity mismatches are skipped and counted.
-- Empty labels and parse-invalid rows are skipped and counted.
-- Loading a new candidate file clears any imported labels and resets the label-file input, preventing stale cross-queue progress from leaking into a new review.
-- Imported labels populate the existing local label map, so progress counts and `Unlabeled only` filtering work across resumed sessions.
-- Export schema remains unchanged.
+- 不属于当前 candidate set 的 labels 会被 skipped and counted。
+- identity mismatches 会被 skipped and counted。
+- Empty labels 与 parse-invalid rows 会被 skipped and counted。
+- 加载新 candidate file 会清空已导入 labels 并重置 label-file input，防止 stale cross-queue progress 泄漏到新 review。
+- Imported labels 会写入现有 local label map，因此 progress counts 和 `Unlabeled only` filtering 能在 resumed sessions 中继续工作。
+- Export schema 保持不变。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-annotations.test.js
@@ -726,13 +728,13 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 29/29 pass
 ```
 
-### Archived raw_log rescue P10: Console review queue metadata display
+### Archived raw_log rescue P10：Console review queue metadata 展示
 
-After P9 was committed as `7f7426c feat(console): list rescue review queue reports`, P10 fixed the next Console handoff gap: `/annotations` could load the P7 queue JSONL, but the page normalized samples down to generic annotation fields and discarded review-queue context that annotators need.
+P9 提交为 `7f7426c feat(console): list rescue review queue reports` 后，P10 修复下一个 Console handoff 缺口：`/annotations` 可以加载 P7 queue JSONL，但页面会把 samples 归一化成 generic annotation fields，从而丢掉标注者需要的 review-queue context。
 
-Implemented:
+实现内容：
 
-- Updated `console/views/annotations.ejs` to preserve P7 queue metadata while loading candidate JSONL:
+- 更新 `console/views/annotations.ejs`，加载 candidate JSONL 时保留 P7 queue metadata：
   - `queue_type`
   - `queue_priority`
   - `review_reasons`
@@ -743,8 +745,8 @@ Implemented:
   - `manual_review_flags`
   - `scoring_parts`
   - `prior_sampling_reason`
-- Added a conditional `Review Queue Metadata` card on `/annotations`.
-- The card displays:
+- 在 `/annotations` 增加条件显示的 `Review Queue Metadata` card。
+- Card 展示：
   - queue priority
   - raw → final prediction
   - score / boundary distance
@@ -753,11 +755,11 @@ Implemented:
   - manual review flags
   - risk signals
   - scoring parts
-- The card is hidden for ordinary candidate JSONL rows without queue metadata.
-- Label export schema is unchanged; queue metadata remains display-only and is not written into label JSONL.
-- Read-only boundary remains unchanged: no upload, DB write, apply, archive, delete, quarantine, or reinforce.
+- 普通 candidate JSONL row 如果没有 queue metadata，该 card 会隐藏。
+- Label export schema 不变；queue metadata 仅用于展示，不写入 label JSONL。
+- 只读边界不变：没有 upload、DB write、apply、archive、delete、quarantine 或 reinforce。
 
-Verification:
+验证：
 
 ```text
 node --test test/console-annotations.test.js
@@ -767,22 +769,22 @@ node --test test/console-reports.test.js test/console-annotations.test.js test/r
 # 28/28 pass
 ```
 
-### Archived raw_log rescue P9: Console reports handoff for P7/P8 artifacts
+### Archived raw_log rescue P9：Console reports 对 P7/P8 artifacts 的 handoff
 
-After P8 was committed as `e40296e feat(annotation): add rescue review queue label report`, P9 closed a Console handoff gap: P7/P8 artifacts existed on disk, but the Console reports allowlist did not recognize the archived raw_log rescue artifact names, and `/annotations` would not list the P7 queue as a loadable candidate.
+P8 提交为 `e40296e feat(annotation): add rescue review queue label report` 后，P9 修复 Console handoff 缺口：P7/P8 artifacts 已经在磁盘上存在，但 Console reports allowlist 还不识别 archived raw_log rescue artifact names，`/annotations` 也不会把 P7 queue 列为 loadable candidate。
 
-Implemented:
+实现内容：
 
-- Updated `console/services/reports-service.js` allowlist for:
+- 更新 `console/services/reports-service.js` allowlist，支持：
   - `archived-raw-log-rescue-combined-report-p*-*.{json,md}`
   - `archived-raw-log-rescue-manual-review-queue-p*-*.{jsonl,md}`
   - `archived-raw-log-rescue-review-queue-label-report-p*-*.{json,md}`
-- Added rescue combined report and review queue label report to latest report tracking.
-- Updated `annotationReportsSnapshot()` so `/annotations` lists P7 manual-review queue JSONL as a loadable candidate.
-- Kept Markdown queue files and label reports out of `available_candidates`, so the annotation UI does not accidentally offer non-sample artifacts as candidate files.
-- Added Console reports tests covering classification, latest null defaults, and the annotation snapshot candidate list.
+- 把 rescue combined report 和 review queue label report 加入 latest report tracking。
+- 更新 `annotationReportsSnapshot()`，让 `/annotations` 把 P7 manual-review queue JSONL 列为 loadable candidate。
+- Markdown queue files 和 label reports 继续排除在 `available_candidates` 之外，避免 annotation UI 误把非 sample artifact 当成 candidate file。
+- 增加 Console reports tests，覆盖 classification、latest null defaults 和 annotation snapshot candidate list。
 
-Real repo snapshot after the change:
+变更后的真实 repo snapshot：
 
 ```text
 p7_kind = archived_raw_log_rescue_review_queue
@@ -792,45 +794,45 @@ latest_rescue_combined = archived-raw-log-rescue-combined-report-p2-p4-20260703.
 latest_rescue_label_report = archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.md
 ```
 
-Verification:
+验证：
 
 ```text
 node --test test/console-reports.test.js test/console-annotations.test.js
 # 18/18 pass
 ```
 
-### Archived raw_log rescue P8: review queue label alignment report
+### Archived raw_log rescue P8：review queue label alignment report
 
-After P7 was committed as `07a5eee feat(annotation): add rescue manual review queue`, P8 added a queue-aware label report so future manual-review labels cannot accidentally be summarized without verifying they belong to the exact P7 queue.
+P7 提交为 `07a5eee feat(annotation): add rescue manual review queue` 后，P8 增加 queue-aware label report，避免未来 manual-review labels 在没有确认属于同一个 P7 queue 的情况下被错误汇总。
 
-Implemented:
+实现内容：
 
-- Added `bin/report-archived-raw-log-rescue-review-queue-labels.cjs`.
-- Added `test/report-archived-raw-log-rescue-review-queue-labels.test.js`.
-- Report validates queue rows first, including explicit safety fields:
+- 新增 `bin/report-archived-raw-log-rescue-review-queue-labels.cjs`。
+- 新增 `test/report-archived-raw-log-rescue-review-queue-labels.test.js`。
+- Report 会先验证 queue rows，并检查显式安全字段：
   - `db_writes=false`
   - `unarchive=false`
   - `category_update=false`
   - `delete=false`
   - `quarantine=false`
   - `reinforce=false`
-- Report validates labels against the queue by `sample_id` and identity fields:
+- Report 会按 `sample_id` 和 identity fields 验证 labels 是否属于该 queue：
   - `memory_id`
   - `chunk_id`
   - `primary_bucket`
   - `source_path`
-- Duplicate label `sample_id`s are treated as blocking issues and do not count toward aligned coverage. This avoids inflated coverage from repeated labels.
-- Report supports a preflight mode with no labels: it validates queue integrity and reports all queue rows as unlabeled.
-- Report outputs both JSON and Markdown.
+- 重复 label `sample_id` 被视为 blocking issue，且不计入 aligned coverage，避免重复 label 抬高覆盖率。
+- Report 支持无 labels 的 preflight mode：只验证 queue integrity，并报告所有 queue rows 均为 unlabeled。
+- Report 同时输出 JSON 和 Markdown。
 
-Generated P8 preflight artifacts:
+生成的 P8 preflight artifacts：
 
 ```text
 reports/archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.json
 reports/archived-raw-log-rescue-review-queue-label-report-p8-preflight-20260704.md
 ```
 
-Preflight command:
+Preflight 命令：
 
 ```bash
 node bin/report-archived-raw-log-rescue-review-queue-labels.cjs \
@@ -840,7 +842,7 @@ node bin/report-archived-raw-log-rescue-review-queue-labels.cjs \
   --sample-limit 10
 ```
 
-Preflight summary:
+Preflight 摘要：
 
 ```text
 queue_total = 50
@@ -856,7 +858,7 @@ queue_reason_distribution = positive_negative_conflict: 50
 queue_bucket_distribution = archived_raw_log_project: 50
 ```
 
-Verification:
+验证：
 
 ```text
 node --test test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
@@ -866,11 +868,11 @@ node --test test/report-archived-raw-log-rescue-review-queue-labels.test.js test
 # 35/35 pass
 ```
 
-### Archived raw_log rescue P7: manual-review queue artifact
+### Archived raw_log rescue P7：manual-review queue artifact
 
-P7 started and implemented the manual-review queue design for archived raw_log rescue. The queue is intentionally separate from the P6 combined label report: the combined report measures scoring quality, while the P7 queue produces the next stable human-review artifact.
+P7 开始并实现 archived raw_log rescue 的 manual-review queue 设计。该 queue 刻意与 P6 combined label report 分离：combined report 用于衡量 scoring quality，而 P7 queue 负责产出下一轮稳定 human-review artifact。
 
-Safety boundary remains unchanged:
+安全边界保持不变：
 
 ```text
 DB write = false
@@ -881,28 +883,28 @@ quarantine = false
 reinforce = false
 ```
 
-Implemented:
+实现内容：
 
-- Added `bin/build-archived-raw-log-rescue-review-queue.cjs`.
-- Added `test/build-archived-raw-log-rescue-review-queue.test.js`.
-- Extended `lib/annotation/archived-raw-log-rescue-sampler.cjs` so `scoreCandidate()` propagates `unsureThreshold` into scoring instead of exposing a fake/ignored CLI knob downstream.
-- Queue priority is deterministic and centered on:
+- 新增 `bin/build-archived-raw-log-rescue-review-queue.cjs`。
+- 新增 `test/build-archived-raw-log-rescue-review-queue.test.js`。
+- 扩展 `lib/annotation/archived-raw-log-rescue-sampler.cjs`，让 `scoreCandidate()` 把 `unsureThreshold` 传入 scoring，而不是在下游暴露一个假的/无效的 CLI knob。
+- Queue priority 确定性排序，重点围绕：
   - `positive_negative_conflict`
   - `raw_predicted_keep_active=yes && predicted_keep_active=unsure`
   - `near_boundary`
-  - `predicted_unsure` as a lower-priority fallback
-- Queue rows include annotation-ready JSONL fields plus score, boundary distance, raw/final prediction, manual review flags, source input/line, preview content, and explicit no-side-effect safety fields.
-- CLI supports label exclusion through `--exclude-labels`, so already labeled seed/P2/P4 samples are not re-queued.
-- CLI can write both JSONL and Markdown artifacts.
+  - `predicted_unsure` 作为低优先级 fallback
+- Queue rows 包含 annotation-ready JSONL fields，以及 score、boundary distance、raw/final prediction、manual review flags、source input/line、preview content 和显式 no-side-effect safety fields。
+- CLI 支持通过 `--exclude-labels` 排除已标注样本，因此 seed/P2/P4 已标注 samples 不会被重新加入 queue。
+- CLI 可同时写出 JSONL 和 Markdown artifacts。
 
-Generated P7 local artifacts:
+生成的 P7 local artifacts：
 
 ```text
 reports/archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl
 reports/archived-raw-log-rescue-manual-review-queue-p7-20260704.md
 ```
 
-Generation command:
+生成命令：
 
 ```bash
 node bin/build-archived-raw-log-rescue-review-queue.cjs \
@@ -913,7 +915,7 @@ node bin/build-archived-raw-log-rescue-review-queue.cjs \
   --out-md reports/archived-raw-log-rescue-manual-review-queue-p7-20260704.md
 ```
 
-Generated queue summary:
+生成 queue summary：
 
 ```text
 input_count = 1100
@@ -927,7 +929,7 @@ predicted_distribution = unsure: 50
 raw_predicted_distribution = yes: 50
 ```
 
-Verification:
+验证：
 
 ```text
 node --test test/build-archived-raw-log-rescue-review-queue.test.js test/archived-raw-log-rescue-sampler.test.js
@@ -937,7 +939,7 @@ node --test test/report-archived-raw-log-rescue-labels.test.js test/evaluate-arc
 # 21/21 pass
 ```
 
-Full `npm test` was also run. It did not pass globally: 711 pass / 8 fail / 6 skip out of 725. The failures are concentrated in pre-existing smart-add duplicate baseline/manifest/preview assertions that depend on current real-data baseline counts; they are not in the archived raw_log rescue P7 path.
+也运行了 full `npm test`。全局没有通过：725 个测试中 711 pass / 8 fail / 6 skip。失败集中在既有 smart-add duplicate baseline/manifest/preview 断言上，这些断言依赖当前真实数据 baseline count；不属于 archived raw_log rescue P7 路径。
 
 ## 2026-07-03
 
