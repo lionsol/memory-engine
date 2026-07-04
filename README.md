@@ -132,6 +132,7 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 
 - 人工标注主流程见 `docs/human-annotation-gold-set.md`。
 - `/reports` ↔ `/annotations` GUI handoff smoke runbook 见 `docs/smoke-tests/console-annotation-report-handoff.md`。
+- 回归验证命令：`npm run smoke:console-annotation-handoff`。
 - 该 GUI 路径只读取 whitelisted reports，不上传 labels，不写 DB，不执行 apply / unarchive / category update / delete / quarantine / reinforce。
 
 ## Checkpoint Canonical Entry

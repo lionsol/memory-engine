@@ -1,5 +1,26 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P32: README mentions Console annotation smoke command
+
+After P31 was committed as `bc61522 test(console): add annotation handoff smoke script`, P32 added the targeted smoke command to the top-level README Console annotation workflow entry. The README now links the docs and shows the exact regression command.
+
+Implemented:
+
+- Updated `README.md` `Console Annotation Workflow`.
+- Added `npm run smoke:console-annotation-handoff` beside the Console annotation/report handoff docs.
+- Updated `test/readme-console-annotation-workflow.test.js` to protect the README command mention.
+- No runtime code changed.
+
+Verification:
+
+```text
+node --test test/readme-console-annotation-workflow.test.js test/package-scripts.test.js test/smoke-tests-index-doc.test.js
+# 7/7 pass
+
+npm run smoke:console-annotation-handoff
+# 56/56 pass
+```
+
 ### Archived raw_log rescue P31: Console annotation handoff npm smoke script
 
 After P30 was committed as `6046fe2 docs(smoke): index console annotation runbooks`, P31 added a targeted npm script for the Console annotation/report handoff smoke path. This makes the GUI handoff regression suite runnable without copying a long `node --test ...` command.

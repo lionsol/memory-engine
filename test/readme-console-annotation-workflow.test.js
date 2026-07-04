@@ -15,6 +15,7 @@ test("README links the Console annotation workflow docs", () => {
     "docs/human-annotation-gold-set.md",
     "docs/smoke-tests/console-annotation-report-handoff.md",
     "/reports` ↔ `/annotations` GUI handoff smoke runbook",
+    "npm run smoke:console-annotation-handoff",
   ]) {
     assert.equal(readme.includes(token), true, `missing README workflow token: ${token}`);
   }
