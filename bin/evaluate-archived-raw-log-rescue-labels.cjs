@@ -53,6 +53,7 @@ function parseArgs(argv) {
     includeTieredCapCalibration: args.includes('--include-tiered-cap-calibration'),
     includeSignalDiversityDiagnostics: args.includes('--include-signal-diversity-diagnostics'),
     includeScoringPartsDiagnostics: args.includes('--include-scoring-parts-diagnostics'),
+    includeScoringPartsTieredCapCalibration: args.includes('--include-scoring-parts-tiered-cap-calibration'),
     threshold: parseNumber(valueFor('--threshold'), DEFAULT_RESCUE_SCORING_THRESHOLD),
     unsureThreshold: parseNumber(valueFor('--unsure-threshold'), DEFAULT_RESCUE_UNSURE_THRESHOLD),
     sweepMin: parseNumber(valueFor('--sweep-min'), 30),
@@ -763,6 +764,106 @@ function buildScoringPartsDiagnostics(rows) {
   };
 }
 
+function scoringPartsTieredCapCalibrationVariants() {
+  return [
+    {
+      variant_id: 'baseline_current_cap',
+      shouldCap: row => row.is_conflict_capped,
+    },
+    {
+      variant_id: 'no_conflict_cap',
+      shouldCap: () => false,
+    },
+    {
+      variant_id: 'uncap_if_high_value_positive_parts',
+      shouldCap: row => !row.pattern_flags.high_value_positive_parts_pattern,
+    },
+    {
+      variant_id: 'uncap_if_has_preference_signal_part',
+      shouldCap: row => !row.has_preference_signal_part,
+    },
+    {
+      variant_id: 'uncap_if_has_project_decision_or_preference_part',
+      shouldCap: row => !(row.has_project_decision_signal_part || row.has_preference_signal_part),
+    },
+    {
+      variant_id: 'uncap_if_has_preference_decision_or_todo_part',
+      shouldCap: row => !(row.has_preference_signal_part || row.has_project_decision_signal_part || row.has_todo_signal_part),
+    },
+    {
+      variant_id: 'cap_unless_project_plus_engineering_only',
+      shouldCap: row => row.pattern_flags.project_plus_engineering_only_positive_parts_pattern,
+    },
+  ];
+}
+
+function compactScoringPartsCalibrationExample(row) {
+  return {
+    sample_id: row.sample_id,
+    primary_bucket: row.primary_bucket,
+    actual_keep_active: row.actual_keep_active,
+    raw_predicted_keep_active: row.raw_predicted_keep_active,
+    predicted_keep_active: row.predicted_keep_active,
+    score: row.score,
+    positive_part_names: row.positive_part_names,
+    negative_part_names: row.negative_part_names,
+    pattern_flags: row.pattern_flags,
+  };
+}
+
+function evaluateScoringPartsTieredCapCalibrationVariant(rows, variant) {
+  const metrics = emptyMetrics();
+  const variantRows = [];
+
+  for (const row of rows) {
+    const keepCap = row.is_conflict_capped ? variant.shouldCap(row) : false;
+    const predictedKeepActive = row.is_conflict_capped
+      ? (keepCap ? row.predicted_keep_active : row.raw_predicted_keep_active)
+      : row.predicted_keep_active;
+    const variantRow = {
+      sample_id: row.sample_id,
+      primary_bucket: row.primary_bucket,
+      target_category: row.target_category,
+      rescue_confidence: row.rescue_confidence,
+      actual_keep_active: row.actual_keep_active,
+      raw_predicted_keep_active: row.raw_predicted_keep_active,
+      predicted_keep_active: predictedKeepActive,
+      rule_id: variant.variant_id,
+      score: row.score,
+      reasons: row.reasons,
+      positive_part_names: row.positive_part_names,
+      negative_part_names: row.negative_part_names,
+      pattern_flags: row.pattern_flags,
+      was_conflict_capped: row.is_conflict_capped,
+      cap_applied: row.is_conflict_capped ? keepCap : false,
+      uncapped_yes: row.is_conflict_capped && !keepCap && row.raw_predicted_keep_active === 'yes' && predictedKeepActive === 'yes',
+    };
+    updateMetrics(metrics, variantRow);
+    variantRows.push(variantRow);
+  }
+
+  finalizeMetrics(metrics);
+  const diagnostics = buildMismatchDiagnostics(variantRows, { includeScoreBucket: true });
+  const cappedRows = variantRows.filter(row => row.cap_applied);
+  const uncappedYesRows = variantRows.filter(row => row.uncapped_yes);
+
+  return {
+    variant_id: variant.variant_id,
+    ...metrics,
+    capped_count: cappedRows.length,
+    capped_false_positive_avoided_count: cappedRows.filter(row => row.actual_keep_active !== 'yes').length,
+    capped_false_negative_caused_count: cappedRows.filter(row => row.actual_keep_active === 'yes').length,
+    uncapped_yes_count: uncappedYesRows.length,
+    false_positives: metrics.false_positives.map(compactMismatch),
+    false_negatives: metrics.false_negatives.map(compactMismatch),
+    false_positive_examples: metrics.false_positives.slice().sort(compareConflictExamples).slice(0, 5).map(compactScoringPartsCalibrationExample),
+    false_negative_examples: metrics.false_negatives.slice().sort(compareConflictExamples).slice(0, 5).map(compactScoringPartsCalibrationExample),
+    false_positive_distribution: diagnostics.false_positive_distribution,
+    false_negative_distribution: diagnostics.false_negative_distribution,
+    diagnostics,
+  };
+}
+
 function tieredCapCalibrationVariants() {
   return [
     {
@@ -1010,6 +1111,31 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
 
   if (options.includeScoringPartsDiagnostics) {
     report.scoring_parts_diagnostics = buildScoringPartsDiagnostics(scoringRows);
+  }
+
+  if (options.includeScoringPartsTieredCapCalibration) {
+    const featureRows = scoringRows
+      .filter(row => row.is_conflict_capped)
+      .map(buildScoringPartsFeatureRow);
+    const nonConflictRows = scoringRows
+      .filter(row => !row.is_conflict_capped)
+      .map(row => ({
+        ...row,
+        positive_part_names: [],
+        negative_part_names: [],
+        pattern_flags: {
+          project_only_positive_parts_pattern: false,
+          project_plus_engineering_only_positive_parts_pattern: false,
+          high_value_positive_parts_pattern: false,
+          penalty_dominated_pattern: false,
+        },
+        has_project_decision_signal_part: false,
+        has_preference_signal_part: false,
+        has_todo_signal_part: false,
+      }));
+    report.scoring_parts_tiered_cap_calibration = scoringPartsTieredCapCalibrationVariants().map(variant =>
+      evaluateScoringPartsTieredCapCalibrationVariant([...featureRows, ...nonConflictRows], variant)
+    );
   }
 
   if (options.out) writeJson(options.out, report);
