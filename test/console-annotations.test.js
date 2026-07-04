@@ -134,6 +134,28 @@ test("console annotations page can auto-load candidate and label reports from qu
   }
 });
 
+test("console annotations page exposes current server deep link for loaded reports", () => {
+  const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
+  for (const token of [
+    "Current Deep Link",
+    "annotationDeepLink",
+    "annotationDeepLinkStatus",
+    "serverCandidateReportName",
+    "serverLabelReportName",
+    "updateCurrentDeepLink",
+    "No server-loaded candidate report",
+    "new URLSearchParams({ candidate: state.serverCandidateReportName })",
+    "params.set(\"labels\", state.serverLabelReportName)",
+    "Server deep link includes candidate only",
+    "Server deep link includes labels:",
+    "state.serverCandidateReportName = reportName",
+    "state.serverLabelReportName = reportName",
+    "Local browser files do not get server deep links.",
+  ]) {
+    assert.equal(page.includes(token), true, `missing current deep link token: ${token}`);
+  }
+});
+
 test("console annotations page exports a browser-local QC report", () => {
   const page = readFileSync(new URL("../console/views/annotations.ejs", import.meta.url), "utf8");
   for (const token of [

@@ -75,6 +75,13 @@
       <div id="annotationLabelReportLoadStatus" class="muted">No server label report loaded</div>
       <ul id="annotationAvailableLabels" class="annotation-file-list"></ul>
     </section>
+
+    <section class="panel annotation-card">
+      <h2>Current Deep Link</h2>
+      <div class="muted">Shown only for server-loaded candidate/queue reports. Local browser files do not get server deep links.</div>
+      <div id="annotationDeepLinkStatus" class="muted">No server-loaded candidate report</div>
+      <a id="annotationDeepLink" hidden class="button" href="#">Open this review</a>
+    </section>
   </aside>
 
   <main class="annotation-content">
@@ -233,7 +240,7 @@
 <script>
   (() => {
     const pageData = JSON.parse(document.getElementById("page-data")?.textContent || "{}").payload || {};
-    const state = { samples: [], filteredSamples: [], labels: new Map(), currentIndex: 0, lastLabelImportSummary: null };
+    const state = { samples: [], filteredSamples: [], labels: new Map(), currentIndex: 0, lastLabelImportSummary: null, serverCandidateReportName: null, serverLabelReportName: null };
     const els = {
       candidateFile: document.getElementById("annotationCandidateFile"),
       labelFile: document.getElementById("annotationLabelFile"),
@@ -256,6 +263,8 @@
       candidateLoadStatus: document.getElementById("annotationCandidateLoadStatus"),
       availableLabels: document.getElementById("annotationAvailableLabels"),
       labelReportLoadStatus: document.getElementById("annotationLabelReportLoadStatus"),
+      deepLink: document.getElementById("annotationDeepLink"),
+      deepLinkStatus: document.getElementById("annotationDeepLinkStatus"),
       emptyState: document.getElementById("annotationEmptyState"),
       reviewState: document.getElementById("annotationReviewState"),
       recordTitle: document.getElementById("annotationRecordTitle"),
@@ -503,17 +512,37 @@
       URL.revokeObjectURL(url);
     }
 
+    function updateCurrentDeepLink() {
+      if (!state.serverCandidateReportName) {
+        els.deepLink.hidden = true;
+        els.deepLink.removeAttribute("href");
+        els.deepLinkStatus.textContent = "No server-loaded candidate report";
+        return;
+      }
+      const params = new URLSearchParams({ candidate: state.serverCandidateReportName });
+      if (state.serverLabelReportName) params.set("labels", state.serverLabelReportName);
+      const href = `/annotations?${params.toString()}`;
+      els.deepLink.href = href;
+      els.deepLink.hidden = false;
+      els.deepLinkStatus.textContent = state.serverLabelReportName
+        ? `Server deep link includes labels: ${state.serverLabelReportName}`
+        : "Server deep link includes candidate only";
+    }
+
     function resetCandidateSamplesFromText(text, sourceLabel) {
       state.samples = parseJsonl(text);
       state.labels.clear();
       state.currentIndex = 0;
       state.lastLabelImportSummary = null;
+      state.serverCandidateReportName = null;
+      state.serverLabelReportName = null;
       els.labelFile.value = "";
       els.labelImportStatus.textContent = "No labels loaded";
       els.labelReportLoadStatus.textContent = "No server label report loaded";
       els.candidateLoadStatus.textContent = sourceLabel ? `Loaded ${state.samples.length} sample(s) from ${sourceLabel}` : `Loaded ${state.samples.length} sample(s)`;
       syncBucketFilterOptions();
       clearFilters();
+      updateCurrentDeepLink();
     }
 
     async function loadCandidateReportFromServer(name) {
@@ -529,6 +558,8 @@
         if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
         if (payload?.format !== "jsonl") throw new Error("selected report is not JSONL");
         resetCandidateSamplesFromText(String(payload.content || ""), reportName);
+        state.serverCandidateReportName = reportName;
+        updateCurrentDeepLink();
         return true;
       } catch (error) {
         els.candidateLoadStatus.textContent = `Failed to load ${reportName}: ${String(error?.message || error)}`;
@@ -553,6 +584,8 @@
         if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
         if (payload?.format !== "jsonl") throw new Error("selected report is not JSONL");
         importLabelsFromText(String(payload.content || ""));
+        state.serverLabelReportName = reportName;
+        updateCurrentDeepLink();
         els.labelReportLoadStatus.textContent = `Loaded labels from ${reportName}`;
         return true;
       } catch (error) {

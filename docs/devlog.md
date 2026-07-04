@@ -1,5 +1,31 @@
 ## 2026-07-04
 
+### Archived raw_log rescue P25: Annotations current review deep link
+
+After P24 was committed as `783cd84 feat(console): open annotations with latest labels`, P25 added a current-review deep-link panel to `/annotations`. When a candidate/queue report and optional labels report are loaded through the server allowlist, the page now shows a reusable link for the same review session.
+
+Implemented:
+
+- Added `Current Deep Link` panel to `/annotations`.
+- Added `state.serverCandidateReportName` and `state.serverLabelReportName`.
+- Added `updateCurrentDeepLink()`.
+- Server-loaded candidate/queue JSONL now records the report name and shows `/annotations?candidate=<report>`.
+- Server-loaded labels JSONL now updates the same link to `/annotations?candidate=<report>&labels=<label-report>`.
+- Loading a new candidate report clears prior label state and resets the deep-link state before setting the new server candidate.
+- Local browser files do not generate server deep links, avoiding unusable links for files that were never available through the allowlisted reports API.
+- Existing query auto-load, JSONL format checks, and label identity alignment remain unchanged.
+- No server route, upload, DB write, apply, unarchive, category update, delete, quarantine, reinforce, LLM, or network side effect was added.
+
+Verification:
+
+```text
+node --test test/console-annotations.test.js
+# 13/13 pass
+
+node --test test/console-reports.test.js test/console-annotations.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js
+# 42/42 pass
+```
+
 ### Archived raw_log rescue P24: Reports to annotations with latest labels
 
 After P23 was committed as `9ff21dc feat(console): link reports to annotations`, P24 extended the report-to-annotation handoff with a resume shortcut. When `/reports` is showing a loadable candidate/queue JSONL report and a latest `annotation_labels` JSONL exists in the allowed report list, the detail view now offers an `Open with Latest Labels` link.
