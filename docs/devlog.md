@@ -1,3 +1,78 @@
+## 2026-07-04
+
+### Archived raw_log rescue P7: manual-review queue artifact
+
+P7 started and implemented the manual-review queue design for archived raw_log rescue. The queue is intentionally separate from the P6 combined label report: the combined report measures scoring quality, while the P7 queue produces the next stable human-review artifact.
+
+Safety boundary remains unchanged:
+
+```text
+DB write = false
+unarchive = false
+category_update = false
+delete = false
+quarantine = false
+reinforce = false
+```
+
+Implemented:
+
+- Added `bin/build-archived-raw-log-rescue-review-queue.cjs`.
+- Added `test/build-archived-raw-log-rescue-review-queue.test.js`.
+- Extended `lib/annotation/archived-raw-log-rescue-sampler.cjs` so `scoreCandidate()` propagates `unsureThreshold` into scoring instead of exposing a fake/ignored CLI knob downstream.
+- Queue priority is deterministic and centered on:
+  - `positive_negative_conflict`
+  - `raw_predicted_keep_active=yes && predicted_keep_active=unsure`
+  - `near_boundary`
+  - `predicted_unsure` as a lower-priority fallback
+- Queue rows include annotation-ready JSONL fields plus score, boundary distance, raw/final prediction, manual review flags, source input/line, preview content, and explicit no-side-effect safety fields.
+- CLI supports label exclusion through `--exclude-labels`, so already labeled seed/P2/P4 samples are not re-queued.
+- CLI can write both JSONL and Markdown artifacts.
+
+Generated P7 local artifacts:
+
+```text
+reports/archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl
+reports/archived-raw-log-rescue-manual-review-queue-p7-20260704.md
+```
+
+Generation command:
+
+```bash
+node bin/build-archived-raw-log-rescue-review-queue.cjs \
+  --input reports/archived-raw-log-rescue-candidates-active-p2-pool.jsonl,reports/archived-raw-log-rescue-candidates-active-p4-pool.jsonl \
+  --exclude-labels reports/archived-raw-log-rescue_labels_seed_v0.1_20samples_20260702.jsonl,reports/archived-raw-log-rescue_labels_active_p2_20samples_20260703.jsonl,reports/archived-raw-log-rescue_labels_active_p4_20samples_20260703.jsonl \
+  --limit 50 \
+  --out-jsonl reports/archived-raw-log-rescue-manual-review-queue-p7-20260704.jsonl \
+  --out-md reports/archived-raw-log-rescue-manual-review-queue-p7-20260704.md
+```
+
+Generated queue summary:
+
+```text
+input_count = 1100
+excluded_count = 51
+duplicate_sample_ids = 70
+eligible_count = 390
+selected_count = 50
+primary_reason_distribution = positive_negative_conflict: 50
+all_reason_distribution = positive_negative_conflict: 50, raw_yes_capped_to_unsure: 50, near_boundary: 50
+predicted_distribution = unsure: 50
+raw_predicted_distribution = yes: 50
+```
+
+Verification:
+
+```text
+node --test test/build-archived-raw-log-rescue-review-queue.test.js test/archived-raw-log-rescue-sampler.test.js
+# 9/9 pass
+
+node --test test/report-archived-raw-log-rescue-labels.test.js test/evaluate-archived-raw-log-rescue-labels.test.js test/archived-raw-log-rescue-rules-scoring.test.js
+# 21/21 pass
+```
+
+Full `npm test` was also run. It did not pass globally: 711 pass / 8 fail / 6 skip out of 725. The failures are concentrated in pre-existing smart-add duplicate baseline/manifest/preview assertions that depend on current real-data baseline counts; they are not in the archived raw_log rescue P7 path.
+
 ## 2026-07-03
 
 ### Archived raw_log rescue active learning closeout: P3.5 → P6
