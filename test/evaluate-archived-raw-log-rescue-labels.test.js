@@ -110,6 +110,7 @@ test("evaluates joined labels against v0.1 rules and v0.2 scoring", () => {
   assert.ok(report.v0_2_scoring.threshold_sweep.some(row => row.threshold === 55));
   assert.equal(report.what_if_calibration, undefined);
   assert.equal(report.calibration_grid, undefined);
+  assert.equal(report.conflict_cap_diagnostics, undefined);
 });
 
 test("does not leak label annotations into v0.1 rule predictions", () => {
@@ -478,6 +479,192 @@ test("calibration grid is candidate-only and unaffected by label target category
   );
 });
 
+test("includes conflict cap diagnostics when requested without changing default metrics", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:cap-no",
+      primary_bucket: "archived_raw_log_project",
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+    candidate({
+      sample_id: "rescue:cap-yes",
+      primary_bucket: "archived_raw_log_project",
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+    candidate({
+      sample_id: "rescue:cap-unsure",
+      primary_bucket: "archived_raw_log_project",
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:cap-no",
+      annotation: {
+        keep_active: "no",
+        target_category: "raw_log",
+        rescue_confidence: "low",
+      },
+    }),
+    label({
+      sample_id: "rescue:cap-yes",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "high",
+      },
+    }),
+    label({
+      sample_id: "rescue:cap-unsure",
+      annotation: {
+        keep_active: "unsure",
+        target_category: "project",
+        rescue_confidence: "medium",
+      },
+    }),
+  ]);
+
+  const baseline = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+  });
+  const report = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPath,
+    candidatesInputPath: candidatesPath,
+    includeConflictCapDiagnostics: true,
+  });
+
+  assert.equal(report.v0_1_rules.exact_match, baseline.v0_1_rules.exact_match);
+  assert.equal(report.v0_2_scoring.exact_match, baseline.v0_2_scoring.exact_match);
+  assert.equal(report.v0_2_scoring.yes_false_negative, baseline.v0_2_scoring.yes_false_negative);
+  assert.ok(report.conflict_cap_diagnostics);
+  assert.equal(report.conflict_cap_diagnostics.capped_count, 3);
+  assert.equal(report.conflict_cap_diagnostics.capped_false_positive_avoided_count, 2);
+  assert.equal(report.conflict_cap_diagnostics.capped_false_negative_caused_count, 1);
+  assert.equal(report.conflict_cap_diagnostics.capped_unsure_actual_count, 1);
+  assert.equal(report.conflict_cap_diagnostics.capped_actual_distribution.no, 1);
+  assert.equal(report.conflict_cap_diagnostics.capped_actual_distribution.yes, 1);
+  assert.equal(report.conflict_cap_diagnostics.capped_actual_distribution.unsure, 1);
+  assert.equal(report.conflict_cap_diagnostics.capped_primary_bucket_distribution.archived_raw_log_project, 3);
+  assert.equal(report.conflict_cap_diagnostics.capped_score_bucket_distribution["55+"], 3);
+  assert.equal(report.conflict_cap_diagnostics.capped_rule_id_distribution["archived_raw_log_rescue_v0.2"], 3);
+  assert.equal(report.conflict_cap_diagnostics.capped_score_summary.min, 55);
+  assert.equal(report.conflict_cap_diagnostics.capped_score_summary.max, 55);
+  assert.equal(report.conflict_cap_diagnostics.capped_score_summary.average, 55);
+  assert.equal(report.conflict_cap_diagnostics.capped_false_positive_avoided_examples.length, 2);
+  assert.equal(report.conflict_cap_diagnostics.capped_false_negative_caused_examples.length, 1);
+  assert.equal(report.conflict_cap_diagnostics.capped_false_positive_avoided_examples[0].sample_id, "rescue:cap-no");
+  assert.equal(report.conflict_cap_diagnostics.capped_false_negative_caused_examples[0].sample_id, "rescue:cap-yes");
+  assert.ok(report.conflict_cap_diagnostics.capped_false_negative_caused_examples[0].reasons.includes("positive_negative_conflict_prediction_cap:0"));
+});
+
+test("conflict cap diagnostics are candidate-only and unaffected by label target category or rescue confidence", () => {
+  const dir = fixtureDir();
+  const labelsPathA = resolve(dir, "labels-a.jsonl");
+  const labelsPathB = resolve(dir, "labels-b.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:cap-yes",
+      primary_bucket: "archived_raw_log_project",
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPathA, [
+    label({
+      sample_id: "rescue:cap-yes",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "low",
+      },
+    }),
+  ]);
+  writeJsonl(labelsPathB, [
+    label({
+      sample_id: "rescue:cap-yes",
+      annotation: {
+        keep_active: "yes",
+        target_category: "raw_log",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const reportA = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathA,
+    candidatesInputPath: candidatesPath,
+    includeConflictCapDiagnostics: true,
+  });
+  const reportB = evaluateArchivedRawLogRescueLabels({
+    labelsInputPath: labelsPathB,
+    candidatesInputPath: candidatesPath,
+    includeConflictCapDiagnostics: true,
+  });
+
+  assert.deepEqual(
+    {
+      capped_count: reportA.conflict_cap_diagnostics.capped_count,
+      capped_primary_bucket_distribution: reportA.conflict_cap_diagnostics.capped_primary_bucket_distribution,
+      capped_score_bucket_distribution: reportA.conflict_cap_diagnostics.capped_score_bucket_distribution,
+      capped_rule_id_distribution: reportA.conflict_cap_diagnostics.capped_rule_id_distribution,
+      capped_score_summary: reportA.conflict_cap_diagnostics.capped_score_summary,
+      capped_false_positive_avoided_count: reportA.conflict_cap_diagnostics.capped_false_positive_avoided_count,
+      capped_false_negative_caused_count: reportA.conflict_cap_diagnostics.capped_false_negative_caused_count,
+      capped_unsure_actual_count: reportA.conflict_cap_diagnostics.capped_unsure_actual_count,
+      capped_false_negative_caused_examples: reportA.conflict_cap_diagnostics.capped_false_negative_caused_examples.map(row => ({
+        sample_id: row.sample_id,
+        primary_bucket: row.primary_bucket,
+        actual_keep_active: row.actual_keep_active,
+        raw_predicted_keep_active: row.raw_predicted_keep_active,
+        predicted_keep_active: row.predicted_keep_active,
+        score: row.score,
+        reasons: row.reasons,
+      })),
+    },
+    {
+      capped_count: reportB.conflict_cap_diagnostics.capped_count,
+      capped_primary_bucket_distribution: reportB.conflict_cap_diagnostics.capped_primary_bucket_distribution,
+      capped_score_bucket_distribution: reportB.conflict_cap_diagnostics.capped_score_bucket_distribution,
+      capped_rule_id_distribution: reportB.conflict_cap_diagnostics.capped_rule_id_distribution,
+      capped_score_summary: reportB.conflict_cap_diagnostics.capped_score_summary,
+      capped_false_positive_avoided_count: reportB.conflict_cap_diagnostics.capped_false_positive_avoided_count,
+      capped_false_negative_caused_count: reportB.conflict_cap_diagnostics.capped_false_negative_caused_count,
+      capped_unsure_actual_count: reportB.conflict_cap_diagnostics.capped_unsure_actual_count,
+      capped_false_negative_caused_examples: reportB.conflict_cap_diagnostics.capped_false_negative_caused_examples.map(row => ({
+        sample_id: row.sample_id,
+        primary_bucket: row.primary_bucket,
+        actual_keep_active: row.actual_keep_active,
+        raw_predicted_keep_active: row.raw_predicted_keep_active,
+        predicted_keep_active: row.predicted_keep_active,
+        score: row.score,
+        reasons: row.reasons,
+      })),
+    },
+  );
+});
+
 test("writes JSON report only when out is specified", () => {
   const dir = fixtureDir();
   const labelsPath = resolve(dir, "labels.jsonl");
@@ -583,4 +770,52 @@ test("CLI prints calibration grid when requested", () => {
   assert.equal(Array.isArray(parsed.calibration_grid.variants), true);
   assert.equal(parsed.calibration_grid.variants.length, 36);
   assert.ok(parsed.calibration_grid.variants.some(row => row.variant_id === "v0_2_grid_t35_raw6_tool16"));
+});
+
+test("CLI prints conflict cap diagnostics when requested", () => {
+  const dir = fixtureDir();
+  const labelsPath = resolve(dir, "labels.jsonl");
+  const candidatesPath = resolve(dir, "candidates.jsonl");
+  const stdoutPath = resolve(dir, "stdout-conflict-cap.json");
+
+  writeJsonl(candidatesPath, [
+    candidate({
+      sample_id: "rescue:cap-yes",
+      primary_bucket: "archived_raw_log_project",
+      risk_signals: [
+        "project:memory-engine",
+        "engineering_evidence_signal",
+        "transient_runtime_noise_signal",
+      ],
+    }),
+  ]);
+  writeJsonl(labelsPath, [
+    label({
+      sample_id: "rescue:cap-yes",
+      annotation: {
+        keep_active: "yes",
+        target_category: "project",
+        rescue_confidence: "high",
+      },
+    }),
+  ]);
+
+  const result = spawnSync(
+    "bash",
+    [
+      "-lc",
+      `${shellQuote(process.execPath)} ${shellQuote(resolve(repoRoot, "bin/evaluate-archived-raw-log-rescue-labels.cjs"))} --labels ${shellQuote(labelsPath)} --candidates ${shellQuote(candidatesPath)} --include-conflict-cap-diagnostics > ${shellQuote(stdoutPath)}`,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+
+  assert.equal(
+    result.status,
+    0,
+    `status=${result.status} signal=${result.signal} stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+  );
+  const parsed = JSON.parse(readFileSync(stdoutPath, "utf8"));
+  assert.equal(parsed.mode, "archived_raw_log_rescue_label_evaluation");
+  assert.equal(parsed.conflict_cap_diagnostics.capped_count, 1);
+  assert.equal(parsed.conflict_cap_diagnostics.capped_false_negative_caused_count, 1);
 });

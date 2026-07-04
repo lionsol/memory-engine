@@ -49,6 +49,7 @@ function parseArgs(argv) {
     out: valueFor('--out'),
     includeCalibration: args.includes('--include-calibration'),
     includeCalibrationGrid: args.includes('--include-calibration-grid'),
+    includeConflictCapDiagnostics: args.includes('--include-conflict-cap-diagnostics'),
     threshold: parseNumber(valueFor('--threshold'), DEFAULT_RESCUE_SCORING_THRESHOLD),
     unsureThreshold: parseNumber(valueFor('--unsure-threshold'), DEFAULT_RESCUE_UNSURE_THRESHOLD),
     sweepMin: parseNumber(valueFor('--sweep-min'), 30),
@@ -360,6 +361,74 @@ function calibrationGridTopVariants(variants) {
     }));
 }
 
+function average(values) {
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function compareConflictExamples(a, b) {
+  if (a.score !== b.score) return b.score - a.score;
+  if (a.primary_bucket !== b.primary_bucket) return a.primary_bucket.localeCompare(b.primary_bucket);
+  return a.sample_id.localeCompare(b.sample_id);
+}
+
+function compactConflictExample(row) {
+  return {
+    sample_id: row.sample_id,
+    primary_bucket: row.primary_bucket,
+    actual_keep_active: row.actual_keep_active,
+    raw_predicted_keep_active: row.raw_predicted_keep_active,
+    predicted_keep_active: row.predicted_keep_active,
+    score: row.score,
+    target_category: row.target_category,
+    rescue_confidence: row.rescue_confidence,
+    reasons: row.reasons,
+  };
+}
+
+function buildConflictCapDiagnostics(rows) {
+  const cappedRows = rows.filter(row =>
+    row.raw_predicted_keep_active === 'yes' &&
+    row.predicted_keep_active === 'unsure' &&
+    (
+      row.manual_review_flags.includes('positive_negative_conflict') ||
+      row.reasons.includes('positive_negative_conflict_prediction_cap:0')
+    )
+  );
+  const cappedFalsePositiveAvoided = cappedRows.filter(row => row.actual_keep_active !== 'yes');
+  const cappedFalseNegativeCaused = cappedRows.filter(row => row.actual_keep_active === 'yes');
+  const cappedUnsureActual = cappedRows.filter(row => row.actual_keep_active === 'unsure');
+  const scores = cappedRows.map(row => row.score);
+
+  return {
+    capped_count: cappedRows.length,
+    capped_actual_distribution: buildDistribution(cappedRows, ['actual_keep_active']).actual_keep_active,
+    capped_primary_bucket_distribution: buildDistribution(cappedRows, ['primary_bucket']).primary_bucket,
+    capped_score_bucket_distribution: buildDistribution(cappedRows, [Object.assign(row => scoreBucket(row.score), { fieldName: 'score_bucket' })]).score_bucket,
+    capped_target_category_distribution: buildDistribution(cappedRows, ['target_category']).target_category,
+    capped_rescue_confidence_distribution: buildDistribution(cappedRows, ['rescue_confidence']).rescue_confidence,
+    capped_rule_id_distribution: buildDistribution(cappedRows, ['rule_id']).rule_id,
+    capped_score_summary: {
+      min: scores.length > 0 ? Math.min(...scores) : null,
+      max: scores.length > 0 ? Math.max(...scores) : null,
+      average: average(scores),
+    },
+    capped_false_positive_avoided_count: cappedFalsePositiveAvoided.length,
+    capped_false_negative_caused_count: cappedFalseNegativeCaused.length,
+    capped_unsure_actual_count: cappedUnsureActual.length,
+    capped_false_positive_avoided_examples: cappedFalsePositiveAvoided
+      .slice()
+      .sort(compareConflictExamples)
+      .slice(0, 5)
+      .map(compactConflictExample),
+    capped_false_negative_caused_examples: cappedFalseNegativeCaused
+      .slice()
+      .sort(compareConflictExamples)
+      .slice(0, 5)
+      .map(compactConflictExample),
+  };
+}
+
 function evaluateArchivedRawLogRescueLabels(options = {}) {
   const labelsInputPath = options.labelsInputPath || 'reports/archived-raw-log-rescue_labels_seed_v0.1_20samples_20260702.jsonl';
   const candidatesInputPath = options.candidatesInputPath || 'reports/archived-raw-log-rescue-candidates-latest.jsonl';
@@ -421,8 +490,10 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
     };
     const scoringRow = {
       ...base,
+      raw_predicted_keep_active: scoring.raw_predicted_keep_active,
       predicted_keep_active: scoring.predicted_keep_active,
       rule_id: scoring.scoring_version,
+      manual_review_flags: scoring.manual_review_flags,
       reasons: scoring.parts.map(p => `${p.name}:${p.value}`),
     };
 
@@ -504,6 +575,10 @@ function evaluateArchivedRawLogRescueLabels(options = {}) {
       variants,
       top_variants: calibrationGridTopVariants(variants),
     };
+  }
+
+  if (options.includeConflictCapDiagnostics) {
+    report.conflict_cap_diagnostics = buildConflictCapDiagnostics(scoringRows);
   }
 
   if (options.out) writeJson(options.out, report);
