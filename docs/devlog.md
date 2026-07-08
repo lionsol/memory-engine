@@ -7056,3 +7056,61 @@ fail 0
 - 未 apply core chunk time migration
 - 未放宽 `event_at` / `created_at` / `updated_at` 语义约束
 - 未重新放开 raw_log / archived raw_log 的低质量 autoRecall 注入
+
+### P35: event_at migration impact preview
+
+- 新增只读 preview CLI：`bin/preview-core-chunk-event-time-migration-impact.js`，用于在不 apply migration 的前提下，预估 core DB `raw_log` 在未来引入 `event_at` schema 后对 checkpoint reader 输入池的影响。
+- preview 复用 `lib/db/core-chunk-time-migration.js` 里的 diagnostics / recovery 逻辑，并新增 `previewCoreChunkEventTimeMigrationImpact()` 导出，统一输出 dry-run 聚合结果。
+- preview 明确只读：
+  - `mode: dry_run`
+  - `writes_db: false`
+  - 不新增 `event_at` / `created_at`
+  - 不修改真实 core DB / engine DB
+  - 不 apply migration
+- `updated_at` 仅用于估算“当前迁移前 checkpoint reader 的 legacy 行为基线”，帮助比较 before / after impact；它被明确标注为 untrusted legacy-only comparison basis，不作为 `event_at` backfill source。
+- 当 schema 未来具备 `event_at` 后，checkpoint reader 将严格按 confirmed / recovered `event_at` 读取，`event_at NULL` 不再 fallback 到 `updated_at`；preview 的目标就是提前量化这部分 drop impact。
+
+### P35 live preview 数字
+
+```text
+raw_log_total_count: 7048
+recoverable_event_at_count: 1738
+unrecoverable_event_at_null_count: 5310
+estimated_rows_dropped_from_db_raw_log_pool_after_migration: 5310
+```
+
+- 当前 live preview 中，可信恢复来源全部来自 `session_transcript_exact_chunk_id`，数量为 `1738`；`updated_at` 没有被当作恢复来源使用。
+- top impacted dates：
+  - `2026-06-21`: `legacy_rows=3306`, `unrecoverable_rows=2776`, `estimated_drop_ratio=0.84`
+  - `2026-06-15`: `legacy_rows=2433`, `unrecoverable_rows=2433`, `estimated_drop_ratio=1`
+  - `2026-06-22`: `legacy_rows=143`, `unrecoverable_rows=25`, `estimated_drop_ratio=0.175`
+  - `2026-06-23`: `legacy_rows=82`, `unrecoverable_rows=22`, `estimated_drop_ratio=0.268`
+- 受影响最大的 path 主要集中在历史 `memory/smart-add/*.md` raw_log chunk，例如：
+  - `memory/smart-add/2026-06-01.md`
+  - `memory/smart-add/2026-05-24.md`
+  - `memory/smart-add/2026-05-29.md`
+  - `memory/smart-add/2026-05-27.md`
+
+### P35 测试与结果
+
+- 新增测试：`test/core-chunk-event-time-migration-impact-preview.test.js`
+- 覆盖：
+  - 默认 dry-run 且不写 DB
+  - text timestamp recovery
+  - transcript exact-id recovery
+  - 无可信 `event_at` 时计入 estimated dropped
+  - `updated_at` 仅用于 legacy grouping，不作为 recovery source
+  - `impact_by_legacy_updated_at_date` / `impact_by_path` 输出
+  - CLI `--json` 正常运行
+  - CLI 拒绝 `--apply` / `--force` / `--write-db` / `--no-backup`
+
+```text
+node --test test/core-chunk-event-time-migration-impact-preview.test.js test/core-chunk-event-time-recovery-audit.test.js test/core-chunk-time-migration.test.js test/checkpoint-raw-log.test.js
+tests 4
+pass 4
+fail 0
+```
+
+- full `npm test` 结果：本轮改动后再次验证为全绿。
+- 是否修改真实 DB：no
+- 是否 apply migration：no
