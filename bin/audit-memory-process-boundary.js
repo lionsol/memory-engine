@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 
+const { writeFileSync } = require("node:fs");
+
+function writeStdout(value = "") {
+  writeFileSync(process.stdout.fd, `${value}\n`, "utf8");
+}
+
+function writeStderr(value = "") {
+  writeFileSync(process.stderr.fd, `${value}\n`, "utf8");
+}
+
 function printHelp() {
   console.log(`Memory Process Boundary Audit
 
@@ -94,10 +104,10 @@ async function main(argv = process.argv.slice(2)) {
       audit.writeAuditReport(output, options.out);
     }
 
-    console.log(output);
+    writeStdout(output);
     return 0;
   } catch (error) {
-    console.error(String(error?.message || error));
+    writeStderr(String(error?.message || error));
     return 1;
   }
 }

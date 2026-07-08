@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { readFileSync } = require("node:fs");
+const { readFileSync, writeFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 const previewCli = require("./preview-smart-add-duplicate-cleanup-candidates.js");
 
@@ -19,6 +19,14 @@ const VALID_DECISIONS = new Set([
   "skip",
   "manual_review_required",
 ]);
+
+function writeStdout(value = "") {
+  writeFileSync(process.stdout.fd, `${value}\n`, "utf8");
+}
+
+function writeStderr(value = "") {
+  writeFileSync(process.stderr.fd, `${value}\n`, "utf8");
+}
 
 function printHelp() {
   console.log(`Validate Smart-Add Duplicate Cleanup Manifest
@@ -379,13 +387,13 @@ async function main(argv = process.argv.slice(2)) {
       ? renderMarkdown(report)
       : JSON.stringify(report, null, 2);
     if (report.summary.status === "fail") {
-      console.error(output);
+      writeStderr(output);
       return 1;
     }
-    console.log(output);
+    writeStdout(output);
     return 0;
   } catch (error) {
-    console.error(String(error?.message || error));
+    writeStderr(String(error?.message || error));
     return 1;
   }
 }

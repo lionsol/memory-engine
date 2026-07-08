@@ -48,6 +48,14 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
+function writeStdout(content) {
+  fs.writeFileSync(process.stdout.fd, `${content}\n`, 'utf8');
+}
+
+function writeStderr(content) {
+  fs.writeFileSync(process.stderr.fd, `${content}\n`, 'utf8');
+}
+
 function splitCsv(value) {
   return String(value || '')
     .split(',')
@@ -402,18 +410,18 @@ function usage() {
 function main() {
   const options = parseArgs(process.argv);
   if (options.help) {
-    console.log(usage());
+    writeStdout(usage());
     return;
   }
   if (!options.queuePath) {
-    console.error('[review-queue-label-report] --queue is required');
+    writeStderr('[review-queue-label-report] --queue is required');
     process.exit(1);
   }
 
   const report = buildReviewQueueLabelReport(options);
   if (options.outJson) writeFile(options.outJson, `${JSON.stringify(report, null, 2)}\n`);
   if (options.outMd) writeFile(options.outMd, renderMarkdown(report));
-  console.log(JSON.stringify(report, null, 2));
+  writeStdout(JSON.stringify(report, null, 2));
 }
 
 if (require.main === module) main();

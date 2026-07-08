@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 
-const { readFileSync } = require("node:fs");
+const { readFileSync, writeFileSync } = require("node:fs");
 const { resolve } = require("node:path");
+
+function writeStdout(value = "") {
+  writeFileSync(process.stdout.fd, `${value}\n`, "utf8");
+}
+
+function writeStderr(value = "") {
+  writeFileSync(process.stderr.fd, `${value}\n`, "utf8");
+}
 
 const DEFAULT_DATASET = "test/fixtures/auto-recall-turn-gold-set.seed.jsonl";
 
@@ -127,10 +135,10 @@ async function main(argv = process.argv.slice(2)) {
     const output = options.json
       ? JSON.stringify({ dataset: datasetPath, ...report }, null, 2)
       : renderSummary(report, datasetPath);
-    console.log(output);
+    writeStdout(output);
     return report.replay.summary.failed_count === 0 ? 0 : 1;
   } catch (error) {
-    console.error(String(error?.message || error));
+    writeStderr(String(error?.message || error));
     return 1;
   }
 }

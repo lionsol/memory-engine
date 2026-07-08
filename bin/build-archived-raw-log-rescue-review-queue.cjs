@@ -38,6 +38,14 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
+function writeStdout(content) {
+  fs.writeFileSync(process.stdout.fd, `${content}\n`, 'utf8');
+}
+
+function writeStderr(content) {
+  fs.writeFileSync(process.stderr.fd, `${content}\n`, 'utf8');
+}
+
 function parseNumber(value, fallback) {
   if (value == null || value === '') return fallback;
   const n = Number(value);
@@ -383,18 +391,18 @@ function usage() {
 function main() {
   const options = parseArgs(process.argv);
   if (options.help) {
-    console.log(usage());
+    writeStdout(usage());
     return;
   }
   if (!options.inputPaths.length) {
-    console.error('[manual-review-queue] --input is required');
+    writeStderr('[manual-review-queue] --input is required');
     process.exit(1);
   }
 
   const report = buildManualReviewQueue(options);
   if (options.outJsonl) writeFile(options.outJsonl, renderJsonl(report.queue));
   if (options.outMd) writeFile(options.outMd, renderMarkdown(report));
-  console.log(JSON.stringify({
+  writeStdout(JSON.stringify({
     mode: report.mode,
     write_db: report.write_db,
     memory_side_effects: report.memory_side_effects,

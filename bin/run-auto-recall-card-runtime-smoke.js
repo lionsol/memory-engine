@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 
+const { writeFileSync } = require("node:fs");
+
+function writeStdout(value = "") {
+  writeFileSync(process.stdout.fd, `${value}\n`, "utf8");
+}
+
+function writeStderr(value = "") {
+  writeFileSync(process.stderr.fd, `${value}\n`, "utf8");
+}
+
 function printHelp() {
   console.log(`Run AutoRecall Card Runtime Smoke
 
@@ -281,10 +291,10 @@ async function main(argv = process.argv.slice(2)) {
       return 0;
     }
     const report = await runCardRuntimeSmoke();
-    console.log(options.markdown ? renderMarkdown(report) : JSON.stringify(report, null, 2));
+    writeStdout(options.markdown ? renderMarkdown(report) : JSON.stringify(report, null, 2));
     return report.summary.failed_count === 0 ? 0 : 1;
   } catch (error) {
-    console.error(String(error?.message || error));
+    writeStderr(String(error?.message || error));
     return 1;
   }
 }

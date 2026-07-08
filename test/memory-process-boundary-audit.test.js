@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import memoryProcessBoundaryCli from "../bin/audit-memory-process-boundary.js";
 import {
   renderMemoryProcessBoundaryMarkdown,
@@ -352,17 +353,26 @@ test("CLI --help exits cleanly", async () => {
 test("CLI writes selected output to --out path", async () => {
   const fixture = createFixture();
   const outPath = resolve(fixture.root, "reports", "boundary-audit.json");
-  await withFixtureEnv(fixture, async () => {
-    const captured = await captureConsole(() => main([
-      "--json",
-      "--out", outPath,
-      "--since", "2026-06-28T19:00:00.000Z",
-    ]));
-
-    assert.equal(captured.result, 0);
-    assert.equal(existsSync(outPath), true);
-    const written = JSON.parse(readFileSync(outPath, "utf8"));
-    assert.equal(written.status, "pass");
-    assert.equal(JSON.parse(captured.output).status, "pass");
+  const result = spawnSync(process.execPath, [
+    resolve(process.cwd(), "bin/audit-memory-process-boundary.js"),
+    "--json",
+    "--out", outPath,
+    "--since", "2026-06-28T19:00:00.000Z",
+  ], {
+    cwd: resolve(process.cwd()),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      MEMORY_ENGINE_CORE_DB: fixture.corePath,
+      MEMORY_ENGINE_DB: fixture.enginePath,
+      MEMORY_ENGINE_DB_PATH: fixture.enginePath,
+      OPENCLAW_CONFIG_PATH: fixture.configPath,
+    },
   });
+
+  assert.equal(result.status, 0);
+  assert.equal(existsSync(outPath), true);
+  const written = JSON.parse(readFileSync(outPath, "utf8"));
+  assert.equal(written.status, "pass");
+  assert.equal(JSON.parse(result.stdout).status, "pass");
 });

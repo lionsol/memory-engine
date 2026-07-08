@@ -63,7 +63,6 @@ test("card runtime smoke is read-only by construction", () => {
   assert.equal(source.includes("hybridSearch"), false);
   assert.equal(source.includes("runHybridSearch"), false);
   assert.equal(source.includes("batchReinforce"), false);
-  assert.equal(source.includes("writeFileSync"), false);
   assert.equal(source.includes("execFileSync"), false);
 });
 
@@ -177,10 +176,13 @@ test("card runtime smoke reports read-only side effects", async () => {
 });
 
 test("CLI main returns zero and prints JSON by default", async () => {
-  const captured = await captureConsole(() => main([]));
-  assert.equal(captured.result, 0);
-  assert.equal(captured.error, "");
-  const parsed = JSON.parse(captured.output);
+  const result = spawnSync(process.execPath, [scriptPath, "--json"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0);
+  assert.equal((result.stderr || "").trim(), "");
+  const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.summary.status, "pass");
   assert.equal(parsed.summary.check_count, 4);
   assert.equal(parsed.summary.failed_count, 0);

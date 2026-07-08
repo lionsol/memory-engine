@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 
+const { writeFileSync } = require("node:fs");
+
+function writeStdout(value = "") {
+  writeFileSync(process.stdout.fd, `${value}\n`, "utf8");
+}
+
+function writeStderr(value = "") {
+  writeFileSync(process.stderr.fd, `${value}\n`, "utf8");
+}
+
 function printHelp() {
   console.log(`Run AutoRecall Long Input Gate Smoke
 
@@ -233,10 +243,10 @@ async function main(argv = process.argv.slice(2)) {
     }
 
     const report = await runLongInputSmoke();
-    console.log(options.markdown ? renderMarkdown(report) : JSON.stringify(report, null, 2));
+    writeStdout(options.markdown ? renderMarkdown(report) : JSON.stringify(report, null, 2));
     return report.summary.status === "pass" ? 0 : 1;
   } catch (error) {
-    console.error(String(error?.message || error));
+    writeStderr(String(error?.message || error));
     return 1;
   }
 }

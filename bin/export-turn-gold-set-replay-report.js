@@ -4,6 +4,14 @@ const { mkdirSync, writeFileSync } = require("node:fs");
 const { resolve, join } = require("node:path");
 const { runReplay, DEFAULT_DATASET } = require("./run-turn-gold-set-replay.js");
 
+function writeStdout(value = "") {
+  writeFileSync(process.stdout.fd, `${value}\n`, "utf8");
+}
+
+function writeStderr(value = "") {
+  writeFileSync(process.stderr.fd, `${value}\n`, "utf8");
+}
+
 const CONFIRM_TOKEN = "WRITE_TURN_GOLD_REPLAY_REPORT";
 
 function pad(value) {
@@ -236,10 +244,10 @@ async function main(argv = process.argv.slice(2)) {
       summary: exportResult.summary,
       report: exportResult.payload,
     };
-    console.log(JSON.stringify(output, null, 2));
+    writeStdout(JSON.stringify(output, null, 2));
     return exportResult.summary.errors.length === 0 ? 0 : 1;
   } catch (error) {
-    console.error(String(error?.message || error));
+    writeStderr(String(error?.message || error));
     return 1;
   }
 }

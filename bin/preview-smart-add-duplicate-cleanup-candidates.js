@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const { writeFileSync } = require("node:fs");
+
 const FLAG_PREFIX = "--";
 const FORBIDDEN_FLAGS = new Set([
   `${FLAG_PREFIX}apply`,
@@ -10,6 +12,14 @@ const FORBIDDEN_FLAGS = new Set([
   `${FLAG_PREFIX}backfill-confidence`,
   `${FLAG_PREFIX}write-db`,
 ]);
+
+function writeStdout(value = "") {
+  writeFileSync(process.stdout.fd, `${value}\n`, "utf8");
+}
+
+function writeStderr(value = "") {
+  writeFileSync(process.stderr.fd, `${value}\n`, "utf8");
+}
 
 function printHelp() {
   console.log(`Preview Smart-Add Duplicate Cleanup Candidates
@@ -218,10 +228,10 @@ async function main(argv = process.argv.slice(2)) {
     const output = options.markdown
       ? renderMarkdown(report)
       : JSON.stringify(report, null, 2);
-    console.log(output);
+    writeStdout(output);
     return 0;
   } catch (error) {
-    console.error(String(error?.message || error));
+    writeStderr(String(error?.message || error));
     return 1;
   }
 }

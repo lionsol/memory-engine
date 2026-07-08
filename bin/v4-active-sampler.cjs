@@ -28,6 +28,14 @@ const {
 
 const ALLOWED_FORMATS = new Set(['json', 'jsonl']);
 
+function writeStdout(content) {
+  fs.writeFileSync(process.stdout.fd, `${content}\n`, 'utf8');
+}
+
+function writeStderr(content) {
+  fs.writeFileSync(process.stderr.fd, `${content}\n`, 'utf8');
+}
+
 function readJsonl(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
   if (!raw) return [];
@@ -157,13 +165,13 @@ function renderOutput({ input, limit, threshold, selection, format, exclusions =
 
 function writeOrPrint(output, outPath) {
   if (!outPath) {
-    process.stdout.write(output);
+    writeStdout(String(output).replace(/\n$/, ''));
     return;
   }
   const resolved = resolve(process.cwd(), outPath);
   fs.mkdirSync(dirname(resolved), { recursive: true });
   fs.writeFileSync(resolved, output, 'utf8');
-  console.log(JSON.stringify({
+  writeStdout(JSON.stringify({
     mode: 'v0.4_active_sampler_write_output',
     output_path: resolved,
     bytes: Buffer.byteLength(output, 'utf8'),
@@ -182,7 +190,7 @@ function writeOrPrint(output, outPath) {
 function main() {
   const args = process.argv.slice(2);
   if (hasFlag(args, '--help') || hasFlag(args, '-h')) {
-    console.log(usage());
+    writeStdout(usage());
     return;
   }
 
@@ -194,12 +202,12 @@ function main() {
   const excludeLabelPaths = splitPathList(argValue(args, '--exclude-labels', ''));
 
   if (!ALLOWED_FORMATS.has(format)) {
-    console.error('[v4-sampler] --format must be json or jsonl');
+    writeStderr('[v4-sampler] --format must be json or jsonl');
     process.exit(1);
   }
 
   if (!fs.existsSync(input)) {
-    console.error(`[v4-sampler] input not found: ${input}`);
+    writeStderr(`[v4-sampler] input not found: ${input}`);
     process.exit(1);
   }
 
@@ -208,7 +216,7 @@ function main() {
   try {
     excludedSampleIds = readExcludedSampleIds(excludeLabelPaths);
   } catch (error) {
-    console.error(`[v4-sampler] ${error.message}`);
+    writeStderr(`[v4-sampler] ${error.message}`);
     process.exit(1);
   }
   const filteredSamples = applyExclusions(samples, excludedSampleIds);

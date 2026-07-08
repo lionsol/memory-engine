@@ -26,6 +26,14 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
+function writeStdout(content) {
+  fs.writeFileSync(process.stdout.fd, `${content}\n`, 'utf8');
+}
+
+function writeStderr(content) {
+  fs.writeFileSync(process.stderr.fd, `${content}\n`, 'utf8');
+}
+
 function parseNumber(value, fallback) {
   if (value == null || value === '') return fallback;
   const n = Number(value);
@@ -399,17 +407,17 @@ function main() {
   try {
     options = parseArgs(process.argv);
   } catch (error) {
-    console.error(`[combined-report] ${error.message}`);
+    writeStderr(`[combined-report] ${error.message}`);
     process.exit(1);
   }
   if (!options.pairs.length) {
-    console.error('[combined-report] at least one --pair labels:candidates is required');
+    writeStderr('[combined-report] at least one --pair labels:candidates is required');
     process.exit(1);
   }
   const report = buildCombinedReport(options);
   if (options.outJson) writeFile(options.outJson, `${JSON.stringify(report, null, 2)}\n`);
   if (options.outMd) writeFile(options.outMd, renderMarkdown(report));
-  console.log(JSON.stringify(report, null, 2));
+  writeStdout(JSON.stringify(report, null, 2));
 }
 
 if (require.main === module) main();
