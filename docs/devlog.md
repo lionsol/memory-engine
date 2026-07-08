@@ -7114,3 +7114,108 @@ fail 0
 - full `npm test` 结果：本轮改动后再次验证为全绿。
 - 是否修改真实 DB：no
 - 是否 apply migration：no
+
+### P36: high-impact event_at NULL raw_log forensic preview
+
+- 新增只读 forensic preview CLI：`bin/inspect-unrecoverable-event-at-raw-log.js`，用于按单个 legacy `updated_at` 日期聚焦分析 unrecoverable `raw_log`。
+- 新增 `inspectUnrecoverableEventAtRawLog()`，在不输出 raw_log 全文的前提下，只产出安全摘要字段：
+  - `id` / `path` / `legacy_updated_at`
+  - `text_length`
+  - `text_sha256_16`
+  - `role_hint`
+  - tag / tool / checkpoint / path-date / file-existence hints
+  - `recommended_action`
+- `updated_at` 仍然只用于 legacy behavior grouping / forensic clue，不作为 `event_at` source。
+- smart-add 文件检查只做 workspace `memory/` 下的 file existence，不读取大文件全文，不写任何真实 DB。
+
+### P36 live forensic: 2026-06-21
+
+```text
+legacy_rows: 3306
+recoverable_rows: 530
+unrecoverable_rows: 2776
+available_in_smart_add_file_count: 0
+looks_like_tool_output_count: 266
+looks_like_checkpoint_generated_count: 9
+```
+
+- `role_breakdown`：
+  - `unknown=2766`
+  - `metadata_header=10`
+- `text_length_distribution`：
+  - `0-79=1514`
+  - `80-199=445`
+  - `200-499=497`
+  - `500-999=244`
+  - `1000+=76`
+- `recommended_action_breakdown`：
+  - `needs_review=2492`
+  - `ignore_low_value=284`
+- 结论：
+  - 这一天的 unrecoverable 数据主要不是明确 user/assistant 对话，而是大量短小 `unknown` 片段。
+  - 在当前 workspace `memory/` 下，对应 smart-add 文件覆盖数是 `0`，不能证明这些 raw_log 仍可由 workspace smart-add 文件替代。
+  - 存在一部分低价值/tool/checkpoint-like 数据，但不足以单独解释全部 drop impact。
+
+### P36 live forensic: 2026-06-15
+
+```text
+legacy_rows: 2433
+recoverable_rows: 0
+unrecoverable_rows: 2433
+available_in_smart_add_file_count: 0
+looks_like_tool_output_count: 936
+looks_like_checkpoint_generated_count: 19
+```
+
+- `role_breakdown`：
+  - `user=1619`
+  - `assistant=175`
+  - `metadata_header=314`
+  - `unknown=325`
+- `text_length_distribution`：
+  - `500-999=1661`
+  - `1000+=754`
+  - `200-499=17`
+- `recommended_action_breakdown`：
+  - `ignore_low_value=1228`
+  - `manual_recovery_candidate=942`
+  - `needs_review=263`
+- 结论：
+  - 这一天与 `2026-06-21` 不同，包含大量长文本 `user/assistant` raw_log。
+  - 同时也有显著的 tool-like / metadata-like 低价值部分，但并不能覆盖全部风险。
+  - `manual_recovery_candidate=942`，说明这一天更适合下一阶段做人工恢复候选导出，而不是直接忽略。
+
+### P36 判断与建议
+
+- 是否大多数数据仍可由 smart-add 文件覆盖：
+  - 基于当前 workspace `memory/` existence 检查，`2026-06-15` / `2026-06-21` 两天的 `available_in_smart_add_file_count` 都是 `0`，没有证据表明大多数 unrecoverable raw_log 已被 workspace smart-add 文件覆盖。
+- 是否存在大量低价值/tool/checkpoint-generated raw_log：
+  - yes，尤其是 `2026-06-15` 有 `936` 条 tool-like，`2026-06-21` 也有 `266` 条。
+  - 但 `2026-06-15` 仍残留大量 user/assistant 长文本，不应把全部高影响都视为低价值噪声。
+- 是否建议继续做 manual recovery candidate export：
+  - yes，优先针对 `2026-06-15`。
+  - `2026-06-21` 更适合先做进一步规则细分或 path cluster 分层，再决定是否导出人工恢复候选。
+
+### P36 测试与结果
+
+- 新增测试：`test/unrecoverable-event-at-raw-log-inspector.test.js`
+- 覆盖：
+  - 默认 dry-run，不写 DB
+  - 按 legacy `updated_at` 日期过滤
+  - recoverable rows 不进入 unrecoverable sample
+  - role/tag/tool/checkpoint hints 聚合
+  - smart-add 文件存在性只做 file existence
+  - CLI `--json` 可运行
+  - CLI 拒绝 `--apply` / `--force` / `--write-db` / `--no-backup`
+  - 不输出 raw_log 全文
+
+```text
+node --test test/unrecoverable-event-at-raw-log-inspector.test.js test/core-chunk-event-time-migration-impact-preview.test.js test/core-chunk-event-time-recovery-audit.test.js
+tests 3
+pass 3
+fail 0
+```
+
+- full `npm test`：本轮开发开始时基线仍为 `117 pass / 0 fail`，P36 完成后再次验证通过。
+- 是否修改真实 DB：no
+- 是否 apply migration：no
