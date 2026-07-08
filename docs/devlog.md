@@ -7219,3 +7219,176 @@ fail 0
 - full `npm test`：本轮开发开始时基线仍为 `117 pass / 0 fail`，P36 完成后再次验证通过。
 - 是否修改真实 DB：no
 - 是否 apply migration：no
+
+### P37: 2026-06-15 manual event_at recovery candidate export
+
+- 新增只读导出 CLI：`bin/export-event-at-manual-recovery-candidates.js`
+- 目标：把 `2026-06-15` forensic 结果中 `recommended_action=manual_recovery_candidate` 的 rows 导出给人工审核，明确下一步是人工标注，而不是自动 backfill。
+- 复用 P36 的 inspector 分类逻辑，不再重复维护另一套规则。
+- 默认行为：
+  - 只导出 `manual_recovery_candidate`
+  - 不导出 `ignore_low_value`
+  - 不导出 raw_log 全文
+  - 只导出 capped preview，默认 `240` 字符、单行化
+  - 支持 `--no-preview`
+  - 默认输出到 `/tmp/memory-engine-reports/`
+
+### P37 live export 结果
+
+```text
+date: 2026-06-15
+candidate_count: 942
+raw_text_exported: false
+preview_chars: 240
+```
+
+- JSONL 输出路径：
+  - `/tmp/memory-engine-reports/event-at-manual-recovery-2026-06-15.jsonl`
+- Markdown 输出路径：
+  - `/tmp/memory-engine-reports/event-at-manual-recovery-2026-06-15.md`
+- live summary：
+  - `role_breakdown`：
+    - `user=825`
+    - `assistant=117`
+  - `tag_breakdown`：
+    - `preference=45`
+    - `decision=4`
+    - `todo=2`
+  - `text_length_distribution`：
+    - `500-999=808`
+    - `1000+=127`
+    - `200-499=7`
+
+### P37 测试与验证
+
+- 新增测试：`test/event-at-manual-recovery-export.test.js`
+- 覆盖：
+  - 默认 dry-run，不写 DB
+  - 只导出 `manual_recovery_candidate`
+  - 默认 preview 截断，不导出全文
+  - `--no-preview` 不输出 preview
+  - JSONL / Markdown 输出格式
+  - `/tmp` 风格输出路径
+  - CLI 拒绝 `--apply` / `--force` / `--write-db` / `--no-backup`
+  - full export 不新增 `event_at` / `created_at`
+
+```text
+node --test test/event-at-manual-recovery-export.test.js test/unrecoverable-event-at-raw-log-inspector.test.js test/core-chunk-event-time-migration-impact-preview.test.js
+tests 3
+pass 3
+fail 0
+```
+
+- 是否包含 raw text：默认 no，仅含 capped preview。
+- 是否修改真实 DB：no
+- 是否 apply migration：no
+- full `npm test`：本轮改动后再次验证通过。
+- 下一步建议：
+  - 对导出的 `942` 条 candidate 做人工标注。
+  - 先区分 `recover_event_at` / `keep_null` / `ignore_low_value` / `needs_more_evidence`。
+  - 不要自动 backfill `event_at`。
+
+### P38: event_at manual recovery label loop
+
+- 目的：在 P37 导出的 `2026-06-15` manual recovery candidates 基础上，建立人工标注闭环，但本阶段仍保持纯只读和 dry-run。
+- 新增 CLI：
+  - `bin/init-event-at-manual-recovery-labels.js`
+  - `bin/summarize-event-at-manual-recovery-labels.js`
+  - `bin/preview-event-at-manual-recovery-apply.js`
+- 本阶段边界：
+  - 不修改真实 DB：no
+  - 不 apply migration：no
+  - 不自动 backfill：no
+  - preview 仅输出未来可能更新的 row id / event_at / source / confidence，不写 DB
+
+- label schema：
+
+```json
+{
+  "id": "chunk id",
+  "date": "2026-06-15",
+  "text_sha256_16": "abcdef1234567890",
+  "manual_review_status": "unreviewed|reviewed",
+  "review_action": "recover_event_at|keep_null|ignore_low_value|needs_more_evidence",
+  "event_at": null,
+  "event_at_source": "session_transcript|external_note|manual_timestamp|other|null",
+  "confidence": null,
+  "reviewer_note": ""
+}
+```
+
+- 规则：
+  - `recover_event_at` 必须同时提供：
+    - `event_at`
+    - `event_at_source`
+    - `confidence`
+  - `event_at` 仅接受：
+    - timezone-explicit ISO timestamp
+    - Unix seconds
+  - 没有明确证据时，只能标：
+    - `keep_null`
+    - `ignore_low_value`
+    - `needs_more_evidence`
+  - `updated_at` 不能作为 `event_at_source`
+  - `legacy_updated_at` 也不能作为 `event_at_source`
+  - 禁止从 `updated_at` 推导 `event_at`
+
+- future apply preview 仅接受：
+  - `review_action=recover_event_at`
+  - 且 label 校验通过
+- 其余 action：
+  - `keep_null`
+  - `ignore_low_value`
+  - `needs_more_evidence`
+  只参与 summary，不进入 preview apply `would_update`
+
+- seed/template 生成行为：
+  - 与 P37 candidate 一一对应
+  - 默认：
+    - `manual_review_status=unreviewed`
+    - `review_action=needs_more_evidence`
+    - `event_at=null`
+    - `event_at_source=null`
+    - `confidence=null`
+  - 不复制 raw_log 全文
+  - 不复制 preview 到 label template
+
+- summary 输出重点：
+  - `review_status_breakdown`
+  - `review_action_breakdown`
+  - `recover_event_at_count`
+  - `invalid_label_count`
+
+- preview 输出重点：
+  - `mode=dry_run`
+  - `writes_db=false`
+  - `migration_applied=false`
+  - `candidate_updates_count`
+  - `valid_recover_event_at_count`
+  - `invalid_recover_event_at_count`
+  - `would_update`
+  - `blocked_reasons`
+
+- 新增测试：`test/event-at-manual-recovery-label-loop.test.js`
+- 覆盖：
+  - init labels 与 candidates 一一对应
+  - 默认 label 为 `unreviewed` 且不含 raw_log 全文
+  - summary 正确统计 action/status
+  - preview 只接受合法 `recover_event_at`
+  - 缺少 timezone 的 `event_at` 会被拒绝
+  - `event_at_source=updated_at` 会被拒绝
+  - preview 不写 DB
+  - CLI 拒绝 `--apply` / `--force` / `--write-db` / `--no-backup`
+
+- 验证：
+
+```text
+node --test test/event-at-manual-recovery-label-loop.test.js test/event-at-manual-recovery-export.test.js
+node --check bin/init-event-at-manual-recovery-labels.js
+node --check bin/summarize-event-at-manual-recovery-labels.js
+node --check bin/preview-event-at-manual-recovery-apply.js
+npm test
+git diff --check
+```
+
+- full `npm test`：P38 改动后再次验证通过。
