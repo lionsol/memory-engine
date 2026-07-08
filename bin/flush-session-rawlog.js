@@ -186,6 +186,37 @@ function toEventTimestampSec(value, fallbackSec) {
   return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : fallbackSec;
 }
 
+function getChunkColumns(db) {
+  return new Set(
+    db.prepare("PRAGMA table_info(chunks)").all().map((row) => String(row.name || "")),
+  );
+}
+
+function buildChunkInsert(columns) {
+  const hasDedicatedEventTime = columns.has("event_at");
+  const insertColumns = [
+    "id",
+    "path",
+    "source",
+    "start_line",
+    "end_line",
+    "hash",
+    "model",
+    "text",
+    "embedding",
+  ];
+  if (hasDedicatedEventTime) insertColumns.push("event_at");
+  if (columns.has("created_at")) insertColumns.push("created_at");
+  insertColumns.push("updated_at");
+
+  const placeholders = insertColumns.map(() => "?").join(", ");
+  return {
+    hasDedicatedEventTime,
+    insertColumns,
+    sql: `INSERT OR IGNORE INTO chunks (${insertColumns.join(", ")}) VALUES (${placeholders})`,
+  };
+}
+
 function writeToDb(dateStr, messages, mainDb, meDb) {
   if (!mainDb || !meDb) {
     log("  DB not available, skipping SQLite write");
@@ -194,10 +225,14 @@ function writeToDb(dateStr, messages, mainDb, meDb) {
 
   const smartAddPath = `memory/smart-add/${dateStr}.md`;
   const fallbackSec = Math.floor(Date.now() / 1000);
+  const chunkColumns = getChunkColumns(mainDb);
+  const chunkInsert = buildChunkInsert(chunkColumns);
+  const insertChunk = mainDb.prepare(chunkInsert.sql);
   let written = 0;
 
   for (const m of messages) {
     const eventSec = toEventTimestampSec(m.ts, fallbackSec);
+    const nowSec = Math.floor(Date.now() / 1000);
     const chunkId = hash(m.text + m.ts + dateStr);
 
     // Only check memory_confidence (fastest dedup)
@@ -205,12 +240,24 @@ function writeToDb(dateStr, messages, mainDb, meDb) {
     if (existing) continue;
 
     try {
-      // Insert into chunks table (main.sqlite). The core chunks schema currently has no created_at column,
-      // so raw_log event time is stored in updated_at. Do not use flush time here.
-      mainDb.prepare(`
-        INSERT OR IGNORE INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at)
-        VALUES (?, ?, 'memory', 0, 0, ?, 'flush-script', ?, '', ?)
-      `).run(chunkId, smartAddPath, hash(m.text), m.text, eventSec);
+      // New core schema stores raw_log event time in event_at.
+      // Legacy core schema has no event_at, so updated_at must temporarily carry event time
+      // to keep checkpoint targetDate filtering correct until explicit core migration runs.
+      const chunkRow = {
+        id: chunkId,
+        path: smartAddPath,
+        source: "memory",
+        start_line: 0,
+        end_line: 0,
+        hash: hash(m.text),
+        model: "flush-script",
+        text: m.text,
+        embedding: "",
+        event_at: eventSec,
+        created_at: nowSec,
+        updated_at: chunkInsert.hasDedicatedEventTime ? nowSec : eventSec,
+      };
+      insertChunk.run(...chunkInsert.insertColumns.map((column) => chunkRow[column]));
 
       // Insert into memory_confidence table (memory-engine.sqlite)
       meDb.prepare(`

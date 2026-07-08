@@ -53,8 +53,12 @@ test("pure SQL helpers detect core writes through casing, whitespace, and commen
     "INSERT INTO core.chunks (id) VALUES ('x')",
     "  update core.chunks set text = 'x' where id = 'chunk-1'",
     "\n\tDELETE FROM core.chunks WHERE id = 'chunk-1'",
+    "ALTER TABLE core.chunks ADD COLUMN event_at INTEGER",
     "/* lead comment */ DROP TABLE core.chunks",
     "-- one line comment\nCREATE TABLE core.xxx (id TEXT)",
+    "CREATE INDEX idx_core_chunks_event_at ON core.chunks(event_at)",
+    "CREATE INDEX core.idx_chunks_event_at ON chunks(event_at)",
+    "DROP INDEX core.idx_chunks_event_at",
   ];
 
   for (const sql of blocked) {
@@ -93,6 +97,14 @@ test("core reads are allowed while core writes are blocked", () => {
       () => db.exec("CREATE TABLE core.xxx (id TEXT)"),
       /blocked/i,
     );
+    assert.throws(
+      () => db.exec("ALTER TABLE core.chunks ADD COLUMN event_at INTEGER"),
+      /blocked/i,
+    );
+    assert.throws(
+      () => db.exec("CREATE INDEX idx_core_chunks_event_at ON core.chunks(event_at)"),
+      /blocked/i,
+    );
   } finally {
     db.close();
   }
@@ -119,6 +131,7 @@ test("comment-prefixed and mixed-case core writes are still blocked", () => {
       "/* c1 */ /* c2 */ DELETE FROM core.chunks WHERE id = 'chunk-1'",
       "-- c1\nDROP TABLE core.chunks",
       "/* c1 */\nCREATE TABLE core.xxx (id TEXT)",
+      "SELECT 1; ALTER TABLE core.chunks ADD COLUMN event_at INTEGER",
     ];
 
     for (const sql of blocked) {

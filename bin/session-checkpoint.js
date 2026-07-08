@@ -97,9 +97,9 @@ function buildCheckpointEvidenceDiagnostics(targetDate, rawLogStats = null) {
     smartAddSkippedCheckpointGenerated: stats.smartAddSkippedCheckpointGenerated || 0,
     generatedEpisodePath: resolve(rt.episodesDir, `${targetDate}.md`),
     evidenceDateFilter: stats.evidenceDateFilter
-      || `targetDate=${targetDate}; timeZone=${rt.timeZone}; smartAdd=memory/smart-add/${targetDate}.md; raw_log=created_at/event_time bounded to targetDate`,
-    rawLogTimeBasis: stats.rawLogTimeBasis || "created_at/event_time",
-    rawLogTimeBasisNote: stats.rawLogTimeBasisNote || "prefer original event creation time; fallback requires updated_at to carry event time, not flush time",
+      || `targetDate=${targetDate}; timeZone=${rt.timeZone}; smartAdd=memory/smart-add/${targetDate}.md; raw_log=event_at/legacy_event_time bounded to targetDate`,
+    rawLogTimeBasis: stats.rawLogTimeBasis || "event_at/legacy_event_time",
+    rawLogTimeBasisNote: stats.rawLogTimeBasisNote || "prefer event_at as original event time; legacy fallback is only allowed before event_at exists",
     rawLogIncluded: stats.rawLogIncluded || 0,
     rawLogSkippedOutOfTargetDate: stats.rawLogSkippedOutOfTargetDate || 0,
     resetDirectParseEnabled: stats.resetDirectParseEnabled === true,

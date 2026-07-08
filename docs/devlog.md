@@ -1,3 +1,246 @@
+## 2026-07-08
+
+### P33 后续：新增只读 event_at recovery audit CLI
+
+本轮在已有 `core-chunk-time-migration` recovery diagnostics 之上，补齐了专门的只读 audit 入口，避免用户把 dry-run audit 误解成 migration apply 准备步骤。
+
+新增内容：
+
+* `lib/db/core-chunk-time-migration.js`
+  * 复用既有 `buildSessionTranscriptEventIndex` / `extractReliableEventAtFromText` / recovery diagnostics。
+  * 新增导出 `auditCoreChunkEventTimeRecovery(options = {})`。
+  * audit 返回明确的只读字段：
+    * `mode: "dry_run"`
+    * `writes_db: false`
+    * `recoverable_event_at_count`
+    * `recoverable_from_text_timestamp_count`
+    * `recoverable_from_session_transcript_count`
+    * `text_and_session_transcript_agree_count`
+    * `conflict_count`
+    * `sample_conflicts`
+    * `sample_recoverable`
+  * conflict 诊断中，若 raw_log text timestamp 与 transcript exact-id timestamp 冲突，则不 backfill。
+* `bin/audit-core-chunk-event-time-recovery.js`
+  * 新增独立 CLI：
+    * `node bin/audit-core-chunk-event-time-recovery.js --json`
+  * 只读，不调用 `applyCoreChunkTimeMigration`。
+  * 拒绝：
+    * `--apply`
+    * `--force`
+    * `--write-db`
+    * `--no-backup`
+* `test/core-chunk-event-time-recovery-audit.test.js`
+  * 覆盖 dry-run 不写 DB。
+  * 覆盖 timezone-explicit text timestamp 可恢复。
+  * 覆盖无 timezone timestamp 不可恢复。
+  * 覆盖 session transcript exact chunk id 可恢复。
+  * 覆盖 text/transcript 一致时 `agree_count` 计数。
+  * 覆盖 text/transcript 冲突时不 backfill、只记 `conflict_count`。
+  * 覆盖 `updated_at` 不能作为恢复来源。
+  * 覆盖 CLI 拒绝 `--apply` / `--force` / `--write-db`。
+  * 覆盖 legacy 真实 fixture dry-run 不新增 `event_at` / `created_at`。
+
+trusted sources 明确限定为：
+
+* raw_log text 开头的 timezone-explicit timestamp。
+* exact session transcript chunk-id match。
+
+明确不可信、不会用于 backfill 的来源：
+
+* `updated_at`
+* 文件 mtime
+* smart-add 文件日期
+* checkpoint episode 日期
+
+验证：
+
+* Targeted tests：
+  * `node --test test/core-chunk-event-time-recovery-audit.test.js test/core-chunk-time-migration.test.js test/checkpoint-raw-log.test.js test/flush-session-rawlog-static.test.js test/core-write-guard.test.js`
+  * 5/5 pass。
+* Syntax / whitespace：
+  * `node --check bin/audit-core-chunk-event-time-recovery.js` pass。
+  * `node --check lib/db/core-chunk-time-migration.js` pass。
+  * `git diff --check` pass。
+
+真实 DB audit：
+
+* 运行：
+  * `node bin/audit-core-chunk-event-time-recovery.js --json`
+* 结果：
+  * `writes_db=false`
+  * `core_db_path=/home/lionsol/.openclaw/memory/main.sqlite`
+  * `engine_db_path=/home/lionsol/.openclaw/memory/memory-engine/memory-engine.sqlite`
+  * `sessions_dir=/home/lionsol/.openclaw/agents/main/sessions`
+  * `has_event_at=false`
+  * `has_created_at=false`
+  * `has_updated_at=true`
+  * `session_files_scanned=194`
+  * `session_records_read=8952`
+  * `session_malformed_records=12`
+  * `session_messages_indexed=2020`
+  * `session_chunk_id_conflict_count=0`
+  * `raw_log_total_count=7048`
+  * `event_at_existing_count=0`
+  * `event_at_null_count=7048`
+  * `recoverable_event_at_count=1738`
+  * `recoverable_from_text_timestamp_count=0`
+  * `recoverable_from_session_transcript_count=1738`
+  * `session_transcript_exact_chunk_id_match_count=1738`
+  * `conflict_count=0`
+  * `unrecoverable_event_at_null_count=5310`
+* 结论：
+  * audit CLI 可在真实 core DB 上只读运行。
+  * 本次未修改真实 DB，`apply migration = no`。
+  * 与上一轮 migration dry-run 基线 `7042/1855/5187` 相比，当前 live DB 和 session transcript 集合已经变化，因此以本次 `7048/1738/5310` 作为最新 audit 基线。
+
+追加 apply 保护：
+
+* `lib/db/core-chunk-time-migration.js`
+  * 新增二次确认 token：`ALLOW_UNRECOVERABLE_EVENT_AT_NULLS`。
+  * `applyCoreChunkTimeMigration()` 在 preflight 后检查 `unrecoverable_event_at_null_count`。
+  * 如果 apply 会留下 `event_at NULL` 的 raw_log，只有 `MIGRATE_CORE_CHUNK_TIMES` 不够，必须额外提供 `confirmUnrecoverableEventAtNulls=ALLOW_UNRECOVERABLE_EVENT_AT_NULLS`。
+  * 该保护在备份前触发，避免用户误以为只是 schema migration，却实际改变历史 checkpoint DB raw_log 输入范围。
+* `bin/migrate-core-chunk-times.js`
+  * 新增 CLI 参数：`--confirm-unrecoverable-event-at-nulls ALLOW_UNRECOVERABLE_EVENT_AT_NULLS`。
+  * dry-run JSON 明确输出：
+    * `apply_would_leave_unrecoverable_event_at_nulls=true`
+    * `unrecoverable_event_at_null_confirm_token_required="ALLOW_UNRECOVERABLE_EVENT_AT_NULLS"`
+* 测试已覆盖：
+  * apply 缺少 core migration token 会失败。
+  * apply 只有 core migration token、但存在 unrecoverable event_at NULL raw_log 时也会失败。
+  * 同时提供两个 explicit token 后，fixture migration 才能继续。
+
+Full test：
+
+* `npm test` 仍未全绿，当前为 `101 pass / 13 fail / 0 skip`。
+* 失败文件包括：
+  * `test/archived-raw-log-rescue-sampler.test.js`
+  * `test/auto-recall-card-runtime-smoke.test.js`
+  * `test/auto-recall-long-input-smoke.test.js`
+  * `test/auto-recall-turn-gold-set-observation.test.js`
+  * `test/build-archived-raw-log-rescue-review-queue.test.js`
+  * `test/export-turn-gold-set-replay-report.test.js`
+  * `test/memory-process-boundary-audit.test.js`
+  * `test/memory-quality-baseline-smoke.test.js`
+  * `test/report-archived-raw-log-rescue-labels.test.js`
+  * `test/report-archived-raw-log-rescue-review-queue-labels.test.js`
+  * `test/smart-add-duplicate-baseline-smoke.test.js`
+  * `test/smart-add-duplicate-cleanup-manifest.test.js`
+  * `test/smart-add-duplicate-cleanup-preview.test.js`
+* 其中 smart-add duplicate baseline 相关失败仍在，但 full test 失败不只集中于该组；本轮不把这些失败归因到 event_at audit 改动。
+
+## 2026-07-07
+
+### Core chunks 时间语义长期线：event_at / created_at / updated_at 分离
+
+本轮从 P33 的短期修复继续推进长期 schema 线：P33 暂时让 `flush-session-rawlog` 把原始事件时间写入 `chunks.updated_at`，并让 checkpoint reader 在缺少更好字段时用 `updated_at_event_time` 兜底。长期方案改为明确区分三类时间：
+
+* `event_at`：原始事件发生时间，用于 `raw_log` / checkpoint `targetDate` filtering。
+* `created_at`：DB row 创建时间。
+* `updated_at`：DB row 最近更新时间、reindex、repair、migration 时间。
+
+只读摸底结果：
+
+* 仓库工作树干净，位于 `main...origin/main`。
+* 当前真实 core DB `chunks` schema 只有 `updated_at INTEGER NOT NULL`，没有 `event_at` / `created_at`。
+* 当前真实 raw_log 聚合：`raw_log_total_count=7042`。
+* 新 migration CLI 初始真实 DB dry-run 结果：
+  * `would_add_columns=[event_at, created_at]`
+  * `event_at_null_count=7042`
+  * 仅靠 raw_log text timestamp 时：`recoverable_event_at_backfill_count=0`，`unrecoverable_event_at_null_count=7042`
+  * `writes_db=false`
+* 随后加入 session transcript exact chunk-id recovery 后，真实 DB dry-run 结果：
+  * `session_files_scanned=191`
+  * `session_messages_indexed=2128`
+  * `session_chunk_id_conflict_count=0`
+  * `recoverable_event_at_backfill_count=1855`
+  * `session_transcript_exact_id_backfill_count=1855`
+  * `backfill_conflict_count=0`
+  * `unrecoverable_event_at_null_count=5187`
+  * `writes_db=false`
+* 结论：不能把历史 `updated_at` 批量当成 `event_at`；但可以用原始 session transcript 与 `flush-session-rawlog` chunkId 公式做精确恢复。当前可可靠恢复 1855/7042 条，仍有 5187 条需保持 `event_at NULL` 或另寻证据。
+
+代码变更：
+
+* `bin/flush-session-rawlog.js`
+  * 写入前检查 `chunks` 列。
+  * 若存在 `event_at`：
+    * `event_at = 原始 session message timestamp`
+    * `created_at = 写入时刻`
+    * `updated_at = 写入时刻`
+  * 若不存在 `event_at`：继续使用 P33 legacy fallback，`updated_at = 原始事件时间`，确保迁移前 checkpoint 仍可按目标日期读取。
+* `lib/checkpoint/raw-log.js`
+  * DB raw_log reader 时间选择改为：
+    1. `event_at`
+    2. legacy-only `created_at_legacy_event_time`（仅当无 `event_at` 时）
+    3. legacy `updated_at_event_time`
+  * 一旦 core schema 有 `event_at`，`event_at IS NULL` 的 raw_log 不再回退到 `updated_at`，避免 reindex/repair 时间污染 episode。
+  * 增加 `rawLogMissingEventAt` 诊断计数。
+* `bin/session-checkpoint.js` / `bin/run-session-checkpoint-direct.sh`
+  * fallback diagnostics 从 `created_at/event_time` 更新为 `event_at/legacy_event_time`。
+* `lib/db/core-chunk-time-migration.js`
+  * 新增专门 core schema migration 模块。
+  * 默认 dry-run，只读检查 schema 与 backfill 可能性。
+  * apply 需要显式 token：`MIGRATE_CORE_CHUNK_TIMES`。
+  * apply 前备份 core DB 及存在的 `-wal` / `-shm` 文件。
+  * apply 只添加 `chunks.event_at` / `chunks.created_at`。
+  * `event_at` backfill 保守执行：只接受 raw_log text 开头带明确时区的 ISO timestamp，或原始 session transcript 的 exact chunk-id match；不盲目复制 `updated_at`。
+  * transcript exact chunk-id match 使用 `flush-session-rawlog` 旧公式：`sha256(text + timestamp + dateStr)`。
+  * 旧数据无法确认事件时间则保持 `event_at NULL`，并通过 dry-run/postflight 诊断计数。
+* `bin/migrate-core-chunk-times.js`
+  * 新增 CLI。
+  * 默认 dry-run。
+  * `--sessions-dir <path>` 可指定 transcript 扫描目录。
+  * 默认启用 session transcript exact-id recovery，可用 `--no-session-transcript-recovery` 关闭。
+  * `--apply` 必须配 `--confirm-core-time-migration MIGRATE_CORE_CHUNK_TIMES`。
+  * 拒绝 `--force` / `--write-db` / `--no-backup`。
+* `lib/db/core-write-guard.cjs`
+  * 补强 core write guard：
+    * 阻止 `CREATE INDEX ... ON core.chunks(...)`。
+    * 阻止 `CREATE INDEX core.idx ...` / `DROP INDEX core.idx` / `REINDEX core...`。
+    * 阻止 `db.exec` 多语句绕过，例如 `SELECT 1; ALTER TABLE core.chunks ...`。
+
+测试覆盖：
+
+* `test/checkpoint-raw-log.test.js`
+  * 旧 `event_at` + 新 `updated_at` 不进入新日期 episode。
+  * 目标日 `event_at` + 后续 `updated_at` 进入目标日期 episode。
+  * `event_at NULL` 不回退到 `updated_at`。
+  * 无 `event_at` 的 legacy schema 仍使用 `updated_at_event_time`。
+* `test/core-chunk-time-migration.test.js`
+  * migration dry-run 不写 DB。
+  * apply 需要 backup + explicit confirm token。
+  * apply 只 conservative backfill 可确认 timestamp 或 exact transcript chunk-id match 的 raw_log。
+  * 普通 core write guard 仍阻止 schema 写入；只有专门 migration path 能写 core。
+* `test/core-write-guard.test.js`
+  * 覆盖 ALTER / CREATE INDEX / DROP INDEX / 多语句绕过。
+* `test/flush-session-rawlog-static.test.js`
+  * 覆盖 `event_at` 新 schema 写入与 legacy `updated_at` fallback。
+
+验证：
+
+* Targeted tests：
+  * `node --test test/core-write-guard.test.js test/core-chunk-time-migration.test.js test/checkpoint-raw-log.test.js test/flush-session-rawlog-static.test.js test/session-checkpoint.integration.test.js`
+  * 51/51 pass。
+* Syntax / whitespace：
+  * `node --check bin/migrate-core-chunk-times.js` pass。
+  * `node --check lib/db/core-chunk-time-migration.js` pass。
+  * `git diff --check` pass。
+* Real DB dry-run：
+  * `node bin/migrate-core-chunk-times.js --json`
+  * 确认 `writes_db=false`，真实 DB 未执行 schema 修改。
+  * session transcript recovery enabled 后可恢复 1855 条，仍有 5187 条不可恢复。
+* Full test：
+  * `npm test` 未全绿：782 pass / 8 fail / 6 skip。
+  * 失败集中在 smart-add duplicate baseline / cleanup preview / manifest 的当前数据基线断言，和本轮 changed files 无直接交集。
+  * 本轮不把 full test 记为通过。
+
+未执行：
+
+* 未 apply migration。
+* 未修改真实 core DB schema。
+* 未把历史 `updated_at` backfill 为 `event_at`。
+
 ## 2026-07-04
 
 ### Archived raw_log rescue P11-P18：scoring diagnostics 闭环与 tiered conflict cap 默认实现

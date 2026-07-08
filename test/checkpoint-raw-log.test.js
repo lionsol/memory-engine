@@ -15,7 +15,7 @@ function setFileMtime(filePath, isoString) {
   utimesSync(filePath, time, time);
 }
 
-function createFixture() {
+function createFixture(options = {}) {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-checkpoint-raw-log-"));
   const workspaceDir = resolve(root, "workspace");
   const memoryDir = resolve(root, "memory");
@@ -23,6 +23,8 @@ function createFixture() {
   const sessionsDir = resolve(root, "sessions");
   const coreDbPath = resolve(root, "core.sqlite");
   const engineDbPath = resolve(root, "engine.sqlite");
+  const includeEventAt = options.includeEventAt !== false;
+  const includeCreatedAt = options.includeCreatedAt !== false;
 
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(smartAddDir, { recursive: true });
@@ -33,8 +35,7 @@ function createFixture() {
     coreDb.exec(`
       CREATE TABLE chunks (
         id TEXT PRIMARY KEY,
-        text TEXT,
-        created_at INTEGER,
+        text TEXT${includeEventAt ? ",\n        event_at INTEGER" : ""}${includeCreatedAt ? ",\n        created_at INTEGER" : ""},
         updated_at INTEGER
       )
     `);
@@ -64,11 +65,27 @@ function createFixture() {
   };
 }
 
-function insertRawLogChunk(fixture, { id, text, updatedAt, createdAt = updatedAt, category = "raw_log" }) {
+function insertRawLogChunk(fixture, { id, text, updatedAt, eventAt = updatedAt, createdAt = updatedAt, category = "raw_log" }) {
   const coreDb = new Database(fixture.coreDbPath);
   const engineDb = new Database(fixture.engineDbPath);
   try {
-    coreDb.prepare("INSERT INTO chunks (id, text, created_at, updated_at) VALUES (?, ?, ?, ?)").run(id, text, createdAt, updatedAt);
+    const columns = new Set(coreDb.prepare("PRAGMA table_info(chunks)").all().map((row) => String(row.name || "")));
+    const insertColumns = ["id", "text"];
+    const values = [id, text];
+    if (columns.has("event_at")) {
+      insertColumns.push("event_at");
+      values.push(eventAt);
+    }
+    if (columns.has("created_at")) {
+      insertColumns.push("created_at");
+      values.push(createdAt);
+    }
+    if (columns.has("updated_at")) {
+      insertColumns.push("updated_at");
+      values.push(updatedAt);
+    }
+    const placeholders = insertColumns.map(() => "?").join(", ");
+    coreDb.prepare(`INSERT INTO chunks (${insertColumns.join(", ")}) VALUES (${placeholders})`).run(...values);
     engineDb.prepare("INSERT INTO memory_confidence (chunk_id, category) VALUES (?, ?)").run(id, category);
   } finally {
     coreDb.close();
@@ -259,18 +276,20 @@ test("DB raw_log entries outside targetDate are excluded and kept in chronologic
   ]);
 });
 
-test("DB raw_log date filter prefers created_at over later updated_at", async () => {
+test("DB raw_log date filter prefers event_at over later updated_at", async () => {
   const fixture = createFixture();
   insertRawLogChunk(fixture, {
     id: "chunk-old-reflushed",
     text: "**User:** old conversation reflushed today should be excluded",
-    createdAt: Date.parse("2026-06-10T09:00:00.000+08:00") / 1000,
+    eventAt: Date.parse("2026-06-10T09:00:00.000+08:00") / 1000,
+    createdAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
     updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
   });
   insertRawLogChunk(fixture, {
     id: "chunk-real-target",
     text: "**User:** real target-day conversation should be included",
-    createdAt: Date.parse("2026-06-17T10:00:00.000+08:00") / 1000,
+    eventAt: Date.parse("2026-06-17T10:00:00.000+08:00") / 1000,
+    createdAt: Date.parse("2026-06-18T10:00:00.000+08:00") / 1000,
     updatedAt: Date.parse("2026-06-18T10:00:00.000+08:00") / 1000,
   });
 
@@ -278,8 +297,41 @@ test("DB raw_log date filter prefers created_at over later updated_at", async ()
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   const conversationTexts = logs.filter((log) => log.source === "conversation").map((log) => log.text);
   assert.deepEqual(conversationTexts, ["**User:** real target-day conversation should be included"]);
-  assert.equal(stats.rawLogTimeBasis, "created_at");
-  assert.match(stats.evidenceDateFilter, /raw_log=created_at bounded to targetDate/);
+  assert.equal(stats.rawLogTimeBasis, "event_at");
+  assert.match(stats.evidenceDateFilter, /raw_log=event_at bounded to targetDate/);
+});
+
+test("DB raw_log with NULL event_at does not fall back to updated_at", async () => {
+  const fixture = createFixture();
+  insertRawLogChunk(fixture, {
+    id: "chunk-null-event-at",
+    text: "**User:** null event_at with target-day updated_at should be excluded",
+    eventAt: null,
+    createdAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  const conversationTexts = logs.filter((log) => log.source === "conversation").map((log) => log.text);
+  assert.deepEqual(conversationTexts, []);
+  assert.equal(stats.rawLogTimeBasis, "event_at");
+  assert.equal(stats.rawLogMissingEventAt, 1);
+});
+
+test("legacy DB raw_log without event_at still falls back to updated_at_event_time", async () => {
+  const fixture = createFixture({ includeEventAt: false, includeCreatedAt: false });
+  insertRawLogChunk(fixture, {
+    id: "chunk-legacy-target",
+    text: "**User:** legacy updated_at event time should be included",
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  const conversationTexts = logs.filter((log) => log.source === "conversation").map((log) => log.text);
+  assert.deepEqual(conversationTexts, ["**User:** legacy updated_at event time should be included"]);
+  assert.equal(stats.rawLogTimeBasis, "updated_at_event_time");
 });
 
 test("timezone-aware boundary includes start and excludes end for Asia/Shanghai targetDate", async () => {
