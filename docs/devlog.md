@@ -7392,3 +7392,52 @@ git diff --check
 ```
 
 - full `npm test`：P38 改动后再次验证通过。
+
+### P39: event_at recovery label pilot sampling
+
+- 目的：从 P38 的 `942` 条 manual recovery labels 中抽一个小样本 pilot，先做人审试跑，再决定后续更大规模标注节奏。
+- 新增只读 CLI：`bin/sample-event-at-manual-recovery-labels.js`
+- 默认 sample count：`50`
+- 默认输出路径：
+  - `/tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15-pilot50.jsonl`
+- 输出仍保留 label schema，并额外增加：
+  - `pilot_sample: true`
+  - `pilot_reason`
+
+- sampling strategy：
+  - deterministic sampling，默认固定 seed，支持 `--seed`
+  - 先保证覆盖：
+    - `role=user`
+    - `role=assistant`
+    - `tag=preference|decision|todo|no_tag`
+    - `length_bucket=500-999|1000+`
+  - 再按 `seed + chunk id` 的稳定顺序补齐到目标 sample count
+  - sampler 需要读取同目录下匹配日期的 P37 candidate JSONL，用于恢复 `role/tag/length` 覆盖维度；输出文件本身仍不带 raw candidate preview
+
+- sample artifact 约束：
+  - 只写 `/tmp/memory-engine-reports/` 下 sample artifact
+  - 是否包含 raw text：no
+  - 是否修改真实 DB：no
+  - 是否 apply migration：no
+
+- 新增测试：`test/event-at-manual-recovery-label-sampler.test.js`
+- 覆盖：
+  - sample 输出数量正确
+  - 同 seed 输出一致
+  - 不输出 raw_log 全文
+  - 保留 label schema
+  - 覆盖 role/tag/length bucket
+  - CLI 拒绝 `--apply` / `--force` / `--write-db` / `--no-backup`
+  - 不写 DB
+
+- 验证：
+
+```text
+node --test test/event-at-manual-recovery-label-sampler.test.js test/event-at-manual-recovery-label-loop.test.js
+node --check bin/sample-event-at-manual-recovery-labels.js
+node bin/sample-event-at-manual-recovery-labels.js --labels /tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15.jsonl --count 50 --out /tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15-pilot50.jsonl
+npm test
+git diff --check
+```
+
+- full `npm test`：P39 改动后再次验证通过。
