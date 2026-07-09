@@ -7441,3 +7441,61 @@ git diff --check
 ```
 
 - full `npm test`：P39 改动后再次验证通过。
+
+### P40: event_at recovery pilot review packet
+
+- 目的：把 P39 pilot labels 与 P37 candidate metadata / capped preview join 成一个人工审核 packet，方便 reviewer 在不接触 raw_log 全文的前提下完成小样本试审。
+- 新增只读 CLI：`bin/build-event-at-pilot-review-packet.js`
+- 输入路径：
+  - labels: `/tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15-pilot50.jsonl`
+  - candidates: `/tmp/memory-engine-reports/event-at-manual-recovery-2026-06-15.jsonl`
+- 输出路径：
+  - `/tmp/memory-engine-reports/event-at-manual-recovery-pilot50-review.md`
+- packet count：`50`
+
+- packet 内容：
+  - `id`
+  - `date`
+  - `text_sha256_16`
+  - `role_hint`
+  - tag hints
+  - `text_length`
+  - `pilot_reason`
+  - capped preview
+  - 当前 label fields
+  - reviewer 可填写字段模板
+
+- 安全边界：
+  - raw_text_exported: false
+  - capped preview only
+  - 不修改真实 DB：no
+  - 不 apply migration：no
+  - 不自动 backfill：no
+
+- 行为约束：
+  - 只使用 P37 candidate 中已有的 capped preview
+  - 如果 label id 在 candidates 中找不到，不静默跳过
+  - 输出 `missing_candidate_count` 和 `missing_candidate_ids`
+  - `updated_at` 仍明确禁止作为 `event_at_source`
+
+- 新增测试：`test/event-at-pilot-review-packet.test.js`
+- 覆盖：
+  - review packet join labels + candidates
+  - 输出 count 正确
+  - missing candidate 会被报告
+  - 不输出 raw_log 全文，只输出 capped preview
+  - Markdown 包含 label rules
+  - CLI 拒绝 `--apply` / `--force` / `--write-db` / `--no-backup`
+  - 不写 DB
+
+- 验证：
+
+```text
+node --test test/event-at-pilot-review-packet.test.js test/event-at-manual-recovery-label-sampler.test.js
+node --check bin/build-event-at-pilot-review-packet.js
+node bin/build-event-at-pilot-review-packet.js --labels /tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15-pilot50.jsonl --candidates /tmp/memory-engine-reports/event-at-manual-recovery-2026-06-15.jsonl --out /tmp/memory-engine-reports/event-at-manual-recovery-pilot50-review.md
+npm test
+git diff --check
+```
+
+- full `npm test`：P40 改动后再次验证通过。
