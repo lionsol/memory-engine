@@ -1,0 +1,1036 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Event-at Recovery Annotator</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --panel: #fffdf8;
+      --line: #d8cfc1;
+      --ink: #1d2430;
+      --muted: #6b7280;
+      --accent: #8b3d20;
+      --accent-soft: #f7e3d8;
+      --warn: #9a3412;
+      --warn-soft: #fff1ea;
+      --ok: #166534;
+      --ok-soft: #edf9f0;
+      --bad: #b91c1c;
+      --bad-soft: #fff0f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font: 14px/1.5 Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+      background:
+        radial-gradient(circle at top left, #eee0c7 0, transparent 28%),
+        linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+    }
+    .shell {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 18px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 14px 40px rgba(29, 36, 48, 0.06);
+    }
+    .sidebar {
+      padding: 18px;
+      position: sticky;
+      top: 18px;
+      align-self: start;
+    }
+    .content {
+      padding: 22px;
+      min-height: 84vh;
+    }
+    h1, h2, h3 {
+      margin: 0 0 10px;
+      font-weight: 700;
+    }
+    h1 { font-size: 28px; }
+    h2 { font-size: 18px; }
+    h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    p, .hint {
+      margin: 0 0 12px;
+      color: var(--muted);
+    }
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+    label {
+      font-weight: 700;
+    }
+    input[type="text"], textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 8px 0;
+      font: inherit;
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .button {
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      padding: 10px 16px;
+      cursor: pointer;
+    }
+    .button.secondary {
+      background: transparent;
+      color: var(--accent);
+    }
+    .button.action {
+      min-width: 0;
+      flex: 1 1 160px;
+    }
+    .button.active {
+      box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.12);
+      transform: translateY(-1px);
+    }
+    .safety {
+      border: 1px solid #f0b79b;
+      background: var(--warn-soft);
+      color: var(--warn);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    .stat b {
+      display: block;
+      font-size: 22px;
+      color: var(--accent);
+    }
+    .list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed var(--line);
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .status {
+      font-weight: 700;
+      color: var(--ok);
+    }
+    .empty {
+      min-height: 60vh;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+    }
+    .meta-grid,
+    .review-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin: 14px 0 18px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 14px;
+    }
+    .meta-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .meta-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px dashed var(--line);
+      padding-bottom: 6px;
+    }
+    .pill-wrap {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .preview {
+      min-height: 220px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .inline-note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .validation {
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 14px;
+      font-weight: 700;
+    }
+    .validation.ok {
+      background: var(--ok-soft);
+      color: var(--ok);
+      border: 1px solid #b7e0c1;
+    }
+    .validation.bad {
+      background: var(--bad-soft);
+      color: var(--bad);
+      border: 1px solid #f4b4b4;
+    }
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+      .meta-grid, .review-grid, .stats { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="panel sidebar">
+      <div class="stack">
+        <div>
+          <h1>Event-at Recovery Annotator</h1>
+          <p>Static browser File API tool for event_at manual recovery labels JSONL.</p>
+          <p class="inline-note">raw_text_exported: false. capped preview only. No DB writes. No migration apply. No automatic backfill.</p>
+        </div>
+
+        <div class="safety">
+          <strong>Safety</strong>
+          <p>Do not use updated_at / legacy_updated_at as event_at.</p>
+          <p>Only choose recover_event_at when there is reliable external or transcript evidence.</p>
+          <p>When unsure, choose needs_more_evidence.</p>
+        </div>
+
+        <div class="field">
+          <label for="candidateFile">Load candidate JSONL</label>
+          <input id="candidateFile" type="file" accept=".jsonl,.txt">
+        </div>
+
+        <div class="field">
+          <label for="labelFile">Load labels JSONL to resume</label>
+          <input id="labelFile" type="file" accept=".jsonl,.txt">
+        </div>
+
+        <div class="field">
+          <label for="reviewStateFilter">Filter: review state</label>
+          <select id="reviewStateFilter">
+            <option value="">All</option>
+            <option value="unreviewed">unreviewed</option>
+            <option value="reviewed">reviewed</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="actionFilter">Filter: review_action</label>
+          <select id="actionFilter">
+            <option value="">All</option>
+            <option value="recover_event_at">recover_event_at</option>
+            <option value="keep_null">keep_null</option>
+            <option value="ignore_low_value">ignore_low_value</option>
+            <option value="needs_more_evidence">needs_more_evidence</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="validityFilter">Filter: validity</label>
+          <select id="validityFilter">
+            <option value="">All</option>
+            <option value="valid">valid</option>
+            <option value="invalid">invalid</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="roleFilter">Filter: role</label>
+          <select id="roleFilter">
+            <option value="">All</option>
+            <option value="user">role=user</option>
+            <option value="assistant">role=assistant</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="tagFilter">Filter: tag</label>
+          <select id="tagFilter">
+            <option value="">All</option>
+            <option value="preference">tag=preference</option>
+            <option value="decision">tag=decision</option>
+            <option value="todo">tag=todo</option>
+            <option value="no_tag">tag=no_tag</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <button id="prevButton" class="button secondary" type="button">Previous</button>
+          <button id="nextButton" class="button secondary" type="button">Next</button>
+        </div>
+
+        <div class="row">
+          <button id="exportButton" class="button" type="button">Export Labels JSONL</button>
+        </div>
+
+        <div class="card">
+          <h2>Progress</h2>
+          <div class="stats">
+            <div class="stat"><span>Total</span><b id="totalCount">0</b></div>
+            <div class="stat"><span>Reviewed</span><b id="reviewedCount">0</b></div>
+            <div class="stat"><span>Unreviewed</span><b id="unreviewedCount">0</b></div>
+            <div class="stat"><span>Invalid</span><b id="invalidCount">0</b></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Action Breakdown</h2>
+          <ul id="actionCounts" class="list"></ul>
+        </div>
+      </div>
+    </aside>
+
+    <main class="panel content">
+      <div id="emptyState" class="empty">
+        <div>
+          <h2>No candidate and labels pair loaded</h2>
+          <p>Choose local candidates JSONL and labels JSONL. The page joins rows by id + text_sha256_16.</p>
+        </div>
+      </div>
+
+      <div id="reviewState" hidden>
+        <div class="toolbar">
+          <div>
+            <h2 id="recordTitle">Record</h2>
+            <p id="recordSubtitle" class="hint"></p>
+          </div>
+          <div id="saveStatus" class="status"></div>
+        </div>
+
+        <div class="meta-grid">
+          <div class="card">
+            <h3>Identity</h3>
+            <ul class="meta-list">
+              <li class="meta-item"><span>id</span><strong id="idValue"></strong></li>
+              <li class="meta-item"><span>id prefix</span><strong id="idPrefixValue"></strong></li>
+              <li class="meta-item"><span>date</span><strong id="dateValue"></strong></li>
+              <li class="meta-item"><span>text_sha256_16</span><strong id="shaValue"></strong></li>
+              <li class="meta-item"><span>role_hint</span><strong id="roleValue"></strong></li>
+              <li class="meta-item"><span>text_length</span><strong id="lengthValue"></strong></li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3>Candidate Context</h3>
+            <ul class="meta-list">
+              <li class="meta-item"><span>tag hints</span><strong id="tagValue"></strong></li>
+              <li class="meta-item"><span>pilot_reason</span><strong id="pilotReasonValue"></strong></li>
+              <li class="meta-item"><span>manual_review_status</span><strong id="statusValue"></strong></li>
+              <li class="meta-item"><span>review_action</span><strong id="actionValue"></strong></li>
+              <li class="meta-item"><span>event_at_source_required</span><strong id="sourceRequiredValue"></strong></li>
+              <li class="meta-item"><span>preview rule</span><strong>capped preview only</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Capped Preview</h3>
+          <p class="inline-note">Only the candidate preview is shown here. raw_log full text is intentionally hidden.</p>
+          <div id="previewValue" class="preview"></div>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>Current Review Fields</h3>
+          <ul class="meta-list">
+            <li class="meta-item"><span>manual_review_status</span><strong id="currentStatusValue"></strong></li>
+            <li class="meta-item"><span>review_action</span><strong id="currentActionValue"></strong></li>
+            <li class="meta-item"><span>event_at</span><strong id="currentEventAtValue"></strong></li>
+            <li class="meta-item"><span>event_at_source</span><strong id="currentSourceValue"></strong></li>
+            <li class="meta-item"><span>confidence</span><strong id="currentConfidenceValue"></strong></li>
+            <li class="meta-item"><span>reviewer_note</span><strong id="currentNoteValue"></strong></li>
+          </ul>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>Review Action</h3>
+          <p class="inline-note">Shortcuts: 1 recover_event_at, 2 keep_null, 3 ignore_low_value, 4 needs_more_evidence, j/k or ←/→ navigate.</p>
+          <div class="row">
+            <button id="actionRecover" data-action="recover_event_at" class="button action secondary" type="button">1 recover_event_at</button>
+            <button id="actionKeepNull" data-action="keep_null" class="button action secondary" type="button">2 keep_null</button>
+            <button id="actionIgnoreLowValue" data-action="ignore_low_value" class="button action secondary" type="button">3 ignore_low_value</button>
+            <button id="actionNeedsMoreEvidence" data-action="needs_more_evidence" class="button action secondary" type="button">4 needs_more_evidence</button>
+          </div>
+        </div>
+
+        <div class="review-grid">
+          <div class="field">
+            <label for="manualReviewStatusInput">manual_review_status</label>
+            <select id="manualReviewStatusInput">
+              <option value="unreviewed">unreviewed</option>
+              <option value="reviewed">reviewed</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="reviewActionInput">review_action</label>
+            <select id="reviewActionInput">
+              <option value="recover_event_at">recover_event_at</option>
+              <option value="keep_null">keep_null</option>
+              <option value="ignore_low_value">ignore_low_value</option>
+              <option value="needs_more_evidence">needs_more_evidence</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="eventAtInput">event_at</label>
+            <input id="eventAtInput" type="text" placeholder="2026-06-15T09:30:00+08:00 or 1718415000">
+            <div class="subtle">Allow timezone-explicit ISO timestamp or Unix seconds. Local time without timezone is invalid.</div>
+          </div>
+
+          <div class="field">
+            <label for="eventAtSourceInput">event_at_source</label>
+            <select id="eventAtSourceInput">
+              <option value="null">null</option>
+              <option value="session_transcript">session_transcript</option>
+              <option value="external_note">external_note</option>
+              <option value="manual_timestamp">manual_timestamp</option>
+              <option value="other">other</option>
+            </select>
+            <div class="subtle">updated_at / legacy_updated_at are forbidden.</div>
+          </div>
+
+          <div class="field">
+            <label for="confidenceInput">confidence</label>
+            <select id="confidenceInput">
+              <option value="">null</option>
+              <option value="high">high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="reviewerNoteInput">reviewer_note</label>
+          <textarea id="reviewerNoteInput" placeholder="reviewer_note"></textarea>
+        </div>
+
+        <div id="validationBox" class="validation ok">Valid label.</div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const REVIEW_ACTIONS = [
+        "recover_event_at",
+        "keep_null",
+        "ignore_low_value",
+        "needs_more_evidence",
+      ];
+      const ALLOWED_SOURCES = new Set([
+        "session_transcript",
+        "external_note",
+        "manual_timestamp",
+        "other",
+        "null",
+      ]);
+      const ALLOWED_CONFIDENCE = new Set(["high", "medium", "low"]);
+
+      const state = {
+        candidates: [],
+        labelsByKey: new Map(),
+        records: [],
+        filteredRecords: [],
+        currentIndex: 0,
+      };
+
+      const els = {
+        candidateFile: document.getElementById("candidateFile"),
+        labelFile: document.getElementById("labelFile"),
+        reviewStateFilter: document.getElementById("reviewStateFilter"),
+        actionFilter: document.getElementById("actionFilter"),
+        validityFilter: document.getElementById("validityFilter"),
+        roleFilter: document.getElementById("roleFilter"),
+        tagFilter: document.getElementById("tagFilter"),
+        prevButton: document.getElementById("prevButton"),
+        nextButton: document.getElementById("nextButton"),
+        exportButton: document.getElementById("exportButton"),
+        totalCount: document.getElementById("totalCount"),
+        reviewedCount: document.getElementById("reviewedCount"),
+        unreviewedCount: document.getElementById("unreviewedCount"),
+        invalidCount: document.getElementById("invalidCount"),
+        actionCounts: document.getElementById("actionCounts"),
+        emptyState: document.getElementById("emptyState"),
+        reviewState: document.getElementById("reviewState"),
+        recordTitle: document.getElementById("recordTitle"),
+        recordSubtitle: document.getElementById("recordSubtitle"),
+        saveStatus: document.getElementById("saveStatus"),
+        idValue: document.getElementById("idValue"),
+        idPrefixValue: document.getElementById("idPrefixValue"),
+        dateValue: document.getElementById("dateValue"),
+        shaValue: document.getElementById("shaValue"),
+        roleValue: document.getElementById("roleValue"),
+        lengthValue: document.getElementById("lengthValue"),
+        tagValue: document.getElementById("tagValue"),
+        pilotReasonValue: document.getElementById("pilotReasonValue"),
+        statusValue: document.getElementById("statusValue"),
+        actionValue: document.getElementById("actionValue"),
+        sourceRequiredValue: document.getElementById("sourceRequiredValue"),
+        previewValue: document.getElementById("previewValue"),
+        currentStatusValue: document.getElementById("currentStatusValue"),
+        currentActionValue: document.getElementById("currentActionValue"),
+        currentEventAtValue: document.getElementById("currentEventAtValue"),
+        currentSourceValue: document.getElementById("currentSourceValue"),
+        currentConfidenceValue: document.getElementById("currentConfidenceValue"),
+        currentNoteValue: document.getElementById("currentNoteValue"),
+        manualReviewStatusInput: document.getElementById("manualReviewStatusInput"),
+        reviewActionInput: document.getElementById("reviewActionInput"),
+        eventAtInput: document.getElementById("eventAtInput"),
+        eventAtSourceInput: document.getElementById("eventAtSourceInput"),
+        confidenceInput: document.getElementById("confidenceInput"),
+        reviewerNoteInput: document.getElementById("reviewerNoteInput"),
+        validationBox: document.getElementById("validationBox"),
+      };
+
+      const actionButtons = Array.from(document.querySelectorAll("[data-action]"));
+
+      function parseJsonl(text) {
+        return String(text || "")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => JSON.parse(line));
+      }
+
+      function isValidDateOnly(value) {
+        return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+      }
+
+      function isValidTextSha16(value) {
+        return /^[a-f0-9]{16}$/i.test(String(value || "").trim());
+      }
+
+      function isExplicitIsoTimestamp(value) {
+        const raw = String(value || "").trim();
+        return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+      }
+
+      function normalizeEventAtValue(value) {
+        if (value === null || value === undefined || value === "") return null;
+        if (typeof value === "number" && Number.isFinite(value)) {
+          return Math.floor(value > 1e12 ? value / 1000 : value);
+        }
+        const raw = String(value).trim();
+        if (!raw) return null;
+        if (/^\d+$/.test(raw)) {
+          const numeric = Number(raw);
+          return Number.isFinite(numeric) ? Math.floor(numeric > 1e12 ? numeric / 1000 : numeric) : null;
+        }
+        if (!isExplicitIsoTimestamp(raw)) return null;
+        const parsed = Date.parse(raw);
+        return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : null;
+      }
+
+      function defaultLabelForCandidate(candidate) {
+        return {
+          id: candidate.id,
+          date: candidate.date,
+          text_sha256_16: candidate.text_sha256_16,
+          manual_review_status: "unreviewed",
+          review_action: "needs_more_evidence",
+          event_at: null,
+          event_at_source: "null",
+          confidence: null,
+          reviewer_note: "",
+        };
+      }
+
+      function normalizeCandidate(raw) {
+        return {
+          id: String(raw.id || "").trim(),
+          date: String(raw.date || "").trim(),
+          text_sha256_16: String(raw.text_sha256_16 || "").trim().toLowerCase(),
+          role_hint: String(raw.role_hint || "unknown").trim() || "unknown",
+          text_length: Number(raw.text_length || 0),
+          pilot_reason: String(raw.pilot_reason || "").trim(),
+          preview: String(raw.preview || "").trim(),
+          manual_review_status: String(raw.manual_review_status || "unreviewed").trim(),
+          event_at_source_required: Boolean(raw.event_at_source_required),
+          has_preference_tag: Boolean(raw.has_preference_tag),
+          has_decision_tag: Boolean(raw.has_decision_tag),
+          has_todo_tag: Boolean(raw.has_todo_tag),
+        };
+      }
+
+      function normalizeLabel(raw, fallbackCandidate) {
+        const base = fallbackCandidate ? defaultLabelForCandidate(fallbackCandidate) : {};
+        return {
+          ...base,
+          id: String(raw.id ?? base.id ?? "").trim(),
+          date: String(raw.date ?? base.date ?? "").trim(),
+          text_sha256_16: String(raw.text_sha256_16 ?? base.text_sha256_16 ?? "").trim().toLowerCase(),
+          manual_review_status: String(raw.manual_review_status ?? base.manual_review_status ?? "unreviewed").trim() || "unreviewed",
+          review_action: String(raw.review_action ?? base.review_action ?? "needs_more_evidence").trim() || "needs_more_evidence",
+          event_at: raw.event_at ?? base.event_at ?? null,
+          event_at_source: raw.event_at_source == null || raw.event_at_source === "" ? "null" : String(raw.event_at_source).trim(),
+          confidence: raw.confidence == null || raw.confidence === "" ? null : String(raw.confidence).trim(),
+          reviewer_note: typeof raw.reviewer_note === "string" ? raw.reviewer_note : String(raw.reviewer_note || ""),
+        };
+      }
+
+      function candidateKey(candidateOrLabel) {
+        return `${String(candidateOrLabel.id || "").trim()}::${String(candidateOrLabel.text_sha256_16 || "").trim().toLowerCase()}`;
+      }
+
+      function tagHints(candidate) {
+        const tags = [];
+        if (candidate.has_preference_tag) tags.push("preference");
+        if (candidate.has_decision_tag) tags.push("decision");
+        if (candidate.has_todo_tag) tags.push("todo");
+        if (tags.length === 0) tags.push("no_tag");
+        return tags;
+      }
+
+      function currentRecord() {
+        return state.filteredRecords[state.currentIndex] || null;
+      }
+
+      function validateLabel(label) {
+        const errors = [];
+        const action = String(label.review_action || "").trim();
+        const status = String(label.manual_review_status || "").trim();
+        const eventAtSource = label.event_at_source == null || label.event_at_source === "" ? "null" : String(label.event_at_source).trim();
+        const confidence = label.confidence == null || label.confidence === "" ? null : String(label.confidence).trim();
+        const rawEventAt = label.event_at;
+        const normalizedEventAt = normalizeEventAtValue(rawEventAt);
+
+        if (!String(label.id || "").trim()) errors.push("id");
+        if (!isValidDateOnly(label.date)) errors.push("date");
+        if (!isValidTextSha16(label.text_sha256_16)) errors.push("text_sha256_16");
+        if (status !== "unreviewed" && status !== "reviewed") errors.push("manual_review_status");
+        if (!REVIEW_ACTIONS.includes(action)) errors.push("review_action");
+        if (eventAtSource === "updated_at" || eventAtSource === "legacy_updated_at") {
+          errors.push("event_at_source_forbidden_updated_at");
+        } else if (!ALLOWED_SOURCES.has(eventAtSource)) {
+          errors.push("event_at_source");
+        }
+
+        if (action === "recover_event_at") {
+          if (normalizedEventAt === null) {
+            const rawValue = String(rawEventAt ?? "").trim();
+            if (rawValue && !/^\d+$/.test(rawValue) && !isExplicitIsoTimestamp(rawValue)) {
+              errors.push("event_at_timezone_explicit_iso_or_unix_seconds_required");
+            } else {
+              errors.push("event_at");
+            }
+          }
+          if (eventAtSource === "null") errors.push("event_at_source_required");
+          if (!ALLOWED_CONFIDENCE.has(confidence || "")) errors.push("confidence");
+        } else {
+          if (rawEventAt !== null && rawEventAt !== undefined && String(rawEventAt).trim() !== "") {
+            errors.push("event_at_not_allowed_without_recover_event_at");
+          }
+          if (eventAtSource !== "null") errors.push("event_at_source_must_be_null");
+          if (confidence !== null) errors.push("confidence_not_allowed_without_recover_event_at");
+        }
+
+        return {
+          valid: errors.length === 0,
+          errors,
+          normalizedEventAt,
+        };
+      }
+
+      function rebuildRecords() {
+        state.records = state.candidates.map((candidate) => {
+          const key = candidateKey(candidate);
+          const existingLabel = state.labelsByKey.get(key);
+          const label = normalizeLabel(existingLabel || {}, candidate);
+          return {
+            key,
+            candidate,
+            label,
+          };
+        });
+
+        const knownKeys = new Set(state.records.map((record) => record.key));
+        for (const [key, label] of state.labelsByKey.entries()) {
+          if (knownKeys.has(key)) continue;
+          state.records.push({
+            key,
+            candidate: null,
+            label: normalizeLabel(label),
+          });
+        }
+      }
+
+      function syncLabelMapFromRecords() {
+        for (const record of state.records) {
+          state.labelsByKey.set(record.key, { ...record.label });
+        }
+      }
+
+      function applyFilters() {
+        const reviewState = els.reviewStateFilter.value.trim();
+        const action = els.actionFilter.value.trim();
+        const validity = els.validityFilter.value.trim();
+        const role = els.roleFilter.value.trim();
+        const tag = els.tagFilter.value.trim();
+
+        state.filteredRecords = state.records.filter((record) => {
+          if (!record.candidate) return false;
+          const validation = validateLabel(record.label);
+          if (reviewState && record.label.manual_review_status !== reviewState) return false;
+          if (action && record.label.review_action !== action) return false;
+          if (validity === "valid" && !validation.valid) return false;
+          if (validity === "invalid" && validation.valid) return false;
+          if (role && record.candidate.role_hint !== role) return false;
+          if (tag && !tagHints(record.candidate).includes(tag)) return false;
+          return true;
+        });
+
+        if (state.currentIndex >= state.filteredRecords.length) {
+          state.currentIndex = Math.max(0, state.filteredRecords.length - 1);
+        }
+        render();
+      }
+
+      function updateStats() {
+        let reviewed = 0;
+        let unreviewed = 0;
+        let invalid = 0;
+        const actionCounts = new Map(REVIEW_ACTIONS.map((action) => [action, 0]));
+
+        for (const record of state.records) {
+          if (!record.candidate) continue;
+          if (record.label.manual_review_status === "reviewed") reviewed += 1;
+          else unreviewed += 1;
+          if (!validateLabel(record.label).valid) invalid += 1;
+          actionCounts.set(record.label.review_action, (actionCounts.get(record.label.review_action) || 0) + 1);
+        }
+
+        els.totalCount.textContent = String(state.records.filter((record) => record.candidate).length);
+        els.reviewedCount.textContent = String(reviewed);
+        els.unreviewedCount.textContent = String(unreviewed);
+        els.invalidCount.textContent = String(invalid);
+
+        els.actionCounts.innerHTML = "";
+        for (const [action, count] of actionCounts.entries()) {
+          const item = document.createElement("li");
+          item.innerHTML = `<span>${action}</span><strong>${count}</strong>`;
+          els.actionCounts.appendChild(item);
+        }
+      }
+
+      function loadForm(record) {
+        els.manualReviewStatusInput.value = record.label.manual_review_status || "unreviewed";
+        els.reviewActionInput.value = record.label.review_action || "needs_more_evidence";
+        els.eventAtInput.value = record.label.event_at == null ? "" : String(record.label.event_at);
+        els.eventAtSourceInput.value = record.label.event_at_source || "null";
+        els.confidenceInput.value = record.label.confidence || "";
+        els.reviewerNoteInput.value = record.label.reviewer_note || "";
+        syncActionButtons();
+        syncRecoverFieldState();
+      }
+
+      function syncActionButtons() {
+        for (const button of actionButtons) {
+          const active = button.dataset.action === els.reviewActionInput.value;
+          button.classList.toggle("active", active);
+          button.classList.toggle("secondary", !active);
+        }
+      }
+
+      function syncRecoverFieldState() {
+        const recover = els.reviewActionInput.value === "recover_event_at";
+        els.eventAtInput.disabled = !recover;
+        els.eventAtSourceInput.disabled = !recover;
+        els.confidenceInput.disabled = !recover;
+      }
+
+      function persistCurrentRecord() {
+        const record = currentRecord();
+        if (!record) return;
+
+        record.label.manual_review_status = els.manualReviewStatusInput.value || "unreviewed";
+        record.label.review_action = els.reviewActionInput.value || "needs_more_evidence";
+        record.label.event_at = els.eventAtInput.value.trim() === "" ? null : els.eventAtInput.value.trim();
+        record.label.event_at_source = els.eventAtSourceInput.value || "null";
+        record.label.confidence = els.confidenceInput.value || null;
+        record.label.reviewer_note = els.reviewerNoteInput.value || "";
+
+        if (record.label.review_action !== "recover_event_at") {
+          record.label.event_at = null;
+          record.label.event_at_source = "null";
+          record.label.confidence = null;
+          els.eventAtInput.value = "";
+          els.eventAtSourceInput.value = "null";
+          els.confidenceInput.value = "";
+        }
+
+        state.labelsByKey.set(record.key, { ...record.label });
+        els.saveStatus.textContent = "Captured locally";
+        updateStats();
+        renderValidation(record);
+        renderCurrentReviewFields(record);
+      }
+
+      function renderValidation(record) {
+        const validation = validateLabel(record.label);
+        els.validationBox.className = `validation ${validation.valid ? "ok" : "bad"}`;
+        els.validationBox.textContent = validation.valid
+          ? "Valid label."
+          : `Invalid label: ${validation.errors.join(", ")}`;
+      }
+
+      function renderCurrentReviewFields(record) {
+        els.currentStatusValue.textContent = record.label.manual_review_status || "unreviewed";
+        els.currentActionValue.textContent = record.label.review_action || "needs_more_evidence";
+        els.currentEventAtValue.textContent = record.label.event_at == null || record.label.event_at === "" ? "null" : String(record.label.event_at);
+        els.currentSourceValue.textContent = record.label.event_at_source || "null";
+        els.currentConfidenceValue.textContent = record.label.confidence || "null";
+        els.currentNoteValue.textContent = record.label.reviewer_note || "";
+        els.statusValue.textContent = record.label.manual_review_status || "unreviewed";
+        els.actionValue.textContent = record.label.review_action || "needs_more_evidence";
+      }
+
+      function render() {
+        updateStats();
+
+        const record = currentRecord();
+        if (!record) {
+          els.reviewState.hidden = true;
+          els.emptyState.hidden = false;
+          if (state.records.length > 0) {
+            els.emptyState.innerHTML = "<div><h2>No record matches current filters</h2><p>Adjust the filters or reset them to continue annotation.</p></div>";
+          }
+          return;
+        }
+
+        const candidate = record.candidate;
+        els.emptyState.hidden = true;
+        els.reviewState.hidden = false;
+        els.recordTitle.textContent = `${state.currentIndex + 1} / ${state.filteredRecords.length}`;
+        els.recordSubtitle.textContent = `${candidate.role_hint} · ${tagHints(candidate).join(", ")}`;
+        els.idValue.textContent = candidate.id;
+        els.idPrefixValue.textContent = candidate.id.slice(0, 12);
+        els.dateValue.textContent = candidate.date;
+        els.shaValue.textContent = candidate.text_sha256_16;
+        els.roleValue.textContent = candidate.role_hint;
+        els.lengthValue.textContent = String(candidate.text_length || 0);
+        els.tagValue.textContent = tagHints(candidate).join(", ");
+        els.pilotReasonValue.textContent = candidate.pilot_reason || "n/a";
+        els.sourceRequiredValue.textContent = candidate.event_at_source_required ? "true" : "false";
+        els.previewValue.textContent = candidate.preview || "(empty preview)";
+
+        loadForm(record);
+        renderCurrentReviewFields(record);
+        renderValidation(record);
+      }
+
+      function setAction(action) {
+        els.reviewActionInput.value = action;
+        if (action === "recover_event_at") {
+          els.manualReviewStatusInput.value = "reviewed";
+        } else {
+          els.manualReviewStatusInput.value = "reviewed";
+          els.eventAtInput.value = "";
+          els.eventAtSourceInput.value = "null";
+          els.confidenceInput.value = "";
+        }
+        syncActionButtons();
+        syncRecoverFieldState();
+        persistCurrentRecord();
+      }
+
+      function move(delta) {
+        persistCurrentRecord();
+        if (state.filteredRecords.length === 0) return;
+        const next = state.currentIndex + delta;
+        state.currentIndex = Math.max(0, Math.min(state.filteredRecords.length - 1, next));
+        render();
+      }
+
+      function exportLabelsJsonl() {
+        syncLabelMapFromRecords();
+        const rows = state.records
+          .filter((record) => record.candidate)
+          .map((record) => ({
+            id: record.label.id,
+            date: record.label.date,
+            text_sha256_16: record.label.text_sha256_16,
+            manual_review_status: record.label.manual_review_status,
+            review_action: record.label.review_action,
+            event_at: record.label.event_at == null || record.label.event_at === "" ? null : record.label.event_at,
+            event_at_source: record.label.event_at_source || "null",
+            confidence: record.label.confidence == null || record.label.confidence === "" ? null : record.label.confidence,
+            reviewer_note: record.label.reviewer_note || "",
+          }));
+
+        const text = rows.map((row) => JSON.stringify(row)).join("\n");
+        const blob = new Blob([text ? `${text}\n` : ""], { type: "application/x-ndjson" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `event-at-manual-recovery-labels-${new Date().toISOString().replace(/[:]/g, "-")}.jsonl`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function loadCandidates(rows) {
+        state.candidates = rows.map(normalizeCandidate).filter((candidate) => candidate.id && isValidTextSha16(candidate.text_sha256_16));
+        rebuildRecords();
+        applyFilters();
+      }
+
+      function loadLabels(rows) {
+        state.labelsByKey.clear();
+        for (const raw of rows) {
+          const label = normalizeLabel(raw);
+          state.labelsByKey.set(candidateKey(label), label);
+        }
+        rebuildRecords();
+        applyFilters();
+      }
+
+      async function loadFile(input, onRows) {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const text = await file.text();
+        const rows = parseJsonl(text);
+        onRows(rows);
+      }
+
+      els.candidateFile.addEventListener("change", async () => {
+        await loadFile(els.candidateFile, loadCandidates);
+      });
+
+      els.labelFile.addEventListener("change", async () => {
+        await loadFile(els.labelFile, loadLabels);
+      });
+
+      [
+        els.reviewStateFilter,
+        els.actionFilter,
+        els.validityFilter,
+        els.roleFilter,
+        els.tagFilter,
+      ].forEach((el) => {
+        el.addEventListener("change", applyFilters);
+      });
+
+      els.prevButton.addEventListener("click", () => move(-1));
+      els.nextButton.addEventListener("click", () => move(1));
+      els.exportButton.addEventListener("click", () => {
+        persistCurrentRecord();
+        exportLabelsJsonl();
+      });
+
+      els.manualReviewStatusInput.addEventListener("change", persistCurrentRecord);
+      els.reviewActionInput.addEventListener("change", () => {
+        syncActionButtons();
+        syncRecoverFieldState();
+        persistCurrentRecord();
+      });
+      els.eventAtInput.addEventListener("input", persistCurrentRecord);
+      els.eventAtSourceInput.addEventListener("change", persistCurrentRecord);
+      els.confidenceInput.addEventListener("change", persistCurrentRecord);
+      els.reviewerNoteInput.addEventListener("input", persistCurrentRecord);
+
+      for (const button of actionButtons) {
+        button.addEventListener("click", () => setAction(button.dataset.action));
+      }
+
+      document.addEventListener("keydown", (event) => {
+        const tagName = String(document.activeElement?.tagName || "").toLowerCase();
+        const isTextField = tagName === "input" || tagName === "textarea" || tagName === "select";
+        if (isTextField && !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+
+        if (event.key === "1") setAction("recover_event_at");
+        if (event.key === "2") setAction("keep_null");
+        if (event.key === "3") setAction("ignore_low_value");
+        if (event.key === "4") setAction("needs_more_evidence");
+        if (event.key === "j" || event.key === "ArrowRight") move(1);
+        if (event.key === "k" || event.key === "ArrowLeft") move(-1);
+      });
+
+      updateStats();
+    })();
+  </script>
+</body>
+</html>

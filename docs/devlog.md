@@ -7499,3 +7499,120 @@ git diff --check
 ```
 
 - full `npm test`：P40 改动后再次验证通过。
+
+### P41: event_at recovery web annotator
+
+- 目的：用 Web GUI 替代手改 JSONL 和 Markdown review packet 标注，继续保持 event_at manual recovery 流程只读、browser-local、无真实 DB 变更。
+- 新增静态工具：`tools/event-at-recovery-annotator.html`
+- 输入文件：
+  - candidates：`/tmp/memory-engine-reports/event-at-manual-recovery-2026-06-15.jsonl`
+  - labels：`/tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15-pilot50.jsonl`
+  - labels：`/tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15.jsonl`
+- 输出文件：
+  - browser 导出的 labels JSONL
+  - 保持兼容：
+    - `bin/summarize-event-at-manual-recovery-labels.js`
+    - `bin/preview-event-at-manual-recovery-apply.js`
+
+- GUI 行为：
+  - 通过浏览器 File API 读取本地 candidates JSONL 和 labels JSONL。
+  - 按 `id + text_sha256_16` join candidate 与 label。
+  - 展示：
+    - `id / id prefix`
+    - `date`
+    - `text_sha256_16`
+    - `role_hint`
+    - tag hints
+    - `text_length`
+    - `pilot_reason`
+    - capped preview
+    - current review fields
+  - 不显示 raw_log 全文，只显示 candidate 中已有 capped preview。
+  - 支持逐条标注：
+    - `recover_event_at`
+    - `keep_null`
+    - `ignore_low_value`
+    - `needs_more_evidence`
+  - `recover_event_at` 时要求填写：
+    - `event_at`
+    - `event_at_source`
+    - `confidence`
+  - `event_at` 校验：
+    - 允许 timezone-explicit ISO timestamp
+    - 允许 Unix seconds
+    - 不允许无 timezone 的本地时间
+  - `event_at_source` 允许：
+    - `session_transcript`
+    - `external_note`
+    - `manual_timestamp`
+    - `other`
+    - `null`
+  - 明确禁止：
+    - `updated_at`
+    - `legacy_updated_at`
+  - 支持 `reviewer_note`。
+  - 支持过滤：
+    - `unreviewed`
+    - `reviewed`
+    - `recover_event_at`
+    - `keep_null`
+    - `ignore_low_value`
+    - `needs_more_evidence`
+    - `invalid`
+    - `role=user`
+    - `role=assistant`
+    - `tag=preference|decision|todo|no_tag`
+  - 支持快捷键：
+    - `1/2/3/4` 选择 review action
+    - `j/k` 或 `←/→` 切换记录
+  - 页面实时显示：
+    - `total`
+    - `reviewed`
+    - `unreviewed`
+    - action breakdown
+    - invalid count
+
+- export schema：
+  - 每行保留 P38 label schema：
+    - `id`
+    - `date`
+    - `text_sha256_16`
+    - `manual_review_status`
+    - `review_action`
+    - `event_at`
+    - `event_at_source`
+    - `confidence`
+    - `reviewer_note`
+
+- 安全边界：
+  - 页面显式提示：
+    - `Do not use updated_at / legacy_updated_at as event_at.`
+    - `Only choose recover_event_at when there is reliable external or transcript evidence.`
+    - `When unsure, choose needs_more_evidence.`
+  - `raw_text_exported: false`
+  - `capped preview only`
+  - `real DB modified: no`
+  - `migration applied: no`
+  - 不做 server upload，不写真实 DB，不 apply migration，不自动 backfill。
+
+- 新增测试：`test/event-at-recovery-annotator-static.test.js`
+- 覆盖：
+  - HTML 文件存在
+  - 四个 review action 存在
+  - `event_at / event_at_source / confidence / reviewer_note` 存在
+  - 禁止 `updated_at` 作为 source 的提示存在
+  - File API input 存在
+  - export JSONL 文本与函数存在
+  - 页面不包含 DB write / migration apply 调用
+  - 页面不包含 server upload 逻辑
+  - 页面明确 `raw_text_exported: false` 与 capped preview only
+
+- 验证：
+
+```text
+node --test test/event-at-recovery-annotator-static.test.js test/event-at-manual-recovery-label-loop.test.js
+npm test
+git diff --check
+```
+
+- full `npm test`：P41 改动后再次验证通过。
