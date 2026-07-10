@@ -7616,3 +7616,18 @@ git diff --check
 ```
 
 - full `npm test`：P41 改动后再次验证通过。
+
+### P42: event_at recovery annotator manual smoke record
+
+- GUI manual smoke：成功。用户已加载 candidates 与 pilot labels，并导出 annotated labels。
+- 输入文件：
+  - candidates：`/tmp/memory-engine-reports/event-at-manual-recovery-2026-06-15.jsonl`
+  - labels：`/tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15-pilot50.jsonl`
+- 输出文件：`/tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15-pilot50-annotated.jsonl`
+- summary JSON 摘要：`label_count=942`，`reviewed=2`，`unreviewed=940`，`recover_event_at_count=0`，`keep_null_count=1`，`ignore_low_value_count=1`，`needs_more_evidence_count=940`，`invalid_label_count=0`。
+- preview JSON 摘要：`candidate_updates_count=0`，`valid_recover_event_at_count=0`，`invalid_recover_event_at_count=0`，`blocked_reasons=[]`。
+- `raw_text_exported: false`
+- `real DB modified: no`
+- `migration applied: no`
+- 两个命令均为 `dry_run=true`，`writes_db=false`，`migration_applied=false`。
+- full `npm test`：通过。
