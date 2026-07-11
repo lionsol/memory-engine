@@ -9,6 +9,7 @@ import { resolve } from "node:path";
 import {
   CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
   CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
+  CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE,
   applyCoreChunkTimeMigration,
   extractReliableEventAtFromText,
   inspectCoreChunkTimeMigration,
@@ -169,7 +170,7 @@ test("core chunk time migration dry-run reports schema/backfill without writing 
   assert.equal(afterColumns.has("created_at"), false);
 });
 
-test("core chunk time migration apply requires backup and explicit confirm token", () => {
+test("core chunk time migration apply is suspended by provenance audit", () => {
   const fixture = createFixture();
 
   assert.throws(
@@ -179,7 +180,7 @@ test("core chunk time migration apply requires backup and explicit confirm token
       sessionsDir: fixture.sessionsDir,
       backupDir: fixture.backupDir,
     }),
-    /confirm token/i,
+    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
   );
 
   assert.throws(
@@ -190,43 +191,21 @@ test("core chunk time migration apply requires backup and explicit confirm token
       backupDir: fixture.backupDir,
       confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
     }),
-    /event_at NULL/i,
+    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
   );
 
-  const report = applyCoreChunkTimeMigration({
-    coreDbPath: fixture.coreDbPath,
-    engineDbPath: fixture.engineDbPath,
-    sessionsDir: fixture.sessionsDir,
-    backupDir: fixture.backupDir,
-    confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
-    confirmUnrecoverableEventAtNulls: CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
-  });
-
-  const columns = readCoreColumns(fixture.coreDbPath);
-  assert.equal(report.mode, "apply");
-  assert.equal(report.backup_paths.length >= 1, true);
-  assert.equal(report.backup_paths.every((path) => existsSync(path)), true);
-  assert.deepEqual(report.added_columns, ["event_at", "created_at"]);
-  assert.equal(report.backfilled_event_at_count, 2);
-  assert.equal(columns.has("event_at"), true);
-  assert.equal(columns.has("created_at"), true);
-
-  const db = new Database(fixture.coreDbPath, { readonly: true, fileMustExist: true });
-  try {
-    const recoverable = db.prepare("SELECT event_at, created_at, updated_at FROM chunks WHERE id = ?").get("recoverable-raw-log");
-    const transcriptRecoverable = db.prepare("SELECT event_at, created_at, updated_at FROM chunks WHERE id = ?").get(fixture.transcriptChunkId);
-    const unrecoverable = db.prepare("SELECT event_at, created_at, updated_at FROM chunks WHERE id = ?").get("unrecoverable-raw-log");
-    const nonRaw = db.prepare("SELECT event_at, created_at, updated_at FROM chunks WHERE id = ?").get("non-raw-log");
-    assert.equal(recoverable.event_at, Date.parse("2026-06-17T09:30:00.000+08:00") / 1000);
-    assert.equal(transcriptRecoverable.event_at, Date.parse(fixture.transcriptTs) / 1000);
-    assert.equal(recoverable.created_at, null);
-    assert.equal(transcriptRecoverable.created_at, null);
-    assert.equal(unrecoverable.event_at, null);
-    assert.equal(unrecoverable.created_at, null);
-    assert.equal(nonRaw.event_at, null);
-  } finally {
-    db.close();
-  }
+  assert.throws(
+    () => applyCoreChunkTimeMigration({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      sessionsDir: fixture.sessionsDir,
+      backupDir: fixture.backupDir,
+      confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
+      confirmUnrecoverableEventAtNulls: CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
+    }),
+    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
+  );
+  assert.equal(readCoreColumns(fixture.coreDbPath).has("event_at"), false);
 });
 
 test("ordinary core write guard still blocks core schema changes outside migration path", () => {
@@ -243,13 +222,15 @@ test("ordinary core write guard still blocks core schema changes outside migrati
     db.close();
   }
 
-  const report = applyCoreChunkTimeMigration({
-    coreDbPath: fixture.coreDbPath,
-    engineDbPath: fixture.engineDbPath,
-    sessionsDir: fixture.sessionsDir,
-    backupDir: fixture.backupDir,
-    confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
-    confirmUnrecoverableEventAtNulls: CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
-  });
-  assert.deepEqual(report.added_columns, ["event_at", "created_at"]);
+  assert.throws(
+    () => applyCoreChunkTimeMigration({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      sessionsDir: fixture.sessionsDir,
+      backupDir: fixture.backupDir,
+      confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
+      confirmUnrecoverableEventAtNulls: CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
+    }),
+    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
+  );
 });

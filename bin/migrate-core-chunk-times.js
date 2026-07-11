@@ -46,6 +46,8 @@ Refused:
 
 Notes:
   - Default mode is dry-run and writes no DB files.
+  - Core event_at migration is suspended and must not be applied.
+  - Provenance gate: denied_by_provenance_audit.
   - Apply adds chunks.event_at and chunks.created_at only after backup.
   - Apply refuses to proceed when unrecoverable raw_log rows would remain event_at NULL unless the second explicit token is provided.
   - event_at backfill is conservative: only leading ISO timestamps and exact session transcript chunk-id matches are trusted.

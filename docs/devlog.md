@@ -7617,6 +7617,46 @@ git diff --check
 
 - full `npm test`：P41 改动后再次验证通过。
 
+### P45: event_at migration decision closure and audit reconciliation
+
+- P45 reconciliation CLI：`bin/reconcile-event-at-audit-counts.js`。
+- 3306 与 3229 的差异已对账：
+  - migration impact preview：`chunks JOIN engine.memory_confidence`，严格 `mc.category='raw_log'`，按 `updated_at` 的 UTC calendar date 分组，不过滤 archived；历史 session scope 使用任意 `*.jsonl.*` 变体，排除 `.deleted.` 与 `.trajectory.`。
+  - provenance audit：同样严格 `raw_log` join、无 archived 过滤，按 Asia/Shanghai `+08:00` 日期范围匹配秒/毫秒 `updated_at`；session scope 为 base `.jsonl`、`.reset.*`、`.deleted.*`，排除 trajectory。
+  - `row_difference=77`，全部来自 UTC calendar grouping 与 +08:00 local-day predicate 的边界差异，不是通过修改数字对齐。
+- 530 与 267 的差异已对账：历史 migration report 的 `recoverable=530` 是历史 union/recoverability 口径；P44 `session_formula_match=267` 只统计当前严格 session scope 中的 exact `sha256(message_text + raw_session_timestamp + local_date_string)` chunk-id match，不包含 text timestamp recovery。当前保留的历史 session variant 只能重放 396 条，另有 134 条历史 recoverable 无法从当前 session corpus 重建。`match_difference=263`。
+- session scope reconciliation：当前扫描 485 个文件；migration wildcard scope 202 个非 deleted 文件，包含 `.reset.*` 与其他 `.jsonl.*` 变体；P44 scope 含 283 个 `.deleted.*` 文件；两者均排除 trajectory。
+- reconciliation report：`reconciled=true`；`raw_text_exported=false`；`writes_db=false`；`migration_applied=false`。
+- 新增 ADR：`docs/adr/event-time-ownership.md`，状态 `Accepted`，标题为 Memory-engine owns event-time metadata in an engine-side sidecar。
+- 决策关闭：
+  - 不执行当前 core `chunks.event_at` migration。
+  - 不使用 `updated_at`、file mtime、batch-write time、import time 或 smart-add path date 作为 event_at。
+  - smart-add 路径日期最多是 `date_only`，旧数据允许 `exact` / `date_only` / `unknown`，`unknown` 是合法状态。
+  - 后续 event-time metadata 放入 memory-engine 自有 sidecar，不修改 OpenClaw core schema。
+- `applyCoreChunkTimeMigration()` 已加入不可绕过的 `denied_by_provenance_audit` gate；即使提供旧 token 也拒绝 apply。dry-run、audit、preview、evidence 工具仍可运行。
+- pilot 结论：pilot50 已完成；人工无法可靠回忆精确时间；P43 的 12 条全部 `no_match`；P44 识别 smart-add import/reindex 与 flush batch-write；剩余 892 条停止标注；当前唯一 `recover_event_at` 无证据，应降级为 `needs_more_evidence`。
+- 当前不建议继续标剩余 892 条；不建议 apply migration，建议后续实现 engine-side event-time sidecar。
+- `real DB modified=no`；`migration applied=no`。
+- targeted tests：P45 reconciliation/suspension/provenance tests 通过。
+- full `npm test`：P45 改动后待最终验收。
+
+### P44: 2026-06-15 raw_log provenance and generation-chain audit
+
+- P43 已证明 pilot evidence 中符合取证条件的 12 条全部 `no_match`，session transcript 不能解释当前人工标注的 recover event_at；本阶段不再降低 fuzzy threshold，不恢复 event_at，不 backfill，不 apply migration。
+- 新增只读 CLI：`bin/audit-raw-log-provenance.js`，按 legacy `updated_at` 日期同时支持秒/毫秒过滤，聚合 path/source/model、line range、hash/id、文本长度、confidence 时间、session chunk-id 公式、memory 文件匹配和批量写入时间；不输出 raw text。
+- writer/generation chain inventory：
+  - `bin/flush-session-rawlog.js`：session JSONL -> raw_log chunk；公式为 `sha256(message_text + raw_session_timestamp + local_date_string)`。legacy schema 将可解析 session timestamp 写入 `updated_at`，缺 timestamp 时 fallback 为 flush/write time；当前 schema 则写 `event_at` 并保留 `updated_at` 为 write time。证据：git `3b84412`、`430a042`、`44b2edd`，文件 `bin/flush-session-rawlog.js:134-267`。
+  - OpenClaw memory index/reindex：`memory/smart-add/*.md` -> indexed chunks；06-15 的 `model=Qwen/Qwen3-Embedding-4B`、smart-add path、session formula 命中 0，说明这批主要是 smart-add 文件导入/索引链，而非可由 session 反推的原始消息链。
+  - `lib/index-sync-runtime.js` 只为已索引 smart-add/episodes 补 `memory_confidence`，其 `last_confidence_update` 是维护时间，不是 event time。
+- 2026-06-15 审计：`row_count=2433`；全部 `path_family=smart-add`、`source=memory`、`model=Qwen/Qwen3-Embedding-4B`；`hash_matches_sha256_text=2433/2433`；session formula match `0/2433`；exact file-content match `0`，normalized line/block match `2`；文本长度 `min=193, p50=885, p95=1464, max=3108`；duplicate hash/text groups `98`。
+- 06-15 `updated_at`：全为毫秒；归一化后仅 36 个秒值，最大同秒 199，最大同分钟 1280，窗口跨度 112 秒。结论：`updated_at` 很可能是批量索引/导入写入时间，不是 2433 条事件同时发生的时间；`legacy_updated_at_date=2026-06-15` 不能当作真实 event date。判断：`likely_batch_write_date`，并存在 timestamp pollution 风险。
+- 2026-06-21 对照：`row_count=3229`；全部 `path_family=smart-add`、`source=memory`、`model=flush-script`；hash/text 完全匹配 `3229/3229`；session formula match `267/3229`；exact file-content match `22`，normalized match `22`；文本长度 `min=1, p50=61, p95=757, max=10302`；duplicate groups `255`。
+- 06-21 `updated_at`：全为秒；只有 5 个秒值，最大同秒 1038，最大同分钟 3229，跨度 4 秒。结论同样是强批量写入特征。06-15 与 06-21 共享 smart-add/raw_log 大类，但不是同一精确生成链：06-15 偏 reindex/import，06-21 偏 flush-script/mixed session linkage。
+- 由于 06-15 的时间字段是批量导入时间、session evidence 命中为 0、文件正文也无法逐条对应，不建议继续人工标注剩余 892 条；建议延期或取消当前 core `event_at` migration，直到获得可靠外部/原始 session 证据。
+- `raw_text_exported=false`；`real DB modified=no`；`migration applied=no`。
+- targeted tests：`node --test test/raw-log-provenance-audit.test.js test/event-at-session-evidence-resolver.test.js` 通过；CLI syntax check 通过。
+- full `npm test`：P44 改动后待最终验收。
+
 ### P43: OpenClaw session raw log event_at evidence resolver
 
 - 人工不应凭记忆填写精确 `event_at`。人工负责价值判断，session evidence resolver 负责从 OpenClaw 每日 session raw log 做时间取证。
