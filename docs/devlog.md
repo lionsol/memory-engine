@@ -7617,6 +7617,33 @@ git diff --check
 
 - full `npm test`：P41 改动后再次验证通过。
 
+### P43: OpenClaw session raw log event_at evidence resolver
+
+- 人工不应凭记忆填写精确 `event_at`。人工负责价值判断，session evidence resolver 负责从 OpenClaw 每日 session raw log 做时间取证。
+- 新增只读 CLI：
+  - `bin/resolve-event-at-session-evidence.js`
+  - `bin/preview-event-at-labels-from-session-evidence.js`
+  - `lib/event-at-session-evidence.js`
+- resolver 只扫描 `*.jsonl`、`*.jsonl.reset.*`、`*.jsonl.deleted.*`，排除 trajectory、toolResult-only 和非 user/assistant message；文件读取错误与 malformed line 会计数，不静默吞掉。
+- 四级证据边界：
+  - exact chunk-id：复用 `sha256(text + timestamp + dateStr)`，唯一时为 high confidence。
+  - exact normalized text：只做 CRLF/LF、trim、空白、已知 timestamp wrapper 和 role wrapper 归一化，并记录 steps。
+  - substring：最小长度与覆盖率限制，仅为 medium、必须人工确认，不可直接 apply。
+  - fuzzy：仅 low confidence、必须人工确认，永远不进入 apply suggestion。
+- 只有无冲突、唯一、timestamp 合法且 exact chunk-id 或 exact normalized text 的证据，才可在 label preview 中建议 `recover_event_at`；preview 不覆盖 labels。
+- pilot50 evidence 运行：
+  - candidates：`/tmp/memory-engine-reports/event-at-manual-recovery-2026-06-15.jsonl`
+  - labels：`/tmp/memory-engine-reports/event-at-manual-recovery-labels-2026-06-15-pilot50-annotated.jsonl`
+  - evidence：`/tmp/memory-engine-reports/event-at-session-evidence-pilot50.jsonl`
+  - session files scanned：475；messages indexed：2145；malformed line count：0；file read errors：0。
+  - 50 条人工 reviewed labels 中，按 needs_more_evidence / keep_null / recover_event_at 选择 12 条；resolution breakdown：`no_match=12`、`ambiguous=0`、`conflict=0`、`unique_match=0`。
+  - unique high-confidence match count：0；label enrichment preview 的 `suggested_label_updates_count=0`。
+  - 当前唯一 `recover_event_at` 未找到 session transcript evidence，event_at 无法验证，应降级为 `needs_more_evidence`；原 labels 未修改。
+- CLI 拒绝 `--apply`、`--force`、`--write-db`、`--no-backup`；不使用 updated_at、file mtime 或 filename date 作为 event_at source。
+- `raw_text_exported=false`；`real DB modified=no`；`migration applied=no`；不自动 backfill。
+- targeted tests：`node --test test/event-at-session-evidence-resolver.test.js test/event-at-manual-recovery-label-loop.test.js` 通过。
+- full `npm test`：待 P43 改动后最终验收。
+
 ### P42: event_at recovery annotator manual smoke record
 
 - GUI manual smoke：成功。用户已加载 candidates 与 pilot labels，并导出 annotated labels。
