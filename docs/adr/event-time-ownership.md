@@ -31,3 +31,11 @@ The P45 reconciliation keeps the historical migration-impact count of 3,306 and 
 - Core migration apply is unavailable until this ADR is explicitly superseded by a future decision and the gate is changed in code.
 - Existing raw-log records retain their historical fields; no automatic event-time backfill is performed.
 - Future sidecar work must define its schema and write guard before any apply workflow is introduced.
+
+## P46 Sidecar MVP
+
+The proposed `memory_event_times` table is an engine-owned sidecar with `exact`, `date_only`, and `unknown` precision. Exact rows require a real Unix-seconds event timestamp and trustworthy evidence; date-only rows retain only `YYYY-MM-DD`; unknown rows retain no guessed time. Sidecar lifecycle `created_at` and `updated_at` are not event timestamps.
+
+The MVP validator rejects millisecond timestamps, inconsistent business-timezone dates, smart-add/import/unknown sources for exact precision, guessed timestamps for date-only/unknown rows, and missing evidence references for high-confidence exact records. Repository writes require explicit `allowWrite: true`; the default is `denied_by_default_write_guard`. The schema preview found no `memory_event_times` table in the real engine DB and performed no create operation.
+
+Rejected provenance may be retained only as structured `evidence_type: rejected_source` on an `unknown` row with `source: unknown` and no event time. This records why a source such as `core.updated_at` was rejected without making it event-time evidence.

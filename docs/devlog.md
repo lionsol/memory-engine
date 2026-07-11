@@ -7617,6 +7617,35 @@ git diff --check
 
 - full `npm test`：P41 改动后再次验证通过。
 
+### P46 closure: rejected-source evidence semantics
+
+- 修正 `unknown` sidecar evidence 边界：存在 `evidence_ref` 时必须显式使用 `evidence_type=rejected_source`。
+- `rejected_source` 只能用于 `precision=unknown`、`source=unknown` 且 `event_at/event_date=NULL`；exact/date_only 和任何带时间的记录均拒绝。
+- 因此可以结构化记录 `core.updated_at`、file mtime、import timestamp 等被拒绝的来源，但不会把它们当作 event-time evidence。
+- `resolveEffectiveEventTime` 对 rejected evidence 仍返回 `unknown`，不读取 core `updated_at`。
+
+### P46: engine-side event-time sidecar schema MVP
+
+- 新增 `lib/db/memory-event-times.js` 与 `bin/preview-memory-event-times-schema.js`。
+- sidecar 表名：`memory_event_times`；不建立到 core DB 的 foreign key，不接入 recall、checkpoint 或排序。
+- schema 支持：
+  - `event_at`：Unix seconds，仅 exact 使用。
+  - `event_date`：`YYYY-MM-DD`，date_only 使用。
+  - `precision`：`exact` / `date_only` / `unknown`。
+  - `source`：session transcript、external note、manual timestamp、smart-add path、import metadata、unknown。
+  - `confidence`、evidence fields，以及 sidecar row lifecycle `created_at` / `updated_at`。
+- validator 不变量：
+  - exact 必须有 event_at，可推导业务时区 event_date；拒绝毫秒值、smart_add_path/import_metadata/unknown source；high confidence 必须有 evidence_ref。
+  - date_only 只保留 event_date，event_at 必须 NULL，不补当天午夜。
+  - unknown 的 event_at/event_date 必须 NULL，source 必须 unknown。
+  - updated_at、file mtime、import time 不能作为 event-time source。
+- repository API：`validateMemoryEventTime`、`normalizeMemoryEventTime`、`getMemoryEventTime`、`listMemoryEventTimes`、`upsertMemoryEventTime`、`resolveEffectiveEventTime`。upsert 默认以 `denied_by_default_write_guard` 拒绝，只有 fixture 显式 `allowWrite: true` 才能写入临时 DB。
+- `resolveEffectiveEventTime` 只读取 sidecar：exact 返回 exact timestamp，date_only 返回日期，unknown/缺失返回 unknown；永远不 fallback 到 core `updated_at`。
+- 真实 engine DB schema preview：`exists=false`、`would_create=true`、`writes_db=false`；本阶段未执行 CREATE TABLE。real engine DB modified=no；core DB modified=no；core migration applied=no。
+- P45 的 `denied_by_provenance_audit` core migration suspension 继续有效。
+- targeted tests：P46 sidecar/schema-preview/suspension tests 通过。
+- full `npm test`：P46 改动后待最终验收。
+
 ### P45: event_at migration decision closure and audit reconciliation
 
 - P45 reconciliation CLI：`bin/reconcile-event-at-audit-counts.js`。
