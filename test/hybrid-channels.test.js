@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { collectFtsCandidates } from "../lib/recall/hybrid/channels/fts.js";
+import {
+  ISOLATED_FTS_SQL,
+  isArchivedLikeLegacySql,
+  mergeFtsConfidenceRow,
+} from "../lib/recall/hybrid/channels/fts-query.js";
 import { collectKgCandidates } from "../lib/recall/hybrid/channels/kg.js";
 import { collectRecentCandidates } from "../lib/recall/hybrid/channels/recent.js";
 import { collectVectorCandidates } from "../lib/recall/hybrid/channels/vector.js";
@@ -22,7 +27,7 @@ function lexicalMatchScore(haystack, terms) {
   return round4(matched / terms.length);
 }
 
-function makeDebugAndCounts() {
+function makeDebugAndCounts(minConfidence = 0.15) {
   const candidateCounts = createCandidateCounts();
   const debug = createHybridDebug({
     rawQuery: "query",
@@ -30,14 +35,15 @@ function makeDebugAndCounts() {
     normalizedQuery: "query",
     queryTerms: ["query"],
     candidateCounts,
-    minConfidence: 0.15,
+    minConfidence,
     lexicalConfidenceThreshold: 0.7,
   });
   return { candidateCounts, debug };
 }
 
 function makeBaseCtx(overrides = {}) {
-  const { candidateCounts, debug } = makeDebugAndCounts();
+  const minConfidence = overrides.minConfidence ?? 0.15;
+  const { candidateCounts, debug } = makeDebugAndCounts(minConfidence);
   const channels = {};
   const nowSec = 1710003600;
   const normalizeCandidate = row => normalizeExternalMemory(row, {
@@ -107,6 +113,14 @@ function makeBaseCtx(overrides = {}) {
         return { all: () => [] };
       },
     }),
+    withCoreDb: fn => fn({
+      prepare() {
+        return { all: () => [] };
+      },
+    }),
+    ftsAccessMode: "legacy",
+    minConfidence,
+    filterForRerank: item => isCandidateAllowedForRerank(item, minConfidence),
     ...overrides,
   };
 }
@@ -150,6 +164,145 @@ test("FTS channel collects candidates and updates debug/count fields", async () 
   assert.equal(ctx.candidateCounts.fts_raw_final, 1);
   assert.equal(ctx.debug.strict_count, 1);
   assert.equal(ctx.channels.fts.length, 1);
+});
+
+test("FTS isolated mode uses Core JSON archived filtering and never legacy SQL", async () => {
+  let legacyCalls = 0;
+  let coreSql = "";
+  let coreArgs = [];
+  const ctx = makeBaseCtx({
+    ftsAccessMode: "isolated",
+    normalizedQuery: "memory engine",
+    fallbackFtsQuery: "memory OR engine",
+    queryTerms: ["memory", "engine"],
+    confidenceMap: new Map([
+      ["archived\"id", { is_archived: 1 }],
+      ["active", { confidence: 0.8, category: "raw_log", is_archived: 0 }],
+    ]),
+    withDb: fn => {
+      legacyCalls += 1;
+      return fn({ prepare: () => ({ all: () => [] }) });
+    },
+    withCoreDb: fn => fn({
+      prepare(sql) {
+        coreSql = String(sql);
+        return { all: (...args) => { coreArgs = args; return [{ id: "active", text: "memory engine", path: "memory/a.md", updated_at: 1 }]; } };
+      },
+    }),
+  });
+
+  await collectFtsCandidates(ctx);
+  assert.equal(coreSql.includes("chunks_fts"), true);
+  assert.equal(coreSql.includes("json_each"), true);
+  assert.equal(coreSql.includes("NOT EXISTS"), true);
+  assert.equal(coreSql.includes("memory_confidence"), false);
+  assert.equal(coreSql.includes("ATTACH"), false);
+  assert.equal(coreSql.includes("TEMP"), false);
+  assert.deepEqual(JSON.parse(coreArgs[1]), ["archived\"id"]);
+  assert.equal(legacyCalls, 0);
+  assert.equal(ctx.channels.fts[0].confidence, 0.8);
+});
+
+test("FTS confidence merge preserves legacy LEFT JOIN defaults", () => {
+  const missing = mergeFtsConfidenceRow({ id: "missing", text: "x" }, new Map());
+  assert.equal(missing.confidence, null);
+  assert.equal(missing.last_confidence_update, null);
+  assert.equal(missing.base_tau, 7);
+  assert.equal(missing.hit_count, 0);
+  assert.equal(missing.category, null);
+  assert.equal(missing.is_archived, 0);
+  const nulled = mergeFtsConfidenceRow({ id: "nulled", text: "x" }, new Map([["nulled", {
+    confidence: null,
+    last_confidence_update: null,
+    base_tau: null,
+    hit_count: null,
+    is_protected: null,
+    conflict_flag: null,
+    category: null,
+    is_archived: null,
+  }]]));
+  assert.equal(nulled.confidence, null);
+  assert.equal(nulled.base_tau, 7);
+  assert.equal(nulled.hit_count, 0);
+  assert.equal(nulled.is_protected, 0);
+  assert.equal(nulled.conflict_flag, 0);
+  assert.equal(nulled.category, null);
+  assert.equal(nulled.is_archived, 0);
+  assert.equal(ISOLATED_FTS_SQL.includes("LIMIT ?"), true);
+});
+
+test("legacy archived semantics match COALESCE(is_archived, 0) = 0 for SQLite values", () => {
+  const cases = [
+    [null, false],
+    [undefined, false],
+    [0, false],
+    [0.0, false],
+    [1, true],
+    [-1, true],
+    [0.5, true],
+    ["", true],
+    ["abc", true],
+    [{}, true],
+    [Buffer.from([1]), true],
+  ];
+  for (const [value, archived] of cases) {
+    assert.equal(isArchivedLikeLegacySql(value), archived, String(value));
+  }
+});
+
+test("legacy default path preserves null-confidence normalization from 8334887", async () => {
+  const makeReader = () => ({
+    prepare() {
+      return {
+        all() {
+          return [{
+            id: "missing-confidence",
+            text: "query memory",
+            path: "memory/smart-add/missing.md",
+            updated_at: 1710000000,
+            confidence: null,
+            last_confidence_update: null,
+            base_tau: 7,
+            hit_count: 0,
+            is_protected: 0,
+            conflict_flag: 0,
+            category: null,
+            is_archived: 0,
+          }];
+        },
+      };
+    },
+  });
+
+  for (const mode of ["legacy", "isolated"]) {
+    const keptCtx = makeBaseCtx({
+      ftsAccessMode: mode,
+      minConfidence: 0,
+      confidenceMap: new Map(),
+      withDb: fn => fn(makeReader()),
+      withCoreDb: fn => fn(makeReader()),
+    });
+    await collectFtsCandidates(keptCtx);
+    assert.equal(keptCtx.debug.strict_count, 1, mode);
+    assert.equal(keptCtx.candidateCounts.fts_raw_primary, 1, mode);
+    assert.equal(keptCtx.debug.fallback_count, 0, mode);
+    assert.equal(keptCtx.channels.fts.length, 1, mode);
+    assert.equal(keptCtx.channels.fts[0].confidence_mode, "managed", mode);
+    assert.equal(keptCtx.channels.fts[0].confidence, 0, mode);
+
+    const filteredCtx = makeBaseCtx({
+      ftsAccessMode: mode,
+      minConfidence: 0.15,
+      confidenceMap: new Map(),
+      withDb: fn => fn(makeReader()),
+      withCoreDb: fn => fn(makeReader()),
+    });
+    await collectFtsCandidates(filteredCtx);
+    assert.equal(filteredCtx.debug.strict_count, 1, mode);
+    assert.equal(filteredCtx.candidateCounts.fts_raw_primary, 1, mode);
+    assert.equal(filteredCtx.debug.fallback_count, 0, mode);
+    assert.deepEqual(filteredCtx.channels.fts, [], mode);
+  }
 });
 
 test("KG channel normalizes candidates and updates debug/count fields", async () => {

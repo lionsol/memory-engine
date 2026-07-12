@@ -131,10 +131,12 @@ test("legacy adapter uses one scoped entry and maps all readers to the scoped ac
     core: await access.withCoreDb(db => db.marker),
     engine: await access.withEngineDb(db => db.marker),
     legacy: await access.withLegacyDb(db => db.marker),
+    isolatedFts: access.capabilities.isolatedFts,
   }));
-  assert.deepEqual(result, { core: "scoped", engine: "scoped", legacy: "scoped" });
+  assert.deepEqual(result, { core: "scoped", engine: "scoped", legacy: "scoped", isolatedFts: false });
   assert.equal(scopedRuns, 1);
   assert.equal(baseCalls, 0);
+  assert.equal(runWithHybridDbAccessScope({ withDb: scopedAccessor }, access => access.capabilities.isolatedFts), false);
 });
 
 test("malformed legacy scoped accessors fail at the scope callback boundary", async () => {
@@ -182,4 +184,63 @@ test("explicit scope resolves and rejects with one lifecycle", async () => {
   }, rejectedCalls)), /core reader failure/);
   assert.equal(rejectedCalls.scopeOpened, 1);
   assert.equal(rejectedCalls.scopeClosed, 1);
+});
+
+test("isolatedFts capability requires strict true and routes only FTS to Core", async () => {
+  for (const capability of [undefined, false, "true", 1, null, {}, []]) {
+    const sqlByReader = { core: [], engine: [], legacy: [] };
+    const reader = name => run => run({
+      prepare(sql) {
+        sqlByReader[name].push(String(sql));
+        return {
+          all: () => name === "engine"
+            ? [{ chunk_id: "chunk-1", confidence: 0.8, category: "raw_log", is_archived: 0 }]
+            : name === "core"
+              ? [{ id: "chunk-1", path: "memory/a.md", updated_at: 1 }]
+              : [],
+        };
+      },
+    });
+    const access = {
+      withCoreDb: reader("core"),
+      withEngineDb: reader("engine"),
+      withLegacyDb: reader("legacy"),
+    };
+    if (capability !== undefined) access.capabilities = { isolatedFts: capability };
+    await hybridSearch("capability query", {}, {
+      withHybridDbAccessScope: async run => run(access),
+      calcRealtimeConf: row => row.confidence,
+      syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+      getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+    });
+    assert.equal(sqlByReader.engine.length, 1);
+    assert.equal(sqlByReader.core.some(sql => sql.includes("SELECT id, path, updated_at FROM chunks")), true);
+    assert.equal(sqlByReader.core.some(sql => sql.includes("chunks_fts")), false, String(capability));
+    assert.equal(sqlByReader.legacy.some(sql => sql.includes("chunks_fts")), true, String(capability));
+  }
+
+  const sqlByReader = { core: [], engine: [], legacy: [] };
+  const reader = name => run => run({
+    prepare(sql) {
+      sqlByReader[name].push(String(sql));
+      return { all: () => name === "engine"
+        ? [{ chunk_id: "chunk-1", confidence: 0.8, category: "raw_log", is_archived: 0 }]
+        : name === "core" ? [{ id: "chunk-1", path: "memory/a.md", updated_at: 1 }] : [] };
+    },
+  });
+  await hybridSearch("capability query", {}, {
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: reader("core"),
+      withEngineDb: reader("engine"),
+      withLegacyDb: reader("legacy"),
+      capabilities: { isolatedFts: true },
+    }),
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+  });
+  assert.equal(sqlByReader.engine.length, 1);
+  assert.equal(sqlByReader.core.some(sql => sql.includes("chunks_fts") && sql.includes("json_each")), true);
+  assert.equal(sqlByReader.legacy.some(sql => sql.includes("chunks_fts")), false);
+  assert.equal(sqlByReader.legacy.length > 0, true);
 });
