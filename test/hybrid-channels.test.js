@@ -306,11 +306,13 @@ test("legacy default path preserves null-confidence normalization from 8334887",
 });
 
 test("KG channel normalizes candidates and updates debug/count fields", async () => {
+  let preparedSql = "";
   const ctx = makeBaseCtx({
     normalizedQuery: "session checkpoint",
     queryTerms: ["session", "checkpoint"],
     withDb: fn => fn({
-      prepare() {
+      prepare(sql) {
+        preparedSql = String(sql);
         return {
           all() {
             return [{
@@ -335,6 +337,10 @@ test("KG channel normalizes candidates and updates debug/count fields", async ()
   });
 
   await collectKgCandidates(ctx);
+  assert.match(
+    preparedSql,
+    /ORDER BY\s+c\.updated_at\s+DESC\s*,\s*c\.id\s+ASC\s+LIMIT\s+\?/i,
+  );
   assert.equal(ctx.candidateCounts.kg_raw, 1);
   assert.equal(ctx.candidateCounts.kg_after_conf_filter, 1);
   assert.equal(ctx.channels.kg[0].path, "memory/episodes/session-checkpoint.md");
