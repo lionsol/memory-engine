@@ -132,11 +132,19 @@ test("legacy adapter uses one scoped entry and maps all readers to the scoped ac
     engine: await access.withEngineDb(db => db.marker),
     legacy: await access.withLegacyDb(db => db.marker),
     isolatedFts: access.capabilities.isolatedFts,
+    isolatedKg: access.capabilities.isolatedKg,
   }));
-  assert.deepEqual(result, { core: "scoped", engine: "scoped", legacy: "scoped", isolatedFts: false });
+  assert.deepEqual(result, {
+    core: "scoped",
+    engine: "scoped",
+    legacy: "scoped",
+    isolatedFts: false,
+    isolatedKg: false,
+  });
   assert.equal(scopedRuns, 1);
   assert.equal(baseCalls, 0);
   assert.equal(runWithHybridDbAccessScope({ withDb: scopedAccessor }, access => access.capabilities.isolatedFts), false);
+  assert.equal(runWithHybridDbAccessScope({ withDb: scopedAccessor }, access => access.capabilities.isolatedKg), false);
 });
 
 test("malformed legacy scoped accessors fail at the scope callback boundary", async () => {
@@ -243,4 +251,118 @@ test("isolatedFts capability requires strict true and routes only FTS to Core", 
   assert.equal(sqlByReader.core.some(sql => sql.includes("chunks_fts") && sql.includes("json_each")), true);
   assert.equal(sqlByReader.legacy.some(sql => sql.includes("chunks_fts")), false);
   assert.equal(sqlByReader.legacy.length > 0, true);
+});
+
+test("isolatedKg capability requires strict true and stays independent from isolatedFts", async () => {
+  for (const capability of [undefined, false, "true", 1, null, {}, []]) {
+    const result = await runWithHybridDbAccessScope({
+      withHybridDbAccessScope: async run => run({
+        withCoreDb: run => run({ marker: "core" }),
+        withEngineDb: run => run({ marker: "engine" }),
+        withLegacyDb: run => run({ marker: "legacy" }),
+        capabilities: capability === undefined ? { isolatedFts: true } : { isolatedFts: true, isolatedKg: capability },
+      }),
+    }, access => access.capabilities);
+    assert.equal(result.isolatedFts, true, String(capability));
+    assert.equal(result.isolatedKg, false, String(capability));
+  }
+
+  const enabled = await runWithHybridDbAccessScope({
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: run => run({ marker: "core" }),
+      withEngineDb: run => run({ marker: "engine" }),
+      withLegacyDb: run => run({ marker: "legacy" }),
+      capabilities: { isolatedFts: false, isolatedKg: true },
+    }),
+  }, access => access.capabilities);
+  assert.equal(enabled.isolatedFts, false);
+  assert.equal(enabled.isolatedKg, true);
+});
+
+test("hybridSearch routes KG to isolated readers only when capability is true and snapshot IDs are all text", async () => {
+  const sqlByReader = { core: [], engine: [], legacy: [] };
+  const reader = name => run => run({
+    prepare(sql) {
+      const query = String(sql);
+      sqlByReader[name].push(query);
+      return {
+        all() {
+          if (name === "engine" && query.includes("SELECT chunk_id, confidence")) {
+            return [{ chunk_id: "chunk-1", confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
+          }
+          if (name === "core" && query.includes("SELECT id, path, updated_at FROM chunks")) {
+            return [{ id: "chunk-1", path: "memory/a.md", updated_at: 1 }];
+          }
+          if (name === "engine" && query.includes("typeof(chunk_id) AS chunk_id_storage_class")) {
+            return [{ chunk_id: "chunk-1", chunk_id_storage_class: "text", confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0, kg_data: "ordinary query node" }];
+          }
+          if (name === "core" && query.includes("FROM json_each(?) AS candidate")) {
+            return [{ id: "chunk-1", text: "ordinary query note", path: "memory/a.md", updated_at: 1 }];
+          }
+          return [];
+        },
+        get: () => null,
+      };
+    },
+  });
+
+  const result = await hybridSearch("ordinary query", {}, {
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: reader("core"),
+      withEngineDb: reader("engine"),
+      withLegacyDb: reader("legacy"),
+      capabilities: { isolatedKg: true },
+    }),
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+  });
+
+  assert.equal(sqlByReader.engine.some(sql => sql.includes("typeof(chunk_id) AS chunk_id_storage_class")), true);
+  assert.equal(sqlByReader.core.some(sql => sql.includes("FROM json_each(?) AS candidate")), true);
+  assert.equal(sqlByReader.legacy.some(sql => sql.includes("FROM memory_confidence mc") && sql.includes("mc.kg_data LIKE")), false);
+  assert.equal(result.debug.kg_access_mode, "isolated");
+});
+
+test("hybridSearch falls back KG to legacy when isolatedKg is requested but snapshot IDs are not all text", async () => {
+  const sqlByReader = { core: [], engine: [], legacy: [] };
+  const reader = name => run => run({
+    prepare(sql) {
+      const query = String(sql);
+      sqlByReader[name].push(query);
+      return {
+        all() {
+          if (name === "engine" && query.includes("SELECT chunk_id, confidence")) {
+            return [{ chunk_id: Buffer.from("blob-id"), confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
+          }
+          if (name === "core" && query.includes("SELECT id, path, updated_at FROM chunks")) {
+            return [{ id: "chunk-1", path: "memory/a.md", updated_at: 1 }];
+          }
+          if (name === "legacy" && query.includes("FROM memory_confidence mc") && query.includes("mc.kg_data LIKE")) {
+            return [{ id: "chunk-1", text: "ordinary query note", path: "memory/a.md", updated_at: 1, confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0, kg_data: "ordinary query node" }];
+          }
+          return [];
+        },
+        get: () => null,
+      };
+    },
+  });
+
+  const result = await hybridSearch("ordinary query", {}, {
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: reader("core"),
+      withEngineDb: reader("engine"),
+      withLegacyDb: reader("legacy"),
+      capabilities: { isolatedKg: true },
+    }),
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+  });
+
+  assert.equal(sqlByReader.engine.some(sql => sql.includes("typeof(chunk_id) AS chunk_id_storage_class")), false);
+  assert.equal(sqlByReader.core.some(sql => sql.includes("FROM json_each(?) AS candidate")), false);
+  assert.equal(sqlByReader.legacy.some(sql => sql.includes("FROM memory_confidence mc") && sql.includes("mc.kg_data LIKE")), true);
+  assert.equal(result.debug.kg_access_mode, "legacy_fallback");
+  assert.equal(result.debug.kg_isolated_fallback_reason, "text_id_invariant_failed");
 });

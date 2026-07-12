@@ -8,6 +8,7 @@ import {
   mergeFtsConfidenceRow,
 } from "../lib/recall/hybrid/channels/fts-query.js";
 import { collectKgCandidates } from "../lib/recall/hybrid/channels/kg.js";
+import { CORE_KG_JSON_JOIN_SQL } from "../lib/recall/hybrid/channels/kg-query.js";
 import { collectRecentCandidates } from "../lib/recall/hybrid/channels/recent.js";
 import { collectVectorCandidates } from "../lib/recall/hybrid/channels/vector.js";
 import { createCandidateCounts, createHybridDebug, createHybridWarnings, toDebugErrorMessage } from "../lib/recall/hybrid/debug.js";
@@ -113,12 +114,20 @@ function makeBaseCtx(overrides = {}) {
         return { all: () => [] };
       },
     }),
+    withEngineDb: fn => fn({
+      prepare() {
+        return { all: () => [] };
+      },
+    }),
     withCoreDb: fn => fn({
       prepare() {
         return { all: () => [] };
       },
     }),
     ftsAccessMode: "legacy",
+    kgAccessMode: "legacy",
+    kgIsolationRequested: false,
+    kgIsolationFallbackReason: null,
     minConfidence,
     filterForRerank: item => isCandidateAllowedForRerank(item, minConfidence),
     ...overrides,
@@ -345,6 +354,260 @@ test("KG channel normalizes candidates and updates debug/count fields", async ()
   assert.equal(ctx.candidateCounts.kg_after_conf_filter, 1);
   assert.equal(ctx.channels.kg[0].path, "memory/episodes/session-checkpoint.md");
   assert.equal(ctx.channels.kg[0].category, "episodic");
+});
+
+test("KG isolated mode uses Engine candidate SQL plus Core JSON JOIN and never legacy SQL", async () => {
+  let legacyCalls = 0;
+  let engineSql = "";
+  let coreSql = "";
+  let coreArgs = [];
+  const ctx = makeBaseCtx({
+    normalizedQuery: "session checkpoint",
+    strippedQuery: "session checkpoint",
+    queryTerms: ["session", "checkpoint"],
+    kgAccessMode: "isolated",
+    kgIsolationRequested: true,
+    withDb: () => {
+      legacyCalls += 1;
+      throw new Error("legacy KG reader should not run");
+    },
+    withEngineDb: fn => fn({
+      prepare(sql) {
+        engineSql = String(sql);
+        return {
+          all() {
+            return [{
+              chunk_id: "chunk-1",
+              chunk_id_storage_class: "text",
+              confidence: 0.82,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "raw_log",
+              is_archived: 0,
+              kg_data: "session checkpoint project",
+            }];
+          },
+        };
+      },
+    }),
+    withCoreDb: fn => fn({
+      prepare(sql) {
+        coreSql = String(sql);
+        return {
+          all(...args) {
+            coreArgs = args;
+            return [{
+              id: "chunk-1",
+              text: "session checkpoint note",
+              path: "memory/episodes/session-checkpoint.md",
+              updated_at: 1710000000,
+            }];
+          },
+        };
+      },
+    }),
+  });
+
+  await collectKgCandidates(ctx);
+  assert.equal(engineSql.includes("typeof(chunk_id) AS chunk_id_storage_class"), true);
+  assert.equal(engineSql.includes("LIMIT"), false);
+  assert.equal(engineSql.includes("chunks"), false);
+  assert.equal(engineSql.includes("ATTACH"), false);
+  assert.equal(engineSql.includes("TEMP"), false);
+  assert.equal(coreSql.includes("json_each(?)"), true);
+  assert.equal(coreSql.includes("JOIN chunks"), true);
+  assert.equal(coreSql.includes("memory_confidence"), false);
+  assert.equal(coreSql.includes("ATTACH"), false);
+  assert.equal(coreSql.includes("TEMP"), false);
+  assert.deepEqual(JSON.parse(coreArgs[0]), ["chunk-1"]);
+  assert.equal(coreArgs[1], 20);
+  assert.equal(legacyCalls, 0);
+  assert.equal(ctx.debug.kg_access_mode, "isolated");
+  assert.equal(ctx.channels.kg[0].path, "memory/episodes/session-checkpoint.md");
+  assert.equal(CORE_KG_JSON_JOIN_SQL.includes("ORDER BY c.updated_at DESC, c.id ASC"), true);
+});
+
+test("KG isolated mode fail-closes to legacy when a matching candidate has non-text ID", async () => {
+  let legacyCalls = 0;
+  let coreCalls = 0;
+  const ctx = makeBaseCtx({
+    normalizedQuery: "session checkpoint",
+    strippedQuery: "session checkpoint",
+    queryTerms: ["session", "checkpoint"],
+    kgAccessMode: "isolated",
+    kgIsolationRequested: true,
+    withEngineDb: fn => fn({
+      prepare() {
+        return {
+          all() {
+            return [{
+              chunk_id: Buffer.from("blob-id"),
+              chunk_id_storage_class: "blob",
+              confidence: 0.82,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "raw_log",
+              is_archived: 0,
+              kg_data: "session checkpoint project",
+            }];
+          },
+        };
+      },
+    }),
+    withCoreDb: () => {
+      coreCalls += 1;
+      throw new Error("Core JSON JOIN should not run");
+    },
+    withDb: fn => {
+      legacyCalls += 1;
+      return fn({
+        prepare() {
+          return {
+            all() {
+              return [{
+                id: "chunk-1",
+                text: "session checkpoint note",
+                path: "memory/episodes/session-checkpoint.md",
+                updated_at: 1710000000,
+                confidence: 0.82,
+                last_confidence_update: 0,
+                base_tau: 7,
+                hit_count: 3,
+                is_protected: 0,
+                conflict_flag: 0,
+                category: "raw_log",
+                is_archived: 0,
+                kg_data: "session checkpoint project",
+              }];
+            },
+          };
+        },
+      });
+    },
+  });
+
+  await collectKgCandidates(ctx);
+  assert.equal(legacyCalls, 1);
+  assert.equal(coreCalls, 0);
+  assert.equal(ctx.debug.kg_access_mode, "legacy_fallback");
+  assert.equal(ctx.debug.kg_isolated_fallback_reason, "non_text_matching_candidate_id");
+  assert.equal(ctx.channels.kg.length, 1);
+});
+
+test("KG isolated Engine SQL errors surface through kg_error and never fall back to legacy", async () => {
+  let legacyCalls = 0;
+  let coreCalls = 0;
+
+  const ctx = makeBaseCtx({
+    normalizedQuery: "session checkpoint",
+    strippedQuery: "session checkpoint",
+    queryTerms: ["session", "checkpoint"],
+    kgAccessMode: "isolated",
+    kgIsolationRequested: true,
+    withEngineDb: fn => fn({
+      prepare() {
+        throw new Error("isolated engine failure");
+      },
+    }),
+    withCoreDb: () => {
+      coreCalls += 1;
+      throw new Error("Core reader must not run");
+    },
+    withDb: () => {
+      legacyCalls += 1;
+      throw new Error("Legacy reader must not run");
+    },
+  });
+
+  await collectKgCandidates(ctx);
+
+  assert.equal(legacyCalls, 0);
+  assert.equal(coreCalls, 0);
+  assert.equal(ctx.debug.kg_error, "isolated engine failure");
+  assert.equal(
+    ctx.warnings.some(item =>
+      item.message === "kg_search_error"
+      && item.error === "isolated engine failure"
+    ),
+    true,
+  );
+  assert.equal(Object.hasOwn(ctx.debug, "kg_isolated_fallback_reason"), false);
+  assert.equal(ctx.candidateCounts.kg_raw, 0);
+  assert.equal(ctx.candidateCounts.kg_after_conf_filter, 0);
+  assert.equal(Object.hasOwn(ctx.channels, "kg"), false);
+});
+
+test("KG isolated Core SQL errors surface through kg_error and never fall back to legacy", async () => {
+  let coreCalls = 0;
+  let legacyCalls = 0;
+
+  const ctx = makeBaseCtx({
+    normalizedQuery: "session checkpoint",
+    strippedQuery: "session checkpoint",
+    queryTerms: ["session", "checkpoint"],
+    kgAccessMode: "isolated",
+    kgIsolationRequested: true,
+    withEngineDb: fn => fn({
+      prepare() {
+        return {
+          all() {
+            return [{
+              chunk_id: "chunk-1",
+              chunk_id_storage_class: "text",
+              confidence: 0.82,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "raw_log",
+              is_archived: 0,
+              kg_data: "session checkpoint project",
+            }];
+          },
+        };
+      },
+    }),
+    withCoreDb: fn => {
+      coreCalls += 1;
+      return fn({
+        prepare() {
+          return {
+            all() {
+              throw new Error("isolated core failure");
+            },
+          };
+        },
+      });
+    },
+    withDb: () => {
+      legacyCalls += 1;
+      throw new Error("Legacy reader must not run");
+    },
+  });
+
+  await collectKgCandidates(ctx);
+
+  assert.equal(coreCalls, 1);
+  assert.equal(legacyCalls, 0);
+  assert.equal(ctx.debug.kg_error, "isolated core failure");
+  assert.equal(
+    ctx.warnings.some(item =>
+      item.message === "kg_search_error"
+      && item.error === "isolated core failure"
+    ),
+    true,
+  );
+  assert.equal(Object.hasOwn(ctx.debug, "kg_isolated_fallback_reason"), false);
+  assert.equal(ctx.candidateCounts.kg_raw, 0);
+  assert.equal(ctx.candidateCounts.kg_after_conf_filter, 0);
+  assert.equal(Object.hasOwn(ctx.channels, "kg"), false);
 });
 
 test("recent channel preserves fallback/debug semantics", async () => {
