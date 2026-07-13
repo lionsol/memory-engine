@@ -22,8 +22,8 @@ test("isolated Recent probe emits structured JSON evidence from synthetic SQLite
   assert.deepEqual(result.topology.isolated_engine.database_names, ["main"]);
   assert.deepEqual(result.topology.isolated_core.database_names, ["main"]);
 
-  assert.equal(result.legacy_recent_order_contract.deterministic, false);
-  assert.equal(result.legacy_recent_order_contract.reason, "missing_secondary_tie_breaker");
+  assert.equal(result.legacy_recent_order_contract.deterministic, true);
+  assert.equal(result.legacy_recent_order_contract.reason, "explicit_secondary_tie_breaker_present");
   assert.deepEqual(result.legacy_recent_order_contract.recommended_order, [
     "c.updated_at DESC",
     "c.id ASC",
@@ -131,7 +131,7 @@ test("isolated Recent probe emits structured JSON evidence from synthetic SQLite
   assert.equal(result.conditional_recommendation_class, "B");
   assert.equal(result.preferred_strategy, "none");
   assert.equal(result.conditional_preferred_strategy, "core_first_archived_json_exclusion");
-  assert.equal(result.migration_prerequisites.includes("deterministic recent tie ordering"), true);
+  assert.equal(result.migration_prerequisites.includes("deterministic recent tie ordering"), false);
   assert.equal(result.migration_prerequisites.includes("TEXT-only Core/Engine ID invariant"), true);
   assert.deepEqual(result.required_invariant, {
     engine_chunk_id_storage_class: "text",

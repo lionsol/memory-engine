@@ -22,7 +22,7 @@ const RECENT_LEGACY_SQL = `
   WHERE COALESCE(mc.is_archived, 0) = 0
     AND c.path NOT LIKE 'memory/generated-smart-add/%'
     AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
-  ORDER BY c.updated_at DESC
+  ORDER BY c.updated_at DESC, c.id ASC
   LIMIT ?
 `;
 
@@ -40,7 +40,7 @@ const RECENT_LIKE_LEGACY_SQL = (patternCount) => `
   WHERE COALESCE(mc.is_archived, 0) = 0
     AND c.path NOT LIKE 'memory/generated-smart-add/%'
     AND (${Array.from({ length: patternCount }, () => "(c.path LIKE ? OR c.text LIKE ?)").join(" OR ")})
-  ORDER BY c.updated_at DESC
+  ORDER BY c.updated_at DESC, c.id ASC
   LIMIT ?
 `;
 
@@ -58,7 +58,7 @@ const CORE_FIRST_RECENT_SQL = `
       FROM json_each(?) AS archived
       WHERE c.id = CAST(archived.value AS TEXT)
     )
-  ORDER BY c.updated_at DESC
+  ORDER BY c.updated_at DESC, c.id ASC
   LIMIT ?
 `;
 
@@ -76,7 +76,7 @@ const CORE_FIRST_LIKE_SQL = (patternCount) => `
       FROM json_each(?) AS archived
       WHERE c.id = CAST(archived.value AS TEXT)
     )
-  ORDER BY c.updated_at DESC
+  ORDER BY c.updated_at DESC, c.id ASC
   LIMIT ?
 `;
 
@@ -107,7 +107,7 @@ const CORE_JOIN_ENGINE_IDS_SQL = `
     ON c.id = CAST(candidate.value AS TEXT)
   WHERE c.path NOT LIKE 'memory/generated-smart-add/%'
     AND (c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')
-  ORDER BY c.updated_at DESC
+  ORDER BY c.updated_at DESC, c.id ASC
   LIMIT ?
 `;
 
@@ -122,7 +122,7 @@ const CORE_JOIN_ENGINE_IDS_LIKE_SQL = (patternCount) => `
     ON c.id = CAST(candidate.value AS TEXT)
   WHERE c.path NOT LIKE 'memory/generated-smart-add/%'
     AND (${Array.from({ length: patternCount }, () => "(c.path LIKE ? OR c.text LIKE ?)").join(" OR ")})
-  ORDER BY c.updated_at DESC
+  ORDER BY c.updated_at DESC, c.id ASC
   LIMIT ?
 `;
 
@@ -279,7 +279,11 @@ function branchInventory() {
         "c.path NOT LIKE 'memory/generated-smart-add/%'",
         "OR of (c.path LIKE ? OR c.text LIKE ?)",
       ],
-      ordering: source.includes("ORDER BY c.updated_at DESC") ? ["c.updated_at DESC"] : [],
+      ordering: source.includes("ORDER BY c.updated_at DESC, c.id ASC")
+        ? ["c.updated_at DESC", "c.id ASC"]
+        : source.includes("ORDER BY c.updated_at DESC")
+          ? ["c.updated_at DESC"]
+          : [],
       limit_position: "SQL before JS filtering",
       post_processing: [
         "candidateCounts.like_raw",
@@ -298,7 +302,7 @@ function branchInventory() {
         "c.path NOT LIKE 'memory/generated-smart-add/%'",
         "(c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')",
       ],
-      ordering: ["c.updated_at DESC"],
+      ordering: ["c.updated_at DESC", "c.id ASC"],
       limit_position: "SQL before JS filtering",
       post_processing: [
         "candidateCounts.recent_raw",
@@ -336,7 +340,7 @@ function branchInventory() {
         "c.path NOT LIKE 'memory/generated-smart-add/%'",
         "(c.path LIKE 'memory/smart-add/%' OR c.path LIKE 'memory/episodes/%')",
       ],
-      ordering: ["c.updated_at DESC"],
+      ordering: ["c.updated_at DESC", "c.id ASC"],
       limit_position: "SQL before JS filtering",
       post_processing: [
         "candidateCounts.recent_fallback_raw",
@@ -1211,7 +1215,7 @@ async function buildProbeReport() {
       sqlite_storage_class_equivalence: sqliteStorageClassEquivalence,
       foundational_equivalence: foundationalEquivalence,
       recommendation_class: foundationalEquivalence ? "A" : "C",
-      conditional_recommendation_class: textIdFoundationalEquivalence && !legacyRecentOrderContract.deterministic ? "B" : (textIdFoundationalEquivalence ? "A" : "C"),
+      conditional_recommendation_class: textIdFoundationalEquivalence ? "B" : "C",
       preferred_strategy: "none",
       conditional_preferred_strategy: textIdFoundationalEquivalence ? "core_first_archived_json_exclusion" : "none",
       migration_prerequisites: migrationPrerequisites,
