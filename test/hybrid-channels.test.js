@@ -128,6 +128,9 @@ function makeBaseCtx(overrides = {}) {
     kgAccessMode: "legacy",
     kgIsolationRequested: false,
     kgIsolationFallbackReason: null,
+    recentAccessMode: "legacy",
+    recentIsolationRequested: false,
+    recentIsolationFallbackReason: null,
     minConfidence,
     filterForRerank: item => isCandidateAllowedForRerank(item, minConfidence),
     ...overrides,
@@ -648,6 +651,173 @@ test("recent channel preserves fallback/debug semantics", async () => {
   assert.equal(ctx.debug.fallbacks_triggered.includes("recent_episodic"), true);
   assert.equal(ctx.candidateCounts.recent_raw, 1);
   assert.equal(ctx.candidateCounts.recent_fallback_raw, 1);
+});
+
+test("Recent isolated archived SQL errors surface through recent_error and never fall back to legacy", async () => {
+  let legacyCalls = 0;
+  let coreCalls = 0;
+  const ctx = makeBaseCtx({
+    normalizedQuery: "session checkpoint",
+    strippedQuery: "session checkpoint",
+    queryTerms: ["session", "checkpoint"],
+    recentAccessMode: "isolated",
+    recentIsolationRequested: true,
+    withEngineDb: fn => fn({
+      readonly: true,
+      prepare() {
+        throw new Error("isolated recent archived failure");
+      },
+    }),
+    withCoreDb: () => {
+      coreCalls += 1;
+      throw new Error("Core reader must not run");
+    },
+    withDb: () => {
+      legacyCalls += 1;
+      throw new Error("Legacy reader must not run");
+    },
+  });
+
+  await collectRecentCandidates(ctx);
+
+  assert.equal(legacyCalls, 0);
+  assert.equal(coreCalls, 0);
+  assert.equal(ctx.debug.recent_error, "isolated recent archived failure");
+  assert.equal(
+    ctx.warnings.some(item =>
+      item.message === "recent_search_error"
+      && item.error === "isolated recent archived failure"
+    ),
+    true,
+  );
+  assert.equal(Object.hasOwn(ctx.debug, "recent_isolated_fallback_reason"), false);
+  assert.equal(ctx.candidateCounts.like_raw, 0);
+  assert.equal(ctx.candidateCounts.recent_raw, 0);
+  assert.equal(ctx.candidateCounts.episode_raw, 0);
+  assert.equal(ctx.candidateCounts.recent_fallback_raw, 0);
+  assert.equal(Object.hasOwn(ctx.channels, "recent"), false);
+  assert.equal(Object.hasOwn(ctx.channels, "like"), false);
+});
+
+test("Recent isolated Core SQL errors surface through recent_error and never fall back to legacy", async () => {
+  let coreCalls = 0;
+  let legacyCalls = 0;
+  const ctx = makeBaseCtx({
+    normalizedQuery: "session checkpoint",
+    strippedQuery: "session checkpoint",
+    queryTerms: ["session", "checkpoint"],
+    recentAccessMode: "isolated",
+    recentIsolationRequested: true,
+    withEngineDb: fn => fn({
+      readonly: true,
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("COALESCE(is_archived, 0) != 0")) {
+          return { all: () => [] };
+        }
+        if (query.includes("WITH selected AS")) {
+          return { all: () => [] };
+        }
+        return { all: () => [] };
+      },
+    }),
+    withCoreDb: fn => {
+      coreCalls += 1;
+      return fn({
+        readonly: true,
+        prepare() {
+          return {
+            all() {
+              throw new Error("isolated recent core failure");
+            },
+          };
+        },
+      });
+    },
+    withDb: () => {
+      legacyCalls += 1;
+      throw new Error("Legacy reader must not run");
+    },
+  });
+
+  await collectRecentCandidates(ctx);
+
+  assert.equal(coreCalls, 1);
+  assert.equal(legacyCalls, 0);
+  assert.equal(ctx.debug.recent_error, "isolated recent core failure");
+  assert.equal(
+    ctx.warnings.some(item =>
+      item.message === "recent_search_error"
+      && item.error === "isolated recent core failure"
+    ),
+    true,
+  );
+  assert.equal(Object.hasOwn(ctx.debug, "recent_isolated_fallback_reason"), false);
+  assert.equal(ctx.candidateCounts.recent_raw, 0);
+  assert.equal(ctx.candidateCounts.recent_fallback_raw, 0);
+  assert.equal(Object.hasOwn(ctx.channels, "recent"), false);
+});
+
+test("Recent isolated metadata SQL errors surface through recent_error and never fall back to legacy", async () => {
+  let legacyCalls = 0;
+  const ctx = makeBaseCtx({
+    normalizedQuery: "session checkpoint",
+    strippedQuery: "session checkpoint",
+    queryTerms: ["session", "checkpoint"],
+    recentAccessMode: "isolated",
+    recentIsolationRequested: true,
+    withEngineDb: fn => fn({
+      readonly: true,
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("COALESCE(is_archived, 0) != 0")) {
+          return { all: () => [] };
+        }
+        if (query.includes("WITH selected AS")) {
+          return {
+            all() {
+              throw new Error("isolated recent metadata failure");
+            },
+          };
+        }
+        return { all: () => [] };
+      },
+    }),
+    withCoreDb: fn => fn({
+      readonly: true,
+      prepare() {
+        return {
+          all() {
+            return [{
+              id: "chunk-1",
+              text: "session checkpoint note",
+              path: "memory/smart-add/checkpoint.md",
+              updated_at: 1710000000,
+            }];
+          },
+        };
+      },
+    }),
+    withDb: () => {
+      legacyCalls += 1;
+      throw new Error("Legacy reader must not run");
+    },
+  });
+
+  await collectRecentCandidates(ctx);
+
+  assert.equal(legacyCalls, 0);
+  assert.equal(ctx.debug.recent_error, "isolated recent metadata failure");
+  assert.equal(
+    ctx.warnings.some(item =>
+      item.message === "recent_search_error"
+      && item.error === "isolated recent metadata failure"
+    ),
+    true,
+  );
+  assert.equal(Object.hasOwn(ctx.debug, "recent_isolated_fallback_reason"), false);
+  assert.equal(ctx.candidateCounts.recent_raw, 0);
+  assert.equal(Object.hasOwn(ctx.channels, "recent"), false);
 });
 
 test("vector channel preserves success and fallback debug semantics", async () => {

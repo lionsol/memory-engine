@@ -133,6 +133,7 @@ test("legacy adapter uses one scoped entry and maps all readers to the scoped ac
     legacy: await access.withLegacyDb(db => db.marker),
     isolatedFts: access.capabilities.isolatedFts,
     isolatedKg: access.capabilities.isolatedKg,
+    isolatedRecent: access.capabilities.isolatedRecent,
   }));
   assert.deepEqual(result, {
     core: "scoped",
@@ -140,11 +141,13 @@ test("legacy adapter uses one scoped entry and maps all readers to the scoped ac
     legacy: "scoped",
     isolatedFts: false,
     isolatedKg: false,
+    isolatedRecent: false,
   });
   assert.equal(scopedRuns, 1);
   assert.equal(baseCalls, 0);
   assert.equal(runWithHybridDbAccessScope({ withDb: scopedAccessor }, access => access.capabilities.isolatedFts), false);
   assert.equal(runWithHybridDbAccessScope({ withDb: scopedAccessor }, access => access.capabilities.isolatedKg), false);
+  assert.equal(runWithHybridDbAccessScope({ withDb: scopedAccessor }, access => access.capabilities.isolatedRecent), false);
 });
 
 test("malformed legacy scoped accessors fail at the scope callback boundary", async () => {
@@ -279,6 +282,36 @@ test("isolatedKg capability requires strict true and stays independent from isol
   assert.equal(enabled.isolatedKg, true);
 });
 
+test("isolatedRecent capability requires strict true and stays independent from isolatedFts and isolatedKg", async () => {
+  for (const capability of [undefined, false, "true", 1, null, {}, []]) {
+    const result = await runWithHybridDbAccessScope({
+      withHybridDbAccessScope: async run => run({
+        withCoreDb: run => run({ marker: "core" }),
+        withEngineDb: run => run({ marker: "engine" }),
+        withLegacyDb: run => run({ marker: "legacy" }),
+        capabilities: capability === undefined
+          ? { isolatedFts: true, isolatedKg: true }
+          : { isolatedFts: true, isolatedKg: true, isolatedRecent: capability },
+      }),
+    }, access => access.capabilities);
+    assert.equal(result.isolatedFts, true, String(capability));
+    assert.equal(result.isolatedKg, true, String(capability));
+    assert.equal(result.isolatedRecent, false, String(capability));
+  }
+
+  const enabled = await runWithHybridDbAccessScope({
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: run => run({ marker: "core" }),
+      withEngineDb: run => run({ marker: "engine" }),
+      withLegacyDb: run => run({ marker: "legacy" }),
+      capabilities: { isolatedFts: false, isolatedKg: false, isolatedRecent: true },
+    }),
+  }, access => access.capabilities);
+  assert.equal(enabled.isolatedFts, false);
+  assert.equal(enabled.isolatedKg, false);
+  assert.equal(enabled.isolatedRecent, true);
+});
+
 test("hybridSearch routes KG to isolated readers only when capability is true and snapshot IDs are all text", async () => {
   const sqlByReader = { core: [], engine: [], legacy: [] };
   const reader = name => run => run({
@@ -365,4 +398,111 @@ test("hybridSearch falls back KG to legacy when isolatedKg is requested but snap
   assert.equal(sqlByReader.legacy.some(sql => sql.includes("FROM memory_confidence mc") && sql.includes("mc.kg_data LIKE")), true);
   assert.equal(result.debug.kg_access_mode, "legacy_fallback");
   assert.equal(result.debug.kg_isolated_fallback_reason, "text_id_invariant_failed");
+});
+
+test("hybridSearch routes Recent to isolated readers only when capability is true and snapshot IDs are all text", async () => {
+  const sqlByReader = { core: [], engine: [], legacy: [] };
+  const reader = name => run => run({
+    readonly: true,
+    prepare(sql) {
+      const query = String(sql);
+      sqlByReader[name].push(query);
+      return {
+        all(...args) {
+          if (query.includes("PRAGMA database_list")) {
+            return [{ name: "main" }];
+          }
+          if (name === "engine" && query.includes("SELECT chunk_id, confidence")) {
+            return [{ chunk_id: "chunk-1", confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
+          }
+          if (name === "core" && query.includes("SELECT id, path, updated_at FROM chunks")) {
+            return [{ id: "chunk-1", path: "memory/smart-add/a.md", updated_at: 1 }];
+          }
+          if (name === "engine" && query.includes("COALESCE(is_archived, 0) != 0")) {
+            return [];
+          }
+          if (name === "core" && query.includes("NOT EXISTS") && query.includes("memory/smart-add/%")) {
+            return [{ id: "chunk-1", text: "ordinary query note", path: "memory/smart-add/a.md", updated_at: 1 }];
+          }
+          if (name === "engine" && query.includes("WITH selected AS")) {
+            return [{ chunk_id: "chunk-1", confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
+          }
+          return [];
+        },
+        get: () => null,
+      };
+    },
+  });
+
+  const result = await hybridSearch("ordinary query", {}, {
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: reader("core"),
+      withEngineDb: reader("engine"),
+      withLegacyDb: reader("legacy"),
+      capabilities: { isolatedRecent: true },
+    }),
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+  });
+
+  assert.equal(sqlByReader.engine.some(sql => sql.includes("COALESCE(is_archived, 0) != 0")), true);
+  assert.equal(sqlByReader.engine.some(sql => sql.includes("WITH selected AS")), true);
+  assert.equal(sqlByReader.core.some(sql => sql.includes("NOT EXISTS") && sql.includes("memory/smart-add/%")), true);
+  assert.equal(
+    sqlByReader.legacy.some(sql => sql.includes("LEFT JOIN memory_confidence") && sql.includes("memory/smart-add/%")),
+    false,
+  );
+  assert.equal(result.debug.recent_access_mode, "isolated");
+});
+
+test("hybridSearch falls back Recent to legacy when isolatedRecent is requested but snapshot IDs are not all text", async () => {
+  const sqlByReader = { core: [], engine: [], legacy: [] };
+  const reader = name => run => run({
+    readonly: true,
+    prepare(sql) {
+      const query = String(sql);
+      sqlByReader[name].push(query);
+      return {
+        all() {
+          if (query.includes("PRAGMA database_list")) {
+            return [{ name: "main" }];
+          }
+          if (name === "engine" && query.includes("SELECT chunk_id, confidence")) {
+            return [{ chunk_id: Buffer.from("blob-id"), confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
+          }
+          if (name === "core" && query.includes("SELECT id, path, updated_at FROM chunks")) {
+            return [{ id: "chunk-1", path: "memory/smart-add/a.md", updated_at: 1 }];
+          }
+          if (name === "legacy" && query.includes("LEFT JOIN memory_confidence") && query.includes("memory/smart-add/%")) {
+            return [{ id: "chunk-1", text: "ordinary query note", path: "memory/smart-add/a.md", updated_at: 1, confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
+          }
+          return [];
+        },
+        get: () => null,
+      };
+    },
+  });
+
+  const result = await hybridSearch("ordinary query", {}, {
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: reader("core"),
+      withEngineDb: reader("engine"),
+      withLegacyDb: reader("legacy"),
+      capabilities: { isolatedRecent: true },
+    }),
+    calcRealtimeConf: row => row.confidence,
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+  });
+
+  assert.equal(sqlByReader.engine.some(sql => sql.includes("COALESCE(is_archived, 0) != 0")), false);
+  assert.equal(sqlByReader.engine.some(sql => sql.includes("WITH selected AS")), false);
+  assert.equal(sqlByReader.core.some(sql => sql.includes("NOT EXISTS") && sql.includes("memory/smart-add/%")), false);
+  assert.equal(
+    sqlByReader.legacy.some(sql => sql.includes("LEFT JOIN memory_confidence") && sql.includes("memory/smart-add/%")),
+    true,
+  );
+  assert.equal(result.debug.recent_access_mode, "guarded_fallback");
+  assert.equal(result.debug.recent_isolated_fallback_reason, "isolated_recent_engine_id_invariant_failed");
 });
