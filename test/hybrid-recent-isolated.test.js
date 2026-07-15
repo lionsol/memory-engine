@@ -294,6 +294,10 @@ function ids(rows = []) {
   return rows.map(row => row.id);
 }
 
+function explainPlanDetails(db, sql, params = []) {
+  return db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params).map(row => String(row.detail || ""));
+}
+
 test("isolated Recent matches legacy across like, recent, episode, and recent_fallback branches", async () => {
   await withFixture(({ core, engine }) => {
     insertChunk(core, { id: "C", updatedAt: 1000, path: "memory/smart-add/C.md", text: "alpha smart add C" });
@@ -340,6 +344,8 @@ test("isolated Recent matches legacy across like, recent, episode, and recent_fa
     assert.deepEqual(ids(isolated.ctx.channels.episode), ["B"]);
     assert.deepEqual(ids(isolated.ctx.channels.recent_fallback), ["A", "B", "C"]);
     assert.equal(isolated.records.some(record => record.db === "core" && record.sql.includes("json_each(?) AS archived")), true);
+    assert.equal(isolated.records.some(record => record.db === "core" && record.sql.includes("NOT IN")), true);
+    assert.equal(isolated.records.some(record => record.db === "core" && record.sql.includes("NOT EXISTS")), false);
     assert.equal(isolated.records.some(record => record.db === "engine" && record.sql.includes("COALESCE(is_archived, 0) != 0")), true);
     assert.equal(isolated.records.some(record => record.db === "engine" && record.sql.includes("WITH selected AS")), true);
   });
@@ -493,4 +499,95 @@ test("isolated Recent falls back to legacy on archived or metadata TEXT guard fa
   assert.equal(metadataFallback.debug.recent_access_mode, "guarded_fallback");
   assert.equal(metadataFallback.debug.recent_isolated_fallback_reason, "isolated_recent_metadata_duplicate_id");
   assert.deepEqual(ids(metadataFallback.channels.recent), ["legacy"]);
+});
+
+test("isolated Recent falls back to legacy when archived IDs are null, blob, integer, or real before Core SQL", async () => {
+  for (const [label, archivedValue] of [
+    ["null", null],
+    ["blob", Buffer.from("blob-id")],
+    ["integer", 42],
+    ["real", 1.5],
+  ]) {
+    let coreCalls = 0;
+    const ctx = makeCtx({
+      withDb: run => run({
+        prepare: () => ({ all: () => [{ id: "legacy", text: "alpha", path: "memory/smart-add/legacy.md", updated_at: 1, confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 3, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }] }),
+      }),
+      withCoreDb: run => run({
+        readonly: true,
+        prepare() {
+          coreCalls += 1;
+          return { all: () => [] };
+        },
+      }),
+      withEngineDb: run => run({
+        readonly: true,
+        prepare(sql) {
+          const query = String(sql);
+          if (query.includes("COALESCE(is_archived, 0) != 0")) return { all: () => [{ chunk_id: archivedValue }] };
+          if (query.includes("WITH selected AS")) return { all: () => [] };
+          return { all: () => [] };
+        },
+      }),
+    }, {
+      ftsIsEmpty: false,
+      recentAccessMode: "isolated",
+      recentIsolationRequested: true,
+    });
+    await collectRecentCandidates(ctx);
+    assert.equal(coreCalls, 0, label);
+    assert.equal(ctx.debug.recent_access_mode, "guarded_fallback", label);
+    assert.equal(ctx.debug.recent_isolated_fallback_reason, "isolated_recent_archived_id_invariant_failed", label);
+    assert.deepEqual(ids(ctx.channels.recent), ["legacy"], label);
+  }
+});
+
+test("isolated Recent keeps empty archived payload equivalent and production SQL plan is non-correlated NOT IN", async () => {
+  await withFixture(({ core, engine }) => {
+    insertChunk(core, { id: "B", updatedAt: 900, path: "memory/episodes/B.md", text: "alpha episodic" });
+    insertChunk(core, { id: "A", updatedAt: 1000, path: "memory/smart-add/A.md", text: "alpha smart" });
+    insertConfidence(engine, { id: "A", category: "raw_log", kgData: "alpha smart" });
+    insertConfidence(engine, { id: "B", category: "episodic", kgData: "alpha episodic" });
+  }, async (paths) => {
+    const legacy = await runRecent(paths, {
+      ftsIsEmpty: true,
+      recentAccessMode: "legacy",
+      recentTopK: 2,
+      recentRerankTopK: 2,
+      recentFallbackTopK: 2,
+      likeTopK: 2,
+    });
+    const isolated = await runRecent(paths, {
+      ftsIsEmpty: true,
+      recentAccessMode: "isolated",
+      recentIsolationRequested: true,
+      recentTopK: 2,
+      recentRerankTopK: 2,
+      recentFallbackTopK: 2,
+      likeTopK: 2,
+    });
+
+    assert.equal(isolated.ctx.debug.recent_archived_row_count, 0);
+    assert.equal(isolated.ctx.debug.recent_archived_unique_id_count, 0);
+    assert.equal(isolated.ctx.debug.recent_archived_json_bytes, 2);
+    for (const name of ["like", "recent", "episode", "recent_fallback"]) {
+      assert.deepEqual(channelSnapshot(isolated.ctx.channels, name), channelSnapshot(legacy.ctx.channels, name), name);
+    }
+
+    const coreDb = new Database(paths.corePath, { readonly: true, fileMustExist: true });
+    try {
+      const coreSqlRecords = isolated.records.filter(record => record.db === "core" && record.sql.includes("json_each(?) AS archived"));
+      assert.equal(coreSqlRecords.length, 3);
+      for (const record of coreSqlRecords) {
+        assert.equal(record.sql.includes("NOT IN"), true);
+        assert.equal(record.sql.includes("NOT EXISTS"), false);
+        const details = explainPlanDetails(coreDb, record.sql, record.params);
+        assert.equal(details.some(detail => detail.includes("CORRELATED SCALAR SUBQUERY")), false, record.sql);
+        assert.equal(details.some(detail => detail.includes("SCAN json_each") || detail.includes("SCAN archived VIRTUAL TABLE")), true, details.join("\n"));
+        assert.equal(details.some(detail => detail.includes("LIST SUBQUERY")), true, details.join("\n"));
+      }
+    } finally {
+      coreDb.close();
+    }
+  });
 });

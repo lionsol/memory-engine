@@ -421,7 +421,7 @@ test("hybridSearch routes Recent to isolated readers only when capability is tru
           if (name === "engine" && query.includes("COALESCE(is_archived, 0) != 0")) {
             return [];
           }
-          if (name === "core" && query.includes("NOT EXISTS") && query.includes("memory/smart-add/%")) {
+          if (name === "core" && query.includes("NOT IN") && query.includes("memory/smart-add/%")) {
             return [{ id: "chunk-1", text: "ordinary query note", path: "memory/smart-add/a.md", updated_at: 1 }];
           }
           if (name === "engine" && query.includes("WITH selected AS")) {
@@ -448,7 +448,7 @@ test("hybridSearch routes Recent to isolated readers only when capability is tru
 
   assert.equal(sqlByReader.engine.some(sql => sql.includes("COALESCE(is_archived, 0) != 0")), true);
   assert.equal(sqlByReader.engine.some(sql => sql.includes("WITH selected AS")), true);
-  assert.equal(sqlByReader.core.some(sql => sql.includes("NOT EXISTS") && sql.includes("memory/smart-add/%")), true);
+  assert.equal(sqlByReader.core.some(sql => sql.includes("NOT IN") && sql.includes("memory/smart-add/%")), true);
   assert.equal(
     sqlByReader.legacy.some(sql => sql.includes("LEFT JOIN memory_confidence") && sql.includes("memory/smart-add/%")),
     false,
