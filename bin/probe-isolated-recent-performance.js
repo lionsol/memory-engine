@@ -22,19 +22,23 @@ function readFlagValue(argv, index, flagName) {
 
 function usage() {
   return `Usage:
-  node bin/probe-isolated-recent-performance.js [--json] [--out <path>] [--help]
+  node bin/probe-isolated-recent-performance.js [--mode synthetic|real] [--core-db <path>] [--engine-db <path>] [--json] [--out <path>] [--help]
 
 Notes:
   - Isolated Recent performance probe is read-only.
-  - It uses synthetic SQLite fixtures only.
-  - It never touches production Recent, real DBs, or runtime capability defaults.`;
+  - Default mode is synthetic.
+  - Real mode is opt-in and requires explicit Core and Engine DB paths.
+  - It never touches production Recent, runtime capability defaults, or opens DBs writable.`;
 }
 
 function parseArgs(argv = []) {
   const options = {
+    mode: "synthetic",
     json: false,
     out: null,
     help: false,
+    coreDbPath: null,
+    engineDbPath: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -50,6 +54,25 @@ function parseArgs(argv = []) {
       options.json = true;
       continue;
     }
+    if (arg === "--mode") {
+      const mode = readFlagValue(argv, index, "--mode");
+      if (!["synthetic", "real"].includes(mode)) {
+        throw new Error(`unknown mode: ${mode}`);
+      }
+      options.mode = mode;
+      index += 1;
+      continue;
+    }
+    if (arg === "--core-db") {
+      options.coreDbPath = resolve(readFlagValue(argv, index, "--core-db"));
+      index += 1;
+      continue;
+    }
+    if (arg === "--engine-db") {
+      options.engineDbPath = resolve(readFlagValue(argv, index, "--engine-db"));
+      index += 1;
+      continue;
+    }
     if (arg === "--out") {
       options.out = resolve(readFlagValue(argv, index, "--out"));
       index += 1;
@@ -59,6 +82,12 @@ function parseArgs(argv = []) {
   }
 
   if (!options.json) options.json = true;
+  if (options.mode === "synthetic" && (options.coreDbPath || options.engineDbPath)) {
+    throw new Error("db_paths_require_real_mode");
+  }
+  if (options.mode === "real" && (!options.coreDbPath || !options.engineDbPath)) {
+    throw new Error("real_mode_requires_explicit_core_and_engine_db");
+  }
   return options;
 }
 
@@ -73,7 +102,21 @@ async function probeIsolatedRecentPerformance(argv = process.argv.slice(2), deps
   if (options.help) return { exitCode: 0, output: usage() };
 
   const probe = deps.probe || await import("../lib/recall/hybrid/recent-performance-probe.js");
-  const report = await probe.runRecentPerformanceProbe();
+  const report = await probe.runRecentPerformanceProbe({
+    mode: options.mode,
+    coreDbPath: options.coreDbPath,
+    engineDbPath: options.engineDbPath,
+  });
+  const privacyValidation = report.privacy_validation
+    || probe.validateRecentPerformancePublicReport?.(report)
+    || { passed: true };
+  if (!privacyValidation.passed) {
+    return {
+      exitCode: 2,
+      output: "public_report_privacy_validation_failed",
+      report: null,
+    };
+  }
   const output = JSON.stringify(report, null, 2);
   if (options.out) probe.writeRecentPerformanceReport(output, options.out);
   return {

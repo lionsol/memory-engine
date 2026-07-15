@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -35,7 +35,7 @@ test("recent performance CLI help, parser, and mutation flag rejection", async (
   }
 });
 
-test("recent performance CLI writes report only to caller path and returns valid JSON", async () => {
+test("recent performance CLI writes validated report only to caller path", async () => {
   const root = createFixtureRoot();
   try {
     const outPath = join(root, "recent-performance.json");
@@ -44,7 +44,7 @@ test("recent performance CLI writes report only to caller path and returns valid
         runRecentPerformanceProbe: async () => ({
           probe: "isolated_recent_archived_exclusion_performance",
           decision: { class: "recommended_sql_rewrite" },
-          privacy_ok: true,
+          privacy_validation: { passed: true, forbidden_key_count: 0, raw_value_leak_count: 0, invalid_hash_count: 0, checked_sensitive_value_count: 0 },
         }),
         writeRecentPerformanceReport(output, path) {
           require("node:fs").mkdirSync(require("node:path").dirname(path), { recursive: true });
@@ -61,10 +61,39 @@ test("recent performance CLI writes report only to caller path and returns valid
   }
 });
 
+test("recent performance CLI fails closed on privacy validation failure and does not overwrite out file", async () => {
+  const root = createFixtureRoot();
+  try {
+    const outPath = join(root, "recent-performance.json");
+    writeFileSync(outPath, "KEEP");
+    const result = await probeIsolatedRecentPerformance(["--json", "--out", outPath], {
+      probe: {
+        runRecentPerformanceProbe: async () => ({
+          probe: "isolated_recent_archived_exclusion_performance",
+          decision: { class: "recommended_sql_rewrite" },
+          privacy_validation: { passed: false, forbidden_key_count: 1, raw_value_leak_count: 0, invalid_hash_count: 0, checked_sensitive_value_count: 1 },
+          rows: [{ id: "SHOULD-NOT-PRINT" }],
+        }),
+        writeRecentPerformanceReport() {
+          throw new Error("must not write");
+        },
+      },
+    });
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.output, "public_report_privacy_validation_failed");
+    assert.equal(readFileSync(outPath, "utf8"), "KEEP");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("recent performance CLI exit codes cover pass, fail, and inconclusive", async () => {
   const pass = await probeIsolatedRecentPerformance(["--json"], {
     probe: {
-      runRecentPerformanceProbe: async () => ({ decision: { class: "recommended_sql_rewrite" } }),
+      runRecentPerformanceProbe: async () => ({
+        decision: { class: "recommended_sql_rewrite" },
+        privacy_validation: { passed: true },
+      }),
       writeRecentPerformanceReport() {},
     },
   });
@@ -72,7 +101,10 @@ test("recent performance CLI exit codes cover pass, fail, and inconclusive", asy
 
   const fail = await probeIsolatedRecentPerformance(["--json"], {
     probe: {
-      runRecentPerformanceProbe: async () => ({ decision: { class: "fail" } }),
+      runRecentPerformanceProbe: async () => ({
+        decision: { class: "fail" },
+        privacy_validation: { passed: true },
+      }),
       writeRecentPerformanceReport() {},
     },
   });
@@ -80,7 +112,10 @@ test("recent performance CLI exit codes cover pass, fail, and inconclusive", asy
 
   const inconclusive = await probeIsolatedRecentPerformance(["--json"], {
     probe: {
-      runRecentPerformanceProbe: async () => ({ decision: { class: "inconclusive" } }),
+      runRecentPerformanceProbe: async () => ({
+        decision: { class: "inconclusive" },
+        privacy_validation: { passed: true },
+      }),
       writeRecentPerformanceReport() {},
     },
   });
