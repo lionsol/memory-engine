@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { existsSync } = require("node:fs");
-const { resolve } = require("node:path");
+const { resolve, isAbsolute } = require("node:path");
 
 const MUTATION_FLAGS = new Set([
   "--apply",
@@ -21,13 +21,27 @@ function readFlagValue(argv, index, flagName) {
   return value;
 }
 
+function resolvePathOrUri(input) {
+  if (input.startsWith("file:///") || input.startsWith("file%3A///") || input.startsWith("file%3A%2F%2F%2F")) {
+    try {
+      const decoded = decodeURIComponent(input);
+      const { fileURLToPath } = require("node:url");
+      return resolve(fileURLToPath(decoded));
+    } catch {
+      throw new Error(`Cannot resolve file URI: ${input}`);
+    }
+  }
+  // Relative path or regular absolute path
+  return resolve(input);
+}
+
 function usage() {
   return `Usage:
   node bin/audit-isolated-recent-rollout-readiness.js [--json] [--out <path>]
       [--core-db <path>] [--engine-db <path>]
       [--query <text>] [--queries-file <path>] [--derive-limit <n>]
       [--include-no-hit-control] [--warmups <n>] [--repetitions <n>]
-      [--concurrency-levels 2,4]
+      [--concurrency-levels 2,4] [--hash-main-files] [--isolated-snapshot]
 
 Notes:
   - Isolated Recent rollout readiness audit is read-only.
@@ -56,6 +70,8 @@ function parseArgs(argv = []) {
     warmups: 1,
     repetitions: 5,
     concurrencyLevels: [2, 4],
+    hashMainFiles: false,
+    isolatedSnapshot: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -67,12 +83,12 @@ function parseArgs(argv = []) {
       throw new Error(`Isolated Recent rollout readiness audit is read-only; rejected mutation flag: ${arg}`);
     }
     if (arg === "--core-db" || arg === "--core-db-path") {
-      options.coreDbPath = resolve(readFlagValue(argv, i, arg));
+      options.coreDbPath = readFlagValue(argv, i, arg);
       i += 1;
       continue;
     }
     if (arg === "--engine-db" || arg === "--engine-db-path") {
-      options.engineDbPath = resolve(readFlagValue(argv, i, arg));
+      options.engineDbPath = readFlagValue(argv, i, arg);
       i += 1;
       continue;
     }
@@ -120,6 +136,14 @@ function parseArgs(argv = []) {
       i += 1;
       continue;
     }
+    if (arg === "--hash-main-files") {
+      options.hashMainFiles = true;
+      continue;
+    }
+    if (arg === "--isolated-snapshot") {
+      options.isolatedSnapshot = true;
+      continue;
+    }
     throw new Error(`unknown argument: ${arg}`);
   }
   if (!options.json) options.json = true;
@@ -144,8 +168,37 @@ async function auditIsolatedRecentRolloutReadiness(argv = process.argv.slice(2),
   const isolatedDbs = deps.isolatedDbs || await import("../lib/db/isolated-dbs.js");
   const audit = deps.audit || await import("../lib/recall/hybrid/recent-rollout-readiness-audit.js");
 
-  const coreDbPath = options.coreDbPath || engineDbMod.resolveCoreDbPath();
-  const engineDbPath = options.engineDbPath || engineDbMod.resolveEngineDbPath();
+  const defaultCoreDbPath = typeof engineDbMod.resolveCoreDbPath === "function"
+    ? engineDbMod.resolveCoreDbPath()
+    : null;
+  const defaultEngineDbPath = typeof engineDbMod.resolveEngineDbPath === "function"
+    ? engineDbMod.resolveEngineDbPath()
+    : null;
+  const requestedCoreDbPath = options.coreDbPath || defaultCoreDbPath;
+  const requestedEngineDbPath = options.engineDbPath || defaultEngineDbPath;
+  const coreDbPath = requestedCoreDbPath ? resolvePathOrUri(requestedCoreDbPath) : requestedCoreDbPath;
+  const engineDbPath = requestedEngineDbPath ? resolvePathOrUri(requestedEngineDbPath) : requestedEngineDbPath;
+  if (!coreDbPath || !engineDbPath) {
+    throw new Error("Core and Engine DB paths are required");
+  }
+  let snapshotIdentityVerified = false;
+  if (options.isolatedSnapshot === true && defaultCoreDbPath && defaultEngineDbPath) {
+    const { rejectLiveDatabaseSnapshotIdentity } = await import(
+      "../lib/recall/hybrid/recent-rollout-readiness-audit.js"
+    );
+    const coreCheck = rejectLiveDatabaseSnapshotIdentity(requestedCoreDbPath, [defaultCoreDbPath]);
+    const engineCheck = rejectLiveDatabaseSnapshotIdentity(requestedEngineDbPath, [defaultEngineDbPath]);
+    if (!coreCheck.allowed || !engineCheck.allowed) {
+      const reasons = [];
+      if (!coreCheck.allowed) reasons.push(`core: ${coreCheck.reason}`);
+      if (!engineCheck.allowed) reasons.push(`engine: ${engineCheck.reason}`);
+      throw new Error(
+        `--isolated-snapshot rejected: ${reasons.join(", ")}. `
+        + `Isolated snapshot mode only accepts non-live snapshot files that are identity-distinct from the default databases.`
+      );
+    }
+    snapshotIdentityVerified = true;
+  }
   assertDbExists(coreDbPath, "Core");
   assertDbExists(engineDbPath, "Engine");
 
@@ -198,6 +251,9 @@ async function auditIsolatedRecentRolloutReadiness(argv = process.argv.slice(2),
       repetitions: options.repetitions,
       concurrencyLevels: options.concurrencyLevels,
       openHandles,
+      hashMainFiles: options.hashMainFiles,
+      isolatedSnapshot: options.isolatedSnapshot,
+      snapshotIdentityVerified,
     });
 
     const output = JSON.stringify(report, null, 2);

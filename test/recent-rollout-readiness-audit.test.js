@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, renameSync, rmSync, symlinkSync, linkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,7 +8,16 @@ import Database from "better-sqlite3";
 
 import { openCoreDbReadonly, openEngineDbIsolated } from "../lib/db/isolated-dbs.js";
 import { openEngineDb } from "../lib/db/engine-db.js";
-import { runRecentRolloutReadinessAudit } from "../lib/recall/hybrid/recent-rollout-readiness-audit.js";
+import {
+  classifyDatabaseStability,
+  RECENT_ROLLOUT_REPORT_SCHEMA_VERSION,
+  rejectLiveDatabaseSnapshotIdentity,
+  resolveSnapshotPathIdentity,
+  runRecentRolloutReadinessAudit,
+  FILE_IDENTITY_ALLOWED,
+  FILE_IDENTITY_BLOCKED,
+  FILE_IDENTITY_ERROR,
+} from "../lib/recall/hybrid/recent-rollout-readiness-audit.js";
 
 function createFixtureRoot() {
   return mkdtempSync(join(tmpdir(), "memory-engine-recent-rollout-"));
@@ -164,6 +173,8 @@ test("rollout readiness audit passes canary readiness with branch coverage, no-h
       warmups: 0,
       repetitions: 2,
       concurrencyWorkerDelayMs: 50,
+      isolatedSnapshot: true,
+      snapshotIdentityVerified: true,
       sampleSensitiveValues: () => [
         "SECRET ALPHA SMART BODY",
         "SECRET-SMART-A.md",
@@ -171,8 +182,18 @@ test("rollout readiness audit passes canary readiness with branch coverage, no-h
         "1000",
       ],
     }, async (report) => {
+      assert.equal(report.report_schema_version, RECENT_ROLLOUT_REPORT_SCHEMA_VERSION);
       assert.equal(report.decision.class, "pass_canary_readiness");
       assert.equal(report.production_enablement_recommended, false);
+      assert.deepEqual(report.snapshot_context, {
+        requested: true,
+        verified_non_live_identity: true,
+        database_open_mode: "readonly",
+        sqlite_immutable: false,
+        expected_external_writer: false,
+        creation_method_claim: "sqlite_backup_api",
+        creation_method_verified: false,
+      });
       assert.deepEqual(report.branch_coverage, {
         like_fallback: true,
         recent_scored: true,
@@ -225,6 +246,246 @@ test("rollout readiness audit passes canary readiness with branch coverage, no-h
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+function mockSnapshot({
+  present = false,
+  size = null,
+  mtimeMs = null,
+  inode = null,
+  sha256 = null,
+  sha256_checked = false,
+} = {}) {
+  return { present, size, mtimeMs, inode, sha256, sha256_checked };
+}
+
+function makeStabilityInput(overrides = {}) {
+  return {
+    before: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: 100, mtimeMs: 10, inode: 1, sha256: "a".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 7,
+        schema_version: 1,
+        total_changes: 0,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: 80, mtimeMs: 11, inode: 2, sha256: "b".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+    after: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: 100, mtimeMs: 20, inode: 1, sha256: "a".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 7,
+        schema_version: 1,
+        total_changes: 0,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: 80, mtimeMs: 21, inode: 2, sha256: "b".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+    hashMainFiles: true,
+    snapshotContext: {
+      requested: false,
+      verified_non_live_identity: false,
+      database_open_mode: "readonly",
+      sqlite_immutable: false,
+      expected_external_writer: true,
+      creation_method_claim: null,
+      creation_method_verified: false,
+    },
+    ...overrides,
+  };
+}
+
+test("stability classification distinguishes sidecar-neutral, readonly WAL index activity, unknown sidecar activity, and logical changes", () => {
+  const neutral = classifyDatabaseStability(makeStabilityInput());
+  assert.equal(neutral.logical_database_stable, true);
+  assert.equal(neutral.sidecar_neutral, true);
+  assert.equal(neutral.sidecar_activity_class, "none");
+  assert.equal(neutral.stable, true);
+  assert.equal(neutral.stability_contract.logical_readonly, true);
+  assert.equal(neutral.stability_contract.sidecar_neutral, true);
+  assert.equal(neutral.main_file_content_evidence, "sha256");
+  assert.equal(neutral.main_file_content_stable, true);
+
+  const readonlySidecar = classifyDatabaseStability(makeStabilityInput({
+    snapshotContext: {
+      requested: true,
+      verified_non_live_identity: true,
+      database_open_mode: "readonly",
+      sqlite_immutable: false,
+      expected_external_writer: false,
+      creation_method_claim: "sqlite_backup_api",
+      creation_method_verified: false,
+    },
+    after: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: 100, mtimeMs: 20, inode: 1, sha256: "a".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot({ present: true, size: 0, mtimeMs: 30, inode: 3, sha256: "c".repeat(64), sha256_checked: true }),
+        shm: mockSnapshot({ present: true, size: 32768, mtimeMs: 31, inode: 4 }),
+        data_version: 7,
+        schema_version: 1,
+        total_changes: 0,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: 80, mtimeMs: 21, inode: 2, sha256: "b".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot({ present: true, size: 0, mtimeMs: 32, inode: 5, sha256: "d".repeat(64), sha256_checked: true }),
+        shm: mockSnapshot({ present: true, size: 32768, mtimeMs: 33, inode: 6 }),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+  }));
+  assert.equal(readonlySidecar.logical_database_stable, true);
+  assert.equal(readonlySidecar.sidecar_neutral, false);
+  assert.equal(readonlySidecar.sidecar_activity_class, "readonly_wal_index_activity");
+  assert.equal(readonlySidecar.decision_eligible, true);
+  assert.equal(readonlySidecar.stability_contract.sidecar_neutral, false);
+
+  const unknownSidecar = classifyDatabaseStability(makeStabilityInput({
+    after: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: 100, mtimeMs: 20, inode: 1, sha256: "a".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot({ present: false }),
+        shm: mockSnapshot({ present: true, size: 32768, mtimeMs: 31, inode: 4 }),
+        data_version: 7,
+        schema_version: 1,
+        total_changes: 0,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: 80, mtimeMs: 21, inode: 2, sha256: "b".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot({ present: false }),
+        shm: mockSnapshot({ present: true, size: 32768, mtimeMs: 33, inode: 6 }),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+  }));
+  assert.equal(unknownSidecar.sidecar_activity_class, "external_or_unknown_activity");
+  assert.equal(unknownSidecar.logical_database_stable, true);
+  assert.equal(unknownSidecar.decision_eligible, false);
+  assert.equal(unknownSidecar.stability_contract.sidecar_neutral, false);
+
+  const walContentChange = classifyDatabaseStability(makeStabilityInput({
+    after: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: 100, mtimeMs: 20, inode: 1, sha256: "a".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot({ present: true, size: 64, mtimeMs: 30, inode: 3, sha256: "e".repeat(64), sha256_checked: true }),
+        shm: mockSnapshot(),
+        data_version: 7,
+        schema_version: 1,
+        total_changes: 0,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: 80, mtimeMs: 21, inode: 2, sha256: "b".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+  }));
+  assert.equal(walContentChange.sidecar_activity_class, "wal_content_change");
+  assert.equal(walContentChange.decision_eligible, false);
+  assert.equal(walContentChange.logical_database_stable, true);
+
+  const logicalChange = classifyDatabaseStability(makeStabilityInput({
+    after: {
+      legacy: { data_version: 8, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: 100, mtimeMs: 20, inode: 1, sha256: "z".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 8,
+        schema_version: 2,
+        total_changes: 1,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: 80, mtimeMs: 21, inode: 2, sha256: "b".repeat(64), sha256_checked: true }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+  }));
+  assert.equal(logicalChange.logical_database_stable, false);
+  assert.equal(logicalChange.sidecar_activity_class, "logical_database_change");
+  assert.equal(logicalChange.stable, false);
+});
+
+test("stability classification marks hash evidence levels without claiming cryptographic proof when hashes are disabled", () => {
+  const unhashed = classifyDatabaseStability(makeStabilityInput({
+    hashMainFiles: false,
+    before: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: 100, mtimeMs: 10, inode: 1 }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 7,
+        schema_version: 1,
+        total_changes: 0,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: 80, mtimeMs: 11, inode: 2 }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+    after: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: 100, mtimeMs: 20, inode: 1 }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 7,
+        schema_version: 1,
+        total_changes: 0,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: 80, mtimeMs: 21, inode: 2 }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+  }));
+  assert.equal(unhashed.hash_main_files, false);
+  assert.equal(unhashed.core.main.sha256_checked, false);
+  assert.equal(unhashed.engine.main.sha256_checked, false);
+  assert.equal(unhashed.main_file_content_evidence, "metadata_and_sqlite_versions");
+  assert.equal(unhashed.main_file_content_stable, true);
+  assert.equal(unhashed.logical_database_stable, true);
+  assert.equal(unhashed.stability_contract.logical_readonly, true);
 });
 
 test("rollout readiness audit guarded fallback preserves legacy and performs no isolated core query when snapshot guard fails", async () => {
@@ -345,4 +606,120 @@ test("rollout readiness audit does not pass canary readiness when concurrency ex
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("snapshot file identity resolution handles absolute, relative, symlink, hardlink, URI, and encoded URI", () => {
+  const root = createFixtureRoot();
+  try {
+    const realPath = join(root, "identity-test.sqlite");
+    writeFileSync(realPath, "alpha content");
+
+    const previousCwd = process.cwd();
+    process.chdir(root);
+
+    const abs = resolveSnapshotPathIdentity(realPath);
+    assert.equal(abs.status, FILE_IDENTITY_ALLOWED);
+    assert.equal(abs.identity.realpath, realPath);
+    assert.ok(abs.identity.dev > 0);
+    assert.ok(abs.identity.ino > 0);
+
+    const relativeCheck = rejectLiveDatabaseSnapshotIdentity("./identity-test.sqlite", [realPath]);
+    assert.equal(relativeCheck.allowed, false);
+    assert.equal(relativeCheck.status, FILE_IDENTITY_BLOCKED);
+
+    const parentRelativeCheck = rejectLiveDatabaseSnapshotIdentity(join(root, "..", root.split("/").pop(), "identity-test.sqlite"), [realPath]);
+    assert.equal(parentRelativeCheck.allowed, false);
+
+    const symlinkPath = join(root, "identity-symlink.sqlite");
+    symlinkSync(realPath, symlinkPath);
+    const symCheck = rejectLiveDatabaseSnapshotIdentity(symlinkPath, [realPath]);
+    assert.equal(symCheck.allowed, false);
+    assert.equal(symCheck.reason, "input_path_identifies_default_db");
+
+    const hardlinkPath = join(root, "identity-hardlink.sqlite");
+    linkSync(realPath, hardlinkPath);
+    const hardCheck = rejectLiveDatabaseSnapshotIdentity(hardlinkPath, [realPath]);
+    assert.equal(hardCheck.allowed, false);
+    assert.equal(hardCheck.reason, "input_path_identifies_default_db");
+
+    const properUri = `file://${realPath}`;
+    const uriCheck = rejectLiveDatabaseSnapshotIdentity(properUri, [realPath]);
+    assert.equal(uriCheck.allowed, false);
+    assert.equal(uriCheck.reason, "file_uri_not_allowed");
+
+    const encodedUri = encodeURIComponent(`file://${realPath}`);
+    const encodedCheck = rejectLiveDatabaseSnapshotIdentity(encodedUri, [realPath]);
+    assert.equal(encodedCheck.allowed, false);
+    assert.equal(encodedCheck.reason, "encoded_file_uri_not_allowed");
+
+    const missing = resolveSnapshotPathIdentity(join(root, "no-such-file.sqlite"));
+    assert.equal(missing.status, FILE_IDENTITY_ERROR);
+
+    const otherPath = join(root, "other-file.sqlite");
+    writeFileSync(otherPath, "different");
+    const independent = rejectLiveDatabaseSnapshotIdentity(otherPath, [realPath]);
+    assert.equal(independent.allowed, true);
+    process.chdir(previousCwd);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("main_file_content_evidence reflects sha256, metadata_and_sqlite_versions, and insufficient levels", () => {
+  // sha256 level: hashMainFiles=true, sha256 checked on both before and after
+  const sha256Result = classifyDatabaseStability(makeStabilityInput({ hashMainFiles: true }));
+  assert.equal(sha256Result.main_file_content_evidence, "sha256");
+  assert.equal(sha256Result.hash_main_files, true);
+
+  // metadata_and_sqlite_versions level: hashMainFiles=false, all metadata present
+  const metaResult = classifyDatabaseStability(makeStabilityInput({ hashMainFiles: false }));
+  assert.equal(metaResult.main_file_content_evidence, "metadata_and_sqlite_versions");
+  assert.equal(metaResult.hash_main_files, false);
+
+  // insufficient level: missing metadata
+  const insufficientInput = classifyDatabaseStability(makeStabilityInput({
+    hashMainFiles: true,
+    before: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: null, mtimeMs: 10, inode: 1, sha256: null, sha256_checked: false }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 7,
+        schema_version: 1,
+        total_changes: 0,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: null, mtimeMs: 11, inode: 2, sha256: null, sha256_checked: false }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 4,
+        schema_version: 1,
+        total_changes: 0,
+      },
+    },
+    after: {
+      legacy: { data_version: 7, total_changes: 0 },
+      core: {
+        main: mockSnapshot({ present: true, size: null, mtimeMs: 20, inode: 1, sha256: null, sha256_checked: false }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 7,
+        schema_version: null,
+        total_changes: null,
+      },
+      engine: {
+        main: mockSnapshot({ present: true, size: null, mtimeMs: 21, inode: 2, sha256: null, sha256_checked: false }),
+        wal: mockSnapshot(),
+        shm: mockSnapshot(),
+        data_version: 4,
+        schema_version: null,
+        total_changes: null,
+      },
+    },
+  }));
+  assert.equal(insufficientInput.main_file_content_evidence, "insufficient");
+  assert.equal(insufficientInput.main_file_content_stable, false);
+  assert.equal(insufficientInput.logical_database_stable, false);
+  assert.equal(insufficientInput.decision_eligible, false);
 });
