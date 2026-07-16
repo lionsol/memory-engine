@@ -53,6 +53,7 @@ import {
 } from "./lib/recall/auto-recall-reinforcement.js";
 import { analyzeAutoRecallIntent } from "./lib/recall/auto-recall-intent.js";
 import { evaluateAutoRecallRuntimeGate } from "./lib/recall/auto-recall-runtime-gate.js";
+import { createAutoRecallTurnStateManager } from "./lib/recall/auto-recall-turn-state.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
@@ -211,10 +212,7 @@ export default definePluginEntry({
     // Initialize LanceDB readiness as early as possible.
     void ensureLanceDBReady();
 
-
-    const autoRecallTraceByRun = new Map();
-    const autoRecallTraceBySession = new Map();
-    const currentTurnMemoryEngineGetIds = new Set();
+    const autoRecallTurnState = createAutoRecallTurnStateManager();
     const memoryEngineConfig = getMemoryEngineConfig(api?.config || null);
     const smartAddTimeZone = getSmartAddTimeZone(api?.config || null);
     const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
@@ -237,11 +235,19 @@ export default definePluginEntry({
       console.log(`[memory-engine] autoRecall hook registered topK=${autoRecallTopK} timeoutMs=${autoRecallTimeoutMs}`);
       api.on("before_prompt_build", async (event, ctx) => {
         try {
-          currentTurnMemoryEngineGetIds.clear();
+          autoRecallTurnState.cleanupExpired();
           const prompt = String(event?.prompt || "").trim();
           const traceId = crypto.randomUUID();
           const startedAt = Date.now();
           const sessionId = resolveHookSessionId(event, ctx);
+          const runKey = ctx?.runId || event?.runId || null;
+          if (runKey) {
+            autoRecallTurnState.createTurnState({
+              runId: runKey,
+              sessionId,
+              traceId,
+            });
+          }
 
           const runtimeGate = evaluateAutoRecallRuntimeGate({ event, ctx, config: autoRecallConfig });
           if (!runtimeGate.allowed) {
@@ -575,10 +581,15 @@ export default definePluginEntry({
               injected_count: Math.min(gatedResults.length, autoRecallTopK),
             }),
           });
-          const traceState = { traceId, sessionId: sessionIdForEvents, injectedIds, reinforcementAllowedIds };
-          const runKey = ctx?.runId || event?.runId;
-          if (runKey) autoRecallTraceByRun.set(runKey, traceState);
-          if (sessionIdForEvents) autoRecallTraceBySession.set(sessionIdForEvents, traceState);
+          if (runKey) {
+            autoRecallTurnState.updateTurnRecallState({
+              runId: runKey,
+              sessionId: sessionIdForEvents,
+              traceId,
+              injectedIds,
+              reinforcementAllowedIds,
+            });
+          }
           return { prependContext };
         } catch (e) {
           api.logger?.warn?.(`memory-engine autoRecall skipped: ${e.message}`);
@@ -586,25 +597,42 @@ export default definePluginEntry({
         }
       }, { timeoutMs: autoRecallTimeoutMs });
 
-      api.on("before_agent_finalize", async (event, ctx) => {
+      api.on("before_tool_call", async (event, ctx) => {
         try {
+          autoRecallTurnState.cleanupExpired();
+          if (event?.toolName !== "memory_engine_get") return;
+          const toolCallId = event?.toolCallId || ctx?.toolCallId || null;
+          const runId = ctx?.runId || event?.runId || null;
+          if (!toolCallId || !runId) return;
+          autoRecallTurnState.recordToolInvocationScope({
+            toolCallId,
+            runId,
+            sessionId: ctx?.sessionId || resolveHookSessionId(event, ctx),
+          });
+        } catch (e) {
+          api.logger?.warn?.(`memory-engine autoRecall tool scope bridge skipped: ${e.message}`);
+        }
+      });
+
+      api.on("before_agent_finalize", async (event, ctx) => {
+        const runId = event?.runId || ctx?.runId || null;
+        try {
+          autoRecallTurnState.cleanupExpired();
           const text = event?.lastAssistantMessage || "";
           const citedIds = parseCitedMemoryIds(text);
           if (citedIds.length === 0) return;
           const sessionId = resolveHookSessionId(event, ctx);
-          const traceState =
-            autoRecallTraceByRun.get(event?.runId || ctx?.runId) ||
-            autoRecallTraceBySession.get(sessionId);
+          const turnState = autoRecallTurnState.getTurnState(runId);
           const allowlist = buildReinforcementAllowedIds({
-            traceState,
-            currentTurnMemoryEngineGetIds: [...currentTurnMemoryEngineGetIds],
+            traceState: turnState,
+            currentTurnMemoryEngineGetIds: [...(turnState?.memoryEngineGetIds || [])],
           });
           const filtered = filterCitedIdsForReinforcement(citedIds, allowlist.reinforcement_allowed_ids);
           const idsToReinforce = filtered.reinforced_ids;
           recordMemoryEvent({
             event_type: "auto_recall_debug",
             session_id: sessionId,
-            trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,
+            trace_id: turnState?.traceId || event?.runId || ctx?.runId || null,
             source: "autoRecall.finalize",
             metadata_json: {
               debug_type: "reinforcement_gate",
@@ -628,7 +656,7 @@ export default definePluginEntry({
             recordMemoryEvent({
               event_type: "memory_cited",
               session_id: sessionId,
-              trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,
+              trace_id: turnState?.traceId || event?.runId || ctx?.runId || null,
               memory_id: id.slice(0, 16),
               cited_count: 1,
               source: "autoRecall.finalize",
@@ -646,7 +674,7 @@ export default definePluginEntry({
             recordMemoryEvent({
               event_type: "memory_reinforced",
               session_id: sessionId,
-              trace_id: traceState?.traceId || event?.runId || ctx?.runId || null,
+              trace_id: turnState?.traceId || event?.runId || ctx?.runId || null,
               memory_id: id.slice(0, 16),
               source: "autoRecall.finalize",
               metadata_json: {
@@ -664,7 +692,10 @@ export default definePluginEntry({
         } catch (e) {
           api.logger?.warn?.(`memory-engine autoRecall citation finalize skipped: ${e.message}`);
         } finally {
-          currentTurnMemoryEngineGetIds.clear();
+          if (runId) {
+            autoRecallTurnState.deleteTurnState(runId);
+            autoRecallTurnState.deleteToolInvocationScopesByRunId(runId);
+          }
         }
       });
     }
@@ -672,7 +703,7 @@ export default definePluginEntry({
     // Register memory prompt supplement — guides agent to cite memory IDs
     api.registerMemoryPromptSupplement((_params) => {
       const sessionId = resolveHookSessionId(_params, _params?.ctx || _params);
-      const injected = sessionId ? (autoRecallTraceBySession.get(sessionId)?.injectedIds || []) : [];
+      const injected = sessionId ? (autoRecallTurnState.getTurnStateBySession(sessionId)?.injectedIds || []) : [];
       const supplement = [
         MEMORY_SUPPLEMENT_BOUNDARY_START,
         `${MEMORY_SUPPLEMENT_SENTINEL}: active`,
@@ -732,9 +763,29 @@ export default definePluginEntry({
       withDb,
       calcRealtimeConf,
       CATEGORY_MAP,
-      onMemoryEngineGetSuccess: (memoryId) => {
-        const shortId = String(memoryId || "").slice(0, 16).trim();
-        if (shortId) currentTurnMemoryEngineGetIds.add(shortId);
+      onMemoryEngineGetSuccess: (memoryId, params) => {
+        const toolCallId = params?._toolCallId || null;
+        const scope = toolCallId ? autoRecallTurnState.getToolInvocationScope(toolCallId) : null;
+        if (!scope?.runId) {
+          recordMemoryEvent({
+            event_type: "auto_recall_debug",
+            session_id: scope?.sessionId || null,
+            trace_id: null,
+            source: "autoRecall.tool_bridge",
+            metadata_json: {
+              debug_type: "memory_engine_get_scope_missing",
+              reason: toolCallId ? "tool_call_scope_not_found" : "tool_call_id_missing",
+              tool_call_id: toolCallId,
+              memory_id: String(memoryId || "").slice(0, 16),
+            },
+          });
+          return;
+        }
+        autoRecallTurnState.recordMemoryEngineGet({
+          runId: scope.runId,
+          memoryId,
+        });
+        autoRecallTurnState.deleteToolInvocationScope(toolCallId);
       },
     });
 
