@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withCoreDbReadonly } from "../lib/db/isolated-dbs.js";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CLI_PATH = resolve(REPO_ROOT, "bin/cleanup-orphan-confidence.js");
@@ -89,6 +90,43 @@ function createFixture() {
   return { corePath, enginePath };
 }
 
+function createEmptyFixture() {
+  const root = mkdtempSync(resolve(tmpdir(), "memory-engine-orphan-cleanup-empty-"));
+  const corePath = resolve(root, "core.sqlite");
+  const engineDir = resolve(root, "engine");
+  const enginePath = resolve(engineDir, "memory-engine.sqlite");
+  mkdirSync(engineDir, { recursive: true });
+
+  const coreDb = new Database(corePath);
+  coreDb.exec(`
+    CREATE TABLE chunks (
+      id TEXT PRIMARY KEY,
+      text TEXT,
+      updated_at INTEGER
+    )
+  `);
+  coreDb.close();
+
+  const engineDb = new Database(enginePath);
+  engineDb.exec(`
+    CREATE TABLE memory_confidence (
+      chunk_id TEXT PRIMARY KEY,
+      confidence REAL,
+      last_confidence_update INTEGER
+    );
+
+    CREATE TABLE memory_events (
+      id INTEGER PRIMARY KEY,
+      event_type TEXT,
+      source TEXT,
+      memory_id TEXT
+    );
+  `);
+  engineDb.close();
+
+  return { corePath, enginePath };
+}
+
 async function importCleanupModule(tag) {
   return import(`../lib/quality/orphan-confidence-cleanup.js?orphan-cleanup=${tag}`);
 }
@@ -165,7 +203,33 @@ test("dry-run does not issue DELETE/UPDATE/INSERT/DROP/CREATE/ALTER/VACUUM state
   assert.deepEqual(forbidden, []);
 });
 
-test("dry-run counts orphans via memory_confidence LEFT JOIN core.chunks and excludes live confidence rows", async () => {
+test("core handle is real SQLite readonly and rejects writes without SQL guard", () => {
+  const fixture = createFixture();
+
+  withCoreDbReadonly((coreDb) => {
+    assert.throws(
+      () => coreDb.prepare("INSERT INTO chunks (id, text, updated_at) VALUES (?, ?, ?)").run("new", "x", 1),
+      /readonly/i,
+    );
+    assert.throws(
+      () => coreDb.prepare("UPDATE chunks SET text = ? WHERE id = ?").run("changed", "chunk-live-1"),
+      /readonly/i,
+    );
+    assert.throws(
+      () => coreDb.prepare("DELETE FROM chunks WHERE id = ?").run("chunk-live-1"),
+      /readonly/i,
+    );
+    assert.throws(
+      () => coreDb.exec("CREATE TABLE forbidden (id INTEGER)"),
+      /readonly/i,
+    );
+  }, {
+    coreDbPath: fixture.corePath,
+    engineDbPath: fixture.enginePath,
+  });
+});
+
+test("dry-run counts orphans via two-phase core existence scan and excludes live confidence rows", async () => {
   const fixture = createFixture();
 
   const { collectOrphanConfidenceDryRun } = await importCleanupModule(`join-${Date.now()}`);
@@ -185,6 +249,82 @@ test("dry-run counts orphans via memory_confidence LEFT JOIN core.chunks and exc
   assert.equal(report.sample_orphan_chunk_ids.includes("chunk-live-2"), false);
   assert.equal(report.sample_orphan_chunk_ids.includes("orphan-2026-06-a"), true);
   assert.equal(report.sample_orphan_chunk_ids.includes("1234567890abcdef-stale"), true);
+});
+
+test("dry-run reports zero orphans when engine confidence is empty", async () => {
+  const fixture = createEmptyFixture();
+
+  const { collectOrphanConfidenceDryRun } = await importCleanupModule(`empty-engine-${Date.now()}`);
+  const report = collectOrphanConfidenceDryRun({
+    engineDbPath: fixture.enginePath,
+    coreDbPath: fixture.corePath,
+  });
+
+  assert.equal(report.confidence_total_count, 0);
+  assert.equal(report.chunks_total_count, 0);
+  assert.equal(report.orphan_confidence_count, 0);
+  assert.equal(report.would_delete_count, 0);
+  assert.deepEqual(report.sample_orphan_chunk_ids, []);
+});
+
+test("dry-run reports all engine confidence rows as orphan when core chunks is empty", async () => {
+  const fixture = createEmptyFixture();
+  const engineDb = new Database(fixture.enginePath);
+  try {
+    engineDb.prepare("INSERT INTO memory_confidence (chunk_id, confidence, last_confidence_update) VALUES (?, ?, ?)").run("id-a", 0.4, 100);
+    engineDb.prepare("INSERT INTO memory_confidence (chunk_id, confidence, last_confidence_update) VALUES (?, ?, ?)").run("id-b", 0.6, 200);
+  } finally {
+    engineDb.close();
+  }
+
+  const { collectOrphanConfidenceDryRun } = await importCleanupModule(`empty-core-${Date.now()}`);
+  const report = collectOrphanConfidenceDryRun({
+    engineDbPath: fixture.enginePath,
+    coreDbPath: fixture.corePath,
+  });
+
+  assert.equal(report.confidence_total_count, 2);
+  assert.equal(report.chunks_total_count, 0);
+  assert.equal(report.orphan_confidence_count, 2);
+  assert.equal(report.would_delete_count, 2);
+});
+
+test("dry-run batches core existence checks to avoid bind limit overflow", async () => {
+  const fixture = createEmptyFixture();
+  const coreDb = new Database(fixture.corePath);
+  const engineDb = new Database(fixture.enginePath);
+  try {
+    const insertChunk = coreDb.prepare("INSERT INTO chunks (id, text, updated_at) VALUES (?, ?, ?)");
+    const insertConfidence = engineDb.prepare("INSERT INTO memory_confidence (chunk_id, confidence, last_confidence_update) VALUES (?, ?, ?)");
+    for (let index = 0; index < 1203; index += 1) {
+      const id = `chunk-${String(index).padStart(4, "0")}`;
+      insertConfidence.run(id, 0.5, 1000 + index);
+      if (index < 701) {
+        insertChunk.run(id, `text-${index}`, 2000 + index);
+      }
+    }
+  } finally {
+    coreDb.close();
+    engineDb.close();
+  }
+
+  const { collectOrphanConfidenceDryRun } = await importCleanupModule(`batched-${Date.now()}`);
+  const report = collectOrphanConfidenceDryRun({
+    engineDbPath: fixture.enginePath,
+    coreDbPath: fixture.corePath,
+    sampleLimit: 5,
+  });
+
+  assert.equal(report.confidence_total_count, 1203);
+  assert.equal(report.chunks_total_count, 701);
+  assert.equal(report.orphan_confidence_count, 502);
+  assert.equal(report.would_delete_count, 502);
+});
+
+test("cleanup path source no longer uses ATTACH or core schema SQL", () => {
+  const source = readFileSync(resolve(REPO_ROOT, "lib/quality/orphan-confidence-cleanup.js"), "utf8");
+  assert.doesNotMatch(source, /ATTACH DATABASE/i);
+  assert.doesNotMatch(source, /core\.chunks/i);
 });
 
 test("dry-run report includes required fields, correct distributions, and sampleLimit trimming", async () => {
