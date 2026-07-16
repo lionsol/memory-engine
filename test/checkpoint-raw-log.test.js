@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
-import { mkdtempSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -334,6 +334,22 @@ test("legacy DB raw_log without event_at still falls back to updated_at_event_ti
   assert.equal(stats.rawLogTimeBasis, "updated_at_event_time");
 });
 
+test("legacy DB raw_log without event_at and with created_at prefers created_at legacy event time", async () => {
+  const fixture = createFixture({ includeEventAt: false, includeCreatedAt: true });
+  insertRawLogChunk(fixture, {
+    id: "chunk-created-target",
+    text: "**User:** created_at legacy event time should be included",
+    createdAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+    updatedAt: Date.parse("2026-06-18T09:00:00.000+08:00") / 1000,
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const stats = checkpointRawLog.getRawLogCollectionStats(logs);
+  const conversationTexts = logs.filter((log) => log.source === "conversation").map((log) => log.text);
+  assert.deepEqual(conversationTexts, ["**User:** created_at legacy event time should be included"]);
+  assert.equal(stats.rawLogTimeBasis, "created_at_legacy_event_time");
+});
+
 test("timezone-aware boundary includes start and excludes end for Asia/Shanghai targetDate", async () => {
   const fixture = createFixture();
   insertRawLogChunk(fixture, {
@@ -358,6 +374,126 @@ test("timezone-aware boundary includes start and excludes end for Asia/Shanghai 
   assert.deepEqual(conversationTexts, [
     "**User:** included at exact targetDate start",
   ]);
+});
+
+test("DB raw_log keeps stable ordering by normalized timestamp then chunk id", async () => {
+  const fixture = createFixture();
+  insertRawLogChunk(fixture, {
+    id: "b-id",
+    text: "**User:** b",
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+  });
+  insertRawLogChunk(fixture, {
+    id: "a-id",
+    text: "**User:** a",
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const conversationIds = logs.filter((log) => log.source === "conversation").map((log) => log.chunk_id);
+  assert.deepEqual(conversationIds, ["a-id", "b-id"]);
+});
+
+test("DB raw_log mixed second and millisecond timestamps are normalized and ordered by real time", async () => {
+  const fixture = createFixture();
+  insertRawLogChunk(fixture, {
+    id: "sec-row",
+    text: "**User:** second timestamp first",
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+  });
+  insertRawLogChunk(fixture, {
+    id: "ms-row",
+    text: "**User:** millisecond timestamp second",
+    updatedAt: Date.parse("2026-06-17T09:05:00.000+08:00"),
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const conversationIds = logs.filter((log) => log.source === "conversation").map((log) => log.chunk_id);
+  assert.deepEqual(conversationIds, ["sec-row", "ms-row"]);
+});
+
+test("engine category filtering preserves core order after application-side filtering", async () => {
+  const fixture = createFixture();
+  insertRawLogChunk(fixture, {
+    id: "A",
+    text: "**User:** A",
+    updatedAt: Date.parse("2026-06-17T08:00:00.000+08:00") / 1000,
+    category: "project",
+  });
+  insertRawLogChunk(fixture, {
+    id: "B",
+    text: "**User:** B",
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+    category: "raw_log",
+  });
+  insertRawLogChunk(fixture, {
+    id: "C",
+    text: "**User:** C",
+    updatedAt: Date.parse("2026-06-17T10:00:00.000+08:00") / 1000,
+    category: "project",
+  });
+  insertRawLogChunk(fixture, {
+    id: "D",
+    text: "**User:** D",
+    updatedAt: Date.parse("2026-06-17T11:00:00.000+08:00") / 1000,
+    category: "raw_log",
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const conversationIds = logs.filter((log) => log.source === "conversation").map((log) => log.chunk_id);
+  assert.deepEqual(conversationIds, ["B", "D"]);
+});
+
+test("empty core returns no DB raw_log rows and avoids invalid IN clauses", async () => {
+  const fixture = createFixture();
+  const engineDb = new Database(fixture.engineDbPath);
+  try {
+    engineDb.prepare("INSERT INTO memory_confidence (chunk_id, category) VALUES (?, ?)").run("orphan-only", "raw_log");
+  } finally {
+    engineDb.close();
+  }
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const conversationLogs = logs.filter((log) => log.source === "conversation");
+  assert.deepEqual(conversationLogs, []);
+});
+
+test("empty engine or no raw_log category returns no DB raw_log rows", async () => {
+  const fixture = createFixture();
+  insertRawLogChunk(fixture, {
+    id: "not-raw",
+    text: "**User:** should be filtered out",
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+    category: "project",
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const conversationLogs = logs.filter((log) => log.source === "conversation");
+  assert.deepEqual(conversationLogs, []);
+});
+
+test("DB raw_log batch membership query handles more than one IN batch and preserves order", async () => {
+  const fixture = createFixture();
+  const baseMs = Date.parse("2026-06-17T09:00:00.000+08:00");
+  for (let index = 0; index < 700; index += 1) {
+    const id = `chunk-${String(index).padStart(4, "0")}`;
+    insertRawLogChunk(fixture, {
+      id,
+      text: `**User:** entry ${index}`,
+      updatedAt: Math.floor((baseMs + (index * 1000)) / 1000),
+      category: index % 3 === 0 ? "raw_log" : "project",
+    });
+  }
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const conversationIds = logs.filter((log) => log.source === "conversation").map((log) => log.chunk_id);
+  const expectedIds = [];
+  for (let index = 0; index < 700; index += 1) {
+    if (index % 3 === 0) expectedIds.push(`chunk-${String(index).padStart(4, "0")}`);
+  }
+  assert.equal(conversationIds.length, expectedIds.length);
+  assert.deepEqual(conversationIds.slice(0, 5), expectedIds.slice(0, 5));
+  assert.deepEqual(conversationIds.slice(-5), expectedIds.slice(-5));
 });
 
 test("timestamp-prefixed **User:** DB raw_log is classified as user", async () => {
@@ -763,6 +899,32 @@ test("DB raw_log reader does not fall back to latest 100 outside targetDate", as
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(logs.filter((log) => log.source === "conversation").length, 0);
   assert.equal(stats.rawLogIncluded, 0);
+});
+
+test("DB raw_log returns stable output fields for conversation rows", async () => {
+  const fixture = createFixture();
+  insertRawLogChunk(fixture, {
+    id: "field-check",
+    text: "**User:** field check",
+    updatedAt: Date.parse("2026-06-17T09:00:00.000+08:00") / 1000,
+  });
+
+  const logs = await getLogsForTargetDate(fixture, "2026-06-17");
+  const conversationRow = logs.find((log) => log.chunk_id === "field-check");
+  assert.deepEqual(conversationRow, {
+    category: "raw_log",
+    text: "**User:** field check",
+    source: "conversation",
+    chunk_id: "field-check",
+  });
+});
+
+test("raw-log dual-handle path no longer references attached checkpoint schema", () => {
+  const source = readFileSync(resolve("lib/checkpoint/raw-log.js"), "utf8");
+  assert.doesNotMatch(source, /chunks_db\./);
+  assert.doesNotMatch(source, /withMeDb\s*\(/);
+  assert.doesNotMatch(source, /ATTACH DATABASE/);
+  assert.match(source, /withCheckpointDbs\s*\(/);
 });
 
 test("DB read failure logs warning and loader still returns other sources", async () => {
