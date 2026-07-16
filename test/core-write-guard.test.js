@@ -48,6 +48,32 @@ function openAttachedDb() {
   return db;
 }
 
+function openCheckpointAttachedDb() {
+  const root = mkdtempSync(resolve(tmpdir(), "memory-engine-checkpoint-guard-"));
+  const corePath = resolve(root, "core.sqlite");
+  const enginePath = resolve(root, "engine.sqlite");
+  createCoreDb(corePath);
+
+  const db = new Database(enginePath);
+  db.exec("CREATE TABLE memory_confidence (chunk_id TEXT PRIMARY KEY, confidence REAL)");
+  db.exec(`ATTACH DATABASE '${String(corePath).replace(/'/g, "''")}' AS chunks_db`);
+  patchWriteGuards(db, { message: "writes to OpenClaw core DB are blocked in checkpoint DB access" });
+  return db;
+}
+
+function openOrphanCleanupAttachedDb() {
+  const root = mkdtempSync(resolve(tmpdir(), "memory-engine-orphan-guard-"));
+  const corePath = resolve(root, "core.sqlite");
+  const enginePath = resolve(root, "engine.sqlite");
+  createCoreDb(corePath);
+
+  const db = new Database(enginePath);
+  db.exec("CREATE TABLE memory_confidence (chunk_id TEXT PRIMARY KEY, confidence REAL)");
+  db.exec(`ATTACH DATABASE '${String(corePath).replace(/'/g, "''")}' AS core`);
+  patchWriteGuards(db, { message: "writes to OpenClaw core DB are blocked in orphan confidence cleanup" });
+  return db;
+}
+
 test("pure SQL helpers detect core writes through casing, whitespace, and comments", () => {
   const blocked = [
     "INSERT INTO core.chunks (id) VALUES ('x')",
@@ -68,6 +94,8 @@ test("pure SQL helpers detect core writes through casing, whitespace, and commen
 
   assert.equal(isWriteSql("SELECT * FROM core.chunks"), false);
   assert.equal(writeTargetIsCore("INSERT INTO engine_items SELECT * FROM core.chunks"), false);
+  assert.equal(writeTargetIsCore("INSERT INTO chunks_db.chunks (id) VALUES ('x')"), true);
+  assert.equal(writeTargetIsCore("UPDATE chunks_db.chunks SET text = 'x' WHERE id = 'chunk-1'"), true);
 });
 
 test("core reads are allowed while core writes are blocked", () => {
@@ -137,6 +165,54 @@ test("comment-prefixed and mixed-case core writes are still blocked", () => {
     for (const sql of blocked) {
       assert.throws(() => db.exec(sql), /blocked/i, sql);
     }
+  } finally {
+    db.close();
+  }
+});
+
+test("checkpoint path blocks chunks_db writes while engine writes stay allowed", () => {
+  const db = openCheckpointAttachedDb();
+  try {
+    const row = db.prepare("SELECT id, text FROM chunks_db.chunks WHERE id = ?").get("chunk-1");
+    assert.equal(row?.id, "chunk-1");
+
+    assert.throws(
+      () => db.prepare("INSERT INTO chunks_db.chunks (id, path, text, updated_at) VALUES (?, ?, ?, ?)").run("x", "p", "t", 1),
+      /blocked/i,
+    );
+    assert.throws(
+      () => db.prepare("UPDATE chunks_db.chunks SET text = ? WHERE id = ?").run("changed", "chunk-1"),
+      /blocked/i,
+    );
+    assert.throws(
+      () => db.prepare("DELETE FROM chunks_db.chunks WHERE id = ?").run("chunk-1"),
+      /blocked/i,
+    );
+
+    db.prepare("INSERT INTO memory_confidence (chunk_id, confidence) VALUES (?, ?)").run("chunk-1", 0.5);
+    db.prepare("UPDATE memory_confidence SET confidence = ? WHERE chunk_id = ?").run(0.9, "chunk-1");
+    assert.equal(db.prepare("SELECT confidence FROM memory_confidence WHERE chunk_id = ?").get("chunk-1")?.confidence, 0.9);
+  } finally {
+    db.close();
+  }
+});
+
+test("orphan cleanup path blocks core writes while memory_confidence cleanup remains allowed", () => {
+  const db = openOrphanCleanupAttachedDb();
+  try {
+    db.prepare("INSERT INTO memory_confidence (chunk_id, confidence) VALUES (?, ?)").run("chunk-1", 0.5);
+
+    assert.throws(
+      () => db.prepare("DELETE FROM core.chunks WHERE id = ?").run("chunk-1"),
+      /blocked/i,
+    );
+    assert.throws(
+      () => db.prepare("UPDATE core.chunks SET text = ? WHERE id = ?").run("changed", "chunk-1"),
+      /blocked/i,
+    );
+
+    db.prepare("DELETE FROM memory_confidence WHERE chunk_id = ?").run("chunk-1");
+    assert.equal(db.prepare("SELECT COUNT(*) AS c FROM memory_confidence WHERE chunk_id = ?").get("chunk-1")?.c, 0);
   } finally {
     db.close();
   }
