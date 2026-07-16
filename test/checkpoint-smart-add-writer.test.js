@@ -10,6 +10,14 @@ const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
 const smartAddWriter = require("../lib/checkpoint/smart-add-writer.js");
 
+function likeOnlyInput() {
+  return "alphaBeta gammaDelta epsilonZeta";
+}
+
+function likeOnlyStoredText(suffix = "") {
+  return `xxalphaBetaxx yygammaDeltayy zzepsilonZetazz ${suffix}`.trim();
+}
+
 function createFixture() {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-smart-add-writer-"));
   const workspaceDir = resolve(root, "workspace");
@@ -61,10 +69,13 @@ function insertCoreChunk(coreDbPath, { id, path, text = "", updatedAt = 1 }) {
   }
 }
 
-function insertEngineConfidence(engineDbPath, { chunkId }) {
+function insertEngineConfidence(engineDbPath, { chunkId, isArchived = false }) {
   const db = new Database(engineDbPath);
   try {
-    db.prepare("INSERT INTO memory_confidence (chunk_id, is_archived) VALUES (?, 0)").run(chunkId);
+    db.prepare("INSERT INTO memory_confidence (chunk_id, is_archived) VALUES (?, ?)").run(
+      chunkId,
+      isArchived ? 1 : 0,
+    );
   } finally {
     db.close();
   }
@@ -222,6 +233,352 @@ test("isDuplicate returns true when today's fingerprint matches", async () => {
       provenance: smartAddWriter.SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
     }), true);
   });
+});
+
+test("isDuplicate returns true for an active duplicate in core and engine", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "dup-active",
+    path: "memory/smart-add/2026-06-17.md",
+    text: "hello world duplicate body",
+  });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "dup-active" });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("hello world duplicate body", "raw_log"), true);
+  });
+});
+
+test("isDuplicate returns false when no duplicate matches exist", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "other-text",
+    path: "memory/smart-add/2026-06-17.md",
+    text: "completely unrelated body",
+  });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "other-text" });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("hello world duplicate body", "raw_log"), false);
+  });
+});
+
+test("isDuplicate returns true for archived-only FTS matches", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "dup-archived",
+    path: "memory/smart-add/2026-06-17.md",
+    text: "archived duplicate body",
+  });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "dup-archived", isArchived: true });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("archived duplicate body", "raw_log"), true);
+  });
+});
+
+test("isDuplicate returns true when archived and active duplicates coexist", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "dup-archived",
+    path: "memory/smart-add/2026-06-17.md",
+    text: "mixed duplicate body",
+  });
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "dup-active",
+    path: "memory/smart-add/2026-06-17.md",
+    text: "mixed duplicate body",
+  });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "dup-archived", isArchived: true });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "dup-active" });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("mixed duplicate body", "raw_log"), true);
+  });
+});
+
+test("isDuplicate returns true for FTS matches without any engine row", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "no-engine-row",
+    path: "memory/smart-add/2026-06-17.md",
+    text: "orphan duplicate body",
+  });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("orphan duplicate body", "raw_log"), true);
+  });
+});
+
+test("isDuplicate short-circuits after FTS hit and does not require the Engine path", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "fts-short-circuit",
+    path: "memory/smart-add/2026-06-17.md",
+    text: "fts short circuit body",
+  });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: resolve(fixture.workspaceDir, "missing-engine.sqlite"),
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("fts short circuit body", "raw_log"), true);
+  });
+});
+
+test("isDuplicate ignores eligible engine rows whose core chunks are missing", async () => {
+  const fixture = createFixture();
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "missing-core-row" });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("missing core duplicate body", "raw_log"), false);
+  });
+});
+
+test("isDuplicate returns false for empty engine eligibility set on a LIKE-only input", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "core-only",
+    path: "memory/smart-add/2026-06-17.md",
+    text: likeOnlyStoredText("core-only"),
+  });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate(likeOnlyInput(), "raw_log"), false);
+  });
+});
+
+test("isDuplicate returns false when core is empty", async () => {
+  const fixture = createFixture();
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "engine-only" });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("engine-only duplicate body", "raw_log"), false);
+  });
+});
+
+test("isDuplicate returns false for LIKE-only archived duplicates", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "archived-like-1",
+    path: "memory/smart-add/a.md",
+    text: likeOnlyStoredText("archived-like-1"),
+  });
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "archived-like-2",
+    path: "memory/smart-add/b.md",
+    text: likeOnlyStoredText("archived-like-2"),
+  });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "archived-like-1", isArchived: true });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "archived-like-2", isArchived: true });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate(likeOnlyInput(), "raw_log"), false);
+  });
+});
+
+test("isDuplicate returns false for LIKE-only matches without engine rows", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "missing-engine-1",
+    path: "memory/smart-add/a.md",
+    text: likeOnlyStoredText("missing-engine-1"),
+  });
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "missing-engine-2",
+    path: "memory/smart-add/b.md",
+    text: likeOnlyStoredText("missing-engine-2"),
+  });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate(likeOnlyInput(), "raw_log"), false);
+  });
+});
+
+test("isDuplicate returns true when LIKE-only active matches reach the threshold of two", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "like-active-1",
+    path: "memory/smart-add/a.md",
+    text: likeOnlyStoredText("like-active-1"),
+  });
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "like-active-2",
+    path: "memory/smart-add/b.md",
+    text: likeOnlyStoredText("like-active-2"),
+  });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "like-active-1" });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "like-active-2" });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate(likeOnlyInput(), "raw_log"), true);
+  });
+});
+
+test("isDuplicate finds a LIKE-only duplicate when matches are split across batches", async () => {
+  const fixture = createFixture();
+  for (let index = 0; index < 700; index += 1) {
+    const id = `chunk-${String(index).padStart(4, "0")}`;
+    const text = index === 499 || index === 650
+      ? likeOnlyStoredText(id)
+      : `other body ${index}`;
+    insertCoreChunk(fixture.coreDbPath, {
+      id,
+      path: `memory/smart-add/${id}.md`,
+      text,
+    });
+    insertEngineConfidence(fixture.engineDbPath, { chunkId: id });
+  }
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate(likeOnlyInput(), "raw_log"), true);
+  });
+});
+
+test("isDuplicate returns false when only one LIKE-only match exists across all batches", async () => {
+  const fixture = createFixture();
+  for (let index = 0; index < 700; index += 1) {
+    const id = `chunk-${String(index).padStart(4, "0")}`;
+    const text = index === 650 ? likeOnlyStoredText(id) : `other body ${index}`;
+    insertCoreChunk(fixture.coreDbPath, {
+      id,
+      path: `memory/smart-add/${id}.md`,
+      text,
+    });
+    insertEngineConfidence(fixture.engineDbPath, { chunkId: id });
+  }
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate(likeOnlyInput(), "raw_log"), false);
+  });
+});
+
+test("isDuplicate keeps the current token-based matching normalization behavior", async () => {
+  const fixture = createFixture();
+  insertCoreChunk(fixture.coreDbPath, {
+    id: "normalized-active",
+    path: "memory/smart-add/2026-06-17.md",
+    text: "Alpha beta gamma delta",
+  });
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "normalized-active" });
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(smartAddWriter.isDuplicate("Alpha, beta! gamma? delta.", "raw_log"), true);
+  });
+});
+
+test("isDuplicate uses readonlyEngine dual-handle path and no attached schema references", () => {
+  const source = readFileSync(resolve("lib/checkpoint/smart-add-writer.js"), "utf8");
+  assert.doesNotMatch(source, /chunks_db\./);
+  assert.doesNotMatch(source, /withMeDb\s*\(/);
+  assert.doesNotMatch(source, /ATTACH DATABASE/);
+  assert.doesNotMatch(source, /patchWriteGuards/);
+  assert.match(source, /withDb\s*\(/);
+  assert.match(source, /withCheckpointDbs\s*\(/);
+  assert.match(source, /readonlyEngine:\s*true/);
+  assert.match(source, /SMART_ADD_DUPLICATE_BATCH_SIZE/);
 });
 
 test("isDuplicate returns false on DB error", async () => {
