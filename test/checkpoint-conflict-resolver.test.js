@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
-import { mkdtempSync, mkdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -75,6 +75,16 @@ function readConflictRows(engineDbPath) {
     return db.prepare("SELECT chunk_id, conflict_flag, category, is_archived, last_confidence_update FROM memory_confidence ORDER BY chunk_id").all();
   } finally {
     db.close();
+  }
+}
+
+function withMutedConsoleLog(run) {
+  const original = console.log;
+  console.log = () => {};
+  try {
+    return run();
+  } finally {
+    console.log = original;
   }
 }
 
@@ -167,4 +177,168 @@ test("archived entries do not participate", async () => {
   const byId = Object.fromEntries(rows.map((row) => [row.chunk_id, row]));
   assert.equal(byId.new.conflict_flag, 0);
   assert.equal(byId.archived.conflict_flag, 0);
+});
+
+test("different config keys do not conflict with each other", async () => {
+  const fixture = createFixture();
+  insertChunk(fixture.coreDbPath, { id: "theme", text: "配置：theme = dark（来源：checkpoint）", updatedAt: 2 });
+  insertChunk(fixture.coreDbPath, { id: "language", text: "配置：language = zh（来源：checkpoint）", updatedAt: 1 });
+  insertConfidence(fixture.engineDbPath, { chunkId: "theme", lastUpdate: 200 });
+  insertConfidence(fixture.engineDbPath, { chunkId: "language", lastUpdate: 100 });
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+  }, async () => {
+    const flagged = resolveConfigConflicts();
+    assert.equal(flagged, 0);
+  });
+
+  const rows = readConflictRows(fixture.engineDbPath);
+  assert.deepEqual(rows.map((row) => row.conflict_flag), [0, 0]);
+});
+
+test("non-preference categories do not participate", async () => {
+  const fixture = createFixture();
+  insertChunk(fixture.coreDbPath, { id: "pref", text: "配置：theme = dark（来源：checkpoint）", updatedAt: 2 });
+  insertChunk(fixture.coreDbPath, { id: "episodic", text: "配置：theme = light（来源：checkpoint）", updatedAt: 1 });
+  insertConfidence(fixture.engineDbPath, { chunkId: "pref", lastUpdate: 200, category: "preference" });
+  insertConfidence(fixture.engineDbPath, { chunkId: "episodic", lastUpdate: 100, category: "episodic" });
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+  }, async () => {
+    const flagged = resolveConfigConflicts();
+    assert.equal(flagged, 0);
+  });
+
+  const rows = readConflictRows(fixture.engineDbPath);
+  const byId = Object.fromEntries(rows.map((row) => [row.chunk_id, row]));
+  assert.equal(byId.pref.conflict_flag, 0);
+  assert.equal(byId.episodic.conflict_flag, 0);
+});
+
+test("latest row is chosen by engine last_confidence_update ordering, not insertion order", async () => {
+  const fixture = createFixture();
+  insertChunk(fixture.coreDbPath, { id: "older", text: "配置：theme = light（来源：checkpoint）", updatedAt: 1 });
+  insertChunk(fixture.coreDbPath, { id: "newer", text: "配置：theme = dark（来源：checkpoint）", updatedAt: 2 });
+  insertConfidence(fixture.engineDbPath, { chunkId: "older", lastUpdate: 100 });
+  insertConfidence(fixture.engineDbPath, { chunkId: "newer", lastUpdate: 200 });
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+  }, async () => {
+    const flagged = resolveConfigConflicts();
+    assert.equal(flagged, 1);
+  });
+
+  const rows = readConflictRows(fixture.engineDbPath);
+  const byId = Object.fromEntries(rows.map((row) => [row.chunk_id, row]));
+  assert.equal(byId.newer.conflict_flag, 0);
+  assert.equal(byId.older.conflict_flag, 1);
+});
+
+test("missing core chunks are excluded by the same semantics as the old inner join", async () => {
+  const fixture = createFixture();
+  insertChunk(fixture.coreDbPath, { id: "existing", text: "配置：theme = dark（来源：checkpoint）", updatedAt: 1 });
+  insertConfidence(fixture.engineDbPath, { chunkId: "existing", lastUpdate: 200, conflictFlag: 0 });
+  insertConfidence(fixture.engineDbPath, { chunkId: "missing-core", lastUpdate: 100, conflictFlag: 0 });
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+  }, async () => {
+    const flagged = resolveConfigConflicts();
+    assert.equal(flagged, 0);
+  });
+
+  const rows = readConflictRows(fixture.engineDbPath);
+  const byId = Object.fromEntries(rows.map((row) => [row.chunk_id, row]));
+  assert.equal(byId.existing.conflict_flag, 0);
+  assert.equal(byId["missing-core"].conflict_flag, 0);
+});
+
+test("empty engine returns zero flagged conflicts", async () => {
+  const fixture = createFixture();
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+  }, async () => {
+    const flagged = resolveConfigConflicts();
+    assert.equal(flagged, 0);
+  });
+
+  assert.deepEqual(readConflictRows(fixture.engineDbPath), []);
+});
+
+test("empty core yields zero flagged conflicts and does not mutate engine rows", async () => {
+  const fixture = createFixture();
+  insertConfidence(fixture.engineDbPath, { chunkId: "missing-1", lastUpdate: 200, conflictFlag: 0 });
+  insertConfidence(fixture.engineDbPath, { chunkId: "missing-2", lastUpdate: 100, conflictFlag: 1 });
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+  }, async () => {
+    const flagged = resolveConfigConflicts();
+    assert.equal(flagged, 0);
+  });
+
+  const rows = readConflictRows(fixture.engineDbPath);
+  const byId = Object.fromEntries(rows.map((row) => [row.chunk_id, row]));
+  assert.equal(byId["missing-1"].conflict_flag, 0);
+  assert.equal(byId["missing-2"].conflict_flag, 1);
+});
+
+test("batch core reads handle more than one IN batch and keep only the newest entry unflagged", async () => {
+  const fixture = createFixture();
+  for (let index = 0; index < 700; index += 1) {
+    const chunkId = `c-${String(index).padStart(4, "0")}`;
+    insertChunk(fixture.coreDbPath, {
+      id: chunkId,
+      text: `配置：theme = value-${index}（来源：checkpoint）`,
+      updatedAt: index,
+    });
+    insertConfidence(fixture.engineDbPath, {
+      chunkId,
+      lastUpdate: 1000 - index,
+      conflictFlag: 0,
+    });
+  }
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+  }, async () => {
+    const flagged = withMutedConsoleLog(() => resolveConfigConflicts());
+    assert.equal(flagged, 699);
+  });
+
+  const rows = readConflictRows(fixture.engineDbPath);
+  const newest = rows.find((row) => row.chunk_id === "c-0000");
+  const flaggedRows = rows.filter((row) => row.conflict_flag === 1);
+  assert.equal(newest.conflict_flag, 0);
+  assert.equal(flaggedRows.length, 699);
+});
+
+test("conflict resolver source uses dual handles and no attached schema references", () => {
+  const source = readFileSync(resolve("lib/checkpoint/conflict-resolver.js"), "utf8");
+  assert.doesNotMatch(source, /chunks_db\./);
+  assert.doesNotMatch(source, /withMeDb\s*\(/);
+  assert.doesNotMatch(source, /ATTACH DATABASE/);
+  assert.doesNotMatch(source, /patchWriteGuards/);
+  assert.match(source, /withCheckpointDbs\s*\(/);
+  assert.match(source, /engineDb/);
+  assert.match(source, /coreDb/);
+  assert.match(source, /CONFLICT_CORE_BATCH_SIZE/);
 });
