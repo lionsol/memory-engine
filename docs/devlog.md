@@ -1,3 +1,122 @@
+## 2026-07-16
+
+### Phase 1B：Hybrid 检索数据库隔离与 Recent 灰度验证基础设施
+
+本轮集中记录 2026-07-12 至 2026-07-16 已提交的 Hybrid 检索数据库隔离、KG/Recent 等价性验证、Recent 性能与 rollout readiness 审计，以及默认关闭的 shadow canary 基础设施。提交范围为 `8334887..30087b1`。
+
+#### Hybrid 数据库访问契约与隔离通道
+
+* 新增 `lib/recall/hybrid/db-access.js`，将 Hybrid 检索使用的数据库能力显式拆分为 Core 只读访问、Engine 隔离访问和 legacy 兼容访问，避免新隔离通道继续隐式依赖单一 attached handle。
+* FTS 新增 opt-in isolated 路径，默认仍保留 legacy 行为；未新增 manifest、环境变量或用户参数启用入口。
+* KG 完成隔离可行性探针、确定性 tie ordering、guarded isolated path 和只读 shadow audit：
+  * tie 场景增加稳定次级排序，避免相同分值下结果顺序漂移；
+  * isolated KG 只在内部 capability 严格为 `true` 时启用；
+  * id/storage invariant 不满足时安全回到 legacy；
+  * shadow audit 只比较结果，不改变实际 served candidates。
+
+#### Recent 隔离路径与等价性边界
+
+* 完成 isolated Recent 等价性探针，并确认旧查询仅按 `updated_at DESC` 排序时存在 tie 不确定性；生产查询增加稳定次级排序。
+* 新增 Recent isolation readiness audit，明确三种归档过滤策略的语义差异：
+  * Core `LIMIT` 后再由 JavaScript 排除 archived IDs 会破坏候选数量和排序语义；
+  * Engine-first 会漏掉缺失 `memory_confidence` 的 Core rows；
+  * Core-first 并在 SQL 中排除 archived IDs 后再 `LIMIT`，可以保持 legacy 语义。
+* guarded isolated Recent 使用独立 Core/Engine 只读 handle：
+  * Core 负责候选查询和 archived 排除；
+  * Engine 负责 metadata merge；
+  * 覆盖 `like_fallback`、`recent_scored`、`recent_fallback` 和 `episode_projection`；
+  * storage/id guard 失败时原子回退 legacy；
+  * 一旦 isolated 路径已选中，SQL 错误不会带着部分结果回退，而是记录稳定错误并返回空的 isolated 输出。
+* 新增只读 Recent shadow audit，对 legacy 与 isolated 的 ordered IDs、raw/normalized fingerprints、候选数量、channel membership 和分支覆盖进行比较；真实数据库审计未执行写操作。
+
+#### Recent 性能优化与 rollout readiness
+
+* 新增 fixture/real 两种 Recent performance probe，用于比较 archive exclusion 策略、查询计划、序列化成本和端到端延迟。
+* isolated Recent archived exclusion 从 correlated `NOT EXISTS` 改为单一 SQL source 中的 JSON list subquery：
+
+```sql
+AND c.id NOT IN (
+  SELECT CAST(archived.value AS TEXT)
+  FROM json_each(?) AS archived
+)
+```
+
+* 真实数据基线中，旧策略约为 `6.7–7.5s`，优化后约为 `40–65ms`，约 `116–168x` 加速；JSON stringify 约为 `2.6ms`，不是主要瓶颈。
+* rollout readiness audit 使用生产 `collectRecentCandidates` 路径和 worker-thread 独立只读连接执行真实并发验证：
+  * 共 51 个 query、102 个 legacy/isolated scenario；
+  * 101 个 isolated scenario 等价，1 个为双方均无命中；
+  * 四个 Recent 分支均覆盖；
+  * mismatch、partial result、SQL error 和非预期 fallback 均为 0；
+  * concurrency 2 的 p95 约为 `234–238ms`；
+  * concurrency 4 的 p95 约为 `311–317ms`；
+  * 未观察到 `SQLITE_BUSY`。
+* readiness decision 达到 `pass_canary_readiness`，但仍明确输出 `production_enablement_recommended=false`。
+
+#### 数据库稳定性与 WAL sidecar 语义
+
+* 修正 rollout audit 对数据库稳定性的判定：只读连接可能创建零字节 WAL、创建 SHM 或更新 SHM mtime，这类 WAL-index sidecar 活动不能直接等同于业务数据修改。
+* 报告 schema 将以下概念分离：
+  * `logical_database_stable`
+  * `main_file_content_stable`
+  * `sidecar_neutral`
+  * SQLite `data_version` / `schema_version` / `total_changes`
+  * `readonly_wal_index_activity`、`wal_content_change`、`logical_database_change` 等 activity class。
+* 新增用户显式声明的 `--isolated-snapshot` 模式，通过 SQLite Backup API 创建静态副本后审计；对 live DB、symlink、hardlink 和 URI 等价路径增加 identity 保护。
+* 当前 `better-sqlite3@11.10.0` 构建不支持 SQLite URI，因此没有引入不可验证的 immutable URI 功能面。
+
+#### Guarded Recent shadow canary
+
+* 新增 `recent-canary-policy.js` 和 `recent-canary-shadow.js`，允许的运行模式只有：
+  * `off`
+  * `shadow`
+* 默认 sample rate 为 `0`，production 未注入 provider；默认路径不打开额外 handle、不执行额外 SQL，也不做 fingerprint comparison。
+* policy 使用内部 provider、可信 context 和确定性 SHA-256 bucket 计算采样；provider 不能直接覆盖最终 `sampled` 结果。
+* shadow 模式分别运行一份 legacy 和 isolated Recent，并始终只返回 legacy：
+  * isolated candidates、warnings 和 errors 不进入 live candidate state；
+  * isolated-only IDs 不进入最终结果、引用或强化可见链路；
+  * legacy/isolated 的 query count、timing 和比较结果保持隔离。
+
+#### Canary scope 审计与信任边界收紧
+
+* 新增只读 scope-source audit，核实 OpenClaw `ToolDefinition.execute` 的真实签名为 `execute(toolCallId, params, signal, onUpdate, ctx)`。
+* 当前插件入口可见的 `toolCallId` 仅能分类为 `framework_derived_but_ambiguous`；`params.action` 和 `params.query_or_text` 均为 `user_controlled`。
+* 当前 `ExtensionContext` 未向 memory-engine 暴露可信的 agent/session/request/turn/chat scope，因此审计 decision 为：
+
+```text
+no_trusted_scope_available
+```
+
+* `resolveRecentCanaryContext` 从旧签名：
+
+```js
+resolveRecentCanaryContext({ toolCallId, action, params })
+```
+
+收紧为：
+
+```js
+resolveRecentCanaryContext({ trustedRuntimeContext })
+```
+
+* `trustedRuntimeContext` 默认 `null`；tool params 中伪造 `recentCanaryContext`、provider、sample key、rate 或 mode 均不能启用 shadow。
+* resolver 抛错、返回非法对象、缺少 `source` 或返回旧 scope 形状时均安全关闭，并保持 legacy served result 不变。
+
+#### 当前结论
+
+* isolated FTS/KG/Recent 的实现、等价性探针、真实性能审计和 Recent shadow 基础设施已经就绪。
+* Recent shadow provider 仍未注入，sample rate 仍为 `0`，实际运行模式仍为 `off`。
+* 不通过 query、params、action 或 `toolCallId` 猜测 agent/session 身份。
+* OpenClaw trusted scope 集成暂缓；在宿主没有稳定公共插件契约前，不维护版本相关的本地宿主补丁，避免 memory-engine 与 OpenClaw 升级形成持续耦合。
+* 本轮没有启用 isolated Recent production serving，没有改变引用/强化结果，没有执行真实数据库写入，也没有发布新 release 或创建 tag。
+
+#### 验证
+
+* Recent rollout readiness 真实审计两次得到 `pass_canary_readiness`，同时保持 `production_enablement_recommended=false`。
+* guarded shadow canary 完成 policy、shadow execution、integration、snapshot 和引用/强化隔离测试；该阶段完整测试通过。
+* scope-source audit 定向测试与三次稳定性测试通过；提交 `e99acc0` 时完整测试为 `161/161`。
+* context boundary 收紧后完整测试为 `162/162`，`npm run check` 为 `static check passed: 348 files`。
+* 截至 `30087b1`，上述阶段代码均已提交；未 push、未 tag。
+
 ## 2026-07-08
 
 ### P33 后续：新增只读 event_at recovery audit CLI
