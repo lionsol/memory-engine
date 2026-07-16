@@ -64,6 +64,15 @@ function readConfidenceRows(engineDbPath) {
   }
 }
 
+function readDatabaseList(dbPath) {
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+  try {
+    return db.prepare("PRAGMA database_list").all();
+  } finally {
+    db.close();
+  }
+}
+
 function readCoreChunkCount(coreDbPath) {
   const db = new Database(coreDbPath, { readonly: true });
   try {
@@ -160,6 +169,40 @@ test("writeConfidence writes engine row by resolving chunk through core chunks q
   assert.equal(rows[0].chunk_id, "resolved-chunk");
 });
 
+test("writeConfidence replaces existing engine row for the same chunk without creating duplicates", async () => {
+  const fixture = createFixture();
+  insertSmartAddChunk(fixture.coreDbPath, { chunkId: "replace-chunk" });
+  const originalNow = Date.now;
+
+  try {
+    await checkpoint.withRuntime({
+      workspaceDir: fixture.workspaceDir,
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+    }, async () => {
+      Date.now = () => 1718678400123;
+      assert.equal(writeConfidence("entry-1", "body", "raw_log"), undefined);
+      Date.now = () => 1718678460456;
+      assert.equal(writeConfidence("entry-2", "body", "preference"), undefined);
+    });
+  } finally {
+    Date.now = originalNow;
+  }
+
+  const rows = readConfidenceRows(fixture.engineDbPath);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], {
+    chunk_id: "replace-chunk",
+    initial_confidence: 0.8,
+    confidence: 0.8,
+    last_confidence_update: 1718678460,
+    base_tau: 90.0,
+    category: "preference",
+  });
+});
+
 test("writeConfidence does not write when matching chunk is not found", async () => {
   const fixture = createFixture();
 
@@ -170,10 +213,11 @@ test("writeConfidence does not write when matching chunk is not found", async ()
     timeZone: "Asia/Shanghai",
     now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
   }, async () => {
-    writeConfidence("entry-1", "body", "preference");
+    assert.equal(writeConfidence("entry-1", "body", "preference"), undefined);
   });
 
   assert.deepEqual(readConfidenceRows(fixture.engineDbPath), []);
+  assert.equal(existsSync(fixture.engineDbPath), false);
 });
 
 test("writeConfidence keeps core DB readonly and only writes engine DB", async () => {
@@ -194,4 +238,77 @@ test("writeConfidence keeps core DB readonly and only writes engine DB", async (
   const after = readCoreChunkCount(fixture.coreDbPath);
   assert.equal(after, before);
   assert.equal(readConfidenceRows(fixture.engineDbPath).length, 1);
+});
+
+test("writeConfidence propagates isolated engine open failures without writing", async () => {
+  const fixture = createFixture();
+  insertSmartAddChunk(fixture.coreDbPath);
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.coreDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.throws(
+      () => writeConfidence("entry-1", "body", "preference"),
+      /different physical files/i,
+    );
+  });
+
+  const coreDb = new Database(fixture.coreDbPath, { readonly: true });
+  try {
+    assert.equal(
+      coreDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'memory_confidence'").get(),
+      undefined,
+    );
+  } finally {
+    coreDb.close();
+  }
+});
+
+test("writeConfidence supports repeated calls without attached schemas", async () => {
+  const fixture = createFixture();
+  insertSmartAddChunk(fixture.coreDbPath, { chunkId: "repeat-a", path: "memory/smart-add/2026-06-18.md" });
+  insertSmartAddChunk(fixture.coreDbPath, { chunkId: "repeat-b", path: "memory/smart-add/2026-06-19.md" });
+
+  const originalNow = Date.now;
+  try {
+    await checkpoint.withRuntime({
+      workspaceDir: fixture.workspaceDir,
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+    }, async () => {
+      Date.now = () => 1718678400123;
+      assert.equal(writeConfidence("entry-1", "body", "raw_log"), undefined);
+      assert.equal(
+        writeConfidence("entry-2", "body", "episodic", {
+          fileRel: "memory/smart-add/2026-06-19.md",
+        }),
+        undefined,
+      );
+    });
+  } finally {
+    Date.now = originalNow;
+  }
+
+  const rows = readConfidenceRows(fixture.engineDbPath);
+  assert.deepEqual(rows.map((row) => row.chunk_id), ["repeat-a", "repeat-b"]);
+
+  const databaseList = readDatabaseList(fixture.engineDbPath);
+  assert.deepEqual(databaseList.map((row) => row.name), ["main"]);
+  assert.equal(databaseList[0].file, fixture.engineDbPath);
+});
+
+test("writeConfidence source no longer references attached checkpoint schema", () => {
+  const source = require("node:fs").readFileSync(resolve("lib/checkpoint/confidence-writer.js"), "utf8");
+  assert.doesNotMatch(source, /withMeDb/);
+  assert.doesNotMatch(source, /chunks_db/);
+  assert.doesNotMatch(source, /ATTACH DATABASE/);
+  assert.doesNotMatch(source, /patchWriteGuards/);
+  assert.match(source, /withDb/);
+  assert.match(source, /withEngineDbIsolated/);
 });
