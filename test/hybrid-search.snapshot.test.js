@@ -91,6 +91,13 @@ const EXPECTED_SNAPSHOT = `{
       "synced": false,
       "reason": "test"
     },
+    "recent_canary_mode": "off",
+    "recent_canary_reason": "provider_unavailable",
+    "recent_canary_scope_class": null,
+    "recent_canary_sampled": false,
+    "recent_canary_shadow_executed": false,
+    "recent_canary_served_mode": "legacy",
+    "recent_canary_policy_error": false,
     "like_patterns": [],
     "channel_sizes": {
       "vector": 1
