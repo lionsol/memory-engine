@@ -1,6 +1,6 @@
 {
   "name": "memory-engine-plugin",
-  "version": "0.8.2",
+  "version": "0.8.22",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -23,6 +23,8 @@
     "memory:cleanup-orphan-confidence": "node bin/cleanup-orphan-confidence.js",
     "console": "node console/cli.js",
     "smoke:console-annotation-handoff": "node --test test/console-reports.test.js test/console-annotations.test.js test/console-annotation-report-handoff-doc.test.js test/human-annotation-workflow-doc.test.js test/readme-console-annotation-workflow.test.js test/smoke-tests-index-doc.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js",
+    "version:status": "node bin/version-status.js",
+    "version:check": "node bin/version-status.js --check",
     "sync-index": "node bin/sync-memory-index.js --force"
   }
 }

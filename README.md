@@ -1,132 +1,160 @@
-# OpenClaw Memory System v0.8.4
+# Memory Engine for OpenClaw
 
-> **存算分离 · 惰性衰减 · 实证强化 · 自动召回**
-> 为 AI Agent 构建的 SQLite 增强型长期记忆系统，具备置信度生命周期管理、知识图谱双轨融合与混合门控检索。
+> **Status: Current project overview**
+>
+> 本 README 只保留稳定的项目定位、系统边界和操作入口。发布版本以 Git tag 与 commit 为准；可调参数、阈值和实现细节以代码、测试及 [`docs/README.md`](docs/README.md) 中列出的现行契约为准。
 
-[![Dashboard](https://img.shields.io/badge/console-Memory%20Console%20Lite-blueviolet)](http://localhost:8787/)  [![AutoRecall](https://img.shields.io/badge/feature-autoRecall-success)]()
+[![Console](https://img.shields.io/badge/console-Memory%20Console%20Lite-blueviolet)](http://localhost:8787/)
+[![Runtime](https://img.shields.io/badge/runtime-OpenClaw-informational)](openclaw.plugin.json)
+[![Node.js](https://img.shields.io/badge/runtime-Node.js-green)](package.json)
+[![SQLite](https://img.shields.io/badge/storage-SQLite-orange)](https://www.sqlite.org/)
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/)
-[![SQLite](https://img.shields.io/badge/sqlite-3.x-orange.svg)](https://www.sqlite.org/)
+> 📚 **文档入口**：先阅读 [`docs/README.md`](docs/README.md)，了解当前架构边界、治理规则、文档权威层级和按任务阅读路径。
 
----
+## 项目定位
 
-## 🧠 核心理念
+Memory Engine 是 OpenClaw `memory-core` 之上的**增强与治理层**，不是 memory slot 的替代实现。
 
-传统 RAG 记忆系统在"查询时"被动搜索原始日志,容易陷入**语义冗余、置信度缺失、知识僵尸化**三大陷阱。
+- `memory-core` 继续拥有标准 `memory_search` / `memory_get` 工具以及 `MEMORY.md`、`memory/*.md` 的基础索引。
+- `memory-engine` 提供混合检索重排、置信度生命周期、AutoRecall、安全强化、checkpoint、质量审计、人工标注和 Console 能力。
+- 面向 Agent 的增强工具是 `memory_engine_search` 与 `memory_engine_get`；`memory_engine` 保留为兼容和管理 action router。
+- `memory-engine` 不注册或覆盖标准 `memory_search` / `memory_get`，也不占用 `plugins.slots.memory`。
+- `active-memory` 与 memory-engine AutoRecall 默认都不应同时启用；没有显式去重时，同时启用会造成重复召回和重复注入。
 
-记忆引擎使用**LanceDB 双引擎存储**与**实时分类规则引擎**,将记忆系统从单一 SQLite 升级为 LanceDB + SQLite 双轨架构。同时借鉴认知科学中的**间隔重复效应**与**遗忘曲线**,将记忆管理升级为**主动生命周期治理**:
+当前工具与插件契约见：
 
-- **写入时编译**:信息入库即赋予初始置信度与半衰期,不同类别走不同遗忘曲线
-- **检索时惰性衰减**:不写库、不刷表,仅在召回瞬间实时计算时间衰减
-- **引用时才强化**:只有被 Agent 实际采纳的记忆才增加权重,杜绝噪音虚假繁荣
-- **双轨融合**:SQLite 作为持久元数据存储,LanceDB 作为向量引擎,Node.js 知识图谱作为内存抽象引擎
+- [`docs/agent-memory-tool-strategy.md`](docs/agent-memory-tool-strategy.md)
+- [`docs/openclaw-memory-contract-compat.md`](docs/openclaw-memory-contract-compat.md)
 
----
+## 当前总体架构
 
-## 🏗️ 架构概览
 ```mermaid
 graph TD
-    subgraph Agent["🧠 Agent 层"]
-        direction LR
-        AC["🔄 规则引擎<br/>autoRouteCategory"]
-        GW["📥 写入网关<br/>smart_add"]
-        IR["🔍 检索拦截器<br/>hybrid_search"]
-        CH["🪝 引用强化钩子<br/>Update Hook"]
+    subgraph OpenClaw["OpenClaw Runtime"]
+        Agent["Agent / Conversation"]
+        CoreTools["memory_search / memory_get"]
+        EngineTools["memory_engine_search / memory_engine_get / memory_engine"]
+        PromptHook["before_prompt_build"]
+        FinalizeHook["before_agent_finalize"]
     end
 
-    subgraph Dual["💾 双引擎存储"]
-        direction LR
-        LDB["⚡ LanceDB<br/>向量 + 文本"]
-        SQL["🗄️ SQLite<br/>元数据 + FTS5"]
+    subgraph Core["memory-core substrate"]
+        CoreIndex["OpenClaw memory indexing and lexical search"]
+        MemoryFiles["MEMORY.md and memory/*.md"]
+        CoreDB["Core DB: main.sqlite\nread-only to memory-engine"]
     end
 
-    subgraph KG["🕸️ Knowledge Graph (Node.js 内存)"]
-        direction LR
-        DRIFT["概念漂移检测"]
-        PACK["子图打包 (kg_data)"]
-        CONFLICT["冲突标记 (conflict_flag)"]
+    subgraph Engine["memory-engine enhancement layer"]
+        ToolRegistration["Tool registration"]
+        Actions["Canonical action / service layer"]
+        Recall["Hybrid recall\nKG + FTS + vector + recent"]
+        AutoRecall["Intent / runtime / eligibility gates"]
+        Reinforce["Current-turn reinforcement allowlist"]
+        Checkpoint["Session checkpoint and maintenance"]
+        Quality["Quality audit / annotation / cleanup governance"]
+        Console["Console / reports / annotations"]
     end
 
-    AC -->|"6组正则路由"| GW
-    GW -->|"写入"| LDB
-    GW -->|"写入"| SQL
-    IR -->|"4通道 RRF 融合"| LDB
-    IR -->|"4通道 RRF 融合"| SQL
-    CH -->|"命中+1, 更新快照"| SQL
-    SQL -.->|"加载 kg_data 重建图谱"| KG
-    KG -->|"漂移/冲突结果写回"| SQL
+    subgraph EngineStorage["memory-engine owned storage"]
+        EngineDB["Engine DB: memory-engine.sqlite\nconfidence / events / sidecars"]
+        LanceDB["LanceDB vector index"]
+    end
 
-    style Agent fill:#e1f5fe,stroke:#01579b
-    style Dual fill:#fff3e0,stroke:#e65100
-    style KG fill:#e8f5e9,stroke:#1b5e20
+    Agent --> CoreTools --> CoreIndex
+    MemoryFiles --> CoreIndex --> CoreDB
+
+    Agent --> EngineTools --> ToolRegistration --> Actions
+    Actions --> Recall
+    Recall --> CoreIndex
+    Recall --> CoreDB
+    Recall --> EngineDB
+    Recall --> LanceDB
+
+    PromptHook --> AutoRecall --> Recall
+    Recall --> AutoRecall --> Agent
+    FinalizeHook --> Reinforce --> EngineDB
+
+    Checkpoint --> MemoryFiles
+    Checkpoint --> EngineDB
+    Quality --> CoreDB
+    Quality --> EngineDB
+    Console --> Quality
 ```
 
-## 🔬 核心算法
+这张图只描述稳定边界，不承诺固定通道数量、固定权重或固定阈值。更细的入口、数据流和治理关系见 [`docs/README.md`](docs/README.md)。
 
-### 动态半衰期(间隔重复)
+## 不可破坏的系统不变量
 
-记忆被反复引用后,遗忘速度指数级下降,但巩固有生理上限:
+| 不变量 | 当前约束 |
+| --- | --- |
+| **memory-core 所有权** | 标准 memory slot、`memory_search`、`memory_get` 和基础文件索引仍归 memory-core 所有 |
+| **Core DB 写保护** | memory-engine 可以有意读取已 attach 的 `core.*`，但不得写入；Engine DB 写入必须继续可用 |
+| **Canonical action 边界** | tool、CLI、hook 和维护入口不得复制或绕过 canonical action/service 业务逻辑 |
+| **检索不等于强化** | 只有当轮 AutoRecall 实际注入或当轮 `memory_engine_get` 成功读取的 ID，才允许进入引用强化候选集合 |
+| **AutoRecall 默认关闭** | AutoRecall 是显式 opt-in；长输入、低相关候选和受污染候选还要经过运行时与 eligibility 安全门 |
+| **事件时间不可伪造** | 不得用 `updated_at`、文件 mtime、批量写入时间、导入时间或路径日期冒充精确事件时间 |
+| **源码不等于运行时** | 修改仓库源码后，必须重新安装或 reload 插件，才能声明 OpenClaw 运行时行为已变化 |
 
-$$\tau(\text{hits}) = \tau_{\min} + (365 - \tau_{\min}) \cdot (1 - e^{-0.3 \cdot \text{hits}})$$
+数据库安全、运行时同步和开发纪律见 [`AGENTS.md`](AGENTS.md)。事件时间决策见 [`docs/adr/event-time-ownership.md`](docs/adr/event-time-ownership.md)。
 
-| 命中次数 (hits) | 半衰期 τ (base_tau=7) | 半衰期 τ (base_tau=30) |
-|:---:|:---:|:---:|
-| 0 | 7 天 | 30 天 |
-| 3 | 67 天 | 145 天 |
-| 5 | 121 天 | 215 天 |
-| 10 | 266 天 | 318 天 |
-| ∞ | 365 天 | 365 天 |
+## 当前检索与召回管线
 
-### 实时置信度衰减
+`hybridSearch` 当前是多阶段、可配置的检索管线，而不是 README 中固定的一条数学公式：
 
-$$\text{Conf}_{\text{realtime}} = \max\left(0,\ \text{Conf}_{\text{snapshot}} \cdot e^{-\frac{\Delta t}{\tau(\text{hits})}} - \text{Penalty}_{\text{conflict}}\right)$$
+1. **查询归一化**：剥离 prompt metadata，生成 FTS 查询、fallback 查询、token 和精确片段信号。
+2. **词法优先召回**：先收集 KG 与 FTS 候选并计算 lexical confidence。
+3. **向量惰性启用**：词法证据足够强时可以跳过向量通道；否则使用 LanceDB 向量召回。
+4. **近期记忆补充**：根据 FTS 结果和隔离能力选择 recent 候选或 fallback 路径。
+5. **RRF 融合**：对实际返回结果的通道做 Reciprocal Rank Fusion，不假设固定通道数量。
+6. **可解释重排**：在语义信号和 RRF 分数之外，叠加可配置的类别、新近度、置信度和外部来源 boost。
+7. **候选治理**：执行最低置信度、类别门、AutoRecall eligibility、污染风险和 disclosure 策略。
+8. **输出或注入**：显式搜索返回结果；AutoRecall 只有通过 intent、runtime 和 eligibility gate 后才生成 prompt supplement。
 
-### 混合门控排序
+当前实现和参数权威来源：
 
-抛弃暴力的向量相似度 × 置信度乘法,采用门控过滤 + 加权求和:
+- 检索编排：[`lib/recall/hybrid-search.js`](lib/recall/hybrid-search.js)
+- 通道融合与重排：[`lib/recall/hybrid/fusion.js`](lib/recall/hybrid/fusion.js)
+- 默认参数：[`lib/config/defaults.js`](lib/config/defaults.js)
+- AutoRecall eligibility：[`lib/recall/auto-recall-eligibility.js`](lib/recall/auto-recall-eligibility.js)
+- AutoRecall runtime gate：[`lib/recall/auto-recall-runtime-gate.js`](lib/recall/auto-recall-runtime-gate.js)
 
-$$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\text{realtime}}$$
+README 故意不复制 `rrfK`、topK、阈值、boost 权重等具体数值，避免文档参数与运行时代码再次漂移。调参必须同时检查配置默认值、覆盖配置、debug metadata 和测试。
 
-语义相似度低于 0.55 的直接淘汰,不参与后续排序。
+## 置信度生命周期
 
----
+memory-engine 对受管理记忆维护 category、confidence、base tau、hit count、保护状态、冲突状态和归档状态。
 
-## 📊 记忆分级法则
+- 写入或同步时为受管理记忆建立置信度侧车记录。
+- 检索时惰性计算实时置信度，不用周期性全表写回来模拟时间流逝。
+- 冲突记忆在实时置信度计算时受到惩罚。
+- 受保护记忆不执行普通衰减路径。
+- 引用强化只允许作用于当前 turn allowlist 中的记忆，并执行有上限的置信度提升。
+- 外部或未受 engine 管理的候选使用独立的 `confidence_mode`，不能伪装成拥有 engine confidence 记录。
 
-不同来源的记忆,从出生起就走不同的遗忘曲线:
+当前公式、类别默认值和强化实现见 [`lib/memory-confidence.js`](lib/memory-confidence.js)。这些数值属于实现配置，不再复制到 README。
 
-| 类别 | 初始置信度 | 基础半衰期 | 典型场景 |
-|:---|:---:|:---:|:---|
-| `temporary` | 0.40 | 2 天 | 临时变量、单次任务 |
-| `raw_log` | 0.50 | 7 天 | 日常对话、未提炼想法 |
-| `episodic` | 0.70 | 30 天 | 情节摘要、会话总结 |
-| `preference` | 0.70 | 30 天(→90) | 用户习惯、**自动从raw_log升级** |
-| `kg_node` | 0.85 | 90 天 | 图谱提炼的结构化结论 |
-| `user_identity` | 0.95 | 365 天 | 核心身份、受保护信息 |
+## 写入、Checkpoint 与生命周期
 
-> **自动分类升级 v1.4**: `smart_add` 入口新增 `autoRouteCategory` 规则引擎(6 组正则),实时自动路由,无需等待夜间 cron。显式传 category 时尊重原值。
+- Tool 行为通过 [`lib/tools/register-memory-engine-tools.js`](lib/tools/register-memory-engine-tools.js) 注册，并路由到 [`lib/tools/memory-engine-actions.js`](lib/tools/memory-engine-actions.js)。
+- 唯一 canonical checkpoint implementation 是 `bin/session-checkpoint.js` 与 `lib/checkpoint/*`。
+- `workspace/scripts/session-checkpoint.js` 仅允许作为 thin shim CLI 入口，负责透传 `argv`、`env` 和 `stdio`。
+- 不要在 legacy workspace script、cron wrapper 或 fallback shell 中复制 raw evidence collection、reset 扫描、LLM prompt assembly 或 smart-add 写入策略。
+- `memory/episodes/YYYY-MM-DD.md` 是生成型 episode 的 canonical 文件路径；legacy mirror 只能作为审计或迁移对象。
+- 数据清理默认遵循 audit / preview / human confirmation / guarded apply / rollback 的顺序，不允许从诊断直接跳到不可逆写入。
 
----
+入口治理基线见 [`docs/memory-entry-boundary-audit.md`](docs/memory-entry-boundary-audit.md)。
 
-## ⚡ 关键设计决策
+## Agent 工具
 
-| 决策 | 说明 |
-|:---|:---|
-| **惰性衰减** | 时间流逝不消耗 I/O。仅在检索或归档时,基于 `last_confidence_update` 实时计算衰减 |
-| **禁止心跳写回** | 指数衰减 $e^{-(t_1+t_2)} = e^{-t_1}e^{-t_2}$ 数学上连续,心跳写回不改变衰减曲线,但会污染字段语义。心跳仅标记 `is_archived` |
-| **引用强化** | 检索 ≠ 记忆强化。仅 LLM 返回的 `cited_memory_ids` 触发 `hit_count+1` 和置信度 +0.1 |
-| **冲突双链路** | 快速链路:图谱概念漂移 → 直接打标;慢速链路:心跳 LLM 扫描历史矛盾 |
-| **子图容器** | KG 结论以 `{"core_concept","triplets":[...]}` 格式存入 `kg_data`,重启时完整重建内存图谱 |
+| 工具 | 所有者 | 用途 |
+| --- | --- | --- |
+| `memory_search` | memory-core | 标准 OpenClaw memory 文件检索 |
+| `memory_get` | memory-core | 读取标准 memory 文件内容 |
+| `memory_engine_search` | memory-engine | 使用 engine 混合检索与治理元数据搜索 |
+| `memory_engine_get` | memory-engine | 显式读取搜索结果的完整记忆，并建立当轮强化证据 |
+| `memory_engine` | memory-engine | 兼容和管理 action router；不替代窄搜索/读取工具 |
 
----
-
-## OpenClaw 集成说明
-
-- `memory-core` 仍然是底层 substrate，负责 `MEMORY.md` / `memory/*.md` 索引与基础检索能力。
-- `memory-engine` 是 enhancement layer，在 `memory-core` 之上增加混合搜索重排、置信度生命周期和引用强化，不接管 OpenClaw 的 memory slot。
-- 面向 agent 的窄工具为 `memory_engine_search` 与 `memory_engine_get`；原有 `memory_engine` 保留以兼容既有调用。
-- `active-memory` 与 `memory-engine` 的 `autoRecall` 不应同时启用，除非显式做去重，否则会产生重复注入。
+Agent 的默认选择规则见 [`docs/agent-memory-tool-strategy.md`](docs/agent-memory-tool-strategy.md)。
 
 ## Console Annotation Workflow
 
@@ -135,13 +163,74 @@ $$\text{Score}_{\text{final}} = 0.7 \cdot \text{Sim} + 0.3 \cdot \text{Conf}_{\t
 - 回归验证命令：`npm run smoke:console-annotation-handoff`。
 - 该 GUI 路径只读取 whitelisted reports，不上传 labels，不写 DB，不执行 apply / unarchive / category update / delete / quarantine / reinforce。
 
-## Checkpoint Canonical Entry
+Console 和质量工具属于治理界面，不是绕过 action/service、DB guard 或人工确认的管理后门。
 
-- 唯一 canonical checkpoint implementation 是 `bin/session-checkpoint.js` 与 `lib/checkpoint/*`。
-- `workspace/scripts/session-checkpoint.js` 仅允许作为 thin shim CLI 入口，负责透传 `argv` / `env` / `stdio` 到插件实现。
-- 不要在 legacy workspace script 中复制 raw evidence collection、reset 扫描、LLM prompt assembly 或 smart-add 输入策略逻辑。
+## 本地开发与运行时同步
 
----
+安装依赖并执行静态检查与测试：
 
+```bash
+npm install
+npm run check
+npm test
+```
 
-- **Task classifier** — `bin/task-classifier.js` 按输入关键词路由 coding / default 任务
+启动 Console：
+
+```bash
+npm run console
+```
+
+查看 CLI：
+
+```bash
+node bin/memory-engine-cli.js --help
+```
+
+将当前源码重新安装到 OpenClaw 运行时：
+
+```bash
+openclaw plugins install . --force
+```
+
+安装后应按改动范围执行 targeted tests、runtime smoke 和 debug metadata 检查。完整步骤见 [`docs/runtime-sync.md`](docs/runtime-sync.md) 与 [`docs/smoke-tests/README.md`](docs/smoke-tests/README.md)。
+
+## 常用治理命令
+
+```bash
+npm run memory:quality
+npm run smoke:quality-baseline
+npm run smoke:smart-add-duplicates
+npm run preview:smart-add-duplicate-cleanup
+npm run memory:cleanup-orphan-confidence
+npm run smoke:console-annotation-handoff
+```
+
+所有 cleanup/apply 类命令都必须先阅读对应设计或操作协议，不能仅凭命令名称推断其是否会写库。
+
+## 仓库导航
+
+| 路径 | 职责 |
+| --- | --- |
+| `index.js` | 插件 bootstrap、依赖注入和 OpenClaw hook 编排 |
+| `lib/tools/` | 工具声明与 canonical runtime action layer |
+| `lib/recall/` | Hybrid Search、AutoRecall gate、turn state、reinforcement 和 memory card |
+| `lib/checkpoint/` | Session checkpoint 的拆分模块 |
+| `lib/db/` | Engine/Core DB 边界、schema、write guard 和 sidecar |
+| `lib/quality/` | 质量评估、审计、候选收集和受控清理 |
+| `lib/annotation/` | 人工标注候选、规则、采样和汇总 |
+| `console/` | Console server、views 和只读治理界面 |
+| `bin/` | CLI、审计、smoke、迁移预览和维护入口 |
+| `docs/` | 当前契约、ADR、runbook、audit、plan 和历史设计 |
+| `test/` | 单元、契约、静态文档和 smoke 回归测试 |
+
+## 版本与文档维护规则
+
+- 当前 manifest release version 为 `0.8.22`，对应当前主线最近可达的正式标签；其后的本地或未推送提交属于 unreleased changes。
+- 运行 `npm run version:status` 查看发布标签、manifest version、距发布提交数、dirty 状态和完整 build identity。
+- 运行 `npm run version:check` 校验 `package.json`、`package-lock.json` 与当前提交可达的最近发布标签是否一致。
+- 完整规则见 [`docs/release-version-policy.md`](docs/release-version-policy.md)。README 标题不硬编码版本号，且不得按全仓库最大 SemVer 选择发布身份。
+- README 不复制容易变化的数值参数、固定通道数量或临时 rollout 状态。
+- 系统边界和默认行为变化时，先更新代码与测试，再更新对应 contract / ADR / runbook，最后同步 README 概览。
+- 新增架构或治理文档必须登记到 [`docs/README.md`](docs/README.md)，并明确其状态是 Current、ADR、Runbook、Design-only、Audit 还是 Historical。
+- 根 README 与专项文档冲突时，按 [`docs/README.md`](docs/README.md) 中的文档权威层级处理。
