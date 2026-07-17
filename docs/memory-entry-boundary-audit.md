@@ -37,8 +37,8 @@ Production entrypoints must not:
 | `index.js` | plugin bootstrap | canonical | Retain; dependency injection and registration orchestration only |
 | `lib/tools/register-memory-engine-tools.js` | tool registration | canonical | Retain; declaration-oriented registration only |
 | `lib/tools/memory-engine-actions.js` | runtime action layer | canonical runtime | Retain; continue auditing DB access and action/service boundaries |
-| `bin/memory-engine.js` | legacy production CLI | unsafe legacy | P1-A Step 3: thin shim or fail closed |
-| `skills/scripts/memory-engine.js` | legacy skill CLI | unsafe legacy fork | P1-A Step 3: thin shim; no independent implementation |
+| `bin/memory-engine.js` | legacy production CLI | legacy compatibility shim | P1-A Step 4: retain compatibility while extracting the shared service |
+| `skills/scripts/memory-engine.js` | legacy skill CLI | legacy compatibility shim | P1-A Step 4: retain compatibility while extracting the shared service |
 | `bin/memory-engine-cli.js` | transitional/admin CLI | partially migrated | P1-A Step 4: extract shared service or refactor as an adapter |
 | `bin/nightly-maintenance.js` | legacy lifecycle entrypoint | unsafe legacy | P1-A Step 5: migrate to canonical maintenance service |
 | `bin/nightly-maintenance-command.cjs` | explicit maintenance command | conditionally allowed | Keep outside plugin runtime; later converge with canonical maintenance service |
@@ -51,13 +51,11 @@ The first seven rows are the required baseline inventory. The command-safe night
 
 ### Legacy entrypoint baseline
 
-The following are explicitly known legacy production bypasses:
+The following is the remaining explicitly known legacy production bypass:
 
-- `bin/memory-engine.js`
-- `skills/scripts/memory-engine.js`
 - `bin/nightly-maintenance.js`
 
-P1-A Step 2 intentionally does not require these files to be shims. Their presence and unsafe classification are the baseline facts that the contract test protects while later migration work is staged.
+P1-A Step 3 removed the duplicated business implementations from the two memory-engine CLI paths. Both now directly invoke `bin/memory-engine-cli.js`, preserve argv/environment/stdin/stdout/stderr and child status, and fail closed when the canonical CLI is unavailable. They remain compatibility entrypoints, not canonical action layers.
 
 ## Maintenance utility exception
 
@@ -92,18 +90,20 @@ The static contract therefore treats clearly named `audit`, `probe`, `migration`
 - all baseline entrypoints are registered in this document;
 - canonical runtime files do not hard-code the Core DB path;
 - tool registration stays declarative and does not open/attach SQLite;
-- the two legacy memory-engine files remain explicitly classified as legacy/unsafe and are included in migration scope;
+- the two legacy memory-engine files remain explicitly classified as compatibility shims and are included in the migration scope;
 - new production-like files in `bin/` or `skills/scripts/` cannot appear without inventory registration;
 - canonical runtime uniqueness is stated without falsely promoting the transitional/admin CLI;
 - missing-canonical-entrypoint behavior is fail-closed, with no silent legacy fallback and no copied business logic in a shim.
 
-This is an inventory guard, not an implementation migration. It intentionally does not assert that current legacy files already satisfy future shim rules.
+This is an inventory guard plus the Step 3 shim contract. It does not promote the transitional/admin CLI to the final canonical service.
 
 ## Fail-closed rule
 
 If the canonical entrypoint is missing, the caller must fail closed. It must not silently fall back to an old business implementation. A legacy shim must not copy business logic; it may only delegate, propagate arguments/environment, or fail with an explicit error.
 
-## Explicit non-goals for P1-A Step 2
+## Explicit non-goals for P1-A Step 2 baseline
+
+The following were non-goals of the completed Step 2 inventory baseline; they remain useful historical scope markers:
 
 This phase does not:
 
@@ -117,19 +117,23 @@ This phase does not:
 - modify AutoRecall;
 - access a real database.
 
+Step 3 changes only the two legacy CLI files and their inventory/test contracts. It does not modify the transitional/admin CLI, nightly lifecycle, runtime actions, retrieval, fallback, schema, or database behavior.
+
 ## Planned migration order
 
 ```text
-P1-A Step 2  inventory + contract
-P1-A Step 3  legacy CLI thin shim
+P1-A Step 2  inventory + contract (completed)
+P1-A Step 3  legacy CLI thin shim (completed)
 P1-A Step 4  canonical/admin CLI service extraction
 P1-A Step 5  nightly lifecycle migration
 P1-A Step 6  final entrypoint audit
 ```
 
-## Audit findings at baseline
+P1-A is not closed: the transitional/admin CLI and nightly lifecycle still require the later migration steps.
 
-- The two memory-engine CLI scripts contain duplicated legacy business logic and direct Core DB path handling.
+## Audit findings after Step 3
+
+- The two memory-engine CLI scripts are compatibility shims that directly invoke `bin/memory-engine-cli.js`; their duplicated business logic was removed in P1-A Step 3.
 - `bin/nightly-maintenance.js` is a legacy lifecycle implementation with direct Core DB access.
 - `bin/memory-engine-cli.js` is transitional/admin and still contains its own DB orchestration; it is not the canonical runtime layer.
 - `bin/nightly-maintenance-command.cjs` is a separately registered command-safe maintenance path and must remain explicitly invoked rather than implicitly loaded by runtime registration.

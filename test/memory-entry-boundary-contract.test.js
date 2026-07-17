@@ -163,16 +163,17 @@ test("tool registration remains declarative", () => {
   ]);
 });
 
-test("legacy entrypoints are explicitly documented without requiring early migration", () => {
+test("legacy entrypoints are documented as compatibility shims", () => {
   const audit = readFileSync(auditDocPath, "utf8");
   for (const relativePath of ["bin/memory-engine.js", "skills/scripts/memory-engine.js"]) {
     assert.equal(existsSync(resolve(repoRoot, relativePath)), true, `missing ${relativePath}`);
     const row = findInventoryRow(audit, relativePath);
     assert.ok(row, `audit must inventory ${relativePath}`);
-    assert.match(row, /unsafe legacy/);
-    assert.match(row, /P1-A Step 3/);
+    assert.match(row, /legacy compatibility shim/);
+    assert.doesNotMatch(row, /unsafe legacy/);
   }
-  assert.doesNotMatch(audit, /already (?:a )?thin shim/i);
+  assert.match(audit, /P1-A Step 3 removed the duplicated business implementations/);
+  assert.match(audit, /Both now directly invoke `bin\/memory-engine-cli\.js`/);
   assert.match(audit, /The canonical runtime action layer for the plugin is:/);
 });
 
