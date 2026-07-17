@@ -201,6 +201,11 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
         event_type: "auto_recall_debug",
         metadata_json: JSON.stringify({ candidate_count: 1, candidate_count_after_gate: 1, injected_count: 1 }),
       },
+      {
+        event_type: "auto_recall_debug",
+        trace_id: "hybrid-isolated",
+        metadata_json: JSON.stringify({ kg_access_mode: "isolated", recent_access_mode: "isolated" }),
+      },
     ],
     coreEvents: [
       {
@@ -213,6 +218,14 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
         candidate_count: 1,
         injected_count: 0,
         latency_ms: 200,
+      },
+      {
+        event_type: "auto_recall_debug",
+        trace_id: "hybrid-kg-fallback",
+        metadata_json: JSON.stringify({
+          kg_access_mode: "legacy_fallback",
+          kg_isolated_fallback_reason: "text_id_invariant_failed",
+        }),
       },
     ],
   });
@@ -242,6 +255,22 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
     assert.equal(categoryMap.episodic, 1);
     assert.equal(categoryMap.project, 1);
     assert.equal(result.aggregate.completed, 2);
+    assert.equal(JSON.stringify(result.hybrid_fallback_observability), JSON.stringify({
+      window_days: 7,
+      observed_hybrid_events: 2,
+      fully_observed_events: 1,
+      partial_observed_events: 1,
+      fully_isolated_events: 1,
+      fallback_events: 1,
+      fallback_rate: 0.5,
+      kg_fallback_events: 1,
+      recent_fallback_events: 0,
+      both_fallback_events: 0,
+      kg_modes: { isolated: 1, legacy_fallback: 1 },
+      recent_modes: { isolated: 1 },
+      kg_fallback_reasons: { text_id_invariant_failed: 1 },
+      recent_fallback_reasons: {},
+    }));
   } finally {
     engineDb.close();
   }

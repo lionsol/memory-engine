@@ -170,6 +170,51 @@ function renderAutoRecallInjectionRate(target, summary) {
   </div>`;
 }
 
+function renderHybridFallbackObservability(target, summary) {
+  const node = $(target);
+  if (!node) return;
+  const reasons = (title, distribution) => {
+    const rows = Object.entries(distribution || {});
+    return `<article class="diversity-dim">
+      <h3>${esc(title)}</h3>
+      <div class="dist-list">
+        ${rows.length
+    ? rows.map(([reason, count]) => `<div class="dist-item"><span>${esc(reason)}</span><strong>${fmt(count)}</strong></div>`).join("")
+    : `<span class="muted">No fallback reasons observed</span>`}
+      </div>
+    </article>`;
+  };
+
+  node.innerHTML = `<div class="diversity-head">
+    <span class="badge">Window: ${esc(summary?.window_days ?? 7)} days</span>
+  </div>
+  <div class="diversity-grid concentration-grid">
+    <article class="diversity-dim">
+      <h3>Hybrid Access</h3>
+      <div class="diversity-kpis">
+        <div><span>Observed Hybrid</span><strong>${fmt(summary?.observed_hybrid_events ?? 0)}</strong></div>
+        <div><span>Fully Isolated</span><strong>${fmt(summary?.fully_isolated_events ?? 0)}</strong></div>
+        <div><span>Fallback Events</span><strong>${fmt(summary?.fallback_events ?? 0)}</strong></div>
+        <div><span>Fallback Rate</span><strong>${pct(summary?.fallback_rate ?? 0)}</strong></div>
+      </div>
+    </article>
+    <article class="diversity-dim">
+      <h3>Fallback Channels</h3>
+      <div class="diversity-kpis">
+        <div><span>KG Fallback</span><strong>${fmt(summary?.kg_fallback_events ?? 0)}</strong></div>
+        <div><span>Recent Fallback</span><strong>${fmt(summary?.recent_fallback_events ?? 0)}</strong></div>
+        <div><span>Both Fallback</span><strong>${fmt(summary?.both_fallback_events ?? 0)}</strong></div>
+        <div><span>Partial Access</span><strong>${fmt(summary?.partial_observed_events ?? 0)}</strong></div>
+      </div>
+    </article>
+  </div>
+  <div class="diversity-grid">
+    ${reasons("KG Fallback Reasons", summary?.kg_fallback_reasons)}
+    ${reasons("Recent Fallback Reasons", summary?.recent_fallback_reasons)}
+  </div>
+  <p class="muted">Fallback rate denominator: AutoRecall debug events carrying at least one Hybrid access mode. Pre-search skips and pre-B3 events are excluded.</p>`;
+}
+
 function reportKindLabel(kind) {
   return ({
     annotation_summary: 'Annotation Summary',
@@ -322,6 +367,7 @@ function initMetrics() {
   const reinforcementConcentration = retrieval.reinforcement_concentration || {};
   const recallMissAfterResponse = retrieval.recall_miss_after_response || {};
   const autoRecallInjectionRate = retrieval.auto_recall_injection_rate || {};
+  const hybridFallbackObservability = retrieval.hybrid_fallback_observability || {};
   cards('[data-metric-cards]', [
     { label: 'Events', value: overview.events || 0 },
     { label: 'Memories', value: overview.memories || 0 },
@@ -346,6 +392,7 @@ function initMetrics() {
   renderTopMemories(pageData);
   renderRecallMissAfterResponse('[data-recall-miss-after-response]', recallMissAfterResponse);
   renderAutoRecallInjectionRate('[data-auto-recall-injection-rate]', autoRecallInjectionRate);
+  renderHybridFallbackObservability('[data-hybrid-fallback-observability]', hybridFallbackObservability);
   table('[data-conflicts]', [
     { label: 'Category', value: r => r.category },
     { label: 'Count', value: r => r.count },

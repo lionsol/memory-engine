@@ -142,6 +142,85 @@ function filterRowsByWindowDays(rows, windowDays, nowMs = Date.now()) {
   });
 }
 
+function sortMetricDistribution(counts) {
+  return Object.fromEntries(
+    [...counts.entries()]
+      .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
+  );
+}
+
+function addMetricDistributionValue(counts, value) {
+  const key = typeof value === "string" && value.trim() ? value.trim() : "unknown";
+  counts.set(key, (counts.get(key) || 0) + 1);
+}
+
+export function buildHybridFallbackObservabilitySummary(
+  rows,
+  { windowDays = 7, nowMs = Date.now() } = {},
+) {
+  const normalizedWindowDays = Math.max(1, Number(windowDays) || 7);
+  const withinWindow = filterRowsByWindowDays(rows, normalizedWindowDays, nowMs);
+  const kgModes = new Map();
+  const recentModes = new Map();
+  const kgReasons = new Map();
+  const recentReasons = new Map();
+  let observedHybridEvents = 0;
+  let fullyObservedEvents = 0;
+  let fullyIsolatedEvents = 0;
+  let fallbackEvents = 0;
+  let kgFallbackEvents = 0;
+  let recentFallbackEvents = 0;
+  let bothFallbackEvents = 0;
+
+  for (const row of withinWindow) {
+    if (row?.event_type !== "auto_recall_debug") continue;
+    const metadata = safeJson(row?.metadata_json, {});
+    if (!metadata || typeof metadata !== "object") continue;
+    if (metadata.debug_type === "gate_decision") continue;
+    const hasKgMode = Object.hasOwn(metadata, "kg_access_mode");
+    const hasRecentMode = Object.hasOwn(metadata, "recent_access_mode");
+    if (!hasKgMode && !hasRecentMode) continue;
+
+    observedHybridEvents += 1;
+    if (hasKgMode) addMetricDistributionValue(kgModes, metadata.kg_access_mode);
+    if (hasRecentMode) addMetricDistributionValue(recentModes, metadata.recent_access_mode);
+    if (hasKgMode && hasRecentMode) fullyObservedEvents += 1;
+
+    const kgIsFallback = metadata.kg_access_mode === "legacy_fallback";
+    const recentIsFallback = metadata.recent_access_mode === "guarded_fallback";
+    if (metadata.kg_access_mode === "isolated" && metadata.recent_access_mode === "isolated") {
+      fullyIsolatedEvents += 1;
+    }
+    if (kgIsFallback) {
+      kgFallbackEvents += 1;
+      addMetricDistributionValue(kgReasons, metadata.kg_isolated_fallback_reason);
+    }
+    if (recentIsFallback) {
+      recentFallbackEvents += 1;
+      addMetricDistributionValue(recentReasons, metadata.recent_isolated_fallback_reason);
+    }
+    if (kgIsFallback && recentIsFallback) bothFallbackEvents += 1;
+    if (kgIsFallback || recentIsFallback) fallbackEvents += 1;
+  }
+
+  return {
+    window_days: normalizedWindowDays,
+    observed_hybrid_events: observedHybridEvents,
+    fully_observed_events: fullyObservedEvents,
+    partial_observed_events: observedHybridEvents - fullyObservedEvents,
+    fully_isolated_events: fullyIsolatedEvents,
+    fallback_events: fallbackEvents,
+    fallback_rate: toShare(fallbackEvents, observedHybridEvents),
+    kg_fallback_events: kgFallbackEvents,
+    recent_fallback_events: recentFallbackEvents,
+    both_fallback_events: bothFallbackEvents,
+    kg_modes: sortMetricDistribution(kgModes),
+    recent_modes: sortMetricDistribution(recentModes),
+    kg_fallback_reasons: sortMetricDistribution(kgReasons),
+    recent_fallback_reasons: sortMetricDistribution(recentReasons),
+  };
+}
+
 export function resolveMemoryReferenceId(row = {}, metadata = {}, fallbackPath = "") {
   const memoryId = asKey(row?.memory_id ?? metadata?.memory_id, "");
   if (memoryId) return memoryId;
@@ -515,6 +594,10 @@ export function retrievalMetrics({ nowMs = Date.now() } = {}) {
       windowDays: metricWindowDays,
       nowMs: metricsNowMs,
     });
+    const hybridFallbackObservability = buildHybridFallbackObservabilitySummary(unifiedEvents, {
+      windowDays: metricWindowDays,
+      nowMs: metricsNowMs,
+    });
     return {
       aggregate,
       categories,
@@ -523,6 +606,7 @@ export function retrievalMetrics({ nowMs = Date.now() } = {}) {
       reinforcement_concentration: reinforcementConcentration,
       recall_miss_after_response: recallMissAfterResponse,
       auto_recall_injection_rate: autoRecallInjectionRate,
+      hybrid_fallback_observability: hybridFallbackObservability,
     };
   }, { readonly: true });
 }
