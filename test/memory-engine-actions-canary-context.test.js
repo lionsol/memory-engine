@@ -104,6 +104,42 @@ test("default trustedRuntimeContext is null and provider is not injected from pa
   assert.equal(JSON.stringify(result).includes("\"edi\""), false);
 });
 
+test("both search surfaces forward the production hybrid scope without changing query parameters", async () => {
+  const record = { calls: 0, providerCalls: 0, queries: [], runtimes: [] };
+  const withHybridDbAccessScope = async run => run({
+    withCoreDb: fn => fn({}),
+    withEngineDb: fn => fn({}),
+    withLegacyDb: fn => fn({}),
+    capabilities: { isolatedFts: true, isolatedKg: true, isolatedRecent: true },
+  });
+  const runtime = createBaseRuntime({
+    hybridSearch: createHybridSearchStub(record),
+    withHybridDbAccessScope,
+  });
+  const executeSearch = createMemoryEngineSearchExecute(runtime);
+  const executeAction = createMemoryEngineExecute(runtime);
+
+  await executeSearch("wrapper-call", { query: "alpha", top_k: 3 });
+  await executeAction("action-call", { action: "search", text: "beta", top_k: 4 });
+
+  assert.equal(record.runtimes[0].withHybridDbAccessScope, withHybridDbAccessScope);
+  assert.equal(record.runtimes[1].withHybridDbAccessScope, withHybridDbAccessScope);
+  assert.deepEqual(record.queries, ["alpha", "beta"]);
+});
+
+test("non-search actions do not invoke the hybrid scope", async () => {
+  let scopeCalls = 0;
+  const executeAction = createMemoryEngineExecute(createBaseRuntime({
+    withHybridDbAccessScope: async run => {
+      scopeCalls += 1;
+      return run({});
+    },
+  }));
+
+  await executeAction("status-call", { action: "status" });
+  assert.equal(scopeCalls, 0);
+});
+
 test("resolver receives only trustedRuntimeContext and not tool params, query, action, or toolCallId", async () => {
   const record = { calls: 0, providerCalls: 0, queries: [], runtimes: [] };
   const seenArgs = [];

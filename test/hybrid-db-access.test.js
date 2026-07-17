@@ -1,8 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import Database from "better-sqlite3";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import { hybridSearch } from "../lib/recall/hybrid-search.js";
-import { CONTRACT_ERROR, runWithHybridDbAccessScope } from "../lib/recall/hybrid/db-access.js";
+import {
+  CONTRACT_ERROR,
+  createIsolatedHybridDbAccessScope,
+  runWithHybridDbAccessScope,
+} from "../lib/recall/hybrid/db-access.js";
+
+function isolatedFactoryFixture() {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-hybrid-scope-"));
+  const coreDbPath = join(root, "core.sqlite");
+  const engineDbPath = join(root, "engine.sqlite");
+  const core = new Database(coreDbPath);
+  core.exec("CREATE TABLE chunks (id TEXT PRIMARY KEY, text TEXT)");
+  core.close();
+  const engine = new Database(engineDbPath);
+  engine.exec("CREATE TABLE memory_confidence (chunk_id TEXT PRIMARY KEY, confidence REAL)");
+  engine.close();
+  return { root, coreDbPath, engineDbPath };
+}
 
 function rowsFor(sql) {
   if (sql.includes("SELECT chunk_id") && sql.includes("FROM memory_confidence")) {
@@ -53,6 +74,47 @@ function runtimeWithExplicitAccess(access, calls, extra = {}) {
     ...extra,
   };
 }
+
+test("production isolated factory exposes all channel capabilities and main-only handles", async () => {
+  const paths = isolatedFactoryFixture();
+  try {
+    let coreHandle;
+    let engineHandle;
+    const withHybridDbAccessScope = createIsolatedHybridDbAccessScope({
+      ...paths,
+      withLegacyDb: () => {
+        throw new Error("legacy accessor must not be used");
+      },
+    });
+
+    const result = await withHybridDbAccessScope(async access => {
+      assert.deepEqual(access.capabilities, {
+        isolatedFts: true,
+        isolatedKg: true,
+        isolatedRecent: true,
+      });
+      coreHandle = access.withCoreDb(db => db);
+      engineHandle = access.withEngineDb(db => db);
+      assert.deepEqual(coreHandle.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
+      assert.deepEqual(engineHandle.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
+      assert.throws(
+        () => coreHandle.prepare("INSERT INTO chunks (id, text) VALUES ('blocked', 'x')").run(),
+        error => error.code === "SQLITE_READONLY",
+      );
+      assert.throws(
+        () => engineHandle.prepare("INSERT INTO memory_confidence (chunk_id, confidence) VALUES ('blocked', 0.1)").run(),
+        error => error.code === "SQLITE_READONLY",
+      );
+      return "scope-result";
+    });
+
+    assert.equal(result, "scope-result");
+    assert.throws(() => coreHandle.prepare("SELECT 1").get(), /closed|not open/i);
+    assert.throws(() => engineHandle.prepare("SELECT 1").get(), /closed|not open/i);
+  } finally {
+    rmSync(paths.root, { recursive: true, force: true });
+  }
+});
 
 test("explicit DB access scope routes metadata and channels to the declared readers", async () => {
   const calls = {};

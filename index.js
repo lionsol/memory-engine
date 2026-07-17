@@ -56,6 +56,7 @@ import { evaluateAutoRecallRuntimeGate } from "./lib/recall/auto-recall-runtime-
 import { createAutoRecallTurnStateManager } from "./lib/recall/auto-recall-turn-state.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
+import { createIsolatedHybridDbAccessScope } from "./lib/recall/hybrid/db-access.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
 import {
   createMemoryEngineGetExecute,
@@ -213,6 +214,9 @@ export default definePluginEntry({
     void ensureLanceDBReady();
 
     const autoRecallTurnState = createAutoRecallTurnStateManager();
+    const withHybridDbAccessScope = createIsolatedHybridDbAccessScope({
+      withLegacyDb: withDb,
+    });
     const memoryEngineConfig = getMemoryEngineConfig(api?.config || null);
     const smartAddTimeZone = getSmartAddTimeZone(api?.config || null);
     const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
@@ -358,6 +362,7 @@ export default definePluginEntry({
           recordMemoryEvent({ event_type: "recall_started", session_id: sessionId, trace_id: traceId, source: "autoRecall", metadata_json: { prompt: prompt.slice(0, 500), topK: autoRecallTopK, focused_query: searchPrompt, recall_intent_reason: recallIntent.intent_reason } });
           const result = await runHybridSearch(searchPrompt, { topK: autoRecallTopK }, {
             withDb,
+            withHybridDbAccessScope,
             calcRealtimeConf,
             syncIndexIfNeeded,
             categoryMap: CATEGORY_MAP,
@@ -736,6 +741,7 @@ export default definePluginEntry({
       syncIndexIfNeeded,
       catParams,
       withDb,
+      withHybridDbAccessScope,
       getLancedbTable,
       generateEmbedding: generateEmbeddingRuntime,
       recordMemoryEvent,
@@ -752,6 +758,7 @@ export default definePluginEntry({
     const executeMemoryEngineSearch = createMemoryEngineSearchExecute({
       api,
       withDb,
+      withHybridDbAccessScope,
       calcRealtimeConf,
       syncIndexIfNeeded,
       CATEGORY_MAP,
