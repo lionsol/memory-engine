@@ -100,7 +100,58 @@ function recordMemoryEvent(event) {
   }
 }
 
-function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
+function buildAutoRecallDebugMetadata(prompt, result, skipReason = null, options) {
+  function summarizeLegacyDbFallback(debugInfo = {}) {
+    const channels = [];
+    if (debugInfo.kg_access_mode === "legacy_fallback") channels.push("kg");
+    if (debugInfo.recent_access_mode === "guarded_fallback") channels.push("recent");
+    return {
+      legacy_db_fallback_used: channels.length > 0,
+      legacy_db_fallback_channels: channels,
+    };
+  }
+
+  function buildAutoRecallHybridAccessMetadata(debugInfo = {}, searchExecuted = false) {
+    if (!searchExecuted || !debugInfo || typeof debugInfo !== "object") return {};
+
+    const metadata = {};
+    const fallbackReasonAliases = {
+      kg_isolated_fallback_reason: "kg_isolation_fallback_reason",
+      recent_isolated_fallback_reason: "recent_isolation_fallback_reason",
+    };
+    for (const key of [
+      "kg_access_mode",
+      "kg_isolated_fallback_reason",
+      "recent_access_mode",
+      "recent_isolated_fallback_reason",
+    ]) {
+      if (Object.hasOwn(debugInfo, key) && debugInfo[key] !== undefined) {
+        metadata[key] = debugInfo[key];
+        if (fallbackReasonAliases[key]) metadata[fallbackReasonAliases[key]] = debugInfo[key];
+      }
+    }
+
+    if (
+      Object.hasOwn(debugInfo, "kg_access_mode") &&
+      !Object.hasOwn(debugInfo, "kg_isolated_fallback_reason")
+    ) {
+      metadata.kg_isolated_fallback_reason = null;
+      metadata.kg_isolation_fallback_reason = null;
+    }
+    if (
+      Object.hasOwn(debugInfo, "recent_access_mode") &&
+      !Object.hasOwn(debugInfo, "recent_isolated_fallback_reason")
+    ) {
+      metadata.recent_isolated_fallback_reason = null;
+      metadata.recent_isolation_fallback_reason = null;
+    }
+
+    return {
+      ...metadata,
+      ...summarizeLegacyDbFallback(debugInfo),
+    };
+  }
+
   const debugInfo = result?.debug || {};
   const strippedPrompt = stripPromptMetadataPrefix(prompt);
   const normalizedQuery = String(debugInfo.query_normalized || normalizeFtsQuery(strippedPrompt));
@@ -160,6 +211,7 @@ function buildAutoRecallDebugMetadata(prompt, result, skipReason = null) {
     skipped: Boolean(skipReason),
     skip_reason: skipReason || null,
     candidate_counts_before_filtering: debugInfo.candidate_counts_before_filtering || {},
+    ...buildAutoRecallHybridAccessMetadata(debugInfo, options && options.searchExecuted === true),
   };
 }
 
@@ -448,7 +500,7 @@ export default definePluginEntry({
             session_id: sessionId,
             trace_id: traceId,
             source: "autoRecall",
-            metadata_json: buildAutoRecallDebugMetadata(prompt, result),
+            metadata_json: buildAutoRecallDebugMetadata(prompt, result, null, { searchExecuted: true }),
           });
           const sessionIdForEvents = resolveHookSessionId(event, ctx);
           result.results.slice(0, Math.max(3, autoRecallTopK)).forEach((r, i) => {

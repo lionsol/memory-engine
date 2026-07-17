@@ -256,3 +256,11 @@ test("production wiring supplies the scope to AutoRecall and both search surface
   assert.match(actionsSource, /createSearchRunner\([\s\S]*?withHybridDbAccessScope/);
   assert.match(actionsSource, /withHybridDbAccessScope,\n\s+calcRealtimeConf/);
 });
+
+test("AutoRecall persistence is explicitly gated on an executed Hybrid result", () => {
+  const indexSource = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+  assert.match(indexSource, /buildAutoRecallDebugMetadata\(prompt, result, null, \{ searchExecuted: true \}\)/);
+  assert.match(indexSource, /function summarizeLegacyDbFallback\(debugInfo = \{\}\)/);
+  assert.match(indexSource, /legacy_db_fallback_channels/);
+  assert.match(indexSource, /legacy_db_fallback_used/);
+});
