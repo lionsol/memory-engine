@@ -15,7 +15,10 @@ const checkpointDate = require("../lib/checkpoint/date");
 const checkpointCompleteness = require("../lib/checkpoint/completeness");
 const { resolveConfigConflicts } = require("../lib/checkpoint/conflict-resolver");
 const { writeConfidence } = require("../lib/checkpoint/confidence-writer");
-const { inspectBusyTimeouts } = require("../lib/checkpoint/db");
+const {
+  inspectBusyTimeouts,
+  inspectCheckpointBusyTimeouts,
+} = require("../lib/checkpoint/db");
 const { writeEpisodeFiles } = require("../lib/checkpoint/episode-writer");
 const checkpointLlm = require("../lib/checkpoint/llm");
 const { writeEmptyEpisode, writeIncompleteEpisode, writeLLMTimeoutEpisode } = require("../lib/checkpoint/markers");
@@ -483,6 +486,7 @@ if (require.main === module) {
 // Public/legacy exports used by tests and external callers.
 module.exports = {
   inspectBusyTimeouts,
+  inspectCheckpointBusyTimeouts,
   main,
   yesterdayDateStr,
   resolveTargetDate,

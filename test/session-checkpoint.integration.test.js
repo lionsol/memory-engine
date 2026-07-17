@@ -304,6 +304,11 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
   }
 });
 
+test("session checkpoint exports legacy and official busy-timeout inspectors", () => {
+  assert.equal(typeof checkpoint.inspectBusyTimeouts, "function");
+  assert.equal(typeof checkpoint.inspectCheckpointBusyTimeouts, "function");
+});
+
 test("session checkpoint calls flush before reading targetDate-bounded raw logs and keeps reset direct parse off by default", async () => {
   const fixture = createFixture();
   let flushed = 0;
