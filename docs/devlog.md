@@ -1,3 +1,195 @@
+## 2026-07-17
+
+### Architecture documentation governance and release-version policy
+
+完成仓库总架构/治理文档入口、根 README 现状化和发布版本治理。
+
+#### Documentation authority and navigation
+
+- 新增 `docs/README.md`，作为架构、契约、ADR、治理规则、runbook、audit、plan 与 historical 文档的统一入口。
+- 建立文档权威层级：
+  1. 代码与自动化测试；
+  2. Accepted ADR / Current contract / Policy；
+  3. Runbook；
+  4. Design-only / Plan；
+  5. Audit / Baseline；
+  6. Historical。
+- 增加按修改区域的最短阅读路径，覆盖 OpenClaw 集成、entrypoint、DB/schema、Hybrid Search、AutoRecall、质量治理、数据清理、Console 和 runtime verification。
+- 明确 `docs/architecture.txt`、`docs/dataflow.txt` 仅为速览，不是权威事实源；`docs/openclaw_memory_v0.1.md` 与早期 AutoRecall plan 属于历史材料。
+- 新增 `test/docs-index.test.js`，锁定根入口、权威层级、关键治理链接及本地 Markdown 链接完整性。
+
+#### Root README current-state rewrite
+
+- 根 README 标题改为无版本的 `Memory Engine for OpenClaw`，不再硬编码易漂移的发布号。
+- 重画当前架构边界，补充：
+  - `memory-core` substrate 与 `memory-engine` enhancement/governance layer；
+  - `memory_search` / `memory_get` 与 `memory_engine_search` / `memory_engine_get` 的工具所有权；
+  - Core DB readonly、Engine DB writable、LanceDB vector index；
+  - canonical action/service layer；
+  - AutoRecall intent/runtime/eligibility gates；
+  - current-turn reinforcement allowlist；
+  - checkpoint、质量审计、人工标注和 Console 治理层。
+- 删除已失真的固定算法描述，包括固定四通道、`0.7 * similarity + 0.3 * confidence` 和固定 `0.55` 门槛。
+- 当前检索描述改为：查询归一化 → KG/FTS lexical-first → lexical confidence 决定 vector skip → Recent/fallback → dynamic-channel RRF → configurable boosts → eligibility/pollution gate → tool output 或 AutoRecall injection。
+- 参数权威来源指向 `lib/recall/hybrid-search.js`、`lib/recall/hybrid/fusion.js`、`lib/config/defaults.js` 与 `lib/memory-confidence.js`。
+- 新增 `test/readme-current-architecture.test.js`，防止旧版本号、旧架构图语义和旧排序公式回归。
+
+#### Release-version governance
+
+- 确认当前主线最新正式发布版本为 `v0.8.22-memory-process-boundary-audit`；今天尚未发布的提交继续视为 `0.8.22` 之后的 unreleased changes，不提前声明为 `0.8.23`。
+- 仓库中旧 `v1.0.0` / `v1.0.1` / `v1.0.2` 标签不在当前 HEAD 祖先链上，因此不得通过“全仓库 SemVer 最大值”识别当前版本。
+- 当前发布标签解析采用当前提交可达的最近标签，版本语义取标签前缀 `vX.Y.Z`。
+- `package.json`、`package-lock.json` 和 lockfile root package version 从陈旧的 `0.8.2` 对齐为 `0.8.22`。
+- 新增：
+  - `docs/release-version-policy.md`
+  - `lib/version/release-version.js`
+  - `bin/version-status.js`
+  - `test/release-version-policy.test.js`
+- 新增命令：
+
+```text
+npm run version:status
+npm run version:check
+```
+
+- `version:status` 分离展示正式 release version 与当前 build identity；未发布提交和 dirty 状态只标记 `unreleased=true`，不导致一致性检查失败。
+- `version:check` 校验最近可达发布标签、manifest/lockfile 版本一致性，并忽略非祖先旧标签。
+
+#### Validation and commit
+
+- 版本检查：通过；当时识别为 release `0.8.22`，HEAD 位于该标签之后且工作区为 unreleased/dirty。
+- 文档、README、版本策略相关测试：18/18 通过。
+- `npm run check`：`static check passed: 359 files`。
+- 全量测试需统一 Node 24 PATH；Node 22 会因 `better-sqlite3` ABI 127/137 不匹配产生环境性失败。
+- Node 24 环境最终结果：`1181 tests`，`1175 passed`，`0 failed`，`6 skipped`。
+- 本阶段代码与文档已提交：
+
+```text
+fd64eb5 docs(governance): establish architecture and release policy
+```
+
+- 上述提交仅包含本阶段 10 个治理文件，没有包含 `docs/devlog.md`、`docs/memory-entry-boundary-audit.md` 或 `test/memory-entry-boundary-contract.test.js`。
+
+### P0-A Step3-F1-D-B3.1: Hybrid fallback observability aggregation and Console metrics
+
+完成 Hybrid DB isolation fallback observability 闭环。
+
+#### Runtime isolation progress
+
+继 F1-B Hybrid runtime isolated DB access 与 F1-C index sync isolation 后，本阶段没有修改 channel fallback 行为，而是增加可观测性。
+
+当前架构：
+
+- Hybrid search runtime:
+  - Core readonly handle
+  - Engine readonly handle
+  - request-scoped isolated session
+
+- Index sync:
+  - Core candidate discovery
+  - Engine existence filtering
+  - Engine-only write transaction
+
+- Remaining compatibility:
+  - KG TEXT-ID invariant fallback
+  - Recent topology/TEXT-ID guarded fallback
+
+这些 fallback 保持不变，等待真实生产数据验证后再决定移除。
+
+#### B3: AutoRecall fallback metadata persistence
+
+新增 AutoRecall Hybrid access telemetry。
+
+持久化 canonical fields:
+
+- `kg_access_mode`
+- `kg_isolated_fallback_reason`
+- `recent_access_mode`
+- `recent_isolated_fallback_reason`
+
+新增：
+
+- `legacy_db_fallback_used`
+- `legacy_db_fallback_channels`
+
+规则：
+
+- 仅 Hybrid search 执行完成后记录。
+- pre-search skip 不生成 fallback 信息。
+- channel error 不视为 fallback。
+- fallback 判断只依据 access mode，不读取错误字段或 summary 字段。
+
+#### B3.1: Metrics and Console observability
+
+新增：
+
+`retrieval.hybrid_fallback_observability`
+
+统计：
+
+- observed_hybrid_events
+- fully_observed_events
+- partial_observed_events
+- fully_isolated_events
+- fallback_events
+- fallback_rate
+- kg_fallback_events
+- recent_fallback_events
+- both_fallback_events
+
+设计原则：
+
+- event-based，不按 trace 聚合。
+- 使用 unified Engine/Core event source。
+- gate_decision 子事件排除。
+- canonical mode/reason 优先。
+- alias 字段不参与统计。
+
+新增 Console:
+
+Hybrid DB Isolation panel
+
+展示：
+
+- Hybrid observation 数量
+- fallback rate
+- KG/Recent fallback
+- fallback reason distribution
+
+动态 reason 在 UI 层统一 esc。
+
+#### Validation
+
+通过：
+
+- Hybrid runtime isolation tests
+- AutoRecall metadata tests
+- Metrics aggregation tests
+- Console rendering tests
+
+工作区：
+
+- clean
+- no real DB access
+- no runtime migration
+- no push
+
+#### Known limitations
+
+- fallback 尚未删除。
+- 当前只能观察 AutoRecall search。
+- tool search telemetry 尚未纳入。
+- 真实生产 TEXT-ID 数据审计未完成。
+
+下一阶段：
+
+基于真实 observability 数据决定：
+
+1. 保留 guarded fallback；
+2. 修复历史 ID 数据后 fail-closed；
+3. 完全移除 attached compatibility path。
+
+
 ## 2026-07-16
 
 ### Phase 1B：Hybrid 检索数据库隔离与 Recent 灰度验证基础设施
