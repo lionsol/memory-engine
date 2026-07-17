@@ -7,8 +7,13 @@ import { tmpdir } from "node:os";
 
 import { hybridSearch } from "../lib/recall/hybrid-search.js";
 import { createIsolatedHybridDbAccessScope } from "../lib/recall/hybrid/db-access.js";
+import {
+  createBackfillConfidenceForIndexedChunks,
+  createIndexSyncRuntime,
+} from "../lib/index-sync-runtime.js";
+import { withCoreDbReadonly, withEngineDbIsolated } from "../lib/db/isolated-dbs.js";
 
-function createFixture({ withConfidenceTable = true } = {}) {
+function createFixture({ withConfidenceTable = true, withMissingBackfillChunk = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "memory-engine-hybrid-runtime-"));
   const coreDbPath = join(root, "core.sqlite");
   const engineDbPath = join(root, "engine.sqlite");
@@ -26,6 +31,12 @@ function createFixture({ withConfidenceTable = true } = {}) {
     INSERT INTO chunks_fts (id, text)
     VALUES ('chunk-1', 'alpha runtime memory');
   `);
+  if (withMissingBackfillChunk) {
+    core.prepare(
+      "INSERT INTO chunks (id, text, path, updated_at) VALUES (?, ?, ?, ?)",
+    ).run("chunk-2", "alpha backfill memory", "memory/smart-add/runtime.md", 9);
+    core.prepare("INSERT INTO chunks_fts (id, text) VALUES (?, ?)").run("chunk-2", "alpha backfill memory");
+  }
   core.close();
 
   const engine = new Database(engineDbPath);
@@ -33,6 +44,7 @@ function createFixture({ withConfidenceTable = true } = {}) {
     engine.exec(`
       CREATE TABLE memory_confidence (
         chunk_id TEXT PRIMARY KEY,
+        initial_confidence REAL,
         confidence REAL,
         last_confidence_update INTEGER,
         base_tau REAL,
@@ -144,6 +156,49 @@ test("valid FTS/KG/Recent fixture uses zero legacy accessor calls", async () => 
     });
     assert.equal(legacyCalls.length, 0);
     assert.equal(result.debug.fts_error, undefined);
+  } finally {
+    rmSync(paths.root, { recursive: true, force: true });
+  }
+});
+
+test("Hybrid sync backfills through staged handles before isolated channels read metadata", async () => {
+  const paths = createFixture({ withMissingBackfillChunk: true });
+  const legacyCalls = [];
+  try {
+    const withCoreDb = fn => withCoreDbReadonly(fn, paths);
+    const withEngineDb = fn => withEngineDbIsolated(fn, { ...paths, readonly: false });
+    const backfill = createBackfillConfidenceForIndexedChunks({
+      catParams: () => ({ conf: 0.5, tau: 7 }),
+      inferCategoryFromChunk: () => "raw_log",
+      withCoreDb,
+      withEngineDb,
+    });
+    const syncIndexIfNeeded = createIndexSyncRuntime({
+      memoryRoot: "/workspace",
+      watchDirs: ["memory/smart-add"],
+      withCoreDb,
+      withEngineDb,
+      getSharedMemoryManager: async () => ({ manager: null }),
+      collectIndexedFiles: () => [{ relPath: "memory/smart-add/runtime.md", mtimeMs: 10 }],
+      readIndexedPathState: () => ({ paths: ["memory/smart-add/runtime.md"], updatedAt: {} }),
+      backfillConfidenceForIndexedChunks: backfill,
+    });
+
+    const result = await hybridSearch("alpha", { topK: 3 }, {
+      withDb: () => {
+        throw new Error("legacy base reader must not be used");
+      },
+      withHybridDbAccessScope: createScope(paths, legacyCalls),
+      calcRealtimeConf: row => Number(row.confidence || 0),
+      syncIndexIfNeeded,
+      getMemorySearchManager: async () => ({ manager: { search: async () => ({ entries: [] }) } }),
+    });
+
+    assert.equal(result.debug.sync.backfill.inserted, 1);
+    assert.equal(legacyCalls.length, 0);
+    withEngineDb(db => {
+      assert.equal(db.prepare("SELECT confidence FROM memory_confidence WHERE chunk_id = 'chunk-2'").get().confidence, 0.5);
+    });
   } finally {
     rmSync(paths.root, { recursive: true, force: true });
   }

@@ -26,6 +26,7 @@ import {
   getSharedMemoryManager,
 } from "./memory-manager-runtime.js";
 import { ensureEngineWritable, withEngineDb, withEngineDbSession } from "./lib/db/engine-db.js";
+import { withCoreDbReadonly, withEngineDbIsolated } from "./lib/db/isolated-dbs.js";
 import { getMemoryEngineConfig } from "./lib/config/runtime.js";
 import { getSmartAddTimeZone } from "./lib/config/helpers.js";
 import { insertMemoryEvent } from "./lib/db/events.js";
@@ -175,12 +176,15 @@ function resolveHookSessionId(event, ctx) {
 const backfillConfidenceForIndexedChunks = createBackfillConfidenceForIndexedChunks({
   catParams,
   inferCategoryFromChunk,
+  withCoreDb: fn => withCoreDbReadonly(fn),
+  withEngineDb: fn => withEngineDbIsolated(fn, { readonly: false }),
 });
 
 const syncIndexIfNeeded = createIndexSyncRuntime({
   memoryRoot: WORKSPACE,
   watchDirs: INDEX_SYNC_WATCH_DIRS,
-  withDb,
+  withCoreDb: fn => withCoreDbReadonly(fn),
+  withEngineDb: fn => withEngineDbIsolated(fn, { readonly: false }),
   getSharedMemoryManager,
   collectIndexedFiles,
   readIndexedPathState,
