@@ -9,12 +9,16 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { resolveEngineDbPath } from "../lib/db/engine-db.js";
 
 const HOME = homedir();
 const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI_PATH = fileURLToPath(new URL("../bin/memory-engine-cli.js", import.meta.url));
 const DEFAULT_ENGINE_DB = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_CORE_DB = resolve(HOME, ".openclaw/memory/main.sqlite");
+const DB_ENV_KEYS = ["ENGINE_DB_PATH", "MEMORY_ENGINE_DB_PATH", "MEMORY_ENGINE_DB", "MEMORY_ENGINE_CORE_DB"];
+const runRealDbTests = process.env.MEMORY_ENGINE_RUN_REAL_DB_TESTS === "1";
+const realDbTest = runRealDbTests ? test : test.skip;
 
 function runCli(args, options = {}) {
   return spawnSync("node", [CLI_PATH, ...args], {
@@ -47,67 +51,47 @@ function skipIfSpawnBlocked(t, result) {
   return false;
 }
 
-// ── Path resolution tests (unit: check default without env vars) ──
+function withCleanDbEnv(overrides, fn) {
+  const previous = Object.fromEntries(DB_ENV_KEYS.map(key => [key, process.env[key]]));
+  try {
+    for (const key of DB_ENV_KEYS) delete process.env[key];
+    Object.assign(process.env, overrides);
+    return fn();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
 
-test("CLI default DB path resolves to engine DB (not core main.sqlite)", (t) => {
+// ── Path resolution tests (pure resolver/parser checks; no DB open) ──
+
+test("CLI default DB path resolves to engine DB (not core main.sqlite)", () => {
   assert.equal(existsSync(CLI_PATH), true, `CLI_PATH should exist: ${CLI_PATH}`);
-  // Run with --help to just load paths, then check error message
-  const env = { ...process.env };
-  delete env.MEMORY_ENGINE_DB_PATH;
-  delete env.MEMORY_ENGINE_DB;
-  delete env.MEMORY_ENGINE_CORE_DB;
-
-  const result = runCli(["status"], { env });
-  if (skipIfSpawnBlocked(t, result)) return;
-  const { status, stderr } = result;
-
-  // Should output the engine DB path, not core DB path
-  const output = stderr || "";
-  // Even if engine DB doesn't exist, it should mention engine DB not core DB
-  assert.ok(output.includes(DEFAULT_ENGINE_DB) || output.includes("memory-engine") || status === 0,
-    `Output should reference engine DB, got: ${output.slice(0, 300)}; result=${JSON.stringify(summarizeSpawnResult(result))}`);
+  withCleanDbEnv({}, () => {
+    assert.equal(resolveEngineDbPath(), DEFAULT_ENGINE_DB);
+    assert.notEqual(resolveEngineDbPath(), DEFAULT_CORE_DB);
+  });
 });
 
-test("MEMORY_ENGINE_DB_PATH env var overrides default engine DB path", (t) => {
-  const customPath = resolve(HOME, ".openclaw/memory/test-custom.sqlite");
-  const env = { ...process.env, MEMORY_ENGINE_DB_PATH: customPath };
-  delete env.MEMORY_ENGINE_DB;
-  delete env.MEMORY_ENGINE_CORE_DB;
-
-  const result = runCli(["status"], { env });
-  if (skipIfSpawnBlocked(t, result)) return;
-  const { stdout, stderr } = result;
-
-  // Should try to open the custom path
-  const output = stdout + stderr;
-  assert.ok(output.includes(customPath),
-    `Expected output to reference custom path "${customPath}", got: ${output.slice(0, 300)}; result=${JSON.stringify(summarizeSpawnResult(result))}`);
+test("MEMORY_ENGINE_DB_PATH overrides the default without opening a DB", () => {
+  const customPath = "/tmp/test-custom.sqlite";
+  withCleanDbEnv({ MEMORY_ENGINE_DB_PATH: customPath }, () => {
+    assert.equal(resolveEngineDbPath(), customPath);
+  });
 });
 
-test("--db flag overrides default and env var engine DB path", (t) => {
-  const flagPath = resolve(HOME, ".openclaw/memory/test-db-flag.sqlite");
-  const env = {
-    ...process.env,
-    // Set env var that should be overridden
-    MEMORY_ENGINE_DB_PATH: resolve(HOME, ".openclaw/memory/should-not-use.sqlite"),
-  };
-  delete env.MEMORY_ENGINE_DB;
-  delete env.MEMORY_ENGINE_CORE_DB;
-
-  const result = runCli(["--db", flagPath, "status"], { env });
-  if (skipIfSpawnBlocked(t, result)) return;
-  const { stdout, stderr } = result;
-
-  const output = stdout + stderr;
-  assert.ok(output.includes(flagPath),
-    `Expected output to reference --db path "${flagPath}", got: ${output.slice(0, 300)}; result=${JSON.stringify(summarizeSpawnResult(result))}`);
-  assert.ok(!output.includes("should-not-use"),
-    `Should NOT use env var path when --db is specified, got: ${output.slice(0, 300)}; result=${JSON.stringify(summarizeSpawnResult(result))}`);
+test("--db flag overrides environment without opening a DB", () => {
+  const flagPath = "/tmp/test-db-flag.sqlite";
+  withCleanDbEnv({ MEMORY_ENGINE_DB_PATH: "/tmp/should-not-use.sqlite" }, () => {
+    assert.equal(resolveEngineDbPath({ engineDbPath: flagPath }), flagPath);
+  });
 });
 
-// ── Functional tests (require real DB) ──
+// ── Functional tests (explicit opt-in; may access real DB/LanceDB) ──
 
-test("CLI status command succeeds with real engine DB", (t) => {
+realDbTest("CLI status command succeeds with real engine DB", (t) => {
   const result = runCli(["status"]);
   if (skipIfSpawnBlocked(t, result)) return;
   const { status, stdout, stderr } = result;
@@ -128,7 +112,7 @@ test("CLI status command succeeds with real engine DB", (t) => {
   }
 });
 
-test("CLI search command works with real DB", (t) => {
+realDbTest("CLI search command works with real DB", (t) => {
   const result = runCli(["search", "memory_engine", "--top-k", "2"], {
     timeout: 30000,
   });

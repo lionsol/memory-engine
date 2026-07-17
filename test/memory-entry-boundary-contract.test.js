@@ -16,6 +16,7 @@ const REQUIRED_INVENTORY = [
   "index.js",
   "lib/tools/register-memory-engine-tools.js",
   "lib/tools/memory-engine-actions.js",
+  "lib/services/memory-engine-cli-service.js",
   "bin/memory-engine.js",
   "skills/scripts/memory-engine.js",
   "bin/memory-engine-cli.js",
@@ -200,6 +201,24 @@ test("canonical runtime uniqueness is stated without promoting the transitional 
   const audit = readFileSync(auditDocPath, "utf8");
   assert.match(audit, /`lib\/tools\/memory-engine-actions\.js` is the unique canonical action layer/);
   assert.match(audit, /`bin\/memory-engine-cli\.js` is not declared canonical/);
+  assert.match(audit, /transitional\/admin adapter/);
+  assert.match(audit, /service-backed/);
+});
+
+test("CLI service boundary is documented and reuses canonical actions", () => {
+  const audit = readFileSync(auditDocPath, "utf8");
+  assert.match(audit, /`lib\/services\/memory-engine-cli-service\.js` \| CLI service boundary/);
+  assert.match(audit, /maps CLI commands to action parameters/i);
+  assert.match(audit, /delegates execution to `lib\/tools\/memory-engine-actions\.js`/);
+  assert.match(audit, /does not copy action SQL/i);
+});
+
+test("default CLI DB tests require explicit real-data opt-in", () => {
+  const source = readRepoFile("test/memory-engine-cli.test.js");
+  assert.match(source, /MEMORY_ENGINE_RUN_REAL_DB_TESTS/);
+  assert.match(source, /const realDbTest = runRealDbTests \? test : test\.skip/);
+  assert.match(source, /realDbTest\("CLI status command succeeds with real engine DB"/);
+  assert.match(source, /realDbTest\("CLI search command works with real DB"/);
 });
 
 test("legacy fallback contract is fail-closed", () => {

@@ -37,17 +37,18 @@ Production entrypoints must not:
 | `index.js` | plugin bootstrap | canonical | Retain; dependency injection and registration orchestration only |
 | `lib/tools/register-memory-engine-tools.js` | tool registration | canonical | Retain; declaration-oriented registration only |
 | `lib/tools/memory-engine-actions.js` | runtime action layer | canonical runtime | Retain; continue auditing DB access and action/service boundaries |
-| `bin/memory-engine.js` | legacy production CLI | legacy compatibility shim | P1-A Step 4: retain compatibility while extracting the shared service |
-| `skills/scripts/memory-engine.js` | legacy skill CLI | legacy compatibility shim | P1-A Step 4: retain compatibility while extracting the shared service |
-| `bin/memory-engine-cli.js` | transitional/admin CLI | partially migrated | P1-A Step 4: extract shared service or refactor as an adapter |
+| `lib/services/memory-engine-cli-service.js` | CLI service boundary | service adapter; not canonical | Assemble CLI runtime dependencies and delegate to `lib/tools/memory-engine-actions.js`; do not add a second action implementation |
+| `bin/memory-engine.js` | legacy production CLI | legacy compatibility shim | P1-A Step 4 first phase: retain compatibility while completing service extraction |
+| `skills/scripts/memory-engine.js` | legacy skill CLI | legacy compatibility shim | P1-A Step 4 first phase: retain compatibility while completing service extraction |
+| `bin/memory-engine-cli.js` | transitional/admin CLI | transitional CLI adapter; service-backed | P1-A Step 4: continue service extraction and refactor as the approved adapter |
 | `bin/nightly-maintenance.js` | legacy lifecycle entrypoint | unsafe legacy | P1-A Step 5: migrate to canonical maintenance service |
 | `bin/nightly-maintenance-command.cjs` | explicit maintenance command | conditionally allowed | Keep outside plugin runtime; later converge with canonical maintenance service |
 
-The first seven rows are the required baseline inventory. The command-safe nightly file is also registered because it is a production-like scheduled/administrative entrypoint present in `bin/`.
+The baseline rows above are the required inventory. The command-safe nightly file is also registered because it is a production-like scheduled/administrative entrypoint present in `bin/`.
 
 ### Canonical runtime uniqueness
 
-`lib/tools/memory-engine-actions.js` is the unique canonical action layer for the current plugin runtime. The registration module may expose the action schema and wrappers, but it must not grow a second implementation. `bin/memory-engine-cli.js` is not declared canonical: it remains a transitional/admin adapter until service extraction is complete.
+`lib/tools/memory-engine-actions.js` is the unique canonical action layer for the current plugin runtime. The registration module may expose the action schema and wrappers, but it must not grow a second implementation. `bin/memory-engine-cli.js` is not declared canonical: it is now a service-backed transitional/admin adapter, with further service extraction still required.
 
 ### Legacy entrypoint baseline
 
@@ -95,7 +96,17 @@ The static contract therefore treats clearly named `audit`, `probe`, `migration`
 - canonical runtime uniqueness is stated without falsely promoting the transitional/admin CLI;
 - missing-canonical-entrypoint behavior is fail-closed, with no silent legacy fallback and no copied business logic in a shim.
 
-This is an inventory guard plus the Step 3 shim contract. It does not promote the transitional/admin CLI to the final canonical service.
+This is an inventory guard plus the Step 3 shim and Step 4 service-boundary contract. It does not promote the transitional/admin CLI or its service adapter to the final canonical action layer.
+
+### CLI service boundary
+
+`bin/memory-engine-cli.js` is limited to argv parsing, help, output formatting, service invocation, and exit-code handling. `lib/services/memory-engine-cli-service.js` maps CLI commands to action parameters, assembles the CLI runtime dependencies, and delegates execution to `lib/tools/memory-engine-actions.js`. It does not copy action SQL, search scoring, retrieval logic, or a second status implementation.
+
+The current canonical `status` action uses the attached Core-compatible DB handle and queries `chunks` in addition to Engine confidence tables. This means a real status invocation may require both the Engine DB and the attached Core DB; the pre-extraction CLI status path only queried Engine confidence data. This compatibility difference is recorded for later action-layer work and is not bypassed by duplicating status SQL in the service.
+
+The service only initializes LanceDB for commands that need it (`add` and `search`). `status` remains a database status query and does not initialize search infrastructure.
+
+Default tests must not access the user's real Core, Engine, or LanceDB data. Real CLI/DB regression tests are explicitly opt-in through `MEMORY_ENGINE_RUN_REAL_DB_TESTS=1` and are not part of the default validation run.
 
 ## Fail-closed rule
 
@@ -130,11 +141,13 @@ P1-A Step 6  final entrypoint audit
 ```
 
 P1-A is not closed: the transitional/admin CLI and nightly lifecycle still require the later migration steps.
+P0-A is also not closed.
 
-## Audit findings after Step 3
+## Audit findings after Step 3 and Step 4 first phase
 
 - The two memory-engine CLI scripts are compatibility shims that directly invoke `bin/memory-engine-cli.js`; their duplicated business logic was removed in P1-A Step 3.
 - `bin/nightly-maintenance.js` is a legacy lifecycle implementation with direct Core DB access.
-- `bin/memory-engine-cli.js` is transitional/admin and still contains its own DB orchestration; it is not the canonical runtime layer.
+- `bin/memory-engine-cli.js` is a service-backed transitional/admin adapter; it no longer owns DB orchestration, but it is not the canonical runtime layer.
+- `lib/services/memory-engine-cli-service.js` is the first-stage CLI service boundary and delegates business execution to `lib/tools/memory-engine-actions.js`.
 - `bin/nightly-maintenance-command.cjs` is a separately registered command-safe maintenance path and must remain explicitly invoked rather than implicitly loaded by runtime registration.
 - No additional unregistered production-like file was accepted into this baseline inventory.
