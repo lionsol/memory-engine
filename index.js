@@ -287,6 +287,12 @@ export default definePluginEntry({
       pluginEntryConfig?.autoRecall ||
       api.config?.autoRecall ||
       {};
+    const kgFailClosedMode = autoRecallConfig.kgFailClosedMode
+      ?? pluginEntryConfig?.kgFailClosedMode
+      ?? api.config?.kgFailClosedMode;
+    const kgFailClosedCanary = autoRecallConfig.kgFailClosedCanary
+      ?? pluginEntryConfig?.kgFailClosedCanary
+      ?? api.config?.kgFailClosedCanary;
     if (autoRecallConfig.enabled && typeof api.on === "function") {
       const autoRecallTopK = Math.max(
         1,
@@ -429,6 +435,14 @@ export default definePluginEntry({
             vectorReadyTimeoutMs: DEFAULT_LANCEDB_READY_TIMEOUT_MS,
             generateEmbedding: generateEmbeddingRuntime,
             getMemorySearchManager,
+            kgFailClosedMode,
+            kgFailClosedCanary,
+            trustedRuntimeContext: {
+              source: "openclaw_runtime",
+              agentIdentity: ctx?.agentIdentity ?? ctx?.agentId ?? event?.agentId ?? null,
+              sessionIdentity: sessionId,
+              requestIdentity: traceId,
+            },
           });
           recordHybridSearchObservation({
             recordMemoryEvent,
@@ -810,6 +824,8 @@ export default definePluginEntry({
       generateEmbedding: generateEmbeddingRuntime,
       recordMemoryEvent,
       getMemorySearchManager,
+      kgFailClosedMode,
+      kgFailClosedCanary,
       calcRealtimeConf,
       existsSync,
       readFileSync,
@@ -830,6 +846,8 @@ export default definePluginEntry({
       generateEmbedding: generateEmbeddingRuntime,
       getMemorySearchManager,
       recordMemoryEvent,
+      kgFailClosedMode,
+      kgFailClosedCanary,
     });
     const executeMemoryEngineGet = createMemoryEngineGetExecute({
       withDb,

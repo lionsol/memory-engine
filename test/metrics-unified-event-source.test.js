@@ -299,6 +299,21 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
       recent_modes: { isolated: 1 },
       kg_fallback_reasons: { text_id_invariant_failed: 1 },
       recent_fallback_reasons: {},
+      kg_fail_closed_shadow: {
+        events: 0,
+        would_fail_closed_events: 0,
+        average_candidate_loss_ratio: 0,
+        max_candidate_loss_ratio: 0,
+        total_dropped_candidates: 0,
+      },
+      kg_fail_closed_canary: {
+        enabled_events: 0,
+        applied_events: 0,
+        suppressed_fallback_events: 0,
+        empty_candidate_events: 0,
+        candidate_loss_ratio: 0,
+        result_change_events: 0,
+      },
     }));
   } finally {
     engineDb.close();
