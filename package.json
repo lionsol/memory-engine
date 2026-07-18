@@ -19,6 +19,7 @@
     "memory:quality": "node bin/memory-quality-eval.js",
     "smoke:quality-baseline": "node bin/run-memory-quality-baseline-smoke.js",
     "smoke:smart-add-duplicates": "node bin/run-smart-add-duplicate-baseline-smoke.js",
+    "smoke:full-fail-closed": "node bin/run-full-fail-closed-safety-smoke.js --markdown",
     "preview:smart-add-duplicate-cleanup": "node bin/preview-smart-add-duplicate-cleanup-candidates.js",
     "memory:cleanup-orphan-confidence": "node bin/cleanup-orphan-confidence.js",
     "console": "node console/cli.js",
