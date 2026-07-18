@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-18, before F1-D-B8-A6 Stage 2 execution.
+> Last updated: 2026-07-19, after F1-D-B8-A6 Stage 2 KG full rollout and Stage 3 rollback validation.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -28,9 +28,10 @@ The authoritative operating procedures remain:
 | B8-A6.1 scoped-canary evidence tooling | CLOSED | Added report-only evaluator and canonical JSON/JSONL metrics summary; evidence dimensions and Stage 2 review eligibility are machine-readable. |
 | B8-A6.2 tool-surface runtime access audit | CLOSED | Registry complete; `coding` profile filters memory-engine tools from the model-visible set; official gateway `tools.invoke` executed both production search wrappers and produced canonical observations. |
 | B8-A6 Stage 1 observation evidence | COMPLETE | `auto_recall=6`, `memory_engine_action_search=1`, `memory_engine_search=1`; no violations or evidence gaps; `stage2_review_eligible=true`. |
-| B8-A6 Stage 2 KG full rollout | OPERATOR AUTHORIZED / PENDING EXECUTION | Execute only KG `full_fail_closed`; keep Recent `legacy_fallback`; cover all production surfaces; then perform Stage 3 real rollback. |
-| B8-A6 Stage 3 KG rollback validation | PENDING | Must restore KG to `legacy_fallback`, reload the runtime, and verify full-mode residue is absent. |
-| B8-A6 Stage 4 Recent full rollout | NOT AUTHORIZED | Requires a separate decision after KG full rollout and rollback evidence are reviewed. |
+| B8-A6 Stage 2 KG full rollout | CLOSED / PASS | Corrected retry produced four canonical runtime observations: `auto_recall=2`, `memory_engine_search=1`, `memory_engine_action_search=1`. All carried KG full markers, Recent remained `legacy_fallback`, and channel/fallback/schema violations were zero. |
+| B8-A6 Stage 3 KG rollback validation | CLOSED / PASS | Original configuration and `agent:main` model were restored; gateway reloaded; rollback search observation contained no KG full residue; post-rollback A5 smoke passed 10/10. |
+| B8-A6.3 observation provenance hardening | REQUIRED NEXT | The first Stage 2 attempt inserted one synthetic `auto_recall` telemetry row (`id=11087`) without canonical source/session/trace/completed-at provenance. It is excluded from authoritative retry evidence but must not enter long-window metrics or removal evidence. |
+| B8-A6 Stage 4 Recent full rollout | REVIEW ELIGIBLE / NOT AUTHORIZED | KG wiring and rollback are verified, but Stage 4 execution requires a separate operator decision after provenance hardening and runbook review. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed full rollout, production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -105,24 +106,67 @@ PATH="$HOME/.local/node24/bin:$PATH" openclaw <command>
 
 Do not interpret a Node 22 CLI initialization failure as evidence that the Node 24 gateway runtime is unhealthy.
 
-## Stage 2 Authorization Boundary
+## Stage 2 and Stage 3 Closeout
 
-The operator has authorized proceeding to Stage 2 after this documentation update. That authorization is limited to:
+The authoritative corrected retry evidence is:
 
-- setting KG to `full_fail_closed`;
-- keeping Recent at `legacy_fallback`;
-- temporarily generating the minimum traffic required for all three production surfaces;
-- readonly export of canonical Hybrid observations;
-- immediate stop and rollback on any runbook violation;
-- mandatory Stage 3 restoration to KG `legacy_fallback` after evidence collection.
+```text
+auto_recall=2
+memory_engine_search=1
+memory_engine_action_search=1
+kg_runtime_mode=full_fail_closed on all 4 observations
+kg_rollout_scope=full on all 4 observations
+kg_scope_required=false on all 4 observations
+kg_fail_closed_scope_match=null on all 4 observations
+recent_runtime_mode=legacy_fallback on all 4 observations
+legacy KG fallback events=0
+channel errors=0
+unknown or unsupported schemas=0
+```
 
-It does not authorize:
+Both AutoRecall rows were produced by the real OpenClaw runtime and contain:
 
-- Recent full rollout;
-- removal of legacy SQL, query definitions, call sites, or `withLegacyDb` reachability;
-- memory mutation, cite, reinforcement, add, update, archive, or delete;
+```text
+source=hybrid.auto_recall
+session_id=present
+trace_id=present
+metadata.completed_at=present
+```
+
+The temporary `agent:main` model override used `opencode/deepseek-v4-flash` because the configured `deepseek/deepseek-v4-flash` route had insufficient credits. Agent result metadata confirmed `provider=opencode`, the AutoRecall turns completed successfully, and the original `agent:main` model was restored afterward.
+
+The first attempt's synthetic row `id=11087` is not part of the corrected retry evidence. It lacks `source`, `session_id`, `trace_id`, and `metadata.completed_at`, so it must not be counted as production AutoRecall evidence.
+
+Stage 3 restored:
+
+```text
+agent:main model=deepseek/deepseek-v4-flash
+autoRecall.enabled=false
+kgFailClosedMode=legacy_fallback
+kgFailClosedCanary.enabled=false
+recentFailClosedMode=legacy_fallback
+recentFailClosedCanary.enabled=false
+```
+
+The runtime install path reported by `openclaw plugins inspect memory-engine --runtime --json` is:
+
+```text
+~/.openclaw/extensions/memory-engine
+```
+
+The reviewed checkout and runtime copy had zero source differences, the repository was clean, and the post-rollback A5 smoke passed 10/10.
+
+## Continuing Safety Boundary
+
+Stage 2/3 closeout does not authorize:
+
+- Recent full rollout without a separate operator decision;
+- memory mutation, `cite`, reinforcement, add, update, archive, or delete;
 - intentional corruption of capability, topology, TEXT-ID invariants, or production data;
+- removal of legacy SQL, query definitions, call sites, or `withLegacyDb` reachability;
 - push or release publication.
+
+Even a successful Stage 2/3 result does not authorize B8-B removal.
 
 ## Relevant Commits
 
@@ -135,12 +179,8 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 
 ## Next Decision
 
-Execute Stage 2 KG full rollout and Stage 3 rollback according to the runbook. After the runtime report is reviewed, update this ledger with:
+Complete B8-A6.3 observation provenance hardening before Stage 4 execution. The hardening must ensure that long-window metrics and rollout/removal evaluators reject or explicitly exclude rows whose canonical envelope does not match the claimed production surface.
 
-- full-mode markers across all three production surfaces;
-- fallback and channel-error counts;
-- Recent isolation result;
-- real rollback result;
-- whether Stage 4 may enter review.
+After that change is reviewed, Stage 4 may enter a separate operator decision for Recent full rollout. Stage 4 must not be inferred from `REVIEW ELIGIBLE`, and B8-B removal remains unauthorized until the production evidence window and removal gate are independently satisfied.
 
-Even a successful Stage 2/3 result does not authorize B8-B removal.
+Even the successful Stage 2/3 result does not authorize B8-B removal.

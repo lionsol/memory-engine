@@ -2,9 +2,17 @@
 
 当前目录就是 memory-engine 插件根目录。
 
-OpenClaw 实际运行的是：
+OpenClaw 当前实际运行的是：
 
-../../extensions/memory-engine
+```text
+~/.openclaw/extensions/memory-engine
+```
+
+应以以下命令返回的 `install.installPath` 为权威值：
+
+```bash
+openclaw plugins inspect memory-engine --runtime --json
+```
 
 因此修改插件源码后，需要重新安装插件，将源码同步到运行时目录。
 
@@ -18,7 +26,7 @@ openclaw plugins install . --force
 ## 验证同步是否成功
 ```bash
 cd ~/.openclaw/workspace/plugins/memory-engine
-diff -qr . ../../extensions/memory-engine \
+diff -qr . "$HOME/.openclaw/extensions/memory-engine" \
   -x node_modules -x .git
 ```
 ## 正常情况下不应存在源码差异。
@@ -31,9 +39,10 @@ diff -qr . ../../extensions/memory-engine \
    * 源码 / 开发目录
    * Git 管理
    * CodeGraph 索引目标
-* ../../extensions/memory-engine
-   * OpenClaw 运行时副本
+* `~/.openclaw/extensions/memory-engine`
+   * OpenClaw 当前运行时副本
    * gateway 实际加载目录
+   * 如 `plugins inspect --runtime --json` 返回其他路径，以 inspect 结果为准
 
 修改源码后如果未执行 plugins install --force，
 可能出现：

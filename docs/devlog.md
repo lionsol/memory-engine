@@ -165,6 +165,77 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 - full Node 24 suite：1456 passed，0 failed，8 skipped；
 - worktree clean；未 push。
 
+## 2026-07-19
+
+### F1-D-B8-A6 Stage 2 KG full rollout and Stage 3 rollback closeout
+
+完成 KG `full_fail_closed` 的真实 runtime wiring 验证和强制 rollback drill。
+
+#### Corrected Stage 2 production evidence
+
+首次尝试中，`agent:main` 显式配置为 `deepseek/deepseek-v4-flash`，该直连 DeepSeek API 路由 credits 不足，导致 `openclaw agent` 无法完成真实 AutoRecall turn。随后曾写入一条合成 `auto_recall` telemetry row；该事件 `id=11087` 缺少 `source`、`session_id`、`trace_id` 和 `metadata.completed_at`，不作为 production evidence。
+
+为完成真实验证，临时将 `agent:main` model 改为 `opencode/deepseek-v4-flash`。Agent result metadata 确认 provider 为 `opencode`，AutoRecall turn 成功。完成后已恢复原模型 `deepseek/deepseek-v4-flash`。
+
+纠正后的 authoritative Stage 2 export 包含 4 条 canonical runtime observation：
+
+```text
+auto_recall=2
+memory_engine_search=1
+memory_engine_action_search=1
+```
+
+全部满足：
+
+```text
+event_type=hybrid_search_observation
+source=hybrid.<surface>
+search_executed=true
+kg_runtime_mode=full_fail_closed
+kg_rollout_scope=full
+kg_scope_required=false
+kg_fail_closed_scope_match=null
+recent_runtime_mode=legacy_fallback
+legacy_db_fallback_channels=[]
+channel_error_count=0
+```
+
+两条 AutoRecall observation 均具有非空 `session_id`、`trace_id` 和有效 `metadata.completed_at`。KG fallback、Recent full/canary、unknown surface、unsupported schema 和 marker violation 均为零。
+
+#### Stage 3 rollback
+
+Stage 2 evidence collection 后恢复原配置并 reload gateway：
+
+```text
+agent:main model=deepseek/deepseek-v4-flash
+autoRecall.enabled=false
+kgFailClosedMode=legacy_fallback
+kgFailClosedCanary.enabled=false
+recentFailClosedMode=legacy_fallback
+recentFailClosedCanary.enabled=false
+```
+
+Rollback search 产生真实 `hybrid.memory_engine_search` observation，未出现 KG full marker residue。Post-rollback A5 smoke 10/10 通过。
+
+#### Runtime and repository verification
+
+- `openclaw plugins inspect memory-engine --runtime --json` 返回 runtime install path：`~/.openclaw/extensions/memory-engine`。
+- 源码与 runtime 副本零差异。
+- memory-engine 三工具仍注册：`memory_engine`、`memory_engine_search`、`memory_engine_get`。
+- Git 工作树 clean。
+- 文档中的旧 `../../extensions/memory-engine` 相对路径已纠正为 inspect 返回的实际路径。
+
+#### Decision
+
+```text
+Stage 2 KG full rollout: PASS
+Stage 3 KG rollback: PASS
+Stage 4 Recent full rollout: review eligible, not authorized
+B8-B legacy fallback removal: not authorized
+```
+
+在 Stage 4 前安排 B8-A6.3 observation provenance hardening：长窗口 metrics 和 rollout/removal evaluator 必须拒绝或显式排除 canonical envelope 与声明 surface 不匹配的行，防止首次尝试中的合成 row 污染未来 30 天 evidence window。
+
 ## 2026-07-17
 
 ### Architecture documentation governance and release-version policy

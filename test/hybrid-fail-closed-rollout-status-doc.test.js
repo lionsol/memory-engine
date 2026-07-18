@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 const STATUS_DOC = new URL("../docs/hybrid-fail-closed-rollout-status.md", import.meta.url);
 const DOCS_INDEX = new URL("../docs/README.md", import.meta.url);
 const DEVLOG = new URL("../docs/devlog.md", import.meta.url);
+const RUNTIME_SYNC = new URL("../docs/runtime-sync.md", import.meta.url);
 
 function read(url) {
   return readFileSync(url, "utf8");
@@ -17,7 +18,7 @@ test("Hybrid fail-closed rollout ledger exists and is indexed", () => {
   assert.match(index, /tool-surface-runtime-access-audit\.md/);
 });
 
-test("rollout ledger records the closed Stage 1 evidence and pending Stage 2 boundary", () => {
+test("rollout ledger records Stage 2 and Stage 3 closeout plus the provenance boundary", () => {
   const doc = read(STATUS_DOC);
   for (const token of [
     "Status: Current rollout ledger",
@@ -25,12 +26,16 @@ test("rollout ledger records the closed Stage 1 evidence and pending Stage 2 bou
     "B8-A6.1 scoped-canary evidence tooling",
     "B8-A6.2 tool-surface runtime access audit",
     "auto_recall=6",
-    "memory_engine_action_search=1",
-    "memory_engine_search=1",
     "stage2_review_eligible=true",
     "tool_surface_runtime_confirmed_effective_filtered",
-    "OPERATOR AUTHORIZED / PENDING EXECUTION",
-    "Stage 3 KG rollback validation",
+    "B8-A6 Stage 2 KG full rollout",
+    "CLOSED / PASS",
+    "auto_recall=2",
+    "kg_runtime_mode=full_fail_closed on all 4 observations",
+    "B8-A6 Stage 3 KG rollback validation",
+    "B8-A6.3 observation provenance hardening",
+    "id=11087",
+    "REVIEW ELIGIBLE / NOT AUTHORIZED",
     "B8-B legacy fallback removal",
     "NOT AUTHORIZED",
   ]) {
@@ -54,15 +59,26 @@ test("rollout ledger preserves runtime and mutation safety boundaries", () => {
   }
 });
 
-test("devlog records the 2026-07-18 Stage 1 closeout", () => {
+test("runtime sync documentation uses the inspected extension install path", () => {
+  const doc = read(RUNTIME_SYNC);
+  assert.match(doc, /~\/\.openclaw\/extensions\/memory-engine/);
+  assert.match(doc, /plugins inspect memory-engine --runtime --json/);
+  assert.doesNotMatch(doc, /\.\.\/\.\.\/extensions\/memory-engine/);
+});
+
+test("devlog records Stage 1 and corrected Stage 2/3 closeout", () => {
   const devlog = read(DEVLOG);
   for (const token of [
+    "## 2026-07-19",
+    "Stage 2 KG full rollout and Stage 3 rollback closeout",
+    "opencode/deepseek-v4-flash",
+    "auto_recall=2",
+    "Stage 2 KG full rollout: PASS",
+    "Stage 3 KG rollback: PASS",
+    "observation provenance hardening",
     "## 2026-07-18",
-    "F1-D-B8-A5/A6",
     "Combined Stage 1 evidence",
     "observed_hybrid_events=8",
-    "Node runtime finding",
-    "Stage 2 已获得 operator 授权",
   ]) {
     assert.equal(devlog.includes(token), true, `missing devlog token: ${token}`);
   }
