@@ -1,3 +1,170 @@
+## 2026-07-18
+
+### F1-D-B8-A5/A6: Full fail-closed rollout readiness and Stage 1 evidence closure
+
+完成 Hybrid Search full fail-closed 的确定性安全矩阵、受控 runtime rollout 准备、KG scoped-canary evidence tooling，以及真实 tool-surface runtime access audit。当前 Stage 1 observation evidence 已满足进入 Stage 2 review 的条件，但 legacy fallback removal 仍未授权。
+
+#### A5 deterministic safety smoke
+
+- 新增全 fail-closed synthetic safety smoke，覆盖 KG / Recent：
+  - `legacy_fallback`
+  - `shadow_fail_closed`
+  - `fail_closed_canary`
+  - `full_fail_closed`
+- 覆盖三个 production surface：
+  - `auto_recall`
+  - `memory_engine_action_search`
+  - `memory_engine_search`
+- 验证 suppression、scope isolation、full rollout markers、rollback 和 observation/metrics 边界。
+- A5 只使用 synthetic SQLite fixture，不访问真实数据库或 runtime。
+
+#### A6 runtime readiness
+
+- manifest 正式暴露 KG / Recent fail-closed mode 与 canary 配置，默认保持 `legacy_fallback`。
+- runtime 配置优先读取官方 `api.pluginConfig`，保留兼容读取路径。
+- 新增 readonly canonical observation exporter、full rollout evidence evaluator 和受控 rollout runbook。
+- Stage 0 在真实 OpenClaw runtime 中通过：
+  - 插件安装/reload 成功；
+  - manifest schema 正常；
+  - `memory_engine` / `memory_engine_search` / `memory_engine_get` 注册正确；
+  - memory-core 工具所有权未被覆盖；
+  - source/runtime 副本零差异；
+  - KG / Recent 均保持 `legacy_fallback`。
+
+#### Stage 1 KG scoped canary
+
+- 可信 main/EDi session 产生 6 条 canonical `auto_recall` observation。
+- 6/6 命中：
+  - `kg_runtime_mode=fail_closed_canary`
+  - `kg_rollout_scope=scoped_canary`
+  - `kg_scope_required=true`
+  - `kg_fail_closed_scope_match=true`
+- Recent 始终为 `legacy_fallback`；full-mode marker 和 channel error 均为零。
+- 健康 isolated KG topology 没有自然 fallback opportunity，因此不通过破坏真实 DB、TEXT-ID invariant、capability 或 SQL 路径制造 fallback。A5 synthetic smoke 继续负责 suppression branch 的确定性证明。
+
+#### A6.1 scoped-canary evidence tooling
+
+新增：
+
+- `bin/audit-scoped-fail-closed-canary-evidence.js`
+- `bin/summarize-hybrid-search-observations.js`
+- `lib/recall/hybrid/scoped-fail-closed-canary-evidence.js`
+
+Evaluator 将证据拆成：
+
+```text
+scope_status
+suppression_status
+surface_coverage_status
+isolation_status
+```
+
+支持状态：
+
+```text
+canary_suppression_confirmed
+canary_scope_confirmed_no_fallback_opportunity
+canary_scope_not_confirmed
+canary_safety_violation
+```
+
+明确 `stage2_review_eligible` 只代表 observation evidence，不能替代 A5、baseline rollback 或 operator approval。
+
+#### A6.2 tool-surface runtime access audit
+
+真实 OpenClaw 审计发现：
+
+- `tools.catalog` 中 memory-engine 三工具注册完整；
+- `tools.effective` 中 main agent 使用 `tools.profile=coding`，memory-engine 工具不在模型可见集合；
+- 这解释了 Stage 1 assistant 无法主动调用工具，不是 plugin wrapper 或 observation writer 故障。
+
+没有切换全局 `full` profile，也没有持久增加 `alsoAllow`。改用官方 gateway `tools.invoke`：
+
+- 经正式 gateway registry、policy 和 `before_tool_call` hook；
+- 实际执行 `memory_engine_search`；
+- 实际执行 `memory_engine action=search`；
+- 两次均 `ok=true`、`source=plugin`、返回结构正常；
+- 产生两条 canonical production observation；
+- 未执行 get/cite/add/update/archive/delete/reinforce。
+
+当前 tool-surface audit：
+
+```text
+status=tool_surface_runtime_confirmed_effective_filtered
+registry_status=complete
+effective_profile=coding
+effective_visibility_status=missing
+invocation_mode=gateway_rpc
+invocation_status=complete
+production_surface_execution_confirmed=true
+model_visibility_confirmed=false
+stage1_tool_surface_coverage_ready=true
+```
+
+#### Combined Stage 1 evidence
+
+canonical evidence：
+
+```text
+auto_recall=6
+memory_engine_action_search=1
+memory_engine_search=1
+observed_hybrid_events=8
+```
+
+最终 evaluator：
+
+```text
+status=canary_scope_confirmed_no_fallback_opportunity
+scope_status=confirmed
+suppression_status=no_opportunity
+surface_coverage_status=complete
+isolation_status=clean
+violations=0
+evidence_gaps=0
+stage2_review_eligible=true
+```
+
+metrics：
+
+```text
+kg_fail_closed_canary.enabled_events=6
+kg_full_fail_closed_events=0
+recent_full_fail_closed_events=0
+recent_fail_closed_canary_runtime.enabled_events=0
+unknown_surface_events=0
+unsupported_schema_version_events=0
+```
+
+#### Node runtime finding
+
+- 默认 shell Node 22 使用 ABI 127。
+- 当前安装的 `better-sqlite3` 为 Node 24 ABI 137。
+- 直接在 Node 22 下运行 OpenClaw CLI 可能出现 native module mismatch；受控 rollout 命令必须显式使用 Node 24 PATH。
+
+#### Documentation and stage gate
+
+- 新增 `docs/hybrid-fail-closed-rollout-status.md` 作为 current rollout ledger。
+- 更新 docs index 和 smoke runbook 导航。
+- Stage 2 已获得 operator 授权，执行范围仅限 KG `full_fail_closed`、三个 production surface evidence 和强制 Stage 3 rollback。
+- Recent full rollout 与 B8-B legacy removal 均未授权。
+
+#### Commits and validation
+
+```text
+e8e4eec feat(recall): add full fail closed safety smoke
+a0d1bb9 feat(recall): prepare controlled full fail closed rollout
+17a90a3 feat(recall): add scoped canary evidence tooling
+4a8d7a5 feat(recall): audit runtime tool surface access
+```
+
+最近验证：
+
+- focused tests：40/40 passed；
+- static check：440 files passed；
+- full Node 24 suite：1456 passed，0 failed，8 skipped；
+- worktree clean；未 push。
+
 ## 2026-07-17
 
 ### Architecture documentation governance and release-version policy

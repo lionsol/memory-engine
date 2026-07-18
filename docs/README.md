@@ -37,6 +37,7 @@
 | 事件时间归属 | [`adr/event-time-ownership.md`](adr/event-time-ownership.md) | Accepted ADR | 确定 event-time 元数据由 engine-side sidecar 持有，禁止伪造或回写 core schema |
 | 发布与版本身份 | [`release-version-policy.md`](release-version-policy.md) | Current release policy | 区分可达发布标签、manifest version、unreleased commits 和精确 build identity |
 | 检索结果到回答的证据规则 | [`retrieval-answering-policy.md`](retrieval-answering-policy.md) | Current policy | 规定按日期回顾等场景的证据优先级，防止把派生摘要当成原始事实 |
+| Hybrid fail-closed rollout 当前状态 | [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md) | Current rollout ledger | 记录 F1-D-B8-A5/A6 阶段、真实 observation 证据、工具策略发现、Stage 2/3 门禁与 B8-B 禁止边界 |
 
 ### 架构速览图
 
@@ -77,7 +78,9 @@
 ### 运行验证与烟雾测试
 
 - [`smoke-tests/README.md`](smoke-tests/README.md)：所有人工 smoke runbook 的目录入口。
+- [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md)：F1-D-B8 当前阶段、证据和下一门禁台账。
 - [`smoke-tests/full-fail-closed-runtime-rollout.md`](smoke-tests/full-fail-closed-runtime-rollout.md)：F1-D-B8-A6 受控插件 reload、逐通道 full rollout、回滚和生产 evidence window 流程。
+- [`smoke-tests/tool-surface-runtime-access-audit.md`](smoke-tests/tool-surface-runtime-access-audit.md)：registry、effective tool policy 与真实 production tool wrapper 执行的分层审计。
 - [`smoke-tests/openclaw-memory-tools.md`](smoke-tests/openclaw-memory-tools.md)：memory-core / memory-engine 工具暴露和路由边界。
 - [`smoke-tests/console-annotation-report-handoff.md`](smoke-tests/console-annotation-report-handoff.md)：Console `/reports` 与 `/annotations` 的只读 handoff 验证。
 
@@ -94,7 +97,7 @@
 | 插件注册、工具命名或 OpenClaw 集成 | `AGENTS.md` → `agent-memory-tool-strategy.md` → `openclaw-memory-contract-compat.md` |
 | CLI、tool、checkpoint、maintenance 入口 | `AGENTS.md` → `memory-entry-boundary-audit.md` |
 | DB attach、schema、写路径或迁移 | `AGENTS.md` → `adr/event-time-ownership.md` → 相关代码与 DB safety tests |
-| hybrid search、autoRecall、注入或强化 | `agent-memory-tool-strategy.md` → `retrieval-answering-policy.md` → AutoRecall object model / runbook |
+| hybrid search、autoRecall、注入或强化 | `agent-memory-tool-strategy.md` → `retrieval-answering-policy.md` → `hybrid-fail-closed-rollout-status.md` → AutoRecall object model / runbook |
 | 质量评分、污染审计或标注 | `memory-quality-eval-mvp-v4.md` → `human-annotation-gold-set.md` |
 | 数据清理或 apply 工具 | 对应 cleanup/apply design → 备份与 rollback 规则 → targeted tests |
 | Console reports / annotations | `human-annotation-gold-set.md` → `smoke-tests/console-annotation-report-handoff.md` |
