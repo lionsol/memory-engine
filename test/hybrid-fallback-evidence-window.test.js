@@ -1,0 +1,151 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  createHybridFallbackEvidenceSnapshot,
+  evaluateHybridFallbackEvidenceWindow,
+} from "../lib/recall/hybrid/fallback-evidence-window.js";
+
+const SURFACES = ["auto_recall", "memory_engine_action_search", "memory_engine_search"];
+
+function event(surface, timestamp, overrides = {}) {
+  const metadata = {
+    surface,
+    schema_version: 1,
+    kg_access_mode: "isolated",
+    recent_access_mode: "isolated",
+    ...overrides.metadata,
+  };
+  const row = {
+    ...overrides,
+    event_type: "hybrid_search_observation",
+    metadata_json: JSON.stringify(metadata),
+    created_at: timestamp,
+  };
+  delete row.metadata;
+  return row;
+}
+
+function balancedEvents({ start = "2026-07-01T00:00:00Z", end = "2026-07-15T00:00:00Z" } = {}) {
+  return Array.from({ length: 100 }, (_, index) => event(
+    SURFACES[index % SURFACES.length],
+    index === 99 ? end : start,
+  ));
+}
+
+test("empty observations are insufficient evidence", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({ observations: [] });
+  assert.equal(snapshot.decision, "insufficient_evidence");
+  assert.deepEqual(snapshot.window, {
+    first_observed_at: null,
+    last_observed_at: null,
+    duration_days: 0,
+  });
+  assert.equal(snapshot.counts.production_events, 0);
+});
+
+test("100 balanced observations over three days are insufficient", () => {
+  const observations = balancedEvents({
+    start: "2026-07-01T00:00:00Z",
+    end: "2026-07-04T00:00:00Z",
+  });
+  const snapshot = evaluateHybridFallbackEvidenceWindow({ observations });
+  assert.equal(snapshot.decision, "insufficient_evidence");
+  assert.equal(snapshot.coverage.sufficient_events, true);
+  assert.equal(snapshot.coverage.sufficient_surface_events, true);
+  assert.equal(snapshot.coverage.sufficient_window, false);
+});
+
+test("balanced production observations over fourteen days are ready", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: balancedEvents(),
+  });
+  assert.equal(snapshot.decision, "ready");
+  assert.deepEqual(snapshot.counts.production_by_surface, {
+    auto_recall: 34,
+    memory_engine_action_search: 33,
+    memory_engine_search: 33,
+  });
+  assert.equal(snapshot.window.duration_days, 14);
+  assert.equal(snapshot.observed_hybrid_events, 100);
+});
+
+test("completed_at takes precedence over created_at", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: [
+      event("auto_recall", "2026-07-01T00:00:00Z", { completed_at: "2026-07-14T00:00:00Z" }),
+      event("memory_engine_action_search", "2026-07-01T00:00:00Z", { completed_at: "2026-07-15T00:00:00Z" }),
+    ],
+    thresholds: {
+      minimum_observations: 2,
+      minimum_surface_observations: 1,
+      minimum_window_days: 1,
+    },
+  });
+  assert.equal(snapshot.window.first_observed_at, "2026-07-14T00:00:00.000Z");
+  assert.equal(snapshot.window.last_observed_at, "2026-07-15T00:00:00.000Z");
+  assert.equal(snapshot.window.duration_days, 1);
+});
+
+test("missing production timestamp creates an evidence gap", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: [event("auto_recall", null)],
+    thresholds: {
+      minimum_observations: 1,
+      minimum_surface_observations: 1,
+      minimum_window_days: 0,
+    },
+  });
+  assert.equal(snapshot.decision, "insufficient_evidence");
+  assert.equal(snapshot.counts.missing_timestamp_events, 1);
+  assert.ok(snapshot.gaps.includes("missing_timestamp_events"));
+});
+
+test("CLI observations are excluded from production evidence", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: [event("cli_search", "2026-07-01T00:00:00Z")],
+  });
+  assert.equal(snapshot.decision, "insufficient_evidence");
+  assert.equal(snapshot.counts.total_events, 1);
+  assert.equal(snapshot.counts.production_events, 0);
+  assert.equal(snapshot.counts.excluded_surfaces.cli_search, 1);
+});
+
+test("unknown surface is a hard blocker", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: [event("future_surface", "2026-07-01T00:00:00Z")],
+  });
+  assert.equal(snapshot.decision, "blocked");
+  assert.ok(snapshot.blockers.includes("unknown_surface_contamination"));
+});
+
+test("fallback and unsupported schema are hard blockers", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: [event("auto_recall", "2026-07-01T00:00:00Z", {
+      metadata: {
+        schema_version: 2,
+        kg_access_mode: "legacy_fallback",
+      },
+    })],
+    thresholds: {
+      minimum_observations: 1,
+      minimum_surface_observations: 1,
+      minimum_window_days: 0,
+    },
+  });
+  assert.equal(snapshot.decision, "blocked");
+  assert.ok(snapshot.blockers.includes("fallback_events_present"));
+  assert.ok(snapshot.blockers.includes("unsupported_schema_version"));
+});
+
+test("snapshot helper returns the same B5-compatible evidence shape", () => {
+  const input = { observations: balancedEvents() };
+  const direct = evaluateHybridFallbackEvidenceWindow(input);
+  const snapshot = createHybridFallbackEvidenceSnapshot(input);
+  assert.deepEqual(
+    { ...snapshot, generated_at: null },
+    { ...direct, generated_at: null },
+  );
+  assert.deepEqual(snapshot.production_observed_by_surface, snapshot.counts.production_by_surface);
+  assert.equal(snapshot.observation_window_days, snapshot.window.duration_days);
+});
