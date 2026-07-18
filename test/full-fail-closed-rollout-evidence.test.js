@@ -182,6 +182,32 @@ test("full mode without an explicit full rollout scope is not confirmed", () => 
   assert.ok(report.evidence_gaps.some(issue => issue.code === "recent_full_fail_closed_mode_not_observable"));
 });
 
+test("access mode cannot substitute for the explicit full runtime marker", () => {
+  const report = buildFullFailClosedRolloutEvidence({
+    observations: [observation("memory_engine_search", {
+      kg_runtime_mode: null,
+      recent_runtime_mode: null,
+    })],
+    thresholds: { minimum_window_days: 0, minimum_observations: 1, minimum_surface_observations: 1 },
+  });
+  assert.equal(report.status, "insufficient_evidence");
+  assert.equal(report.kg_mode, "unknown");
+  assert.equal(report.recent_mode, "unknown");
+});
+
+test("full runtime marker requires explicit non-scoped semantics", () => {
+  const report = buildFullFailClosedRolloutEvidence({
+    observations: [observation("memory_engine_search", {
+      kg_scope_required: null,
+      recent_scope_required: null,
+    })],
+    thresholds: { minimum_window_days: 0, minimum_observations: 1, minimum_surface_observations: 1 },
+  });
+  assert.equal(report.status, "insufficient_evidence");
+  assert.equal(report.kg_mode, "unknown");
+  assert.equal(report.recent_mode, "unknown");
+});
+
 test("explicit non-scoped full mode can satisfy the synthetic schema capability", () => {
   const report = buildFullFailClosedRolloutEvidence(fullFixture());
   assert.equal(report.status, "full_fail_closed_confirmed");
