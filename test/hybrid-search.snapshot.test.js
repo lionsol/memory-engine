@@ -98,6 +98,11 @@ const EXPECTED_SNAPSHOT = `{
     "recent_canary_shadow_executed": false,
     "recent_canary_served_mode": "legacy",
     "recent_canary_policy_error": false,
+    "recent_runtime_mode": "legacy_fallback",
+    "recent_fail_closed_applied": null,
+    "recent_fail_closed_fallback_suppressed": null,
+    "recent_fail_closed_scope_match": null,
+    "recent_fail_closed_empty_candidate": null,
     "like_patterns": [],
     "channel_sizes": {
       "vector": 1

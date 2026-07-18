@@ -293,6 +293,12 @@ export default definePluginEntry({
     const kgFailClosedCanary = autoRecallConfig.kgFailClosedCanary
       ?? pluginEntryConfig?.kgFailClosedCanary
       ?? api.config?.kgFailClosedCanary;
+    const recentFailClosedMode = autoRecallConfig.recentFailClosedMode
+      ?? pluginEntryConfig?.recentFailClosedMode
+      ?? api.config?.recentFailClosedMode;
+    const recentFailClosedCanary = autoRecallConfig.recentFailClosedCanary
+      ?? pluginEntryConfig?.recentFailClosedCanary
+      ?? api.config?.recentFailClosedCanary;
     if (autoRecallConfig.enabled && typeof api.on === "function") {
       const autoRecallTopK = Math.max(
         1,
@@ -437,6 +443,8 @@ export default definePluginEntry({
             getMemorySearchManager,
             kgFailClosedMode,
             kgFailClosedCanary,
+            recentFailClosedMode,
+            recentFailClosedCanary,
             trustedRuntimeContext: {
               source: "openclaw_runtime",
               agentIdentity: ctx?.agentIdentity ?? ctx?.agentId ?? event?.agentId ?? null,
@@ -826,6 +834,8 @@ export default definePluginEntry({
       getMemorySearchManager,
       kgFailClosedMode,
       kgFailClosedCanary,
+      recentFailClosedMode,
+      recentFailClosedCanary,
       calcRealtimeConf,
       existsSync,
       readFileSync,
@@ -848,6 +858,8 @@ export default definePluginEntry({
       recordMemoryEvent,
       kgFailClosedMode,
       kgFailClosedCanary,
+      recentFailClosedMode,
+      recentFailClosedCanary,
     });
     const executeMemoryEngineGet = createMemoryEngineGetExecute({
       withDb,

@@ -83,6 +83,13 @@ test("hybrid fallback observability: empty data returns zero summary", () => {
         max_candidate_loss_ratio: 0,
         risk_level_distribution: {},
       },
+      recent_fail_closed_canary_runtime: {
+        enabled_events: 0,
+        scope_match_events: 0,
+        applied_events: 0,
+        suppressed_fallback_events: 0,
+        empty_candidate_events: 0,
+      },
     },
   );
 });
@@ -166,6 +173,35 @@ test("Recent fail-closed shadow metrics stay separate from real fallback counts"
     average_candidate_loss_ratio: 0.333,
     max_candidate_loss_ratio: 0.333,
     risk_level_distribution: { medium: 1 },
+  });
+  assert.equal(summary.recent_fallback_events, 1);
+});
+
+test("Recent fail-closed canary metrics stay separate from real fallback counts", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, {
+      kg_access_mode: "isolated",
+      recent_access_mode: "isolated_blocked",
+      recent_runtime_mode: "fail_closed_canary",
+      recent_fail_closed_scope_match: true,
+      recent_fail_closed_applied: true,
+      recent_fail_closed_fallback_suppressed: true,
+      recent_fail_closed_empty_candidate: true,
+    }),
+    debugRow(2, {
+      kg_access_mode: "isolated",
+      recent_access_mode: "guarded_fallback",
+      recent_runtime_mode: "legacy_fallback",
+      recent_fail_closed_scope_match: false,
+    }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.deepEqual(summary.recent_fail_closed_canary_runtime, {
+    enabled_events: 2,
+    scope_match_events: 1,
+    applied_events: 1,
+    suppressed_fallback_events: 1,
+    empty_candidate_events: 1,
   });
   assert.equal(summary.recent_fallback_events, 1);
 });

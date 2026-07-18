@@ -205,6 +205,11 @@ export function buildHybridFallbackObservabilitySummary(
   let recentShadowLossRatioCount = 0;
   let recentShadowMaxLossRatio = 0;
   const recentShadowRiskLevels = new Map();
+  let recentCanaryEnabledEvents = 0;
+  let recentCanaryScopeMatchEvents = 0;
+  let recentCanaryAppliedEvents = 0;
+  let recentCanarySuppressedFallbackEvents = 0;
+  let recentCanaryEmptyCandidateEvents = 0;
   let searchExecutedEvents = 0;
   let searchNotExecutedEvents = 0;
   let unknownSurfaceEvents = 0;
@@ -337,6 +342,18 @@ export function buildHybridFallbackObservabilitySummary(
       addMetricDistributionValue(recentShadowRiskLevels, metadata.recent_shadow_risk_level);
     }
 
+    if (metadata.recent_runtime_mode === "fail_closed_canary"
+      || (metadata.recent_fail_closed_scope_match !== null
+        && metadata.recent_fail_closed_scope_match !== undefined)) {
+      recentCanaryEnabledEvents += 1;
+      if (metadata.recent_fail_closed_scope_match === true) recentCanaryScopeMatchEvents += 1;
+      if (metadata.recent_fail_closed_applied === true) recentCanaryAppliedEvents += 1;
+      if (metadata.recent_fail_closed_fallback_suppressed === true) {
+        recentCanarySuppressedFallbackEvents += 1;
+      }
+      if (metadata.recent_fail_closed_empty_candidate === true) recentCanaryEmptyCandidateEvents += 1;
+    }
+
     const rowTimestamp = parseSqliteDateTimeUtc(row?.created_at);
     if (rowTimestamp !== null && (observationStartAtMs === null || rowTimestamp < observationStartAtMs)) {
       observationStartAtMs = rowTimestamp;
@@ -407,6 +424,13 @@ export function buildHybridFallbackObservabilitySummary(
         : 0,
       max_candidate_loss_ratio: round(recentShadowMaxLossRatio, 4),
       risk_level_distribution: sortMetricDistribution(recentShadowRiskLevels),
+    },
+    recent_fail_closed_canary_runtime: {
+      enabled_events: recentCanaryEnabledEvents,
+      scope_match_events: recentCanaryScopeMatchEvents,
+      applied_events: recentCanaryAppliedEvents,
+      suppressed_fallback_events: recentCanarySuppressedFallbackEvents,
+      empty_candidate_events: recentCanaryEmptyCandidateEvents,
     },
   };
 }
