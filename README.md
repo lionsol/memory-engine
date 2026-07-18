@@ -120,6 +120,8 @@ graph TD
 
 README 故意不复制 `rrfK`、topK、阈值、boost 权重等具体数值，避免文档参数与运行时代码再次漂移。调参必须同时检查配置默认值、覆盖配置、debug metadata 和测试。
 
+Legacy fallback code inventory 的顶层计数表示**已分类 finding 数量**，不是唯一文件数、测试文件数或测试用例数。同一文件中的不同符号、不同代码行或不同引用类别会分别计数；解读 inventory 时应结合 `categories` 中的明细，而不是把顶层数字直接当作文件或测试数量。
+
 ## 置信度生命周期
 
 memory-engine 对受管理记忆维护 category、confidence、base tau、hit count、保护状态、冲突状态和归档状态。
