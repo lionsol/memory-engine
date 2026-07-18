@@ -1,0 +1,150 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+import {
+  buildHybridSearchObservation,
+  recordHybridSearchObservation,
+} from "../lib/recall/hybrid-observation.js";
+import {
+  createMemoryEngineExecute,
+  createMemoryEngineSearchExecute,
+} from "../lib/tools/memory-engine-actions.js";
+
+function createRuntime(recorded, overrides = {}) {
+  return {
+    api: { config: {} },
+    autoRouteCategory: () => "raw_log",
+    dateStrInTimeZone: () => "2026-07-18",
+    SMART_ADD_TIME_ZONE: "Asia/Shanghai",
+    resolve: (...parts) => parts.join("/"),
+    WORKSPACE: "/tmp/workspace",
+    SMART_ADD_DIR: "memory/smart-add",
+    buildSmartAddFingerprint: () => "fingerprint",
+    appendSmartAdd: () => ({ appended: true }),
+    syncIndexIfNeeded: async () => ({ synced: false }),
+    catParams: () => ({ conf: 0.5, tau: 7 }),
+    withDb: fn => fn({
+      prepare: () => ({ all: () => [], get: () => null, run: () => ({}) }),
+      transaction: callback => callback,
+    }),
+    getLancedbTable: () => null,
+    generateEmbedding: async () => [],
+    recordMemoryEvent: event => recorded.push(event),
+    getMemorySearchManager: async () => ({ manager: null }),
+    calcRealtimeConf: ({ confidence = 0 }) => Number(confidence || 0),
+    existsSync: () => false,
+    readFileSync: () => "",
+    KG_PATH: "/tmp/workspace/knowledge-graph.json",
+    resolvePrefixes: () => [],
+    batchReinforce: () => 0,
+    CATEGORY_MAP: {},
+    calcTau: () => 0,
+    hybridSearch: async () => ({
+      pool: ["fts", "kg", "recent"],
+      channels: { fts: [], kg: [], recent: [] },
+      channel_sizes: { fts: 0, kg: 0, recent: 0 },
+      debug: {
+        kg_access_mode: "isolated",
+        recent_access_mode: "isolated",
+      },
+      results: [],
+    }),
+    ...overrides,
+  };
+}
+
+test("hybrid observation preserves canonical fields and derives fallback from access mode", () => {
+  const observation = buildHybridSearchObservation({
+    surface: "memory_engine_search",
+    completedAtMs: Date.parse("2026-07-18T10:00:00Z"),
+    result: {
+      channel_sizes: { kg: 2, recent: 1 },
+      results: [{ id: "opaque-id" }],
+      debug: {
+        kg_access_mode: "legacy_fallback",
+        kg_isolated_fallback_reason: "text_id_invariant_failed",
+        recent_access_mode: "isolated",
+        legacy_db_fallback_used: false,
+        query: "must not persist",
+      },
+    },
+  });
+
+  assert.deepEqual(observation, {
+    schema_version: 1,
+    surface: "memory_engine_search",
+    search_executed: true,
+    legacy_db_fallback_used: true,
+    legacy_db_fallback_channels: ["kg"],
+    kg_candidate_count: 2,
+    recent_candidate_count: 1,
+    result_count: 1,
+    channel_error_count: 0,
+    completed_at: "2026-07-18T10:00:00.000Z",
+    kg_access_mode: "legacy_fallback",
+    kg_isolated_fallback_reason: "text_id_invariant_failed",
+    recent_access_mode: "isolated",
+  });
+  assert.equal(JSON.stringify(observation).includes("opaque-id"), false);
+  assert.equal(JSON.stringify(observation).includes("must not persist"), false);
+});
+
+test("recordHybridSearchObservation writes one canonical event and preserves write failures", () => {
+  const events = [];
+  assert.equal(recordHybridSearchObservation({
+    recordMemoryEvent: event => events.push(event),
+    surface: "auto_recall",
+    sessionId: "session-1",
+    traceId: "trace-1",
+    result: { debug: { kg_access_mode: "isolated" }, results: [] },
+  }), true);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].event_type, "hybrid_search_observation");
+  assert.equal(events[0].source, "hybrid.auto_recall");
+  assert.equal(events[0].session_id, "session-1");
+  assert.equal(events[0].trace_id, "trace-1");
+  assert.equal(Object.hasOwn(events[0].metadata_json, "kg_access_mode"), true);
+  assert.equal(Object.hasOwn(events[0].metadata_json, "recent_access_mode"), false);
+  assert.equal(recordHybridSearchObservation({
+    recordMemoryEvent: () => {
+      throw new Error("event store unavailable");
+    },
+    surface: "auto_recall",
+    result: {},
+  }), false);
+});
+
+test("action search and memory_engine_search emit distinct observation surfaces", async () => {
+  const events = [];
+  const runtime = createRuntime(events);
+  const executeAction = createMemoryEngineExecute(runtime);
+  const executeSearch = createMemoryEngineSearchExecute(runtime);
+
+  await executeAction("action-tool", { action: "search", text: "alpha", top_k: 3 });
+  await executeSearch("search-tool", { query: "beta", top_k: 3 });
+
+  assert.deepEqual(events.map(event => event.metadata_json.surface), [
+    "memory_engine_action_search",
+    "memory_engine_search",
+  ]);
+  assert.deepEqual(events.map(event => event.event_type), [
+    "hybrid_search_observation",
+    "hybrid_search_observation",
+  ]);
+
+  const cliEvents = [];
+  const cliAction = createMemoryEngineExecute(createRuntime(cliEvents, {
+    hybridObservationSurface: "cli_search",
+  }));
+  await cliAction("cli-tool", { action: "search", text: "gamma", top_k: 3 });
+  assert.equal(cliEvents[0].metadata_json.surface, "cli_search");
+});
+
+test("production and CLI runtimes declare separate observation surfaces", () => {
+  const indexSource = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+  const cliSource = readFileSync(new URL("../lib/services/memory-engine-cli-service.js", import.meta.url), "utf8");
+  assert.match(indexSource, /surface: "auto_recall"/);
+  assert.match(indexSource, /createMemoryEngineSearchExecute\(\{[\s\S]*?recordMemoryEvent,/);
+  assert.match(cliSource, /hybridObservationSurface: "cli_search"/);
+});

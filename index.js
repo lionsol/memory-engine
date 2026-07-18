@@ -57,6 +57,7 @@ import { evaluateAutoRecallRuntimeGate } from "./lib/recall/auto-recall-runtime-
 import { createAutoRecallTurnStateManager } from "./lib/recall/auto-recall-turn-state.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
+import { recordHybridSearchObservation } from "./lib/recall/hybrid-observation.js";
 import { createIsolatedHybridDbAccessScope } from "./lib/recall/hybrid/db-access.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
 import {
@@ -428,6 +429,13 @@ export default definePluginEntry({
             vectorReadyTimeoutMs: DEFAULT_LANCEDB_READY_TIMEOUT_MS,
             generateEmbedding: generateEmbeddingRuntime,
             getMemorySearchManager,
+          });
+          recordHybridSearchObservation({
+            recordMemoryEvent,
+            surface: "auto_recall",
+            result,
+            sessionId,
+            traceId,
           });
           result.debug = {
             ...(result?.debug || {}),
@@ -821,6 +829,7 @@ export default definePluginEntry({
       getLancedbTable,
       generateEmbedding: generateEmbeddingRuntime,
       getMemorySearchManager,
+      recordMemoryEvent,
     });
     const executeMemoryEngineGet = createMemoryEngineGetExecute({
       withDb,

@@ -6,12 +6,19 @@ const NOW_MS = Date.parse("2026-05-30T00:00:00Z");
 const IN_WINDOW = "2026-05-29 12:00:00";
 const OUT_WINDOW = "2026-05-01 12:00:00";
 
-function debugRow(id, metadata, createdAt = IN_WINDOW, eventType = "auto_recall_debug") {
+function debugRow(id, metadata, createdAt = IN_WINDOW, eventType = "hybrid_search_observation") {
+  const payload = eventType === "hybrid_search_observation" && metadata && typeof metadata === "object"
+    ? {
+      surface: "memory_engine_search",
+      search_executed: true,
+      ...metadata,
+    }
+    : metadata;
   return {
     id,
     event_type: eventType,
     trace_id: `trace-${id}`,
-    metadata_json: typeof metadata === "string" ? metadata : JSON.stringify(metadata),
+    metadata_json: typeof payload === "string" ? payload : JSON.stringify(payload),
     created_at: createdAt,
   };
 }
@@ -21,6 +28,13 @@ test("hybrid fallback observability: empty data returns zero summary", () => {
     buildHybridFallbackObservabilitySummary([], { windowDays: 7, nowMs: NOW_MS }),
     {
       window_days: 7,
+      observation_schema_version: null,
+      observation_schema_versions: {},
+      missing_schema_version_events: 0,
+      unsupported_schema_version_events: 0,
+      observation_start_at: null,
+      search_executed_events: 0,
+      search_not_executed_events: 0,
       observed_hybrid_events: 0,
       fully_observed_events: 0,
       partial_observed_events: 0,
@@ -30,6 +44,19 @@ test("hybrid fallback observability: empty data returns zero summary", () => {
       kg_fallback_events: 0,
       recent_fallback_events: 0,
       both_fallback_events: 0,
+      observed_by_surface: {},
+      production_observed_by_surface: {},
+      excluded_from_production_by_surface: {},
+      unknown_surface_events: 0,
+      fully_observed_by_surface: {},
+      fallback_by_surface: {},
+      kg_attempted_events: 0,
+      recent_attempted_events: 0,
+      kg_isolated_events: 0,
+      recent_isolated_events: 0,
+      kg_fallback_rate: 0,
+      recent_fallback_rate: 0,
+      partial_observation_rate: 0,
       kg_modes: {},
       recent_modes: {},
       kg_fallback_reasons: {},
@@ -40,16 +67,18 @@ test("hybrid fallback observability: empty data returns zero summary", () => {
 
 test("hybrid fallback observability excludes skips, child debug events, other types, and invalid JSON", () => {
   const summary = buildHybridFallbackObservabilitySummary([
-    debugRow(1, { skipped: true, skip_reason: "intent" }),
-    debugRow(2, { debug_type: "gate_decision", kg_access_mode: "legacy_fallback" }),
+    debugRow(1, { skipped: true, skip_reason: "intent" }, IN_WINDOW, "auto_recall_debug"),
+    debugRow(2, { debug_type: "gate_decision", kg_access_mode: "legacy_fallback" }, IN_WINDOW, "auto_recall_debug"),
     debugRow(3, { kg_access_mode: "isolated" }, IN_WINDOW, "recall_completed"),
     debugRow(4, "not-json"),
     debugRow(5, { kg_access_mode: "isolated" }),
+    debugRow(6, { kg_access_mode: "legacy_fallback" }, IN_WINDOW, "auto_recall_debug"),
   ], { windowDays: 7, nowMs: NOW_MS });
 
   assert.equal(summary.observed_hybrid_events, 1);
   assert.equal(summary.fully_isolated_events, 0);
   assert.equal(summary.fallback_events, 0);
+  assert.deepEqual(summary.observed_by_surface, { memory_engine_search: 1 });
 });
 
 test("fully isolated events require both canonical modes", () => {
@@ -191,4 +220,116 @@ test("windowDays excludes old observations", () => {
 
   assert.equal(summary.observed_hybrid_events, 1);
   assert.equal(summary.fallback_events, 0);
+});
+
+test("zero-mode production observations count as partial instrumentation coverage", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, { schema_version: 1 }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.equal(summary.observed_by_surface.memory_engine_search, 1);
+  assert.equal(summary.production_observed_by_surface.memory_engine_search, 1);
+  assert.equal(summary.observed_hybrid_events, 1);
+  assert.equal(summary.fully_observed_events, 0);
+  assert.equal(summary.partial_observed_events, 1);
+  assert.equal(summary.partial_observation_rate, 1);
+  assert.equal(summary.kg_attempted_events, 0);
+  assert.equal(summary.recent_attempted_events, 0);
+});
+
+test("one access mode is a partial production observation", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, { surface: "memory_engine_action_search", kg_access_mode: "isolated" }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.equal(summary.observed_hybrid_events, 1);
+  assert.equal(summary.fully_observed_events, 0);
+  assert.equal(summary.partial_observed_events, 1);
+  assert.equal(summary.kg_attempted_events, 1);
+  assert.equal(summary.recent_attempted_events, 0);
+});
+
+test("CLI observations are visible by surface but excluded from the production denominator", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, {
+      surface: "cli_search",
+      schema_version: 1,
+      kg_access_mode: "legacy_fallback",
+      recent_access_mode: "isolated",
+      kg_isolated_fallback_reason: "cli_reason",
+    }),
+    debugRow(2, {
+      surface: "memory_engine_search",
+      schema_version: 1,
+      kg_access_mode: "isolated",
+      recent_access_mode: "isolated",
+    }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.equal(summary.observed_hybrid_events, 1);
+  assert.equal(summary.fallback_events, 0);
+  assert.deepEqual(summary.observed_by_surface, {
+    cli_search: 1,
+    memory_engine_search: 1,
+  });
+  assert.deepEqual(summary.fallback_by_surface, { cli_search: 1 });
+  assert.deepEqual(summary.excluded_from_production_by_surface, { cli_search: 1 });
+});
+
+test("unknown surfaces are visible but excluded from production metrics", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, {
+      surface: "unknown",
+      kg_access_mode: "legacy_fallback",
+      recent_access_mode: "isolated",
+    }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.equal(summary.observed_by_surface.unknown, 1);
+  assert.equal(summary.unknown_surface_events, 1);
+  assert.equal(summary.observed_hybrid_events, 0);
+  assert.equal(summary.fallback_events, 0);
+  assert.deepEqual(summary.excluded_from_production_by_surface, { unknown: 1 });
+});
+
+test("only the three production surfaces enter the denominator", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, { surface: "auto_recall", kg_access_mode: "isolated" }),
+    debugRow(2, { surface: "memory_engine_action_search", kg_access_mode: "isolated" }),
+    debugRow(3, { surface: "memory_engine_search", kg_access_mode: "isolated" }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.equal(summary.observed_hybrid_events, 3);
+  assert.deepEqual(summary.production_observed_by_surface, {
+    auto_recall: 1,
+    memory_engine_action_search: 1,
+    memory_engine_search: 1,
+  });
+});
+
+test("schema distributions expose mixed, missing, and unsupported versions", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, { schema_version: 1 }),
+    debugRow(2, { schema_version: 1 }),
+    debugRow(3, { schema_version: 2 }),
+    debugRow(4, { schema_version: undefined }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.deepEqual(summary.observation_schema_versions, { "1": 2, "2": 1, unknown: 1 });
+  assert.equal(summary.missing_schema_version_events, 1);
+  assert.equal(summary.unsupported_schema_version_events, 1);
+});
+
+test("search_executed controls the production denominator without hiding coverage", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, { search_executed: false, kg_access_mode: "legacy_fallback" }),
+    debugRow(2, { kg_access_mode: "isolated" }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.equal(summary.search_executed_events, 1);
+  assert.equal(summary.search_not_executed_events, 1);
+  assert.equal(summary.observed_by_surface.memory_engine_search, 2);
+  assert.equal(summary.observed_hybrid_events, 1);
+  assert.equal(summary.fallback_events, 0);
+  assert.equal(summary.excluded_from_production_by_surface.memory_engine_search, 1);
 });

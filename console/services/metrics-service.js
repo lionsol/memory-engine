@@ -154,6 +154,12 @@ function addMetricDistributionValue(counts, value) {
   counts.set(key, (counts.get(key) || 0) + 1);
 }
 
+const PRODUCTION_HYBRID_OBSERVATION_SURFACES = new Set([
+  "auto_recall",
+  "memory_engine_action_search",
+  "memory_engine_search",
+]);
+
 export function buildHybridFallbackObservabilitySummary(
   rows,
   { windowDays = 7, nowMs = Date.now() } = {},
@@ -164,6 +170,11 @@ export function buildHybridFallbackObservabilitySummary(
   const recentModes = new Map();
   const kgReasons = new Map();
   const recentReasons = new Map();
+  const observedBySurface = new Map();
+  const productionObservedBySurface = new Map();
+  const excludedFromProductionBySurface = new Map();
+  const fullyObservedBySurface = new Map();
+  const fallbackBySurface = new Map();
   let observedHybridEvents = 0;
   let fullyObservedEvents = 0;
   let fullyIsolatedEvents = 0;
@@ -171,24 +182,85 @@ export function buildHybridFallbackObservabilitySummary(
   let kgFallbackEvents = 0;
   let recentFallbackEvents = 0;
   let bothFallbackEvents = 0;
+  let kgAttemptedEvents = 0;
+  let recentAttemptedEvents = 0;
+  let kgIsolatedEvents = 0;
+  let recentIsolatedEvents = 0;
+  let searchExecutedEvents = 0;
+  let searchNotExecutedEvents = 0;
+  let unknownSurfaceEvents = 0;
+  let observationSchemaVersion = null;
+  const observationSchemaVersions = new Map();
+  let missingSchemaVersionEvents = 0;
+  let unsupportedSchemaVersionEvents = 0;
+  let observationStartAtMs = null;
 
   for (const row of withinWindow) {
-    if (row?.event_type !== "auto_recall_debug") continue;
-    const metadata = safeJson(row?.metadata_json, {});
+    if (row?.event_type !== "hybrid_search_observation") continue;
+    const metadata = safeJson(row?.metadata_json, null);
     if (!metadata || typeof metadata !== "object") continue;
-    if (metadata.debug_type === "gate_decision") continue;
     const hasKgMode = Object.hasOwn(metadata, "kg_access_mode");
     const hasRecentMode = Object.hasOwn(metadata, "recent_access_mode");
-    if (!hasKgMode && !hasRecentMode) continue;
 
-    observedHybridEvents += 1;
-    if (hasKgMode) addMetricDistributionValue(kgModes, metadata.kg_access_mode);
-    if (hasRecentMode) addMetricDistributionValue(recentModes, metadata.recent_access_mode);
-    if (hasKgMode && hasRecentMode) fullyObservedEvents += 1;
+    const surface = typeof metadata.surface === "string" && metadata.surface.trim()
+      ? metadata.surface.trim()
+      : "unknown";
+    addMetricDistributionValue(observedBySurface, surface);
+    if (surface === "unknown") unknownSurfaceEvents += 1;
 
+    const searchExecuted = metadata.search_executed === true;
+    if (searchExecuted) searchExecutedEvents += 1;
+    else searchNotExecutedEvents += 1;
+
+    const rawSchemaVersion = metadata.schema_version;
+    const schemaVersion = rawSchemaVersion === null
+      || rawSchemaVersion === undefined
+      || (typeof rawSchemaVersion === "string" && !rawSchemaVersion.trim())
+      ? null
+      : Number(rawSchemaVersion);
+    if (Number.isFinite(schemaVersion)) {
+      addMetricDistributionValue(observationSchemaVersions, String(schemaVersion));
+      if (schemaVersion !== 1) unsupportedSchemaVersionEvents += 1;
+      observationSchemaVersion = observationSchemaVersion === null
+        ? schemaVersion
+        : Math.max(observationSchemaVersion, schemaVersion);
+    } else {
+      missingSchemaVersionEvents += 1;
+      addMetricDistributionValue(observationSchemaVersions, "unknown");
+    }
+
+    const fullyObserved = hasKgMode && hasRecentMode;
     const kgIsFallback = metadata.kg_access_mode === "legacy_fallback";
     const recentIsFallback = metadata.recent_access_mode === "guarded_fallback";
-    if (metadata.kg_access_mode === "isolated" && metadata.recent_access_mode === "isolated") {
+    const hasFallback = kgIsFallback || recentIsFallback;
+    if (hasFallback) addMetricDistributionValue(fallbackBySurface, surface);
+
+    const isProductionSurface = PRODUCTION_HYBRID_OBSERVATION_SURFACES.has(surface);
+    const contributesToProduction = isProductionSurface && searchExecuted;
+    if (contributesToProduction) {
+      addMetricDistributionValue(productionObservedBySurface, surface);
+      if (fullyObserved) addMetricDistributionValue(fullyObservedBySurface, surface);
+    } else {
+      addMetricDistributionValue(excludedFromProductionBySurface, surface);
+    }
+
+    if (!contributesToProduction) continue;
+
+    observedHybridEvents += 1;
+    if (hasKgMode) {
+      kgAttemptedEvents += 1;
+      addMetricDistributionValue(kgModes, metadata.kg_access_mode);
+      if (metadata.kg_access_mode === "isolated") kgIsolatedEvents += 1;
+    }
+    if (hasRecentMode) {
+      recentAttemptedEvents += 1;
+      addMetricDistributionValue(recentModes, metadata.recent_access_mode);
+      if (metadata.recent_access_mode === "isolated") recentIsolatedEvents += 1;
+    }
+    if (fullyObserved) fullyObservedEvents += 1;
+    if (hasKgMode && hasRecentMode
+      && metadata.kg_access_mode === "isolated"
+      && metadata.recent_access_mode === "isolated") {
       fullyIsolatedEvents += 1;
     }
     if (kgIsFallback) {
@@ -200,11 +272,25 @@ export function buildHybridFallbackObservabilitySummary(
       addMetricDistributionValue(recentReasons, metadata.recent_isolated_fallback_reason);
     }
     if (kgIsFallback && recentIsFallback) bothFallbackEvents += 1;
-    if (kgIsFallback || recentIsFallback) fallbackEvents += 1;
+    if (hasFallback) fallbackEvents += 1;
+
+    const rowTimestamp = parseSqliteDateTimeUtc(row?.created_at);
+    if (rowTimestamp !== null && (observationStartAtMs === null || rowTimestamp < observationStartAtMs)) {
+      observationStartAtMs = rowTimestamp;
+    }
   }
 
   return {
     window_days: normalizedWindowDays,
+    observation_schema_version: observationSchemaVersion,
+    observation_schema_versions: sortMetricDistribution(observationSchemaVersions),
+    missing_schema_version_events: missingSchemaVersionEvents,
+    unsupported_schema_version_events: unsupportedSchemaVersionEvents,
+    observation_start_at: observationStartAtMs === null
+      ? null
+      : new Date(observationStartAtMs).toISOString(),
+    search_executed_events: searchExecutedEvents,
+    search_not_executed_events: searchNotExecutedEvents,
     observed_hybrid_events: observedHybridEvents,
     fully_observed_events: fullyObservedEvents,
     partial_observed_events: observedHybridEvents - fullyObservedEvents,
@@ -214,6 +300,19 @@ export function buildHybridFallbackObservabilitySummary(
     kg_fallback_events: kgFallbackEvents,
     recent_fallback_events: recentFallbackEvents,
     both_fallback_events: bothFallbackEvents,
+    observed_by_surface: sortMetricDistribution(observedBySurface),
+    production_observed_by_surface: sortMetricDistribution(productionObservedBySurface),
+    excluded_from_production_by_surface: sortMetricDistribution(excludedFromProductionBySurface),
+    unknown_surface_events: unknownSurfaceEvents,
+    fully_observed_by_surface: sortMetricDistribution(fullyObservedBySurface),
+    fallback_by_surface: sortMetricDistribution(fallbackBySurface),
+    kg_attempted_events: kgAttemptedEvents,
+    recent_attempted_events: recentAttemptedEvents,
+    kg_isolated_events: kgIsolatedEvents,
+    recent_isolated_events: recentIsolatedEvents,
+    kg_fallback_rate: toShare(kgFallbackEvents, kgAttemptedEvents),
+    recent_fallback_rate: toShare(recentFallbackEvents, recentAttemptedEvents),
+    partial_observation_rate: toShare(observedHybridEvents - fullyObservedEvents, observedHybridEvents),
     kg_modes: sortMetricDistribution(kgModes),
     recent_modes: sortMetricDistribution(recentModes),
     kg_fallback_reasons: sortMetricDistribution(kgReasons),

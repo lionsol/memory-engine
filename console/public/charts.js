@@ -184,6 +184,17 @@ function renderHybridFallbackObservability(target, summary) {
       </div>
     </article>`;
   };
+  const surfaceSection = (title, distribution, emptyLabel) => {
+    const rows = Object.entries(distribution || {});
+    return `<article class="diversity-dim">
+      <h3>${esc(title)}</h3>
+      <div class="dist-list">
+        ${rows.length
+    ? rows.map(([surface, count]) => `<div class="dist-item"><span>${esc(surface)}</span><strong>${fmt(count)}</strong></div>`).join("")
+    : `<span class="muted">${esc(emptyLabel)}</span>`}
+      </div>
+    </article>`;
+  };
 
   node.innerHTML = `<div class="diversity-head">
     <span class="badge">Window: ${esc(summary?.window_days ?? 7)} days</span>
@@ -209,10 +220,15 @@ function renderHybridFallbackObservability(target, summary) {
     </article>
   </div>
   <div class="diversity-grid">
+    ${surfaceSection("All Observations by Surface", summary?.observed_by_surface, "No Hybrid observations observed")}
+    ${surfaceSection("Production Denominator", summary?.production_observed_by_surface, "No production observations observed")}
+    ${surfaceSection("Excluded / Non-production", summary?.excluded_from_production_by_surface, "No excluded observations observed")}
+  </div>
+  <div class="diversity-grid">
     ${reasons("KG Fallback Reasons", summary?.kg_fallback_reasons)}
     ${reasons("Recent Fallback Reasons", summary?.recent_fallback_reasons)}
   </div>
-  <p class="muted">Fallback rate denominator: AutoRecall debug events carrying at least one Hybrid access mode. Pre-search skips and pre-B3 events are excluded.</p>`;
+  <p class="muted">Fallback rate denominator: successful Hybrid observations from production surfaces. CLI and unknown/non-production surfaces are shown separately and excluded. Observations missing one or both access modes count as partial coverage.</p>`;
 }
 
 function reportKindLabel(kind) {

@@ -24,7 +24,14 @@ test("metrics renderer wires and escapes Hybrid fallback observability", () => {
   assert.match(chartSource, /Partial Access/);
   assert.match(chartSource, /esc\(reason\)/);
   assert.match(chartSource, /No fallback reasons observed/);
-  assert.match(chartSource, /Fallback rate denominator: AutoRecall debug events/);
+  assert.match(chartSource, /All Observations by Surface/);
+  assert.match(chartSource, /Production Denominator/);
+  assert.match(chartSource, /Excluded \/ Non-production/);
+  assert.match(chartSource, /observed_by_surface/);
+  assert.match(chartSource, /production_observed_by_surface/);
+  assert.match(chartSource, /excluded_from_production_by_surface/);
+  assert.match(chartSource, /Fallback rate denominator: successful Hybrid observations from production surfaces/);
+  assert.match(chartSource, /missing one or both access modes count as partial coverage/);
 });
 
 test("metrics API route and reports remain unchanged", () => {
