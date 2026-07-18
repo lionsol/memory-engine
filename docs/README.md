@@ -77,6 +77,7 @@
 ### 运行验证与烟雾测试
 
 - [`smoke-tests/README.md`](smoke-tests/README.md)：所有人工 smoke runbook 的目录入口。
+- [`smoke-tests/full-fail-closed-runtime-rollout.md`](smoke-tests/full-fail-closed-runtime-rollout.md)：F1-D-B8-A6 受控插件 reload、逐通道 full rollout、回滚和生产 evidence window 流程。
 - [`smoke-tests/openclaw-memory-tools.md`](smoke-tests/openclaw-memory-tools.md)：memory-core / memory-engine 工具暴露和路由边界。
 - [`smoke-tests/console-annotation-report-handoff.md`](smoke-tests/console-annotation-report-handoff.md)：Console `/reports` 与 `/annotations` 的只读 handoff 验证。
 

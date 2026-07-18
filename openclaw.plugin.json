@@ -67,6 +67,94 @@
             }
           }
         }
+      },
+      "kgFailClosedMode": {
+        "type": "string",
+        "enum": [
+          "legacy_fallback",
+          "shadow_fail_closed",
+          "fail_closed_canary",
+          "full_fail_closed"
+        ],
+        "default": "legacy_fallback",
+        "description": "KG legacy-fallback policy for all Hybrid Search production surfaces; keep legacy_fallback unless executing the controlled rollout runbook"
+      },
+      "kgFailClosedCanary": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {
+          "enabled": false,
+          "agentIds": [],
+          "sessionIds": []
+        },
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "agentIds": {
+            "type": "array",
+            "default": [],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "sessionIds": {
+            "type": "array",
+            "default": [],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "recentFailClosedMode": {
+        "type": "string",
+        "enum": [
+          "legacy_fallback",
+          "shadow_fail_closed",
+          "fail_closed_canary",
+          "full_fail_closed"
+        ],
+        "default": "legacy_fallback",
+        "description": "Recent legacy-fallback policy for all Hybrid Search production surfaces; keep legacy_fallback unless executing the controlled rollout runbook"
+      },
+      "recentFailClosedCanary": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {
+          "enabled": false,
+          "agentIds": [],
+          "sessionIds": []
+        },
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "agentIds": {
+            "type": "array",
+            "default": [],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "sessionIds": {
+            "type": "array",
+            "default": [],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
       }
     }
   },

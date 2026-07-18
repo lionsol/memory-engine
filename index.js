@@ -287,16 +287,20 @@ export default definePluginEntry({
       pluginEntryConfig?.autoRecall ||
       api.config?.autoRecall ||
       {};
-    const kgFailClosedMode = autoRecallConfig.kgFailClosedMode
+    const kgFailClosedMode = api.pluginConfig?.kgFailClosedMode
+      ?? autoRecallConfig.kgFailClosedMode
       ?? pluginEntryConfig?.kgFailClosedMode
       ?? api.config?.kgFailClosedMode;
-    const kgFailClosedCanary = autoRecallConfig.kgFailClosedCanary
+    const kgFailClosedCanary = api.pluginConfig?.kgFailClosedCanary
+      ?? autoRecallConfig.kgFailClosedCanary
       ?? pluginEntryConfig?.kgFailClosedCanary
       ?? api.config?.kgFailClosedCanary;
-    const recentFailClosedMode = autoRecallConfig.recentFailClosedMode
+    const recentFailClosedMode = api.pluginConfig?.recentFailClosedMode
+      ?? autoRecallConfig.recentFailClosedMode
       ?? pluginEntryConfig?.recentFailClosedMode
       ?? api.config?.recentFailClosedMode;
-    const recentFailClosedCanary = autoRecallConfig.recentFailClosedCanary
+    const recentFailClosedCanary = api.pluginConfig?.recentFailClosedCanary
+      ?? autoRecallConfig.recentFailClosedCanary
       ?? pluginEntryConfig?.recentFailClosedCanary
       ?? api.config?.recentFailClosedCanary;
     if (autoRecallConfig.enabled && typeof api.on === "function") {

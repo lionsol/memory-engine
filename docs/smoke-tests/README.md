@@ -9,6 +9,7 @@ This directory keeps manual smoke-test runbooks for workflows that are important
 | [`console-annotation-report-handoff.md`](console-annotation-report-handoff.md) | Console `/reports` ↔ `/annotations` GUI handoff for annotation/review queue work | Read-only report fetches only; no label upload, DB write, memory mutation, apply, unarchive, category update, delete, quarantine, reinforce, or LLM call |
 | [`openclaw-memory-tools.md`](openclaw-memory-tools.md) | OpenClaw memory tool contract and memory-core / memory-engine split | Tool exposure and routing verification only; no memory mutation |
 | [`full-fail-closed-safety-smoke.md`](full-fail-closed-safety-smoke.md) | F1-D-B8-A5 Hybrid Search full fail-closed matrix across all production surfaces | Synthetic SQLite `:memory:` fixtures only; no real DB, plugin reload, config mutation, network call, report write, or legacy code removal |
+| [`full-fail-closed-runtime-rollout.md`](full-fail-closed-runtime-rollout.md) | F1-D-B8-A6 controlled plugin reload, channel-by-channel rollout, rollback, observation export, and evidence-window procedure | Real runtime changes require an operator; Engine DB access is read-only observation export only; B8-B removal remains prohibited |
 
 ## When to Use
 
@@ -37,6 +38,13 @@ Run the full fail-closed safety smoke whenever changing:
 - scoped-canary versus full-mode metrics;
 - production search-surface wiring.
 
+Use the controlled runtime rollout runbook only after A5 passes and whenever changing:
+
+- `kgFailClosedMode` / `recentFailClosedMode` manifest schema;
+- canary allowlist schema or trusted runtime scope;
+- plugin install/reload and rollback steps;
+- production observation export or full-rollout evidence collection.
+
 ## Regression Guard
 
 The runbooks are also covered by static tests so that key links, workflow steps, and safety boundaries remain discoverable:
@@ -44,5 +52,6 @@ The runbooks are also covered by static tests so that key links, workflow steps,
 ```text
 npm run smoke:console-annotation-handoff
 npm run smoke:full-fail-closed
+node --test test/full-fail-closed-runtime-rollout-contract.test.js
 node --test test/agent-memory-tool-strategy.test.js
 ```

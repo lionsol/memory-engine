@@ -18,6 +18,7 @@ test("smoke tests index links available runbooks", () => {
     "console-annotation-report-handoff.md",
     "openclaw-memory-tools.md",
     "full-fail-closed-safety-smoke.md",
+    "full-fail-closed-runtime-rollout.md",
     "Console `/reports` ↔ `/annotations` GUI handoff",
     "OpenClaw memory tool contract",
     "memory-core / memory-engine split",
@@ -51,6 +52,7 @@ test("smoke tests index records regression guard command", () => {
   for (const token of [
     "npm run smoke:console-annotation-handoff",
     "npm run smoke:full-fail-closed",
+    "node --test test/full-fail-closed-runtime-rollout-contract.test.js",
     "node --test test/agent-memory-tool-strategy.test.js",
     "key links, workflow steps, and safety boundaries remain discoverable",
   ]) {
