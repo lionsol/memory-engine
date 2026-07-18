@@ -10,6 +10,7 @@ This directory keeps manual smoke-test runbooks for workflows that are important
 | [`openclaw-memory-tools.md`](openclaw-memory-tools.md) | OpenClaw memory tool contract and memory-core / memory-engine split | Tool exposure and routing verification only; no memory mutation |
 | [`full-fail-closed-safety-smoke.md`](full-fail-closed-safety-smoke.md) | F1-D-B8-A5 Hybrid Search full fail-closed matrix across all production surfaces | Synthetic SQLite `:memory:` fixtures only; no real DB, plugin reload, config mutation, network call, report write, or legacy code removal |
 | [`full-fail-closed-runtime-rollout.md`](full-fail-closed-runtime-rollout.md) | F1-D-B8-A6 controlled plugin reload, scoped-canary evidence classification, channel-by-channel rollout, rollback, observation export, and evidence-window procedure | Real runtime changes require an operator; report evaluators read JSON/JSONL only; Engine DB access is read-only observation export only; B8-B removal remains prohibited |
+| [`tool-surface-runtime-access-audit.md`](tool-surface-runtime-access-audit.md) | F1-D-B8-A6.2 registry vs effective tool visibility audit plus controlled `tools.invoke` production-surface verification | Search-only gateway invocation; no persistent policy widening, memory mutation, Core DB access, Stage 2 auto-authorization, or legacy removal |
 
 ## When to Use
 
@@ -44,7 +45,10 @@ Use the controlled runtime rollout runbook only after A5 passes and whenever cha
 - canary allowlist schema or trusted runtime scope;
 - plugin install/reload and rollback steps;
 - production observation export or full-rollout evidence collection;
-- scoped-canary status classification or JSON/JSONL metrics summarization.
+- scoped-canary status classification or JSON/JSONL metrics summarization;
+- gateway tool catalog/effective-policy drift;
+- production tool-surface execution through `tools.invoke`;
+- Node ABI mismatch between the OpenClaw CLI and plugin native dependencies.
 
 ## Regression Guard
 
@@ -54,5 +58,6 @@ The runbooks are also covered by static tests so that key links, workflow steps,
 npm run smoke:console-annotation-handoff
 npm run smoke:full-fail-closed
 node --test test/full-fail-closed-runtime-rollout-contract.test.js
+node --test test/tool-surface-runtime-access-audit-doc.test.js
 node --test test/agent-memory-tool-strategy.test.js
 ```

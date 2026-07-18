@@ -16,7 +16,7 @@ function parseJsonLines(source, label = "observations") {
 function loadObservationReport(path) {
   if (!path || typeof path !== "string") throw new Error("observation report path is required");
   const source = readFileSync(path, "utf8");
-  if (path.toLowerCase().endsWith(".jsonl")) return parseJsonLines(source);
+  if (path.toLowerCase().endsWith(".jsonl")) return parseJsonLines(source, path);
 
   try {
     const parsed = JSON.parse(source);
@@ -24,12 +24,20 @@ function loadObservationReport(path) {
     return parsed;
   } catch (error) {
     const message = String(error?.message || error);
-    if (/Unexpected end|Unexpected token|JSON parse/i.test(message)) return parseJsonLines(source);
+    if (/Unexpected end|Unexpected token|JSON parse/i.test(message)) return parseJsonLines(source, path);
     throw error;
   }
 }
 
+function loadObservationReports(paths) {
+  const normalized = Array.isArray(paths) ? paths : [paths];
+  const nonEmpty = normalized.filter(path => typeof path === "string" && path.trim());
+  if (nonEmpty.length === 0) throw new Error("at least one observation report path is required");
+  return nonEmpty.flatMap(loadObservationReport);
+}
+
 module.exports = {
   loadObservationReport,
+  loadObservationReports,
   parseJsonLines,
 };

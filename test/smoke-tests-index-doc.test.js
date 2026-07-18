@@ -19,10 +19,12 @@ test("smoke tests index links available runbooks", () => {
     "openclaw-memory-tools.md",
     "full-fail-closed-safety-smoke.md",
     "full-fail-closed-runtime-rollout.md",
+    "tool-surface-runtime-access-audit.md",
     "Console `/reports` ↔ `/annotations` GUI handoff",
     "OpenClaw memory tool contract",
     "memory-core / memory-engine split",
     "F1-D-B8-A5 Hybrid Search full fail-closed matrix",
+    "F1-D-B8-A6.2 registry vs effective tool visibility audit",
   ]) {
     assert.equal(index.includes(token), true, `missing smoke index token: ${token}`);
   }
@@ -53,6 +55,7 @@ test("smoke tests index records regression guard command", () => {
     "npm run smoke:console-annotation-handoff",
     "npm run smoke:full-fail-closed",
     "node --test test/full-fail-closed-runtime-rollout-contract.test.js",
+    "node --test test/tool-surface-runtime-access-audit-doc.test.js",
     "node --test test/agent-memory-tool-strategy.test.js",
     "key links, workflow steps, and safety boundaries remain discoverable",
   ]) {

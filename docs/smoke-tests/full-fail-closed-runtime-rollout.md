@@ -154,11 +154,14 @@ Evaluate the exported Stage 1 observations with the report-only scoped-canary CL
 ```bash
 ~/.local/node24/bin/node \
   bin/audit-scoped-fail-closed-canary-evidence.js \
-  --observations /tmp/memory-engine-scoped-canary-observations.jsonl \
+  --observations /tmp/memory-engine-auto-recall-canary-observations.jsonl \
+  --observations /tmp/memory-engine-tool-surface-observations.jsonl \
   --channel kg \
   --expected-agent edi \
   --pretty
 ```
+
+`--observations` is repeatable so independently exported AutoRecall and tool-surface windows can be evaluated without hand-editing or synthesizing a combined report.
 
 The evaluator produces one of four statuses:
 
@@ -182,7 +185,7 @@ surface_coverage_status
 isolation_status
 ```
 
-Tool surfaces must be executed through the real registered OpenClaw tools. A CLI call that labels itself as `memory_engine_search` or `memory_engine_action_search`, a manually written observation, or a direct wrapper call is not production tool-surface evidence.
+Tool surfaces must be executed through the real registered OpenClaw tools. A CLI call that labels itself as `memory_engine_search` or `memory_engine_action_search`, a manually written observation, or a direct wrapper call is not production tool-surface evidence. Use the controlled registry/effective-policy and `tools.invoke` procedure in [`tool-surface-runtime-access-audit.md`](tool-surface-runtime-access-audit.md).
 
 The `--expected-agent` value is an operator-supplied run label. The current observation schema proves trusted scope match through the canary markers but does not independently serialize the agent identity.
 

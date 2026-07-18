@@ -40,16 +40,29 @@ test("summary CLI consumes exporter-shaped JSONL through the metrics service", a
   assert.match(result.output, /"observed_hybrid_events": 6/);
 });
 
-test("shared observation loader accepts JSON arrays and JSONL with line diagnostics", () => {
+test("shared observation loader accepts JSON arrays, JSONL, and multiple reports", () => {
   const rows = input.loadObservationReport(fixturePath);
   const jsonPath = tempFile("observations.json", JSON.stringify(rows));
   assert.deepEqual(input.loadObservationReport(jsonPath), rows);
+  assert.deepEqual(input.loadObservationReports([fixturePath, jsonPath]), [...rows, ...rows]);
 
   const badPath = tempFile("observations.jsonl", "{\"ok\":true}\nnot-json\n");
   assert.throws(
     () => input.loadObservationReport(badPath),
-    /invalid observations JSONL at line 2/,
+    /invalid .*JSONL at line 2/,
   );
+});
+
+test("summary CLI accepts repeated observation reports", async () => {
+  const result = await cli.summarizeHybridSearchObservations([
+    "--observations", fixturePath,
+    "--observations", fixturePath,
+    "--window-days", "1",
+    "--now", "2026-07-18T14:12:00.000Z",
+  ]);
+  assert.equal(result.report.input_row_count, 12);
+  assert.equal(result.report.summary.observed_hybrid_events, 12);
+  assert.deepEqual(result.report.summary.production_observed_by_surface, { auto_recall: 12 });
 });
 
 test("summary CLI validates time and window arguments", async () => {
@@ -71,7 +84,8 @@ test("summary CLI validates time and window arguments", async () => {
 test("summary CLI source is report-only and invokes the canonical metrics builder", () => {
   const source = readFileSync(resolve(repoRoot, "bin/summarize-hybrid-search-observations.js"), "utf8");
   assert.match(source, /buildHybridFallbackObservabilitySummary/);
-  assert.match(source, /loadObservationReport/);
+  assert.match(source, /loadObservationReports/);
+  assert.match(cli.usage(), /repeatable/);
   assert.doesNotMatch(source, /better-sqlite3|openEngineDb|withDb|gateway restart|plugins install/);
   assert.match(cli.usage(), /reads JSON or JSONL observation reports only/i);
   assert.match(cli.usage(), /never opens a database/i);

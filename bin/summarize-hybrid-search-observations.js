@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { loadObservationReport } = require("./lib/observation-report-input.js");
+const { loadObservationReports } = require("./lib/observation-report-input.js");
 
 function readFlagValue(argv, index, flagName) {
   const value = argv[index + 1];
@@ -19,7 +19,7 @@ function parseNowMs(value) {
 
 function parseArgs(argv = []) {
   const options = {
-    observationsPath: null,
+    observationPaths: [],
     windowDays: 7,
     nowMs: null,
     pretty: false,
@@ -30,7 +30,7 @@ function parseArgs(argv = []) {
     if (arg === "--help" || arg === "-h") options.help = true;
     else if (arg === "--pretty") options.pretty = true;
     else if (arg === "--observations") {
-      options.observationsPath = readFlagValue(argv, index, arg);
+      options.observationPaths.push(readFlagValue(argv, index, arg));
       index += 1;
     } else if (arg === "--window-days") {
       options.windowDays = Number(readFlagValue(argv, index, arg));
@@ -40,7 +40,7 @@ function parseArgs(argv = []) {
       index += 1;
     } else throw new Error(`unknown argument: ${arg}`);
   }
-  if (!options.help && !options.observationsPath) throw new Error("--observations is required");
+  if (!options.help && options.observationPaths.length === 0) throw new Error("--observations is required");
   if (!options.help && (!Number.isFinite(options.windowDays) || options.windowDays < 1)) {
     throw new Error("--window-days must be a number greater than or equal to 1");
   }
@@ -50,7 +50,7 @@ function parseArgs(argv = []) {
 function usage() {
   return `Usage:
   node bin/summarize-hybrid-search-observations.js
-      --observations <observations.json|observations.jsonl>
+      --observations <observations.json|observations.jsonl> [repeatable]
       [--window-days <n>]
       [--now <ISO|unix-ms>]
       [--pretty]
@@ -61,7 +61,7 @@ This command reads JSON or JSONL observation reports only. It never opens a data
 async function summarizeHybridSearchObservations(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   if (options.help) return { exitCode: 0, output: usage(), report: null };
-  const observations = loadObservationReport(options.observationsPath);
+  const observations = loadObservationReports(options.observationPaths);
   const { buildHybridFallbackObservabilitySummary } = await import(
     "../console/services/metrics-service.js"
   );

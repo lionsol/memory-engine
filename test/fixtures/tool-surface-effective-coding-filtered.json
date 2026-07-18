@@ -1,0 +1,17 @@
+{
+  "agentId": "main",
+  "profile": "coding",
+  "groups": [
+    {
+      "id": "coding",
+      "label": "Coding",
+      "source": "core",
+      "tools": [
+        { "id": "read", "source": "core" },
+        { "id": "write", "source": "core" },
+        { "id": "edit", "source": "core" },
+        { "id": "exec", "source": "core" }
+      ]
+    }
+  ]
+}

@@ -75,6 +75,8 @@ test("runbook classifies scoped-canary evidence without manufacturing production
     "observation-evidence-only",
     "search_executed=true",
     "real registered OpenClaw tools",
+    "tool-surface-runtime-access-audit.md",
+    "`--observations` is repeatable",
     "operator-supplied run label",
   ]) {
     assert.equal(doc.includes(token), true, `missing scoped-canary evidence token: ${token}`);

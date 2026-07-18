@@ -1,0 +1,37 @@
+{
+  "agentId": "main",
+  "profiles": [
+    { "id": "coding", "label": "Coding" }
+  ],
+  "groups": [
+    {
+      "id": "plugin:memory-engine",
+      "label": "memory-engine",
+      "source": "plugin",
+      "pluginId": "memory-engine",
+      "tools": [
+        {
+          "id": "memory_engine",
+          "source": "plugin",
+          "pluginId": "memory-engine",
+          "optional": false,
+          "defaultProfiles": []
+        },
+        {
+          "id": "memory_engine_get",
+          "source": "plugin",
+          "pluginId": "memory-engine",
+          "optional": false,
+          "defaultProfiles": []
+        },
+        {
+          "id": "memory_engine_search",
+          "source": "plugin",
+          "pluginId": "memory-engine",
+          "optional": false,
+          "defaultProfiles": []
+        }
+      ]
+    }
+  ]
+}

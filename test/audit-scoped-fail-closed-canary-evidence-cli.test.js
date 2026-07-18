@@ -95,6 +95,27 @@ test("CLI also exits zero for healthy no-opportunity evidence with complete surf
   assert.equal(result.report.stage2_review_eligible, true);
 });
 
+test("CLI accepts repeated observation reports without manual concatenation", async () => {
+  const autoPath = tempObservations([event("auto_recall", {
+    kg_access_mode: "isolated",
+    kg_fail_closed_applied: false,
+    kg_fail_closed_would_have_used_fallback: false,
+    kg_fail_closed_fallback_suppressed: false,
+  })]);
+  const toolsPath = tempObservations([
+    event("memory_engine_action_search"),
+    event("memory_engine_search"),
+  ]);
+  const result = await cli.auditScopedFailClosedCanaryEvidence([
+    "--observations", autoPath,
+    "--observations", toolsPath,
+    "--channel", "kg",
+  ]);
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.report.input_row_count, 3);
+  assert.equal(result.report.surface_coverage_status, "complete");
+});
+
 test("CLI uses distinct exit codes for missing scope, safety violations, and input errors", async () => {
   const missingScope = await cli.auditScopedFailClosedCanaryEvidence([
     "--observations", tempObservations([event("memory_engine_search")]),
@@ -131,7 +152,8 @@ test("CLI uses distinct exit codes for missing scope, safety violations, and inp
 
 test("CLI source is report-only and has no database or runtime mutation dependency", () => {
   const source = readFileSync(resolve(repoRoot, "bin/audit-scoped-fail-closed-canary-evidence.js"), "utf8");
-  assert.match(source, /loadObservationReport/);
+  assert.match(source, /loadObservationReports/);
+  assert.match(cli.usage(), /repeatable/);
   assert.doesNotMatch(source, /better-sqlite3|openEngineDb|withDb|gateway restart|plugins install/);
   assert.match(cli.usage(), /never opens a database/i);
   assert.match(cli.usage(), /never.*changes rollout configuration/i);
