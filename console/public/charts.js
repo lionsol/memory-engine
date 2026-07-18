@@ -225,6 +225,10 @@ function renderHybridFallbackObservability(target, summary) {
     ${surfaceSection("Excluded / Non-production", summary?.excluded_from_production_by_surface, "No excluded observations observed")}
   </div>
   <div class="diversity-grid">
+    ${surfaceSection("KG Runtime Modes", summary?.kg_runtime_mode_distribution, "No KG runtime modes observed")}
+    ${surfaceSection("Recent Runtime Modes", summary?.recent_runtime_mode_distribution, "No Recent runtime modes observed")}
+  </div>
+  <div class="diversity-grid">
     ${reasons("KG Fallback Reasons", summary?.kg_fallback_reasons)}
     ${reasons("Recent Fallback Reasons", summary?.recent_fallback_reasons)}
   </div>

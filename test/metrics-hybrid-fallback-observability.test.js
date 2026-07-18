@@ -59,6 +59,10 @@ test("hybrid fallback observability: empty data returns zero summary", () => {
       partial_observation_rate: 0,
       kg_modes: {},
       recent_modes: {},
+      kg_runtime_mode_distribution: {},
+      recent_runtime_mode_distribution: {},
+      kg_full_fail_closed_events: 0,
+      recent_full_fail_closed_events: 0,
       kg_fallback_reasons: {},
       recent_fallback_reasons: {},
       kg_fail_closed_shadow: {
@@ -118,6 +122,34 @@ test("KG fail-closed shadow metrics count only explicit shadow observations", ()
     max_candidate_loss_ratio: 0.5,
     total_dropped_candidates: 2,
   });
+});
+
+test("full fail-closed runtime modes remain separate from scoped canary metrics", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, {
+      kg_runtime_mode: "full_fail_closed",
+      recent_runtime_mode: "full_fail_closed",
+      kg_rollout_scope: "full",
+      recent_rollout_scope: "full",
+    }),
+    debugRow(2, {
+      kg_runtime_mode: "fail_closed_canary",
+      recent_runtime_mode: "fail_closed_canary",
+      kg_rollout_scope: "scoped_canary",
+      recent_rollout_scope: "scoped_canary",
+    }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.deepEqual(summary.kg_runtime_mode_distribution, {
+    fail_closed_canary: 1,
+    full_fail_closed: 1,
+  });
+  assert.deepEqual(summary.recent_runtime_mode_distribution, {
+    fail_closed_canary: 1,
+    full_fail_closed: 1,
+  });
+  assert.equal(summary.kg_full_fail_closed_events, 1);
+  assert.equal(summary.recent_full_fail_closed_events, 1);
 });
 
 test("KG fail-closed canary metrics count only explicit canary observations", () => {

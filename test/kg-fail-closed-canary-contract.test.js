@@ -22,3 +22,12 @@ test("canary requires trusted runtime context and an explicit allowlist", async 
     context: { source: "openclaw_runtime", agentIdentity: "edi" },
   }).mode, "fail_closed_canary");
 });
+
+test("full mode is explicit and does not require canary context", async () => {
+  const { resolveKgFailClosedDecision } = await import("../lib/recall/hybrid/kg-fail-closed-policy.js");
+  const decision = resolveKgFailClosedDecision({ mode: "full_fail_closed" });
+  assert.equal(decision.mode, "full_fail_closed");
+  assert.equal(decision.eligible, true);
+  assert.equal(decision.scope_required, false);
+  assert.equal(decision.rollout_scope, "full");
+});

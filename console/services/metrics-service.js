@@ -168,6 +168,8 @@ export function buildHybridFallbackObservabilitySummary(
   const withinWindow = filterRowsByWindowDays(rows, normalizedWindowDays, nowMs);
   const kgModes = new Map();
   const recentModes = new Map();
+  const kgRuntimeModes = new Map();
+  const recentRuntimeModes = new Map();
   const kgReasons = new Map();
   const recentReasons = new Map();
   const observedBySurface = new Map();
@@ -199,6 +201,7 @@ export function buildHybridFallbackObservabilitySummary(
   let kgCanaryLossRatioTotal = 0;
   let kgCanaryLossRatioCount = 0;
   let kgCanaryResultChangeEvents = 0;
+  let kgFullFailClosedEvents = 0;
   let recentShadowEvents = 0;
   let recentShadowWouldFailClosedEvents = 0;
   let recentShadowLossRatioTotal = 0;
@@ -210,6 +213,7 @@ export function buildHybridFallbackObservabilitySummary(
   let recentCanaryAppliedEvents = 0;
   let recentCanarySuppressedFallbackEvents = 0;
   let recentCanaryEmptyCandidateEvents = 0;
+  let recentFullFailClosedEvents = 0;
   let searchExecutedEvents = 0;
   let searchNotExecutedEvents = 0;
   let unknownSurfaceEvents = 0;
@@ -276,10 +280,18 @@ export function buildHybridFallbackObservabilitySummary(
       addMetricDistributionValue(kgModes, metadata.kg_access_mode);
       if (metadata.kg_access_mode === "isolated") kgIsolatedEvents += 1;
     }
+    if (typeof metadata.kg_runtime_mode === "string" && metadata.kg_runtime_mode.trim()) {
+      addMetricDistributionValue(kgRuntimeModes, metadata.kg_runtime_mode);
+      if (metadata.kg_runtime_mode === "full_fail_closed") kgFullFailClosedEvents += 1;
+    }
     if (hasRecentMode) {
       recentAttemptedEvents += 1;
       addMetricDistributionValue(recentModes, metadata.recent_access_mode);
       if (metadata.recent_access_mode === "isolated") recentIsolatedEvents += 1;
+    }
+    if (typeof metadata.recent_runtime_mode === "string" && metadata.recent_runtime_mode.trim()) {
+      addMetricDistributionValue(recentRuntimeModes, metadata.recent_runtime_mode);
+      if (metadata.recent_runtime_mode === "full_fail_closed") recentFullFailClosedEvents += 1;
     }
     if (fullyObserved) fullyObservedEvents += 1;
     if (hasKgMode && hasRecentMode
@@ -395,6 +407,10 @@ export function buildHybridFallbackObservabilitySummary(
     partial_observation_rate: toShare(observedHybridEvents - fullyObservedEvents, observedHybridEvents),
     kg_modes: sortMetricDistribution(kgModes),
     recent_modes: sortMetricDistribution(recentModes),
+    kg_runtime_mode_distribution: sortMetricDistribution(kgRuntimeModes),
+    recent_runtime_mode_distribution: sortMetricDistribution(recentRuntimeModes),
+    kg_full_fail_closed_events: kgFullFailClosedEvents,
+    recent_full_fail_closed_events: recentFullFailClosedEvents,
     kg_fallback_reasons: sortMetricDistribution(kgReasons),
     recent_fallback_reasons: sortMetricDistribution(recentReasons),
     kg_fail_closed_shadow: {

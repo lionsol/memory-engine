@@ -95,6 +95,42 @@ test("shadow mode keeps fallback results and exposes shadow telemetry", async ()
   assert.equal(ctx.debug.kg_fail_closed_applied, undefined);
 });
 
+test("full fail-closed mode suppresses fallback without canary context", async () => {
+  const legacyCalls = [];
+  const decision = resolveKgFailClosedDecision({ mode: "full_fail_closed" });
+  assert.deepEqual({
+    mode: decision.mode,
+    eligible: decision.eligible,
+    in_scope: decision.in_scope,
+    scope_required: decision.scope_required,
+    rollout_scope: decision.rollout_scope,
+    fallback_behavior: decision.fallback_behavior,
+  }, {
+    mode: "full_fail_closed",
+    eligible: true,
+    in_scope: true,
+    scope_required: false,
+    rollout_scope: "full",
+    fallback_behavior: "suppressed",
+  });
+  const ctx = await runCollection(buildContext({ decision, legacyCalls }));
+  assert.deepEqual(legacyCalls, []);
+  assert.equal(ctx.channels.kg, undefined);
+  assert.equal(ctx.debug.kg_runtime_mode, "full_fail_closed");
+  assert.equal(ctx.debug.kg_rollout_scope, "full");
+  assert.equal(ctx.debug.kg_scope_required, false);
+  assert.equal(ctx.debug.kg_fail_closed_scope_match, null);
+  assert.equal(ctx.debug.kg_fail_closed_applied, true);
+  assert.equal(ctx.debug.kg_fail_closed_fallback_suppressed, true);
+  const observation = buildHybridSearchObservation({
+    surface: "memory_engine_search",
+    result: { debug: ctx.debug, channel_sizes: {}, results: [] },
+  });
+  assert.equal(observation.kg_runtime_mode, "full_fail_closed");
+  assert.equal(observation.kg_rollout_scope, "full");
+  assert.equal(observation.kg_scope_required, false);
+});
+
 test("scoped canary suppresses the fallback and serves no KG candidates", async () => {
   const legacyCalls = [];
   const decision = resolveKgFailClosedDecision({

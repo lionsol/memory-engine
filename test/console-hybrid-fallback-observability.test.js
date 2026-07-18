@@ -27,6 +27,8 @@ test("metrics renderer wires and escapes Hybrid fallback observability", () => {
   assert.match(chartSource, /All Observations by Surface/);
   assert.match(chartSource, /Production Denominator/);
   assert.match(chartSource, /Excluded \/ Non-production/);
+  assert.match(chartSource, /KG Runtime Modes/);
+  assert.match(chartSource, /Recent Runtime Modes/);
   assert.match(chartSource, /observed_by_surface/);
   assert.match(chartSource, /production_observed_by_surface/);
   assert.match(chartSource, /excluded_from_production_by_surface/);

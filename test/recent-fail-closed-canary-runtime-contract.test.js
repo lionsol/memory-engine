@@ -48,4 +48,5 @@ test("policy supports only the documented fail-closed modes", () => {
   assert.match(policySource, /legacy_fallback/);
   assert.match(policySource, /shadow_fail_closed/);
   assert.match(policySource, /fail_closed_canary/);
+  assert.match(policySource, /full_fail_closed/);
 });

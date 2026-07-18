@@ -208,6 +208,12 @@ npm run memory:cleanup-orphan-confidence
 npm run smoke:console-annotation-handoff
 ```
 
+> Legacy fallback code inventory 的顶层计数表示已分类的 findings 数量，
+> 不是唯一文件数、测试文件数或测试用例数。
+> Top-level inventory counters represent classified findings,
+> not unique files or test cases.
+> Inventory 顶层计数表示 classified findings，不代表唯一文件数或测试用例数；详细口径见对应 audit 文档。
+
 所有 cleanup/apply 类命令都必须先阅读对应设计或操作协议，不能仅凭命令名称推断其是否会写库。
 
 ## 仓库导航

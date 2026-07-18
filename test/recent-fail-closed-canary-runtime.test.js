@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { collectRecentCandidates } from "../lib/recall/hybrid/channels/recent.js";
 import { evaluateRecentFailClosedPolicy } from "../lib/recall/hybrid/recent-fail-closed-policy.js";
+import { buildHybridSearchObservation } from "../lib/recall/hybrid-observation.js";
 
 const legacyRow = {
   id: "legacy",
@@ -110,6 +111,31 @@ test("shadow fail-closed mode executes fallback and records shadow telemetry", a
   assert.equal(ctx.debug.recent_runtime_mode, "shadow_fail_closed");
   assert.equal(ctx.debug.recent_shadow_mode, "shadow_fail_closed");
   assert.equal(ctx.debug.recent_fail_closed_applied, null);
+});
+
+test("full fail-closed mode suppresses fallback without canary context", async () => {
+  const decision = policy("full_fail_closed");
+  assert.equal(decision.eligible, true);
+  assert.equal(decision.in_scope, true);
+  assert.equal(decision.scope_required, false);
+  assert.equal(decision.rollout_scope, "full");
+  const { ctx, records } = makeContext(decision);
+  await collectRecentCandidates(ctx);
+  assert.deepEqual(records, []);
+  assert.equal(ctx.channels.recent, undefined);
+  assert.equal(ctx.debug.recent_runtime_mode, "full_fail_closed");
+  assert.equal(ctx.debug.recent_rollout_scope, "full");
+  assert.equal(ctx.debug.recent_scope_required, false);
+  assert.equal(ctx.debug.recent_fail_closed_scope_match, null);
+  assert.equal(ctx.debug.recent_fail_closed_applied, true);
+  assert.equal(ctx.debug.recent_fail_closed_fallback_suppressed, true);
+  const observation = buildHybridSearchObservation({
+    surface: "memory_engine_search",
+    result: { debug: ctx.debug, channel_sizes: {}, results: [] },
+  });
+  assert.equal(observation.recent_runtime_mode, "full_fail_closed");
+  assert.equal(observation.recent_rollout_scope, "full");
+  assert.equal(observation.recent_scope_required, false);
 });
 
 test("matching scoped canary suppresses the Recent fallback", async () => {

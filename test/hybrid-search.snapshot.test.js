@@ -99,6 +99,8 @@ const EXPECTED_SNAPSHOT = `{
     "recent_canary_served_mode": "legacy",
     "recent_canary_policy_error": false,
     "recent_runtime_mode": "legacy_fallback",
+    "recent_rollout_scope": "none",
+    "recent_scope_required": false,
     "recent_fail_closed_applied": null,
     "recent_fail_closed_fallback_suppressed": null,
     "recent_fail_closed_scope_match": null,

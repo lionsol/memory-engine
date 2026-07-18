@@ -297,6 +297,10 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
       partial_observation_rate: 0.5,
       kg_modes: { isolated: 1, legacy_fallback: 1 },
       recent_modes: { isolated: 1 },
+      kg_runtime_mode_distribution: {},
+      recent_runtime_mode_distribution: {},
+      kg_full_fail_closed_events: 0,
+      recent_full_fail_closed_events: 0,
       kg_fallback_reasons: { text_id_invariant_failed: 1 },
       recent_fallback_reasons: {},
       kg_fail_closed_shadow: {
