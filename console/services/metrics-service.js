@@ -192,6 +192,13 @@ export function buildHybridFallbackObservabilitySummary(
   let kgShadowLossRatioCount = 0;
   let kgShadowMaxLossRatio = 0;
   let kgShadowDroppedCandidates = 0;
+  let kgCanaryEnabledEvents = 0;
+  let kgCanaryAppliedEvents = 0;
+  let kgCanarySuppressedFallbackEvents = 0;
+  let kgCanaryEmptyCandidateEvents = 0;
+  let kgCanaryLossRatioTotal = 0;
+  let kgCanaryLossRatioCount = 0;
+  let kgCanaryResultChangeEvents = 0;
   let searchExecutedEvents = 0;
   let searchNotExecutedEvents = 0;
   let unknownSurfaceEvents = 0;
@@ -295,6 +302,23 @@ export function buildHybridFallbackObservabilitySummary(
       }
     }
 
+    if (metadata.kg_runtime_mode === "fail_closed_canary") {
+      kgCanaryEnabledEvents += 1;
+      if (metadata.kg_fail_closed_applied === true) kgCanaryAppliedEvents += 1;
+      if (metadata.kg_fail_closed_fallback_suppressed === true) {
+        kgCanarySuppressedFallbackEvents += 1;
+      }
+      if (metadata.kg_fail_closed_empty_candidate === true) {
+        kgCanaryEmptyCandidateEvents += 1;
+        kgCanaryResultChangeEvents += 1;
+      }
+      const lossRatio = Number(metadata.kg_fail_closed_candidate_loss_ratio);
+      if (Number.isFinite(lossRatio) && lossRatio >= 0) {
+        kgCanaryLossRatioTotal += lossRatio;
+        kgCanaryLossRatioCount += 1;
+      }
+    }
+
     const rowTimestamp = parseSqliteDateTimeUtc(row?.created_at);
     if (rowTimestamp !== null && (observationStartAtMs === null || rowTimestamp < observationStartAtMs)) {
       observationStartAtMs = rowTimestamp;
@@ -346,6 +370,16 @@ export function buildHybridFallbackObservabilitySummary(
         : 0,
       max_candidate_loss_ratio: round(kgShadowMaxLossRatio, 4),
       total_dropped_candidates: kgShadowDroppedCandidates,
+    },
+    kg_fail_closed_canary: {
+      enabled_events: kgCanaryEnabledEvents,
+      applied_events: kgCanaryAppliedEvents,
+      suppressed_fallback_events: kgCanarySuppressedFallbackEvents,
+      empty_candidate_events: kgCanaryEmptyCandidateEvents,
+      candidate_loss_ratio: kgCanaryLossRatioCount > 0
+        ? round(kgCanaryLossRatioTotal / kgCanaryLossRatioCount, 4)
+        : 0,
+      result_change_events: kgCanaryResultChangeEvents,
     },
   };
 }
