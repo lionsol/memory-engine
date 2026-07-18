@@ -186,6 +186,12 @@ export function buildHybridFallbackObservabilitySummary(
   let recentAttemptedEvents = 0;
   let kgIsolatedEvents = 0;
   let recentIsolatedEvents = 0;
+  let kgShadowEvents = 0;
+  let kgShadowWouldFailClosedEvents = 0;
+  let kgShadowLossRatioTotal = 0;
+  let kgShadowLossRatioCount = 0;
+  let kgShadowMaxLossRatio = 0;
+  let kgShadowDroppedCandidates = 0;
   let searchExecutedEvents = 0;
   let searchNotExecutedEvents = 0;
   let unknownSurfaceEvents = 0;
@@ -274,6 +280,21 @@ export function buildHybridFallbackObservabilitySummary(
     if (kgIsFallback && recentIsFallback) bothFallbackEvents += 1;
     if (hasFallback) fallbackEvents += 1;
 
+    if (metadata.kg_shadow_mode === "shadow_fail_closed") {
+      kgShadowEvents += 1;
+      if (metadata.kg_shadow_would_fail_closed === true) kgShadowWouldFailClosedEvents += 1;
+      const lossRatio = Number(metadata.kg_shadow_candidate_loss_ratio);
+      if (Number.isFinite(lossRatio) && lossRatio >= 0) {
+        kgShadowLossRatioTotal += lossRatio;
+        kgShadowLossRatioCount += 1;
+        kgShadowMaxLossRatio = Math.max(kgShadowMaxLossRatio, lossRatio);
+      }
+      const droppedCandidates = Number(metadata.kg_shadow_dropped_candidate_count);
+      if (Number.isFinite(droppedCandidates) && droppedCandidates >= 0) {
+        kgShadowDroppedCandidates += droppedCandidates;
+      }
+    }
+
     const rowTimestamp = parseSqliteDateTimeUtc(row?.created_at);
     if (rowTimestamp !== null && (observationStartAtMs === null || rowTimestamp < observationStartAtMs)) {
       observationStartAtMs = rowTimestamp;
@@ -317,6 +338,15 @@ export function buildHybridFallbackObservabilitySummary(
     recent_modes: sortMetricDistribution(recentModes),
     kg_fallback_reasons: sortMetricDistribution(kgReasons),
     recent_fallback_reasons: sortMetricDistribution(recentReasons),
+    kg_fail_closed_shadow: {
+      events: kgShadowEvents,
+      would_fail_closed_events: kgShadowWouldFailClosedEvents,
+      average_candidate_loss_ratio: kgShadowLossRatioCount > 0
+        ? round(kgShadowLossRatioTotal / kgShadowLossRatioCount, 4)
+        : 0,
+      max_candidate_loss_ratio: round(kgShadowMaxLossRatio, 4),
+      total_dropped_candidates: kgShadowDroppedCandidates,
+    },
   };
 }
 
