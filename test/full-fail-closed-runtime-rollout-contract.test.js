@@ -59,6 +59,28 @@ test("runbook requires channel-by-channel rollout and real rollback", () => {
   }
 });
 
+test("runbook classifies scoped-canary evidence without manufacturing production fallback", () => {
+  const doc = readRunbook();
+  for (const token of [
+    "bin/audit-scoped-fail-closed-canary-evidence.js",
+    "canary_scope_confirmed_no_fallback_opportunity",
+    "scope_status",
+    "suppression_status",
+    "surface_coverage_status",
+    "isolation_status",
+    "not mandatory for Stage 2 review",
+    "Do not mutate a production DB",
+    "A5 synthetic smoke remains authoritative",
+    "stage2_review_eligible=true",
+    "observation-evidence-only",
+    "search_executed=true",
+    "real registered OpenClaw tools",
+    "operator-supplied run label",
+  ]) {
+    assert.equal(doc.includes(token), true, `missing scoped-canary evidence token: ${token}`);
+  }
+});
+
 test("runbook defines explicit full markers, stop conditions, and evidence thresholds", () => {
   const doc = readRunbook();
   for (const token of [
@@ -76,6 +98,17 @@ test("runbook defines explicit full markers, stop conditions, and evidence thres
     "minimum_surface_observations: 100",
   ]) {
     assert.equal(doc.includes(token), true, `missing evidence token: ${token}`);
+  }
+});
+
+test("runbook uses the canonical metrics summary CLI for JSON and JSONL evidence", () => {
+  const doc = readRunbook();
+  for (const token of [
+    "bin/summarize-hybrid-search-observations.js",
+    "buildHybridFallbackObservabilitySummary",
+    "does not open SQLite or contact the runtime",
+  ]) {
+    assert.equal(doc.includes(token), true, `missing observation summary token: ${token}`);
   }
 });
 

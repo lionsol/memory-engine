@@ -147,9 +147,62 @@ Repeat for Recent only after KG canary is clean:
 }
 ```
 
+### Stage 1 Evidence Classification
+
+Evaluate the exported Stage 1 observations with the report-only scoped-canary CLI:
+
+```bash
+~/.local/node24/bin/node \
+  bin/audit-scoped-fail-closed-canary-evidence.js \
+  --observations /tmp/memory-engine-scoped-canary-observations.jsonl \
+  --channel kg \
+  --expected-agent edi \
+  --pretty
+```
+
+The evaluator produces one of four statuses:
+
+```text
+canary_suppression_confirmed
+canary_scope_confirmed_no_fallback_opportunity
+canary_scope_not_confirmed
+canary_safety_violation
+```
+
+`canary_scope_confirmed_no_fallback_opportunity` is a valid healthy-topology outcome. KG fallback is selected by isolated capability, TEXT-ID invariant, and isolated SQL safety, not by choosing a query that exists only in the legacy database. Do not mutate a production DB, insert non-TEXT IDs, disable isolated capability, or inject SQL failures merely to manufacture a fallback opportunity.
+
+The deterministic A5 synthetic smoke remains authoritative for exercising the suppression branch. A naturally observed real fallback opportunity strengthens Stage 1 evidence but is not mandatory for Stage 2 review when all three production surfaces are observed, scope isolation is correct, and no safety violation exists.
+
+The evaluator keeps the following evidence dimensions separate:
+
+```text
+scope_status
+suppression_status
+surface_coverage_status
+isolation_status
+```
+
+Tool surfaces must be executed through the real registered OpenClaw tools. A CLI call that labels itself as `memory_engine_search` or `memory_engine_action_search`, a manually written observation, or a direct wrapper call is not production tool-surface evidence.
+
+The `--expected-agent` value is an operator-supplied run label. The current observation schema proves trusted scope match through the canary markers but does not independently serialize the agent identity.
+
+Stage 2 may enter operator review only when:
+
+- A5 synthetic safety smoke still passes;
+- Stage 1 scope status is confirmed;
+- all three production surfaces are observed with `search_executed=true`;
+- tool surfaces do not claim canary scope;
+- the other channel stays unchanged;
+- full-mode markers and channel errors remain zero;
+- the evaluator reports `stage2_review_eligible=true`.
+
+`stage2_review_eligible` is observation-evidence-only. The report does not verify the A5 smoke result, runtime baseline restoration, or operator approval.
+
+This is permission for a fresh Stage 2 review, not automatic authorization and not evidence for legacy code removal.
+
 ## Stage 2: KG Full Rollout
 
-Set only KG to full mode:
+After explicit operator approval based on the Stage 1 evaluator, set only KG to full mode:
 
 ```json
 {
@@ -254,7 +307,19 @@ Do not write production evidence into the repository.
 
 ## Evidence Evaluation
 
-Evaluate the exported observations:
+Generate the canonical metrics summary directly from JSON or JSONL instead of using an ad hoc stdin script:
+
+```bash
+~/.local/node24/bin/node \
+  bin/summarize-hybrid-search-observations.js \
+  --observations /tmp/memory-engine-full-fail-closed-observations.jsonl \
+  --window-days 30 \
+  --pretty
+```
+
+The summary CLI invokes the same `buildHybridFallbackObservabilitySummary` used by the Console metrics service. It reads report files only and does not open SQLite or contact the runtime.
+
+Evaluate the full-rollout observations:
 
 ```bash
 ~/.local/node24/bin/node \
