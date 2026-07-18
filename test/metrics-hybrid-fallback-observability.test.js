@@ -76,6 +76,13 @@ test("hybrid fallback observability: empty data returns zero summary", () => {
         candidate_loss_ratio: 0,
         result_change_events: 0,
       },
+      recent_fail_closed_shadow: {
+        events: 0,
+        would_fail_closed_events: 0,
+        average_candidate_loss_ratio: 0,
+        max_candidate_loss_ratio: 0,
+        risk_level_distribution: {},
+      },
     },
   );
 });
@@ -136,6 +143,31 @@ test("KG fail-closed canary metrics count only explicit canary observations", ()
     result_change_events: 1,
   });
   assert.equal(summary.fallback_events, 1);
+});
+
+test("Recent fail-closed shadow metrics stay separate from real fallback counts", () => {
+  const summary = buildHybridFallbackObservabilitySummary([
+    debugRow(1, {
+      kg_access_mode: "isolated",
+      recent_access_mode: "guarded_fallback",
+      recent_isolated_fallback_reason: "isolated_recent_metadata_duplicate_id",
+      recent_shadow_mode: "shadow_fail_closed",
+      recent_shadow_would_fail_closed: true,
+      recent_shadow_dropped_candidate_count: 1,
+      recent_shadow_candidate_loss_ratio: 0.333,
+      recent_shadow_overlap_count: 2,
+      recent_shadow_risk_level: "medium",
+    }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.deepEqual(summary.recent_fail_closed_shadow, {
+    events: 1,
+    would_fail_closed_events: 1,
+    average_candidate_loss_ratio: 0.333,
+    max_candidate_loss_ratio: 0.333,
+    risk_level_distribution: { medium: 1 },
+  });
+  assert.equal(summary.recent_fallback_events, 1);
 });
 
 test("hybrid fallback observability excludes skips, child debug events, other types, and invalid JSON", () => {

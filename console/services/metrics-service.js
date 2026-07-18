@@ -199,6 +199,12 @@ export function buildHybridFallbackObservabilitySummary(
   let kgCanaryLossRatioTotal = 0;
   let kgCanaryLossRatioCount = 0;
   let kgCanaryResultChangeEvents = 0;
+  let recentShadowEvents = 0;
+  let recentShadowWouldFailClosedEvents = 0;
+  let recentShadowLossRatioTotal = 0;
+  let recentShadowLossRatioCount = 0;
+  let recentShadowMaxLossRatio = 0;
+  const recentShadowRiskLevels = new Map();
   let searchExecutedEvents = 0;
   let searchNotExecutedEvents = 0;
   let unknownSurfaceEvents = 0;
@@ -319,6 +325,18 @@ export function buildHybridFallbackObservabilitySummary(
       }
     }
 
+    if (metadata.recent_shadow_mode === "shadow_fail_closed") {
+      recentShadowEvents += 1;
+      if (metadata.recent_shadow_would_fail_closed === true) recentShadowWouldFailClosedEvents += 1;
+      const lossRatio = Number(metadata.recent_shadow_candidate_loss_ratio);
+      if (Number.isFinite(lossRatio) && lossRatio >= 0) {
+        recentShadowLossRatioTotal += lossRatio;
+        recentShadowLossRatioCount += 1;
+        recentShadowMaxLossRatio = Math.max(recentShadowMaxLossRatio, lossRatio);
+      }
+      addMetricDistributionValue(recentShadowRiskLevels, metadata.recent_shadow_risk_level);
+    }
+
     const rowTimestamp = parseSqliteDateTimeUtc(row?.created_at);
     if (rowTimestamp !== null && (observationStartAtMs === null || rowTimestamp < observationStartAtMs)) {
       observationStartAtMs = rowTimestamp;
@@ -380,6 +398,15 @@ export function buildHybridFallbackObservabilitySummary(
         ? round(kgCanaryLossRatioTotal / kgCanaryLossRatioCount, 4)
         : 0,
       result_change_events: kgCanaryResultChangeEvents,
+    },
+    recent_fail_closed_shadow: {
+      events: recentShadowEvents,
+      would_fail_closed_events: recentShadowWouldFailClosedEvents,
+      average_candidate_loss_ratio: recentShadowLossRatioCount > 0
+        ? round(recentShadowLossRatioTotal / recentShadowLossRatioCount, 4)
+        : 0,
+      max_candidate_loss_ratio: round(recentShadowMaxLossRatio, 4),
+      risk_level_distribution: sortMetricDistribution(recentShadowRiskLevels),
     },
   };
 }

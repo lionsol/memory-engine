@@ -234,8 +234,8 @@ async function runRecent(paths, overrides = {}) {
       withEngineDb: recordAccessor(handles.isolatedEngineDb, "engine", records),
     };
     const ctx = makeCtx(accessors, overrides);
-    await collectRecentCandidates(ctx);
-    return { ctx, records };
+    const result = await collectRecentCandidates(ctx);
+    return { ctx, records, result };
   } finally {
     if (handles.legacyDb.open) handles.legacyDb.close();
     if (handles.isolatedCoreDb.open) handles.isolatedCoreDb.close();
@@ -468,6 +468,12 @@ test("isolated Recent falls back to legacy on archived or metadata TEXT guard fa
   assert.equal(candidateFallback.ctx.debug.recent_access_mode, "guarded_fallback");
   assert.equal(candidateFallback.ctx.debug.recent_isolated_fallback_reason, "isolated_recent_core_candidate_id_invariant_failed");
   assert.deepEqual(ids(candidateFallback.ctx.channels.recent), ["legacy"]);
+  assert.equal(candidateFallback.ctx.debug.recent_shadow_mode, "shadow_fail_closed");
+  assert.equal(candidateFallback.ctx.debug.recent_shadow_would_fail_closed, true);
+  assert.equal(candidateFallback.ctx.debug.recent_shadow_dropped_candidate_count, 1);
+  assert.equal(candidateFallback.ctx.debug.recent_shadow_candidate_loss_ratio, 1);
+  assert.equal(candidateFallback.ctx.debug.recent_shadow_risk_level, "low");
+  assert.equal(candidateFallback.result, undefined);
 
   const metadataFallback = await (async () => {
     const ctx = makeCtx({
@@ -499,6 +505,10 @@ test("isolated Recent falls back to legacy on archived or metadata TEXT guard fa
   assert.equal(metadataFallback.debug.recent_access_mode, "guarded_fallback");
   assert.equal(metadataFallback.debug.recent_isolated_fallback_reason, "isolated_recent_metadata_duplicate_id");
   assert.deepEqual(ids(metadataFallback.channels.recent), ["legacy"]);
+  assert.equal(metadataFallback.debug.recent_shadow_mode, "shadow_fail_closed");
+  assert.equal(metadataFallback.debug.recent_shadow_would_fail_closed, true);
+  assert.equal(metadataFallback.debug.recent_shadow_dropped_candidate_count, 1);
+  assert.equal(metadataFallback.debug.recent_shadow_risk_level, "medium");
 });
 
 test("isolated Recent falls back to legacy when archived IDs are null, blob, integer, or real before Core SQL", async () => {
@@ -539,6 +549,8 @@ test("isolated Recent falls back to legacy when archived IDs are null, blob, int
     assert.equal(ctx.debug.recent_access_mode, "guarded_fallback", label);
     assert.equal(ctx.debug.recent_isolated_fallback_reason, "isolated_recent_archived_id_invariant_failed", label);
     assert.deepEqual(ids(ctx.channels.recent), ["legacy"], label);
+    assert.equal(ctx.debug.recent_shadow_mode, "shadow_fail_closed", label);
+    assert.equal(ctx.debug.recent_shadow_risk_level, "low", label);
   }
 });
 
