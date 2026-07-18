@@ -63,6 +63,7 @@
 - **事件时间治理**：见 [`adr/event-time-ownership.md`](adr/event-time-ownership.md)。不允许用 `updated_at`、文件 mtime、批量写入时间或路径日期推断精确事件时间。
 - **运行时副本同步**：见 [`runtime-sync.md`](runtime-sync.md)。源码修改只有重新安装或 reload 后才会影响 OpenClaw 实际运行插件。
 - **版本与发布身份**：见 [`release-version-policy.md`](release-version-policy.md)。只使用当前提交可达的最近发布标签；非祖先历史上的更大版本号不得覆盖当前 release line。
+- [Legacy fallback code inventory](legacy-fallback-code-inventory.md)：说明 legacy fallback 静态扫描范围、finding 分类、计数语义、完整性规则及 removal-gate 集成方式。
 
 ### 质量评估与人工治理
 

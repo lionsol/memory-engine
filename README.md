@@ -120,7 +120,7 @@ graph TD
 
 README 故意不复制 `rrfK`、topK、阈值、boost 权重等具体数值，避免文档参数与运行时代码再次漂移。调参必须同时检查配置默认值、覆盖配置、debug metadata 和测试。
 
-Legacy fallback code inventory 的顶层计数表示**已分类 finding 数量**，不是唯一文件数、测试文件数或测试用例数。同一文件中的不同符号、不同代码行或不同引用类别会分别计数；解读 inventory 时应结合 `categories` 中的明细，而不是把顶层数字直接当作文件或测试数量。
+Legacy fallback 静态影响面、finding 分类及计数规则见 [`docs/legacy-fallback-code-inventory.md`](docs/legacy-fallback-code-inventory.md)。
 
 ## 置信度生命周期
 
@@ -207,12 +207,6 @@ npm run preview:smart-add-duplicate-cleanup
 npm run memory:cleanup-orphan-confidence
 npm run smoke:console-annotation-handoff
 ```
-
-> Legacy fallback code inventory 的顶层计数表示已分类的 findings 数量，
-> 不是唯一文件数、测试文件数或测试用例数。
-> Top-level inventory counters represent classified findings,
-> not unique files or test cases.
-> Inventory 顶层计数表示 classified findings，不代表唯一文件数或测试用例数；详细口径见对应 audit 文档。
 
 所有 cleanup/apply 类命令都必须先阅读对应设计或操作协议，不能仅凭命令名称推断其是否会写库。
 
