@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-19, after the clean Stage 4 rerun review and B8-A6.4 runtime-gate config contract.
+> Last updated: 2026-07-19, after the final config-only Stage 4 rerun exposed the AutoRecall hook-contract mismatch.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -31,8 +31,9 @@ The authoritative operating procedures remain:
 | B8-A6 Stage 2 KG full rollout | CLOSED / PASS | Corrected retry produced four canonical runtime observations: `auto_recall=2`, `memory_engine_search=1`, `memory_engine_action_search=1`. All carried KG full markers, Recent remained `legacy_fallback`, and channel/fallback/schema violations were zero. |
 | B8-A6 Stage 3 KG rollback validation | CLOSED / PASS | Original configuration and `agent:main` model were restored; gateway reloaded; rollback search observation contained no KG full residue; post-rollback A5 smoke passed 10/10. |
 | B8-A6.3 observation provenance hardening | CLOSED | Shared validator now enforces canonical event/source/schema/search/completion/trace provenance and AutoRecall session provenance. Invalid rows remain auditable but are excluded from production denominators and block canary, rollout, evidence-window, and removal decisions. |
-| B8-A6 Stage 4 Recent full rollout | CLEAN RERUN INCONCLUSIVE / AUTO_RECALL SURFACE MISSING | The unmodified-runtime rerun verified KG and Recent full markers on both tool surfaces, zero fallback/error/provenance violations, and a successful rollback. It could not produce `auto_recall` because no available session satisfied the reviewed default gate `edi + interactive_user_chat + user`. Stage 4 remains open. |
-| B8-A6.4 AutoRecall runtime-gate config contract | CLOSED | The existing runtime allowlists are now declared in `openclaw.plugin.json`: `agentAllowlist`, `chatTypeAllowlist`, and `messageRoleAllowlist`. Defaults remain `edi`, `interactive_user_chat`, and `user`; controlled reruns may expand them through validated config without modifying source. |
+| B8-A6 Stage 4 Recent full rollout | FINAL CONFIG-ONLY RERUN INCONCLUSIVE / AUTO_RECALL HOST-CONTRACT MISMATCH | The reviewed runtime verified KG and Recent full markers on both tool surfaces, zero fallback/error/provenance violations, and successful rollback. `auto_recall` remained zero because `before_prompt_build` exposes `prompt/messages` plus agent context but no `chatType` or `messageRole`, while the plugin gate requires both fields. Stage 4 remains open. |
+| B8-A6.4 AutoRecall runtime-gate config contract | CLOSED / INSUFFICIENT | The existing runtime allowlists are now schema-valid configuration, and `agentAllowlist=["edi","main"]` loaded successfully. This could not solve the missing `chatType/messageRole` dimensions because those values do not exist in the host hook contract. |
+| B8-A6.5 hook-contract-compatible AutoRecall gate | OPEN / REQUIRED NEXT | Redesign the default-deny gate around fields the current OpenClaw hook actually provides, especially `ctx.agentId` and `ctx.trigger`, while preserving denial of heartbeat, cron, memory, budget, missing identity, and non-user turns. Add host-contract fixtures and controlled-run surface coverage enforcement before another Stage 4 rerun. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed full rollout, production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -287,17 +288,9 @@ rollback=PASS
 post-rollback A5=10/10
 ```
 
-The run is `INCONCLUSIVE`, not failed: the full KG/Recent wiring is healthy on both registered tool surfaces, but no available session creation path satisfied all reviewed default AutoRecall gate dimensions simultaneously:
+The first clean run was `INCONCLUSIVE`, not failed: the full KG/Recent wiring was healthy on both registered tool surfaces, but no available session creation path satisfied all reviewed default AutoRecall gate dimensions simultaneously.
 
-```text
-agent=edi
-chat_type=interactive_user_chat
-role=user
-```
-
-The runtime gate already supported config overrides, but the plugin manifest did not declare those fields while `autoRecall.additionalProperties=false`; therefore a validated config-only rerun was not yet possible.
-
-B8-A6.4 closes that contract gap by exposing:
+B8-A6.4 then exposed the existing allowlists as schema-valid configuration:
 
 ```text
 autoRecall.agentAllowlist default=["edi"]
@@ -305,7 +298,40 @@ autoRecall.chatTypeAllowlist default=["interactive_user_chat"]
 autoRecall.messageRoleAllowlist default=["user"]
 ```
 
-Defaults remain unchanged. The next rerun may temporarily add `main` to `agentAllowlist` through OpenClaw configuration, use a real main interactive user turn, and restore the original allowlist afterward. No source modification is allowed.
+The final config-only rerun successfully loaded `agentAllowlist=["edi","main"]`, but `auto_recall` remained zero. Local OpenClaw type definitions and the actual harness invocation confirm:
+
+```text
+PluginHookBeforePromptBuildEvent={prompt,messages}
+PluginHookAgentContext includes agentId, sessionId, messageProvider, channel, senderId, trigger
+PluginHookBeforePromptBuildEvent does not include chatType or messageRole
+PluginHookAgentContext does not include chatType or messageRole
+```
+
+The harness constructs the event as:
+
+```text
+promptEvent={prompt:params.prompt,messages:params.messages}
+```
+
+Normal user runs carry `ctx.trigger="user"`; heartbeat, cron, memory, budget, and other non-user paths use distinct trigger values. Therefore the blocker is not a missing external chat integration. It is a plugin/host contract mismatch: the gate treats fields absent from its selected hook as mandatory.
+
+Final config-only rerun result:
+
+```text
+auto_recall=0
+memory_engine_search=2
+memory_engine_action_search=1
+KG full markers=3/3
+Recent full markers=3/3
+fallback events=0
+channel errors=0
+invalid provenance=0
+rollback=PASS
+post-rollback A5=10/10
+Stage 4=INCONCLUSIVE
+```
+
+B8-A6.5 must replace the impossible gate dimensions with a hook-contract-compatible default-deny policy. The implementation should use trusted host fields such as `ctx.agentId` and `ctx.trigger`, preserve explicit denial of non-user execution paths, and retain compatibility handling for explicit chat/role fields only when a future host provides them.
 
 ## Continuing Safety Boundary
 
@@ -333,7 +359,7 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 
 ## Next Decision
 
-Install the reviewed B8-A6.4 manifest update, then repeat only the missing Stage 4 AutoRecall coverage through validated configuration. Temporarily expand `autoRecall.agentAllowlist` to include `main`, while retaining `interactive_user_chat` and `user`; do not modify source or installed-runtime files. Reuse or regenerate the two real tool surfaces as needed for a single authoritative Stage 4 evidence window.
+Implement and review B8-A6.5 before any further Stage 4 runtime attempt. The gate must be tested against the actual local OpenClaw `before_prompt_build` contract rather than synthetic `chat_type/message_role` fields. The full-rollout controlled-run audit must also make missing canonical surface coverage explicit so `auto_recall=0` cannot be mistaken for a closeout-ready run merely because the long-window evaluator reports only threshold gaps.
 
 A passing clean rerun must show both KG and Recent explicit full markers, zero fallback events, zero invalid provenance observations, no channel or schema errors, no scoped-canary metric leakage, and unchanged reviewed source/runtime code throughout the evidence window. After evidence export, both channels must be restored to `legacy_fallback` and the rollback must be verified in the real runtime.
 

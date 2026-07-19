@@ -1,5 +1,51 @@
 ## 2026-07-19
 
+### F1-D-B8-A6 Stage 4: final config-only rerun and host-contract mismatch review
+
+完成 `f52235e` 后的最终 config-only Stage 4 rerun review。该次运行保持 repository 与 installed runtime source 不变，正式配置接受 `autoRecall.agentAllowlist=["edi","main"]`，但仍无法产生 AutoRecall observation。
+
+#### Runtime evidence
+
+```text
+auto_recall=0
+memory_engine_search=2
+memory_engine_action_search=1
+KG full markers=3/3
+Recent full markers=3/3
+fallback events=0
+channel errors=0
+invalid provenance=0
+rollback observation=1
+post-rollback A5=10/10
+```
+
+#### Root cause verification
+
+本地 OpenClaw plugin SDK 类型与 harness 调用点确认：
+
+```text
+PluginHookBeforePromptBuildEvent={prompt,messages}
+PluginHookAgentContext includes agentId/sessionId/messageProvider/channel/senderId/trigger
+before_prompt_build event/context do not expose chatType or messageRole
+normal user run trigger="user"
+heartbeat/cron/memory/budget use distinct trigger values
+```
+
+memory-engine 的 runtime gate 在 `before_prompt_build` 上强制要求 `chatType` 和 `messageRole`，因此所有真实 main-session turn 都以 `denied_missing_chat_type` 提前退出。B8-A6.4 只解决了 manifest schema 对 allowlist config 的拒绝，无法创造宿主 hook 不提供的字段。
+
+该问题应归类为 plugin/host hook contract mismatch，而不只是缺少 Telegram、webchat 或其他外部会话基础设施。
+
+#### Decision
+
+```text
+B8-A6 Stage 4=INCONCLUSIVE / OPEN
+B8-A6.4 runtime-gate config contract=CLOSED / INSUFFICIENT
+B8-A6.5 hook-contract-compatible AutoRecall gate=OPEN / REQUIRED NEXT
+B8-B removal=NOT AUTHORIZED
+```
+
+B8-A6.5 应围绕宿主实际提供的可信字段设计 default-deny gate，优先使用 `ctx.agentId` 和 `ctx.trigger`，显式拒绝 heartbeat、cron、memory、budget、缺少 identity 和非用户 trigger；若未来宿主显式提供 chat/role 字段，可作为附加约束而不是当前 hook 的必填前置。还应补 controlled-run surface coverage contract，使 `auto_recall=0` 在 Stage 4 closeout 审计中明确阻塞，而不是只作为 30 天窗口阈值 gap。
+
 ### F1-D-B8-A6.4: AutoRecall runtime-gate config contract
 
 Stage 4 clean rerun 保持 reviewed source/runtime 不变，并成功验证 KG/Recent 双通道 full markers、两个 tool surfaces、零 fallback/error/provenance violation 和真实 rollback；但 `auto_recall=0`，因此整体结论为 `INCONCLUSIVE`。
