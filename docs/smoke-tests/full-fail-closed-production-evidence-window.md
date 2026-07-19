@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.3 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING; sustained runtime window not authorized**
+> **Status: B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -169,7 +169,11 @@ The current status is `B8-A7.3 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES R
 
 The final review fixes require scheduled-healthcheck evidence to use a tool production surface, reject surrounding whitespace in canonical timestamps, and separate parity/product health from their freshness statuses. Monitor freshness now aggregates the overall observation, every production surface, healthcheck, parity report, and product-health report; `ready_for_removal_gate` requires all corresponding health and freshness fields to be clean.
 
-The implementation status is `B8-A7.3 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING`. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
+Final review accepted implementation checkpoint `cc88825`. The shared origin validator now matches the trusted resolver's surface contract, canonical timestamps require exact UTC millisecond ISO with no surrounding whitespace, runtime parity health is distinct from report freshness, product-health freshness is explicit, and monitor freshness includes the overall observation plus every production surface, healthcheck, parity, and product-health report. A forged AutoRecall scheduled healthcheck cannot satisfy freshness or removal readiness.
+
+Independent Node 24 validation passed 57 focused tests, static-check for 467 files, the A5 safety smoke at 10/10, and the full 1597-test suite with 1589 passed, 0 failed, and 8 skipped. `code-review-graph 2.3.7` reported risk 0.55, zero affected stored flows, and five helper-level test-gap hints covered by direct tests or adversarial checks.
+
+The current status is `B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW`. This authorizes only a separate review of the sustained-runtime configuration, thresholds, monitoring cadence, and rollback plan. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
 
 ## AutoRecall Product Boundary
 
@@ -217,9 +221,9 @@ B8-B removal-gate review
 
 B8-A7.1 is closed after final review of implementation checkpoint `caf4373`. The accepted identity contract covers the local runtime dependency closure, requires all declared runtime files in filesystem and injected-entry validation paths, rejects duplicate or symlinked runtime paths, and fingerprints the same normalized effective AutoRecall/KG/Recent/retrieval configuration used by runtime behavior. Malformed higher-priority configuration fails closed and supported Recent token compatibility is preserved.
 
-A7.2 continuity and traffic-origin evidence is closed after final review of implementation checkpoint `47389d3`. This authorizes only implementation of A7.3 read-only health monitoring and stop/rollback contract. It does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, enabling sustained AutoRecall, or starting the 30-day runtime window.
+A7.2 continuity and traffic-origin evidence is closed after final review of implementation checkpoint `47389d3`; its historical closeout label is `B8-A7.2 CLOSED / READY FOR A7.3`. This authorized only implementation of A7.3 read-only health monitoring and stop/rollback contract. It does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, enabling sustained AutoRecall, or starting the 30-day runtime window.
 
-The preceding review labels remain historical evidence. The current authorization boundary is `B8-A7.2 CLOSED / READY FOR A7.3`; `B8-A7 sustained runtime window NOT AUTHORIZED` and `B8-B NOT AUTHORIZED` remain unchanged.
+The preceding review labels remain historical evidence. The current authorization boundary is `B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW`; `B8-A7 sustained runtime window NOT AUTHORIZED` and `B8-B NOT AUTHORIZED` remain unchanged.
 
 Historical A7.1 closeout state: `B8-A7.1 CLOSED / READY FOR A7.2`.
 

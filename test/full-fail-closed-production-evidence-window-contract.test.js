@@ -21,7 +21,7 @@ test("B8-A7 production evidence-window runbook exists and is indexed", () => {
   assert.match(read(DOCS_INDEX), /full-fail-closed-production-evidence-window\.md/);
 });
 
-test("runbook records final A7.3 review blockers while preserving the sustained-runtime boundary", () => {
+test("runbook closes A7.3 while preserving the sustained-runtime boundary", () => {
   const doc = read(RUNBOOK);
   for (const token of [
     "B8-A7.1 CLOSED / READY FOR A7.2",
@@ -34,13 +34,13 @@ test("runbook records final A7.3 review blockers while preserving the sustained-
     "same-lifetime duplicates remain fail closed",
     "decoded threshold JSON",
     "share one threshold contract",
-    "B8-A7.3 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED",
-    "Checkpoint `3dcd55c`",
-    "`scheduled_healthcheck` on `auto_recall`",
-    "trusted resolver",
-    "surrounding whitespace",
-    "monitor_freshness_status",
-    "runtime_parity_status",
+    "B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW",
+    "implementation checkpoint `cc88825`",
+    "A forged AutoRecall scheduled healthcheck cannot satisfy freshness or removal readiness",
+    "canonical timestamps require exact UTC millisecond ISO",
+    "runtime parity health is distinct from report freshness",
+    "monitor freshness includes the overall observation plus every production surface",
+    "full 1597-test suite with 1589 passed, 0 failed, and 8 skipped",
     "B8-A7 sustained runtime window NOT AUTHORIZED",
     "evidence_epoch_id",
     "runtime_build_identity",
@@ -64,7 +64,7 @@ test("runbook records final A7.3 review blockers while preserving the sustained-
   }
 });
 
-test("rollout ledger requires final A7.3 review fixes without authorizing sustained runtime", () => {
+test("rollout ledger closes A7.3 without authorizing sustained runtime", () => {
   const doc = read(STATUS);
   for (const token of [
     "B8-A7 sustained production evidence window",
@@ -80,13 +80,13 @@ test("rollout ledger requires final A7.3 review fixes without authorizing sustai
     "post-TTL `toolCallId` reuse",
     "shared threshold validation",
     "B8-A7.3 read-only health monitor and stop contract",
-    "REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED",
-    "Checkpoint `3dcd55c`",
-    "auto_recall",
-    "scheduled_healthcheck",
-    "surrounding whitespace",
-    "monitor_freshness_status",
-    "runtime_parity_status",
+    "CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW",
+    "implementation checkpoint `cc88825`",
+    "scheduled healthchecks are restricted to tool surfaces",
+    "canonical timestamps reject surrounding whitespace",
+    "runtime parity health is separated from parity freshness",
+    "monitor freshness includes every production surface",
+    "full 1597-test suite with 1589 passed, 0 failed, and 8 skipped",
     "long-running runtime configuration change",
     "B8-B remains unauthorized",
   ]) {
@@ -94,7 +94,7 @@ test("rollout ledger requires final A7.3 review fixes without authorizing sustai
   }
 });
 
-test("devlog records final A7.3 review findings and preserves the runtime authorization boundary", () => {
+test("devlog records A7.3 closeout and preserves the runtime authorization boundary", () => {
   const doc = read(DEVLOG);
   for (const token of [
     "F1-D-B8-A7.2: final implementation review closed",
@@ -104,16 +104,16 @@ test("devlog records final A7.3 review findings and preserves the runtime author
     "focused tests=41/41 passed",
     "full suite=1574 tests / 1566 passed / 0 failed / 8 skipped",
     "B8-A7.2=CLOSED / READY FOR A7.3",
-    "F1-D-B8-A7.3: temporal fix final review changes required",
-    "implementation checkpoint `3dcd55c`",
-    "code-review-graph risk score=0.60",
-    "focused tests=99/99 passed",
-    "auto_recall scheduled-healthcheck validator result=valid",
-    "forged auto_recall healthcheck result=ready_for_removal_gate",
-    "canonical timestamp surrounding whitespace accepted=true",
-    "stale surface with monitor_freshness_status=fresh",
-    "runtime parity drift with runtime_parity_status=fresh",
-    "B8-A7.3=REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED",
+    "F1-D-B8-A7.3: final implementation review closed",
+    "implementation checkpoint `cc88825`",
+    "code-review-graph risk score=0.55",
+    "focused tests=57/57 passed",
+    "forged auto_recall scheduled-healthcheck validator=invalid / origin_evidence_mismatch",
+    "single stale tool surface monitor_freshness_status=stale",
+    "runtime parity drift runtime_parity_status=drift",
+    "canonical timestamp leading/trailing whitespace=null",
+    "full suite=1597 tests / 1589 passed / 0 failed / 8 skipped",
+    "B8-A7.3=CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW",
     "F1-D-B8-A7: sustained production evidence-window authorization review",
     "B8-A7 design/tooling=AUTHORIZED",
     "B8-A7 sustained runtime window=NOT AUTHORIZED",
