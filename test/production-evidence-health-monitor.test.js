@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateProductionEvidenceHealth } from "../lib/recall/hybrid/production-evidence-health-monitor.js";
+import {
+  evaluateProductionEvidenceHealth,
+  freshnessStatus,
+  validateBaseline,
+  validateProductHealth,
+  validateRuntimeParity,
+} from "../lib/recall/hybrid/production-evidence-health-monitor.js";
 
 const BASELINE = {
   schema_version: 1,
@@ -140,6 +146,82 @@ test("clean short window is healthy_collecting, not rollback", () => {
   assert.equal(report.latest_healthcheck_at, "2026-07-02T00:30:00.000Z");
 });
 
+test("pre-authorization observations are excluded and stop the active epoch", () => {
+  const report = evaluate(rowsForDays(2), {
+    baseline: { ...BASELINE, authorized_at: "2026-07-02T00:00:00.000Z" },
+    asOf: "2026-07-02T02:00:00.000Z",
+  });
+  assert.equal(report.status, "blocked_rollback_required");
+  assert.ok(report.stop_conditions.some(item => item.code === "observation_before_authorization"));
+  assert.equal(report.observation_before_authorization_count, 3);
+  assert.equal(report.authorized_window_observation_count, 4);
+});
+
+test("future observations and reports are never fresh", () => {
+  const report = evaluate(rowsForDays(2), {
+    asOf: "2026-06-30T23:00:00.000Z",
+  });
+  assert.equal(report.status, "blocked_rollback_required");
+  assert.ok(report.stop_conditions.some(item => item.code === "observation_after_as_of"));
+  assert.ok(report.stop_conditions.some(item => item.code === "runtime_parity_future"));
+  assert.ok(report.stop_conditions.some(item => item.code === "product_health_future"));
+  assert.equal(freshnessStatus(Date.parse("2026-07-02T00:00:00.000Z"), Date.parse("2026-07-01T00:00:00.000Z"), 26), "future");
+});
+
+test("authorization and report timestamps obey the same window", () => {
+  const asOfAfterAuthorization = evaluate(rowsForDays(2), {
+    baseline: { ...BASELINE, authorized_at: "2026-07-03T00:00:00.000Z" },
+    asOf: "2026-07-02T02:00:00.000Z",
+  });
+  assert.ok(asOfAfterAuthorization.stop_conditions.some(item => item.code === "baseline_authorized_after_as_of"));
+
+  const parityBefore = evaluate(rowsForDays(2), {
+    baseline: { ...BASELINE, authorized_at: "2026-07-02T00:00:00.000Z" },
+    runtimeParity: { ...PARITY, checked_at: "2026-07-01T23:00:00.000Z" },
+    asOf: "2026-07-02T02:00:00.000Z",
+  });
+  assert.ok(parityBefore.stop_conditions.some(item => item.code === "runtime_parity_before_authorization"));
+
+  const productBefore = evaluate(rowsForDays(2), {
+    baseline: { ...BASELINE, authorized_at: "2026-07-02T00:00:00.000Z" },
+    productHealth: { ...HEALTH, checked_at: "2026-07-01T23:00:00.000Z" },
+    asOf: "2026-07-02T02:00:00.000Z",
+  });
+  assert.ok(productBefore.stop_conditions.some(item => item.code === "product_health_before_authorization"));
+
+  const healthcheckBefore = evaluate(rowsForDays(2), {
+    baseline: { ...BASELINE, authorized_at: "2026-07-03T00:00:00.000Z" },
+    asOf: "2026-07-03T02:00:00.000Z",
+  });
+  assert.ok(healthcheckBefore.stop_conditions.some(item => item.code === "healthcheck_before_authorization"));
+});
+
+test("invalid external timestamps fail the active monitor", () => {
+  assert.equal(validateBaseline({ ...BASELINE, authorized_at: "2026-07-01" }).valid, false);
+  assert.equal(validateRuntimeParity({ ...PARITY, checked_at: "2026-07-01T00:00:00Z" }).valid, false);
+  assert.equal(validateProductHealth({ ...HEALTH, checked_at: "2026-07-01T08:00:00+08:00" }).valid, false);
+  const report = evaluate(rowsForDays(), { asOf: "July 1, 2026" });
+  assert.equal(report.status, "blocked_rollback_required");
+  assert.ok(report.stop_conditions.some(item => item.code === "invalid_as_of"));
+});
+
+test("impossible scheduled healthcheck evidence cannot satisfy freshness", () => {
+  const observations = rowsForDays();
+  const healthcheck = observations.at(-1).metadata_json;
+  healthcheck.traffic_origin_evidence = {
+    source: "scheduled_healthcheck_wrapper",
+    agent_id_present: false,
+    run_id_present: false,
+    session_id_present: false,
+    tool_call_id_present: false,
+  };
+  const report = evaluate(observations);
+  assert.equal(report.status, "blocked_rollback_required");
+  assert.ok(report.stop_conditions.some(item => item.code === "origin_evidence_mismatch"));
+  assert.equal(report.latest_healthcheck_at, null);
+  assert.ok(report.stop_conditions.some(item => item.code === "healthcheck_missing"));
+});
+
 test("uniform but unauthorized epoch blocks active monitoring", () => {
   const report = evaluate(rowsForDays(2, { identity: { evidence_epoch_id: "other-epoch" } }));
   assert.equal(report.status, "blocked_rollback_required");
@@ -193,10 +275,16 @@ test("parity, product health, and monitor freshness stop active monitoring", () 
 
 test("operator probes do not satisfy the natural denominator", () => {
   const observations = rowsForDays(2, { origin: "operator_verification_probe" });
+  for (const observation of observations) {
+    if (observation.metadata_json.surface === "auto_recall") {
+      observation.metadata_json.traffic_origin = "natural_user_turn";
+      observation.metadata_json.traffic_origin_evidence = originEvidence("natural_user_turn");
+    }
+  }
   const report = evaluate(observations);
   assert.equal(report.status, "healthy_collecting");
-  assert.equal(report.evidence.continuity.natural_observation_count, 0);
-  assert.ok(report.evidence_gaps.some(item => item.code === "no_qualifying_natural_observations"));
+  assert.equal(report.evidence.continuity.natural_observation_count, 2);
+  assert.ok(report.evidence_gaps.some(item => item.code.startsWith("surface_observations_below_threshold:")));
   assert.equal(report.ready_for_removal_gate, false);
 });
 

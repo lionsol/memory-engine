@@ -3,9 +3,26 @@ import assert from "node:assert/strict";
 
 import {
   PRODUCTION_HYBRID_OBSERVATION_SURFACES,
+  canonicalIsoTimestamp,
   summarizeProductionHybridObservationProvenance,
   validateProductionHybridObservationProvenance,
 } from "../lib/recall/hybrid/hybrid-observation-provenance.js";
+
+test("canonical timestamp contract accepts only exact UTC millisecond ISO", () => {
+  assert.equal(canonicalIsoTimestamp("2026-07-01T00:00:00.000Z"), "2026-07-01T00:00:00.000Z");
+  for (const value of [
+    "July 1, 2026",
+    "2026-07-01",
+    "2026-07-01T00:00:00Z",
+    "2026-07-01T08:00:00+08:00",
+    "2026-02-30T00:00:00.000Z",
+    "",
+    null,
+    1,
+  ]) {
+    assert.equal(canonicalIsoTimestamp(value), null, String(value));
+  }
+});
 
 function observation(surface, overrides = {}) {
   const completedAt = Object.hasOwn(overrides, "completed_at")

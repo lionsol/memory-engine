@@ -33,7 +33,7 @@ function row(surface, origin = surface === "auto_recall" ? "natural_user_turn" :
   const evidence = origin === "natural_user_turn"
     ? { source: "before_prompt_build", agent_id_present: true, run_id_present: true, session_id_present: true, tool_call_id_present: false, trigger: "user" }
     : origin === "scheduled_healthcheck"
-      ? { source: "scheduled_healthcheck_wrapper", agent_id_present: true, run_id_present: false, session_id_present: true, tool_call_id_present: false }
+      ? { source: "scheduled_healthcheck_wrapper", agent_id_present: true, run_id_present: false, session_id_present: true, tool_call_id_present: true }
       : { source: "before_tool_call_agent", agent_id_present: true, run_id_present: true, session_id_present: true, tool_call_id_present: true };
   return {
     event_type: "hybrid_search_observation",
@@ -115,6 +115,22 @@ test("CLI maps statuses and rejects unknown or malformed input", async () => {
   const observations = fixture("observations.json", JSON.stringify([]));
   await assert.rejects(() => auditProductionEvidenceHealth(args(observations, { baseline: null })), /baseline JSON must be an object/);
   await assert.rejects(() => auditProductionEvidenceHealth(args(observations, { asOf: "not-iso" })), /ISO timestamp/);
+});
+
+test("CLI rejects non-canonical UTC timestamps with input error semantics", async () => {
+  const observations = fixture("observations.json", JSON.stringify([row("auto_recall")]));
+  for (const value of ["July 1, 2026", "2026-07-01", "2026-07-01T00:00:00Z", "2026-07-01T08:00:00+08:00"]) {
+    await assert.rejects(() => auditProductionEvidenceHealth(args(observations, { asOf: value })), /canonical UTC ISO timestamp/);
+  }
+  await assert.rejects(() => auditProductionEvidenceHealth(args(observations, {
+    baseline: { ...baseline, authorized_at: "2026-07-01" },
+  })), /invalid_baseline_authorized_at/);
+  await assert.rejects(() => auditProductionEvidenceHealth(args(observations, {
+    parity: { ...parity, checked_at: "2026-07-01T00:00:00Z" },
+  })), /invalid_runtime_parity_checked_at/);
+  await assert.rejects(() => auditProductionEvidenceHealth(args(observations, {
+    health: { ...health, checked_at: "2026-07-01T08:00:00+08:00" },
+  })), /invalid_product_health_checked_at/);
 });
 
 test("CLI rejects primitive threshold documents before evaluation", async () => {

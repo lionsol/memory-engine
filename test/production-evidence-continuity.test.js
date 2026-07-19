@@ -40,10 +40,10 @@ function observation(surface, timestamp, origin = surface === "auto_recall" ? "n
         }
         : {
           source: origin === "scheduled_healthcheck" ? "scheduled_healthcheck_wrapper" : "before_tool_call",
-          agent_id_present: false,
+          agent_id_present: origin === "scheduled_healthcheck",
           run_id_present: false,
-          session_id_present: false,
-          tool_call_id_present: false,
+          session_id_present: origin === "scheduled_healthcheck",
+          tool_call_id_present: origin === "scheduled_healthcheck",
           trigger: null,
         };
   return {

@@ -97,8 +97,9 @@ This command reads supplied evidence reports only. It never opens a database, co
 async function auditProductionEvidenceHealth(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   if (options.help) return { exitCode: 0, output: usage(), report: null };
-  if (options.asOf !== undefined && !Number.isFinite(Date.parse(options.asOf))) {
-    throw new Error("--as-of expects an ISO timestamp");
+  const { canonicalIsoTimestamp } = await import("../lib/recall/hybrid/hybrid-observation-provenance.js");
+  if (options.asOf !== undefined && !canonicalIsoTimestamp(options.asOf)) {
+    throw new Error("--as-of expects a canonical UTC ISO timestamp");
   }
   const {
     evaluateProductionEvidenceHealth,
