@@ -1,5 +1,53 @@
 ## 2026-07-19
 
+### F1-D-B8-A6 Stage 4: Recent full rollout authorization review
+
+完成 Stage 4 的 operator authorization review，但尚未执行真实 runtime rollout。
+
+#### Authorization basis
+
+- 用户在确认 B8 属于 P0-A / F1-D Hybrid DB isolation 主线后，明确要求继续后续工作。
+- 已关闭的前置阶段：
+  - B8-A5 safety smoke；
+  - B8-A6 Stage 1 KG scoped canary；
+  - B8-A6 Stage 2 KG full rollout；
+  - B8-A6 Stage 3 KG rollback；
+  - B8-A6.3 observation provenance hardening。
+- Stage 4 受控 runbook 已定义双通道 full markers、三 surface evidence、stop conditions、canonical export、evidence evaluator 和 rollback discipline。
+
+#### Review validation
+
+Node 24 targeted authorization review：
+
+```text
+103 tests
+103 passed
+0 failed
+```
+
+覆盖：
+
+- manifest/config full fail-closed contract；
+- A5 deterministic safety smoke；
+- KG/Recent full-mode channel isolation；
+- Recent fail-closed runtime policy；
+- Recent readiness/review/expansion evaluators；
+- Recent rollback validation；
+- canonical observation provenance；
+- full-rollout evidence evaluator；
+- legacy removal gate continued blocking。
+
+#### Decision
+
+```text
+B8-A6 Stage 4 Recent full rollout=AUTHORIZED / PENDING RUNTIME EXECUTION
+B8-B legacy fallback removal=NOT AUTHORIZED
+```
+
+Stage 4 必须由 edi 按受控 runbook 执行真实 runtime rollout：先备份配置和确认 source/runtime parity，双通道切换到 `full_fail_closed`，执行三 production surfaces，导出 canonical evidence，要求零 fallback/error/schema/marker/provenance violation，然后恢复双通道 `legacy_fallback` 并验证真实 rollback。
+
+本阶段只更新 authorization ledger 和测试契约，没有修改 runtime config、没有 reload gateway、没有访问真实 DB、没有 memory mutation、没有执行 Stage 4、没有授权 B8-B、没有 push。
+
 ### F1-D-B8-A6.3: Hybrid observation provenance hardening
 
 完成 Hybrid production observation provenance 的统一校验与决策链接入，修复“metadata marker 正确但并非真实 runtime observation”仍可能进入 production evidence 的缺口。

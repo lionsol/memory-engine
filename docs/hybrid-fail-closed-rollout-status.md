@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-19, after F1-D-B8-A6.3 observation provenance hardening.
+> Last updated: 2026-07-19, after F1-D-B8-A6 Stage 4 authorization review.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -31,7 +31,7 @@ The authoritative operating procedures remain:
 | B8-A6 Stage 2 KG full rollout | CLOSED / PASS | Corrected retry produced four canonical runtime observations: `auto_recall=2`, `memory_engine_search=1`, `memory_engine_action_search=1`. All carried KG full markers, Recent remained `legacy_fallback`, and channel/fallback/schema violations were zero. |
 | B8-A6 Stage 3 KG rollback validation | CLOSED / PASS | Original configuration and `agent:main` model were restored; gateway reloaded; rollback search observation contained no KG full residue; post-rollback A5 smoke passed 10/10. |
 | B8-A6.3 observation provenance hardening | CLOSED | Shared validator now enforces canonical event/source/schema/search/completion/trace provenance and AutoRecall session provenance. Invalid rows remain auditable but are excluded from production denominators and block canary, rollout, evidence-window, and removal decisions. |
-| B8-A6 Stage 4 Recent full rollout | REVIEW ELIGIBLE / NOT AUTHORIZED | KG wiring and rollback are verified, but Stage 4 execution requires a separate operator decision after provenance hardening and runbook review. |
+| B8-A6 Stage 4 Recent full rollout | AUTHORIZED / PENDING RUNTIME EXECUTION | Operator continuation approval was given after A6.3 closeout. Static/runtime-contract review passed 103/103 targeted tests. Execution must follow the controlled runbook, exercise all three production surfaces, export canonical evidence, and rollback both channels before closeout. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed full rollout, production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -205,17 +205,53 @@ A5 safety smoke=10/10
 full suite=1476 passed, 0 failed, 8 skipped
 ```
 
+## Stage 4 Authorization Review
+
+The operator explicitly approved continuation on 2026-07-19 after reviewing the relationship between B8 and P0-A. Stage 4 is therefore authorized for controlled runtime execution, but it is not yet closed or passed.
+
+Authorization basis:
+
+```text
+B8-A5 safety smoke=CLOSED
+B8-A6 Stage 1 scoped canary=CLOSED
+B8-A6 Stage 2 KG full rollout=CLOSED / PASS
+B8-A6 Stage 3 KG rollback=CLOSED / PASS
+B8-A6.3 provenance hardening=CLOSED
+Stage 4 targeted authorization review tests=103/103 passed
+```
+
+The review covered:
+
+- explicit KG and Recent `full_fail_closed` configuration;
+- channel isolation and scoped-canary metric separation;
+- three-surface production evidence requirements;
+- canonical provenance enforcement;
+- immediate stop conditions;
+- Recent rollback validation;
+- continued B8-B removal blocking.
+
+Stage 4 execution must:
+
+1. save the current OpenClaw configuration and runtime identity;
+2. verify source/runtime parity and A5 10/10 immediately before rollout;
+3. set both KG and Recent to `full_fail_closed`;
+4. execute real `auto_recall`, `memory_engine_search`, and `memory_engine_action_search` surfaces;
+5. export only canonical observations from the real Engine DB;
+6. require zero fallback, channel-error, schema, marker, and provenance violations;
+7. restore both channels to `legacy_fallback` and verify rollback with fresh runtime evidence;
+8. leave B8-B removal unauthorized.
+
 ## Continuing Safety Boundary
 
-Stage 2/3 closeout does not authorize:
+Stage 4 authorization does not authorize:
 
-- Recent full rollout without a separate operator decision;
 - memory mutation, `cite`, reinforcement, add, update, archive, or delete;
 - intentional corruption of capability, topology, TEXT-ID invariants, or production data;
+- synthetic or manually inserted production observations;
 - removal of legacy SQL, query definitions, call sites, or `withLegacyDb` reachability;
 - push or release publication.
 
-Even a successful Stage 2/3 result does not authorize B8-B removal.
+Stage 4 is authorized only for the controlled rollout and rollback procedure. It does not authorize B8-B removal.
 
 ## Relevant Commits
 
@@ -228,8 +264,8 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 
 ## Next Decision
 
-B8-A6.3 is complete. Stage 4 may now enter a separate operator review for Recent full rollout.
+Execute B8-A6 Stage 4 under the controlled runtime runbook. Stage 4 remains `PENDING RUNTIME EXECUTION` until real three-surface evidence and a subsequent rollback are reviewed.
 
-Stage 4 must not be inferred from `REVIEW ELIGIBLE`, and it must repeat the three-surface runtime evidence and rollback discipline with both KG and Recent explicit full markers. B8-B removal remains unauthorized until the required production evidence window, zero fallback and invalid-provenance counts, tested post-removal rollback, complete inventory, and removal gate are independently satisfied.
+A passing Stage 4 run must show both KG and Recent explicit full markers, zero fallback events, zero invalid provenance observations, no channel or schema errors, and no scoped-canary metric leakage. After evidence export, both channels must be restored to `legacy_fallback` and the rollback must be verified in the real runtime.
 
-Even the successful Stage 2/3 result does not authorize B8-B removal.
+B8-B removal remains unauthorized until the required production evidence window, zero fallback and invalid-provenance counts, tested post-removal rollback strategy, complete inventory, and removal gate are independently satisfied.

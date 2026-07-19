@@ -18,7 +18,7 @@ test("Hybrid fail-closed rollout ledger exists and is indexed", () => {
   assert.match(index, /tool-surface-runtime-access-audit\.md/);
 });
 
-test("rollout ledger records Stage 2 and Stage 3 closeout plus the provenance boundary", () => {
+test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage 4 authorization", () => {
   const doc = read(STATUS_DOC);
   for (const token of [
     "Status: Current rollout ledger",
@@ -37,7 +37,9 @@ test("rollout ledger records Stage 2 and Stage 3 closeout plus the provenance bo
     "hybrid-observation-provenance.md",
     "invalid_provenance_observation_count",
     "id=11087",
-    "REVIEW ELIGIBLE / NOT AUTHORIZED",
+    "AUTHORIZED / PENDING RUNTIME EXECUTION",
+    "Stage 4 Authorization Review",
+    "103/103 passed",
     "B8-B legacy fallback removal",
     "NOT AUTHORIZED",
   ]) {
@@ -55,7 +57,8 @@ test("rollout ledger preserves runtime and mutation safety boundaries", () => {
     "reinforcement",
     "intentional corruption",
     "push or release publication",
-    "Even a successful Stage 2/3 result does not authorize B8-B removal",
+    "Stage 4 is authorized only for the controlled rollout and rollback procedure",
+    "It does not authorize B8-B removal",
   ]) {
     assert.equal(doc.includes(token), true, `missing safety boundary token: ${token}`);
   }
@@ -68,7 +71,7 @@ test("runtime sync documentation uses the inspected extension install path", () 
   assert.doesNotMatch(doc, /\.\.\/\.\.\/extensions\/memory-engine/);
 });
 
-test("devlog records Stage 1, corrected Stage 2/3 closeout, and B8-A6.3", () => {
+test("devlog records Stage 1, corrected Stage 2/3 closeout, B8-A6.3, and Stage 4 authorization", () => {
   const devlog = read(DEVLOG);
   for (const token of [
     "## 2026-07-19",
@@ -77,6 +80,9 @@ test("devlog records Stage 1, corrected Stage 2/3 closeout, and B8-A6.3", () => 
     "auto_recall=2",
     "Stage 2 KG full rollout: PASS",
     "Stage 3 KG rollback: PASS",
+    "F1-D-B8-A6 Stage 4: Recent full rollout authorization review",
+    "AUTHORIZED / PENDING RUNTIME EXECUTION",
+    "103 tests",
     "F1-D-B8-A6.3: Hybrid observation provenance hardening",
     "invalid_provenance_observation_count",
     "id=11087",
