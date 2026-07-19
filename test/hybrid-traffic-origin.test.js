@@ -4,6 +4,7 @@ import {
   createHybridTrafficOriginRegistry,
   resolveHybridTrafficOrigin,
   TRAFFIC_ORIGIN_SCHEMA_VERSION,
+  validateHybridTrafficOriginEvidence,
 } from "../lib/recall/hybrid/traffic-origin.js";
 import { buildHybridSearchObservation } from "../lib/recall/hybrid-observation.js";
 
@@ -81,6 +82,65 @@ test("trusted operator and healthcheck wrappers stay outside the natural denomin
   });
   assert.equal(probe.origin, "operator_verification_probe");
   assert.equal(healthcheck.origin, "scheduled_healthcheck");
+});
+
+test("shared origin validator accepts resolver contracts and rejects invalid surface combinations", () => {
+  const cases = [
+    ["auto_recall", "natural_user_turn", {
+      source: "before_prompt_build",
+      agent_id_present: true,
+      run_id_present: true,
+      session_id_present: true,
+      tool_call_id_present: false,
+      trigger: "user",
+    }, true],
+    ["memory_engine_search", "natural_agent_tool_call", {
+      source: "before_tool_call_agent",
+      agent_id_present: true,
+      run_id_present: true,
+      session_id_present: true,
+      tool_call_id_present: true,
+    }, true],
+    ["memory_engine_action_search", "operator_verification_probe", {
+      source: "gateway_tools_invoke",
+      agent_id_present: true,
+      run_id_present: false,
+      session_id_present: true,
+      tool_call_id_present: true,
+      tool_call_transport: "http",
+    }, true],
+    ["memory_engine_search", "scheduled_healthcheck", {
+      source: "scheduled_healthcheck_wrapper",
+      agent_id_present: true,
+      run_id_present: false,
+      session_id_present: true,
+      tool_call_id_present: true,
+    }, true],
+    ["memory_engine_action_search", "scheduled_healthcheck", {
+      source: "scheduled_healthcheck_wrapper",
+      agent_id_present: true,
+      run_id_present: false,
+      session_id_present: true,
+      tool_call_id_present: true,
+    }, true],
+    ["auto_recall", "scheduled_healthcheck", {
+      source: "scheduled_healthcheck_wrapper",
+      agent_id_present: true,
+      run_id_present: false,
+      session_id_present: true,
+      tool_call_id_present: true,
+    }, false],
+  ];
+  for (const [surface, origin, evidence, expected] of cases) {
+    const result = validateHybridTrafficOriginEvidence({
+      surface,
+      origin,
+      evidence,
+      valid: true,
+      reasons: [],
+    });
+    assert.equal(result.valid, expected, `${surface}:${origin}`);
+  }
 });
 
 test("host-shaped before_tool_call context does not require trigger or unsupported hints", () => {

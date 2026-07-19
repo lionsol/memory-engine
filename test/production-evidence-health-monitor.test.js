@@ -126,6 +126,20 @@ function rowsForDays(days = 2, options = {}) {
   return rows;
 }
 
+function fullWindowRows() {
+  const observations = rowsForDays(31, { includeHealthcheck: false });
+  for (let day = 0; day < 31; day += 1) {
+    const date = `2026-07-${String(day + 1).padStart(2, "0")}`;
+    for (let index = 1; index < 17; index += 1) {
+      for (const surface of ["auto_recall", "memory_engine_search", "memory_engine_action_search"]) {
+        observations.push(row(surface, `${date}T00:${String(index).padStart(2, "0")}:00.000Z`));
+      }
+    }
+  }
+  observations.push(row("memory_engine_search", "2026-08-01T00:30:00.000Z", { origin: "scheduled_healthcheck" }));
+  return observations;
+}
+
 function evaluate(observations, overrides = {}) {
   return evaluateProductionEvidenceHealth({
     observations,
@@ -259,6 +273,7 @@ test("parity, product health, and monitor freshness stop active monitoring", () 
   const parity = evaluate(rowsForDays(), { runtimeParity: { ...PARITY, source_runtime_equal: false } });
   assert.equal(parity.status, "blocked_rollback_required");
   assert.ok(parity.stop_conditions.some(item => item.code === "runtime_source_parity_drift"));
+  assert.equal(parity.runtime_parity_status, "drift");
 
   const product = evaluate(rowsForDays(), { productHealth: { ...HEALTH, status: "rollback_required", blockers: ["quality_regression"] } });
   assert.equal(product.status, "blocked_rollback_required");
@@ -271,6 +286,9 @@ test("parity, product health, and monitor freshness stop active monitoring", () 
   });
   assert.equal(stale.status, "blocked_rollback_required");
   assert.ok(stale.stop_conditions.some(item => item.code === "healthcheck_stale"));
+  assert.equal(stale.runtime_parity_status, "clean");
+  assert.equal(stale.runtime_parity_freshness_status, "stale");
+  assert.notEqual(stale.monitor_freshness_status, "fresh");
 });
 
 test("operator probes do not satisfy the natural denominator", () => {
@@ -289,16 +307,7 @@ test("operator probes do not satisfy the natural denominator", () => {
 });
 
 test("complete identity, continuity, full rollout, and fresh monitor evidence is ready for the removal gate", () => {
-  const observations = rowsForDays(31, { includeHealthcheck: false });
-  for (let day = 0; day < 31; day += 1) {
-    const date = `2026-07-${String(day + 1).padStart(2, "0")}`;
-    for (let index = 1; index < 17; index += 1) {
-      for (const surface of ["auto_recall", "memory_engine_search", "memory_engine_action_search"]) {
-        observations.push(row(surface, `${date}T00:${String(index).padStart(2, "0")}:00.000Z`));
-      }
-    }
-  }
-  observations.push(row("memory_engine_search", "2026-08-01T00:30:00.000Z", { origin: "scheduled_healthcheck" }));
+  const observations = fullWindowRows();
   const report = evaluate(observations, {
     asOf: "2026-08-01T01:00:00.000Z",
     runtimeParity: { ...PARITY, checked_at: "2026-08-01T00:40:00.000Z" },
@@ -307,6 +316,30 @@ test("complete identity, continuity, full rollout, and fresh monitor evidence is
   assert.equal(report.status, "ready_for_removal_gate");
   assert.equal(report.rollback_required, false);
   assert.equal(report.ready_for_removal_gate, true);
+  assert.equal(report.runtime_parity_status, "clean");
+  assert.equal(report.runtime_parity_freshness_status, "fresh");
+  assert.equal(report.product_health_status, "healthy");
+  assert.equal(report.product_health_freshness_status, "fresh");
+  assert.equal(report.monitor_freshness_status, "fresh");
+  assert.deepEqual(Object.values(report.observation_freshness_status_by_surface), ["fresh", "fresh", "fresh"]);
+});
+
+test("scheduled healthcheck on AutoRecall cannot make a complete window removal-ready", () => {
+  const observations = fullWindowRows();
+  const healthcheck = observations.at(-1);
+  healthcheck.source = "hybrid.auto_recall";
+  healthcheck.session_id = "session-1";
+  healthcheck.metadata_json.surface = "auto_recall";
+  const report = evaluate(observations, {
+    asOf: "2026-08-01T01:00:00.000Z",
+    runtimeParity: { ...PARITY, checked_at: "2026-08-01T00:40:00.000Z" },
+    productHealth: { ...HEALTH, checked_at: "2026-08-01T00:40:00.000Z" },
+  });
+  assert.equal(report.status, "blocked_rollback_required");
+  assert.equal(report.ready_for_removal_gate, false);
+  assert.ok(report.stop_conditions.some(item => item.code === "origin_evidence_mismatch"));
+  assert.equal(report.latest_healthcheck_at, null);
+  assert.ok(report.stop_conditions.some(item => item.code === "healthcheck_missing"));
 });
 
 test("inactive baseline stays insufficient and never authorizes removal", () => {

@@ -17,6 +17,9 @@ test("canonical timestamp contract accepts only exact UTC millisecond ISO", () =
     "2026-07-01T08:00:00+08:00",
     "2026-02-30T00:00:00.000Z",
     "",
+    " 2026-07-01T00:00:00.000Z",
+    "2026-07-01T00:00:00.000Z ",
+    "\t2026-07-01T00:00:00.000Z",
     null,
     1,
   ]) {

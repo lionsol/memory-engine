@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.3 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED; sustained runtime window not authorized**
+> **Status: B8-A7.3 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -166,6 +166,10 @@ Checkpoint `3dcd55c` binds every child evaluator to the same `authorized_at <= c
 Final review found three remaining contract defects. First, `validateHybridTrafficOriginEvidence()` accepts `scheduled_healthcheck` on `auto_recall`, while the trusted resolver routes AutoRecall only through `before_prompt_build`; a forged AutoRecall healthcheck can therefore satisfy freshness and produce `ready_for_removal_gate`. Second, the exact canonical UTC ISO helper trims surrounding whitespace and accepts the trimmed value. Third, the summary fields are internally inconsistent: `monitor_freshness_status` can be `fresh` while a production surface is stale, and `runtime_parity_status` can be `fresh` while source/runtime drift is an active stop condition. These checks remain report-only and do not authorize a sustained runtime window.
 
 The current status is `B8-A7.3 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED`. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
+
+The final review fixes require scheduled-healthcheck evidence to use a tool production surface, reject surrounding whitespace in canonical timestamps, and separate parity/product health from their freshness statuses. Monitor freshness now aggregates the overall observation, every production surface, healthcheck, parity report, and product-health report; `ready_for_removal_gate` requires all corresponding health and freshness fields to be clean.
+
+The implementation status is `B8-A7.3 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING`. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
 
 ## AutoRecall Product Boundary
 

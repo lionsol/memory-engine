@@ -119,7 +119,7 @@ test("CLI maps statuses and rejects unknown or malformed input", async () => {
 
 test("CLI rejects non-canonical UTC timestamps with input error semantics", async () => {
   const observations = fixture("observations.json", JSON.stringify([row("auto_recall")]));
-  for (const value of ["July 1, 2026", "2026-07-01", "2026-07-01T00:00:00Z", "2026-07-01T08:00:00+08:00"]) {
+  for (const value of ["July 1, 2026", "2026-07-01", "2026-07-01T00:00:00Z", "2026-07-01T08:00:00+08:00", " 2026-07-01T00:00:00.000Z", "2026-07-01T00:00:00.000Z "]) {
     await assert.rejects(() => auditProductionEvidenceHealth(args(observations, { asOf: value })), /canonical UTC ISO timestamp/);
   }
   await assert.rejects(() => auditProductionEvidenceHealth(args(observations, {

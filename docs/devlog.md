@@ -8939,6 +8939,10 @@ git diff --check
 - status: `B8-A7.1 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING`; A7.2, sustained runtime authorization, and B8-B remain unauthorized.
 ## 2026-07-20
 
+### F1-D-B8-A7.3: final evidence status fixes implemented
+
+Implemented the final A7.3 review fixes: scheduled-healthcheck evidence is now limited to tool surfaces, canonical UTC timestamps reject surrounding whitespace, parity health is distinct from parity freshness, and monitor freshness includes all canonical surfaces plus healthcheck, parity, and product-health evidence. `B8-A7.3 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING`; sustained runtime remains unauthorized and B8-B remains unauthorized.
+
 ### F1-D-B8-A7.3: temporal evidence fixes implemented
 
 Implemented the review fixes for authorized evidence boundaries and scheduled-healthcheck provenance. The monitor now uses one canonical UTC ISO timestamp contract, partitions active-epoch observations by `authorized_at` and explicit `asOf`, rejects future evidence as a stop condition, and feeds the same authorized set to identity, continuity, fallback-window, and full-rollout evaluators. Healthcheck freshness now requires the registration-owned wrapper identity fields. `B8-A7.3 REVIEW FIXES IMPLEMENTED / REVIEW PENDING`; the sustained runtime window and B8-B remain unauthorized.
