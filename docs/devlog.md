@@ -1,5 +1,28 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.1: third implementation review changes required
+
+复核 implementation checkpoint `e607019`。第二轮要求的 root runtime dependency hashing、AutoRecall `topK` compatibility、retrieval-sensitive config fingerprint、environment thresholds 和 malformed field handling 已大体实现，42 个定向测试通过；但最终对抗 review 仍确认三个 fail-closed/compatibility 缺口，因此 A7.1 尚不能关闭，也不能进入 A7.2。
+
+```text
+malformed high-priority autoRecall source rejected=false
+Recent canary single-value token alias preserved=false
+dependency closure guard covers non-lib subdirectories=false
+injected fileEntries require declared root runtime files=false
+B8-A7.1=REVIEW FIXES IMPLEMENTED / THIRD REVIEW CHANGES REQUIRED
+B8-A7.2=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+具体证据：
+
+- 当 `pluginConfig.autoRecall="bad"`、低优先级 `pluginEntryConfig.autoRecall.enabled=true` 时，resolver 静默跳过非法高优先级值并启用低优先级配置，返回 `valid=true`；这违反高优先级 malformed config 必须 fail closed 的不变量。
+- Recent fail-closed policy 支持 `canary.token`、`tokenAllowlist` 和 `tokens`，但 normalized resolver 仅保留后两者。`token` 会被静默丢弃，改变既有 scoped-canary 行为且仍返回 `valid=true`。
+- dependency-closure test 对任意包含 `/` 且不位于 `lib/` 的目标直接跳过，未来新增 `runtime/foo.js` 等本地依赖不会触发失败；同时 `buildRuntimeBuildIdentity({ fileEntries })` 只要求三个入口文件，省略全部声明的 root runtime files 仍返回 `valid=true`。
+
+本 review 只更新台账和契约，不修改实现、不访问真实 DB、不 install/reload plugin、不修改真实配置、不启动 A7 runtime、不进入 B8-B。
+
 ### F1-D-B8-A7.1: dependency/config closure fixes implemented
 
 完成第二轮 identity closure：runtime identity 纳入声明的根目录 runtime dependency scope 与 `lib/**`，effective config 复用 `getMemoryEngineConfig` 的结果并保留 AutoRecall `topK` fallback；recall/ranking/confidence 和非敏感环境阈值进入 fingerprint，malformed compatibility values 使用安全运行值并使 evidence identity invalid。

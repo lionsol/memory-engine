@@ -24,11 +24,10 @@ test("B8-A7 production evidence-window runbook exists and is indexed", () => {
 test("runbook blocks sustained runtime until identity continuity origin and monitoring exist", () => {
   const doc = read(RUNBOOK);
   for (const token of [
-    "B8-A7.1 IMPLEMENTED / REVIEW CHANGES REQUIRED",
-    "B8-A7.1 second review changes required",
-    "root-level runtime dependencies",
-    "memoryEngine.recall",
-    "memoryEngine.recall.topK",
+    "B8-A7.1 third review changes required",
+    "malformed higher-priority `autoRecall`",
+    "single-value `token` alias",
+    "dependency-closure validation",
     "B8-A7 design authorized; sustained runtime window not authorized",
     "evidence_epoch_id",
     "runtime_build_identity",
@@ -58,12 +57,10 @@ test("rollout ledger records A7 design authorization without runtime authorizati
     "B8-A7 sustained production evidence window",
     "DESIGN AUTHORIZED / RUNTIME NOT AUTHORIZED",
     "B8-A7.1 evidence epoch and deployment identity",
-    "IMPLEMENTED / SECOND REVIEW CHANGES REQUIRED",
-    "root-level runtime dependencies",
-    "query-utils.js",
-    "memoryEngine.recall.topK",
-    "memoryEngine.recall",
-    "ranking",
+    "REVIEW FIXES IMPLEMENTED / THIRD REVIEW CHANGES REQUIRED",
+    "malformed high-priority `autoRecall` object",
+    "single-value `token` alias",
+    "dependency-closure guard",
     "B8-A7.2 continuity and traffic-origin evidence",
     "B8-A7.3 read-only health monitor and stop contract",
     "long-running runtime configuration change",
@@ -76,10 +73,11 @@ test("rollout ledger records A7 design authorization without runtime authorizati
 test("devlog preserves A7 safety boundary", () => {
   const doc = read(DEVLOG);
   for (const token of [
-    "F1-D-B8-A7.1: second implementation review changes required",
-    "B8-A7.1=IMPLEMENTED / SECOND REVIEW CHANGES REQUIRED",
-    "root-level runtime dependency coverage=incomplete",
-    "retrieval-sensitive memoryEngine config fingerprinted=false",
+    "F1-D-B8-A7.1: third implementation review changes required",
+    "B8-A7.1=REVIEW FIXES IMPLEMENTED / THIRD REVIEW CHANGES REQUIRED",
+    "malformed high-priority autoRecall source rejected=false",
+    "Recent canary single-value token alias preserved=false",
+    "dependency closure guard covers non-lib subdirectories=false",
     "B8-A7.2=NOT STARTED",
     "F1-D-B8-A7: sustained production evidence-window authorization review",
     "B8-A7 design/tooling=AUTHORIZED",

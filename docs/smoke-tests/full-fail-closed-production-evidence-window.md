@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.1 dependency/config closure fixes implemented / review pending; B8-A7.2 not started; sustained runtime window not authorized**
+> **Status: B8-A7.1 third review changes required; B8-A7.2 not started; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -189,8 +189,8 @@ B8-A7 sustained production evidence window
 B8-B removal-gate review
 ```
 
-B8-A7.1 dependency/config closure fixes are implemented but review-pending. The runtime identity now covers declared root-level runtime dependencies and `lib/**`; effective config identity includes retrieval-sensitive recall/ranking/confidence and non-secret environment thresholds, preserves the effective AutoRecall `topK` fallback, and fails closed on malformed compatibility values. This does not authorize A7.2, enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, or starting the sustained runtime window.
+B8-A7.1 dependency/config closure is substantially implemented, but third-review changes remain. A malformed higher-priority `autoRecall` object must be rejected instead of silently falling through to lower-priority configuration; the Recent canary single-value `token` alias must remain compatible; and dependency-closure validation must not skip non-`lib/` subdirectories or accept injected identity entries that omit declared root runtime files. This does not authorize A7.2, enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, or starting the sustained runtime window.
 
-The preceding gate records were `B8-A7.1 IMPLEMENTED / REVIEW CHANGES REQUIRED` and `B8-A7.1 second review changes required`; the second review identified omitted root-level runtime dependencies and the `memoryEngine.recall.topK` / retrieval-sensitive config closure gap. Its authorization boundary was `B8-A7 design authorized; sustained runtime window not authorized`. Those phrases remain historical evidence, not the current review status.
+The preceding gate records were `B8-A7.1 IMPLEMENTED / REVIEW CHANGES REQUIRED`, `B8-A7.1 second review changes required`, and `B8-A7.1 dependency/config closure fixes implemented / review pending`. They remain historical evidence. The current authorization boundary is still `B8-A7 design authorized; sustained runtime window not authorized`.
 
 B8-B remains `NOT AUTHORIZED` throughout A7 implementation and evidence collection.
