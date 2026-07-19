@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -43,17 +43,46 @@ test("runtime file additions, changes, and deletions change identity", () => {
   writeFileSync(resolve(root, "lib/runtime.js"), "export const runtime = 2;\n");
   const changed = buildRuntimeBuildIdentity({ rootDir: root });
   assert.notEqual(changed.identity, added.identity);
+  unlinkSync(resolve(root, "lib/new-runtime.js"));
+  const deleted = buildRuntimeBuildIdentity({ rootDir: root });
+  assert.notEqual(deleted.identity, changed.identity);
+  writeFileSync(resolve(root, "package.json"), "{\"type\":\"module\",\"revision\":2}\n");
+  const packageChanged = buildRuntimeBuildIdentity({ rootDir: root });
+  assert.notEqual(packageChanged.identity, deleted.identity);
 });
 
-test("missing required entry and escaping symlink are explicit invalid results", () => {
+test("missing required entries are explicit invalid results", () => {
   const root = fixtureRoot();
-  writeFileSync(resolve(root, "index.js"), "");
-  const missing = buildRuntimeBuildIdentity({
-    rootDir: root,
-    fileEntries: [{ path: "openclaw.plugin.json", content: "{}" }],
-  });
-  assert.equal(missing.valid, false);
-  assert.ok(missing.errors.some(error => error.startsWith("missing_required_file:index.js")));
+  for (const file of ["index.js", "openclaw.plugin.json", "package.json"]) {
+    unlinkSync(resolve(root, file));
+    const missing = buildRuntimeBuildIdentity({ rootDir: root });
+    assert.equal(missing.valid, false, file);
+    assert.ok(missing.errors.some(error => error.startsWith(`missing_required_file:${file}`)), file);
+    writeFileSync(resolve(root, file), file === "index.js" ? "export const entry = 1;\n" : "{}\n");
+  }
+});
+
+test("required and runtime-scope symlinks fail closed", () => {
+  const root = fixtureRoot();
+  for (const file of ["index.js", "openclaw.plugin.json", "package.json"]) {
+    const source = resolve(root, file);
+    const target = resolve(root, `target-${file}`);
+    writeFileSync(target, readFileForTest(source));
+    unlinkSync(source);
+    symlinkSync(target, source);
+    const result = buildRuntimeBuildIdentity({ rootDir: root });
+    assert.equal(result.valid, false, file);
+    assert.ok(result.errors.some(error => error.startsWith(`missing_required_file:${file}`)), file);
+    unlinkSync(source);
+    writeFileSync(source, file === "index.js" ? "export const entry = 1;\n" : "{}\n");
+  }
+
+  const internalFileTarget = resolve(root, "lib/internal-target.js");
+  writeFileSync(internalFileTarget, "export const internal = 1;\n");
+  symlinkSync(internalFileTarget, resolve(root, "lib/internal-link.js"));
+  const internalFile = buildRuntimeBuildIdentity({ rootDir: root });
+  assert.equal(internalFile.valid, false);
+  assert.ok(internalFile.errors.some(error => error === "runtime_symlink_not_allowed:lib/internal-link.js"));
 
   const outside = mkdtempSync(resolve(tmpdir(), "runtime-build-outside-"));
   writeFileSync(resolve(outside, "escaped.js"), "export const escaped = true;\n");
@@ -61,4 +90,15 @@ test("missing required entry and escaping symlink are explicit invalid results",
   const escaped = buildRuntimeBuildIdentity({ rootDir: root });
   assert.equal(escaped.valid, false);
   assert.ok(escaped.errors.some(error => error.startsWith("symlink_escapes_root:")));
+
+  const outsideDirectory = mkdtempSync(resolve(tmpdir(), "runtime-build-outside-dir-"));
+  writeFileSync(resolve(outsideDirectory, "nested.js"), "export const nested = true;\n");
+  symlinkSync(outsideDirectory, resolve(root, "lib/escaped-directory"), "dir");
+  const escapedDirectory = buildRuntimeBuildIdentity({ rootDir: root });
+  assert.equal(escapedDirectory.valid, false);
+  assert.ok(escapedDirectory.errors.some(error => error.startsWith("symlink_escapes_root:lib/escaped-directory")));
 });
+
+function readFileForTest(path) {
+  return path.endsWith("index.js") ? "export const entry = 1;\n" : "{}\n";
+}

@@ -29,6 +29,7 @@ import { ensureEngineWritable, withEngineDb, withEngineDbSession } from "./lib/d
 import { withCoreDbReadonly, withEngineDbIsolated } from "./lib/db/isolated-dbs.js";
 import { getMemoryEngineConfig } from "./lib/config/runtime.js";
 import { getSmartAddTimeZone } from "./lib/config/helpers.js";
+import { resolveEffectiveHybridRuntimeConfig } from "./lib/config/effective-hybrid-runtime-config.js";
 import { insertMemoryEvent } from "./lib/db/events.js";
 import { ensureMemoryEngineTables, migrateLegacyMemoryEventsFromCore } from "./lib/db/schema.js";
 import {
@@ -278,36 +279,30 @@ export default definePluginEntry({
     const memoryEngineConfig = getMemoryEngineConfig(api?.config || null);
     const smartAddTimeZone = getSmartAddTimeZone(api?.config || null);
     const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
-    const effectivePluginConfig = api.pluginConfig || pluginEntryConfig || {};
+    const effectiveRuntimeConfigResult = resolveEffectiveHybridRuntimeConfig({
+      pluginConfig: api.pluginConfig,
+      pluginEntryConfig,
+      apiConfig: api.config,
+    });
+    const {
+      valid: effectiveRuntimeConfigValid,
+      errors: effectiveRuntimeConfigErrors,
+      ...effectiveRuntimeConfig
+    } = effectiveRuntimeConfigResult;
     const productionEvidenceIdentityContext = createProductionEvidenceIdentityContext({
-      config: effectivePluginConfig,
+      config: effectiveRuntimeConfig,
+      configErrors: effectiveRuntimeConfigValid ? [] : effectiveRuntimeConfigErrors,
     });
     const embeddingRuntimeConfig = api.config || pluginEntryConfig || null;
     const generateEmbeddingRuntime = text => generateEmbedding(text, {
       cfg: embeddingRuntimeConfig,
       apiConfig: api.config || null,
     });
-    const autoRecallConfig =
-      api.pluginConfig?.autoRecall ||
-      pluginEntryConfig?.autoRecall ||
-      api.config?.autoRecall ||
-      {};
-    const kgFailClosedMode = api.pluginConfig?.kgFailClosedMode
-      ?? autoRecallConfig.kgFailClosedMode
-      ?? pluginEntryConfig?.kgFailClosedMode
-      ?? api.config?.kgFailClosedMode;
-    const kgFailClosedCanary = api.pluginConfig?.kgFailClosedCanary
-      ?? autoRecallConfig.kgFailClosedCanary
-      ?? pluginEntryConfig?.kgFailClosedCanary
-      ?? api.config?.kgFailClosedCanary;
-    const recentFailClosedMode = api.pluginConfig?.recentFailClosedMode
-      ?? autoRecallConfig.recentFailClosedMode
-      ?? pluginEntryConfig?.recentFailClosedMode
-      ?? api.config?.recentFailClosedMode;
-    const recentFailClosedCanary = api.pluginConfig?.recentFailClosedCanary
-      ?? autoRecallConfig.recentFailClosedCanary
-      ?? pluginEntryConfig?.recentFailClosedCanary
-      ?? api.config?.recentFailClosedCanary;
+    const autoRecallConfig = effectiveRuntimeConfig.autoRecall;
+    const kgFailClosedMode = effectiveRuntimeConfig.kgFailClosedMode;
+    const kgFailClosedCanary = effectiveRuntimeConfig.kgFailClosedCanary;
+    const recentFailClosedMode = effectiveRuntimeConfig.recentFailClosedMode;
+    const recentFailClosedCanary = effectiveRuntimeConfig.recentFailClosedCanary;
     if (autoRecallConfig.enabled && typeof api.on === "function") {
       const autoRecallTopK = Math.max(
         1,

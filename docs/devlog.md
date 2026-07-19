@@ -1,5 +1,16 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.1: identity review fixes implemented
+
+实现并验证 A7.1 review fixes：`package.json` 现在是 runtime identity 必需文件，runtime scope 内所有 symlink 均 fail closed，rollout config fingerprint 与实际 normalized effective runtime config 共用同一解析结果，并保留 legacy config source compatibility。当前仍等待最终 review，不授权 A7.2 或 sustained runtime window。
+
+```text
+B8-A7.1=REVIEW FIXES IMPLEMENTED / REVIEW PENDING
+B8-A7.2=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7.1: implementation review changes required
 
 复核 commit `250435d` 的 evidence epoch、runtime build identity 与 rollout config fingerprint 实现。主要 observation wiring、identity evaluator、CLI 和默认关闭边界方向正确，但 A7.1 尚不能关闭，也不能进入 A7.2。

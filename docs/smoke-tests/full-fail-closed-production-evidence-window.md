@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.1 IMPLEMENTED / REVIEW CHANGES REQUIRED; B8-A7 design authorized; sustained runtime window not authorized**
+> **Status: B8-A7.1 review fixes implemented / review pending; B8-A7.2 not started; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -189,6 +189,8 @@ B8-A7 sustained production evidence window
 B8-B removal-gate review
 ```
 
-B8-A7.1 is implemented but not review-closed. Before A7.2 begins, the runtime identity must require `package.json`, in-root runtime symlink directories must be hashed or fail closed rather than being silently omitted, and the rollout config fingerprint must be derived from the same normalized effective configuration used by AutoRecall and KG/Recent runtime resolution. It does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, or starting the sustained runtime window.
+B8-A7.1 review fixes are implemented but not review-closed. A7.2 has not started. The runtime identity now requires `package.json`, all runtime-scope symlinks fail closed, and the rollout config fingerprint is derived from the same normalized effective configuration used by AutoRecall and KG/Recent runtime resolution. This does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, or starting the sustained runtime window.
+
+The preceding gate record was `B8-A7.1 IMPLEMENTED / REVIEW CHANGES REQUIRED`; its authorization boundary was `B8-A7 design authorized; sustained runtime window not authorized`. Those phrases remain historical evidence, not the current review status.
 
 B8-B remains `NOT AUTHORIZED` throughout A7 implementation and evidence collection.

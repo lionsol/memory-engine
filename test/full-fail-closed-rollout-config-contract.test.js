@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const MANIFEST = new URL("../openclaw.plugin.json", import.meta.url);
 const INDEX = new URL("../index.js", import.meta.url);
+const EFFECTIVE_CONFIG = new URL("../lib/config/effective-hybrid-runtime-config.js", import.meta.url);
 
 const ALLOWED_MODES = [
   "legacy_fallback",
@@ -55,19 +56,18 @@ test("manifest exposes disabled-by-default trusted canary allowlists", () => {
   assertCanarySchema(properties.recentFailClosedCanary);
 });
 
-test("runtime reads official top-level plugin config before legacy compatibility locations", () => {
+test("runtime and identity use one normalized effective config source", () => {
   const source = readFileSync(INDEX, "utf8");
-  for (const key of [
-    "kgFailClosedMode",
-    "kgFailClosedCanary",
-    "recentFailClosedMode",
-    "recentFailClosedCanary",
-  ]) {
-    assert.match(source, new RegExp(
-      `api\\.pluginConfig\\?\\.${key}[\\s\\S]*?autoRecallConfig\\.${key}[\\s\\S]*?pluginEntryConfig\\?\\.${key}`,
-    ));
-  }
-  assert.match(source, /api\.pluginConfig\?\.autoRecall/);
+  const resolver = readFileSync(EFFECTIVE_CONFIG, "utf8");
+  assert.match(source, /resolveEffectiveHybridRuntimeConfig\(/);
+  assert.match(source, /const autoRecallConfig = effectiveRuntimeConfig\.autoRecall/);
+  assert.match(source, /const kgFailClosedMode = effectiveRuntimeConfig\.kgFailClosedMode/);
+  assert.match(source, /const recentFailClosedMode = effectiveRuntimeConfig\.recentFailClosedMode/);
+  assert.match(source, /config: effectiveRuntimeConfig/);
+  assert.match(resolver, /pluginConfig/);
+  assert.match(resolver, /pluginEntryConfig/);
+  assert.match(resolver, /apiConfig/);
+  assert.match(resolver, /DEFAULT_MODES/);
 });
 
 test("official config controls remain outside autoRecall schema", () => {
