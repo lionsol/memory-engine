@@ -60,7 +60,10 @@ test("runtime and identity use one normalized effective config source", () => {
   const source = readFileSync(INDEX, "utf8");
   const resolver = readFileSync(EFFECTIVE_CONFIG, "utf8");
   assert.match(source, /resolveEffectiveHybridRuntimeConfig\(/);
+  assert.match(source, /apiConfig: api\.config,\s*\n\s*memoryEngineConfig,\s*\n\s*\}\);/);
   assert.match(source, /const autoRecallConfig = effectiveRuntimeConfig\.autoRecall/);
+  assert.match(source, /const autoRecallTopK = autoRecallConfig\.topK/);
+  assert.match(source, /const autoRecallTimeoutMs = autoRecallConfig\.timeoutMs/);
   assert.match(source, /const kgFailClosedMode = effectiveRuntimeConfig\.kgFailClosedMode/);
   assert.match(source, /const recentFailClosedMode = effectiveRuntimeConfig\.recentFailClosedMode/);
   assert.match(source, /config: effectiveRuntimeConfig/);
@@ -68,6 +71,7 @@ test("runtime and identity use one normalized effective config source", () => {
   assert.match(resolver, /pluginEntryConfig/);
   assert.match(resolver, /apiConfig/);
   assert.match(resolver, /DEFAULT_MODES/);
+  assert.match(resolver, /hybridRetrieval/);
 });
 
 test("official config controls remain outside autoRecall schema", () => {

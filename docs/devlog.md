@@ -1,5 +1,16 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.1: dependency/config closure fixes implemented
+
+完成第二轮 identity closure：runtime identity 纳入声明的根目录 runtime dependency scope 与 `lib/**`，effective config 复用 `getMemoryEngineConfig` 的结果并保留 AutoRecall `topK` fallback；recall/ranking/confidence 和非敏感环境阈值进入 fingerprint，malformed compatibility values 使用安全运行值并使 evidence identity invalid。
+
+```text
+B8-A7.1 DEPENDENCY/CONFIG CLOSURE FIXES IMPLEMENTED / REVIEW PENDING
+B8-A7.2=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7.1: second implementation review changes required
 
 复核 implementation checkpoint `41892ed`。第一轮要求的 `package.json` 必需文件、runtime symlink fail-closed 和初始 config-source 统一均已实现，34 个定向测试通过；但第二轮对抗 review 仍确认三类 identity 完整性问题，因此 A7.1 尚不能关闭，也不能进入 A7.2。

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import {
   buildRuntimeBuildIdentity,
   collectRuntimeBuildFiles,
+  ROOT_RUNTIME_FILES,
 } from "../lib/version/runtime-build-identity.js";
 
 function fixtureRoot() {
@@ -16,6 +17,9 @@ function fixtureRoot() {
   writeFileSync(resolve(root, "index.js"), "export const entry = 1;\n");
   writeFileSync(resolve(root, "openclaw.plugin.json"), "{}\n");
   writeFileSync(resolve(root, "package.json"), "{\"type\":\"module\"}\n");
+  for (const file of ROOT_RUNTIME_FILES) {
+    writeFileSync(resolve(root, file), `export const ${file.replaceAll("-", "_").replace(".js", "")} = 1;\n`);
+  }
   writeFileSync(resolve(root, "lib/runtime.js"), "export const runtime = 1;\n");
   writeFileSync(resolve(root, "docs/note.md"), "docs\n");
   writeFileSync(resolve(root, "test/fixture.js"), "test\n");
@@ -49,6 +53,41 @@ test("runtime file additions, changes, and deletions change identity", () => {
   writeFileSync(resolve(root, "package.json"), "{\"type\":\"module\",\"revision\":2}\n");
   const packageChanged = buildRuntimeBuildIdentity({ rootDir: root });
   assert.notEqual(packageChanged.identity, deleted.identity);
+});
+
+test("root runtime dependencies are hashed and required", () => {
+  const root = fixtureRoot();
+  const initial = buildRuntimeBuildIdentity({ rootDir: root });
+  for (const file of ROOT_RUNTIME_FILES) {
+    writeFileSync(resolve(root, file), `export const changed = "${file}";\n`);
+    const changed = buildRuntimeBuildIdentity({ rootDir: root });
+    assert.notEqual(changed.identity, initial.identity, file);
+    writeFileSync(resolve(root, file), `export const ${file.replaceAll("-", "_").replace(".js", "")} = 1;\n`);
+  }
+
+  const missingPath = ROOT_RUNTIME_FILES[0];
+  unlinkSync(resolve(root, missingPath));
+  const missing = buildRuntimeBuildIdentity({ rootDir: root });
+  assert.equal(missing.valid, false);
+  assert.ok(missing.errors.some(error => error.startsWith(`missing_runtime_file:${missingPath}`)));
+});
+
+test("root runtime symlinks fail closed and docs/tests remain outside identity", () => {
+  const root = fixtureRoot();
+  const initial = buildRuntimeBuildIdentity({ rootDir: root });
+  writeFileSync(resolve(root, "docs/note.md"), "changed docs\n");
+  writeFileSync(resolve(root, "test/fixture.js"), "changed test\n");
+  assert.equal(buildRuntimeBuildIdentity({ rootDir: root }).identity, initial.identity);
+
+  const file = ROOT_RUNTIME_FILES[0];
+  const source = resolve(root, file);
+  const target = resolve(root, "runtime-target.js");
+  writeFileSync(target, "export const target = true;\n");
+  unlinkSync(source);
+  symlinkSync(target, source);
+  const symlinked = buildRuntimeBuildIdentity({ rootDir: root });
+  assert.equal(symlinked.valid, false);
+  assert.ok(symlinked.errors.includes(`runtime_symlink_not_allowed:${file}`));
 });
 
 test("missing required entries are explicit invalid results", () => {

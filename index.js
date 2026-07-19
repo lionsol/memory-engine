@@ -283,6 +283,7 @@ export default definePluginEntry({
       pluginConfig: api.pluginConfig,
       pluginEntryConfig,
       apiConfig: api.config,
+      memoryEngineConfig,
     });
     const {
       valid: effectiveRuntimeConfigValid,
@@ -304,11 +305,8 @@ export default definePluginEntry({
     const recentFailClosedMode = effectiveRuntimeConfig.recentFailClosedMode;
     const recentFailClosedCanary = effectiveRuntimeConfig.recentFailClosedCanary;
     if (autoRecallConfig.enabled && typeof api.on === "function") {
-      const autoRecallTopK = Math.max(
-        1,
-        Number(autoRecallConfig.topK ?? memoryEngineConfig?.recall?.topK ?? 3) || 3
-      );
-      const autoRecallTimeoutMs = Math.max(1000, Number(autoRecallConfig.timeoutMs || 8000));
+      const autoRecallTopK = autoRecallConfig.topK;
+      const autoRecallTimeoutMs = autoRecallConfig.timeoutMs;
       console.log(`[memory-engine] autoRecall hook registered topK=${autoRecallTopK} timeoutMs=${autoRecallTimeoutMs}`);
       api.on("before_prompt_build", async (event, ctx) => {
         try {

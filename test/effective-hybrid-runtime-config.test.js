@@ -4,7 +4,10 @@ import {
   DEFAULT_AUTO_RECALL,
   resolveEffectiveHybridRuntimeConfig,
 } from "../lib/config/effective-hybrid-runtime-config.js";
-import { fingerprintRolloutConfig } from "../lib/recall/hybrid/production-evidence-identity.js";
+import {
+  createProductionEvidenceIdentityContext,
+  fingerprintRolloutConfig,
+} from "../lib/recall/hybrid/production-evidence-identity.js";
 
 function normalized(input) {
   const { valid, errors, ...config } = resolveEffectiveHybridRuntimeConfig(input);
@@ -62,7 +65,7 @@ test("omitted values and explicit schema defaults have the same effective finger
   const omitted = fingerprint({});
   const explicit = fingerprint({
     pluginConfig: {
-      autoRecall: { ...DEFAULT_AUTO_RECALL },
+      autoRecall: { ...DEFAULT_AUTO_RECALL, topK: 5 },
       kgFailClosedMode: "legacy_fallback",
       kgFailClosedCanary: { enabled: false, agentIds: [], sessionIds: [], tokens: [] },
       recentFailClosedMode: "legacy_fallback",
@@ -71,6 +74,71 @@ test("omitted values and explicit schema defaults have the same effective finger
     },
   });
   assert.equal(omitted, explicit);
+});
+
+test("AutoRecall topK uses memory-engine recall when not explicitly configured", () => {
+  const inherited = normalized({
+    apiConfig: { memoryEngine: { recall: { topK: 11 } } },
+  });
+  assert.equal(inherited.autoRecall.topK, 11);
+
+  const overridden = normalized({
+    pluginConfig: { autoRecall: { topK: 2 } },
+    apiConfig: { memoryEngine: { recall: { topK: 11 } } },
+  });
+  assert.equal(overridden.autoRecall.topK, 2);
+});
+
+test("effective retrieval configuration changes the fingerprint", () => {
+  const base = { apiConfig: { memoryEngine: { recall: { topK: 5 } } } };
+  for (const section of [
+    { recall: { ftsTopK: 41 } },
+    { recall: { vectorTopK: 41 } },
+    { recall: { recentTopK: 41 } },
+    { recall: { lexicalConfidenceThreshold: 0.81 } },
+    { ranking: { rrfK: 91 } },
+    { confidence: { min: 0.21 } },
+  ]) {
+    assert.notEqual(
+      fingerprint(base),
+      fingerprint({ apiConfig: { memoryEngine: section } }),
+      JSON.stringify(section),
+    );
+  }
+});
+
+test("effective retrieval sections exclude unrelated host configuration", () => {
+  const config = normalized({
+    apiConfig: {
+      memoryEngine: {
+        recall: { ftsTopK: 41 },
+        ranking: { rrfK: 91 },
+        confidence: { min: 0.21 },
+      },
+      unrelatedPlugin: { secret: "not hashed as config" },
+    },
+  });
+  assert.equal(config.hybridRetrieval.recall.ftsTopK, 41);
+  assert.equal(config.hybridRetrieval.ranking.rrfK, 91);
+  assert.equal(config.hybridRetrieval.confidence.min, 0.21);
+  assert.equal(Object.hasOwn(config, "unrelatedPlugin"), false);
+});
+
+test("environment retrieval overrides are normalized into the effective config", () => {
+  const previousMin = process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
+  const previousLexical = process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;
+  try {
+    process.env.MEMORY_ENGINE_MIN_CONFIDENCE = "0.31";
+    process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = "0.82";
+    const config = normalized({});
+    assert.equal(config.hybridRetrieval.effectiveMinConfidence, 0.31);
+    assert.equal(config.hybridRetrieval.effectiveLexicalConfidenceThreshold, 0.82);
+  } finally {
+    if (previousMin === undefined) delete process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
+    else process.env.MEMORY_ENGINE_MIN_CONFIDENCE = previousMin;
+    if (previousLexical === undefined) delete process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;
+    else process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = previousLexical;
+  }
 });
 
 test("effective AutoRecall, mode, canary, and epoch changes change the fingerprint", () => {
@@ -131,4 +199,27 @@ test("invalid fail-closed modes fail safe and invalidate evidence identity", () 
   assert.equal(result.valid, false);
   assert.equal(result.kgFailClosedMode, "legacy_fallback");
   assert.ok(result.errors.includes("invalid_mode:kgFailClosedMode"));
+});
+
+test("malformed compatibility values use safe runtime values and invalidate identity", () => {
+  const result = resolveEffectiveHybridRuntimeConfig({
+    pluginConfig: {
+      autoRecall: { enabled: "false", topK: "bad", timeoutMs: {} },
+      kgFailClosedCanary: { enabled: "true" },
+      productionEvidenceWindow: { enabled: 1, epochId: "epoch-1" },
+    },
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.autoRecall.enabled, false);
+  assert.equal(result.autoRecall.topK, 5);
+  assert.equal(result.autoRecall.timeoutMs, 8000);
+  assert.equal(result.kgFailClosedCanary.enabled, false);
+  assert.equal(result.productionEvidenceWindow.enabled, false);
+
+  const identity = createProductionEvidenceIdentityContext({
+    config: result,
+    configErrors: result.errors,
+  });
+  assert.equal(identity.rolloutConfigFingerprint, null);
+  assert.equal(identity.rolloutConfigFingerprintReport.valid, false);
 });
