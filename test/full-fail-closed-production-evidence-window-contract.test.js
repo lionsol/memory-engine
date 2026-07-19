@@ -21,19 +21,19 @@ test("B8-A7 production evidence-window runbook exists and is indexed", () => {
   assert.match(read(DOCS_INDEX), /full-fail-closed-production-evidence-window\.md/);
 });
 
-test("runbook records final A7.2 review fixes while preserving the sustained-runtime boundary", () => {
+test("runbook closes A7.2 while preserving the sustained-runtime boundary", () => {
   const doc = read(RUNBOOK);
   for (const token of [
     "B8-A7.1 CLOSED / READY FOR A7.2",
     "implementation checkpoint `caf4373`",
     "local runtime dependency closure",
     "normalized effective AutoRecall/KG/Recent/retrieval configuration",
-    "B8-A7.2 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED",
-    "implementation checkpoint `eec0f91`",
-    "tool_call_id_collision",
-    "TTL cleanup",
-    "primitive thresholds JSON",
-    "input error 64",
+    "B8-A7.2 CLOSED / READY FOR A7.3",
+    "implementation checkpoint `47389d3`",
+    "`toolCallId` may be reused after expiry",
+    "same-lifetime duplicates remain fail closed",
+    "decoded threshold JSON",
+    "share one threshold contract",
     "B8-A7 sustained runtime window NOT AUTHORIZED",
     "evidence_epoch_id",
     "runtime_build_identity",
@@ -57,7 +57,7 @@ test("runbook records final A7.2 review fixes while preserving the sustained-run
   }
 });
 
-test("rollout ledger requires final A7.2 review fixes without authorizing sustained runtime", () => {
+test("rollout ledger closes A7.2 without authorizing sustained runtime", () => {
   const doc = read(STATUS);
   for (const token of [
     "B8-A7 sustained production evidence window",
@@ -68,10 +68,10 @@ test("rollout ledger requires final A7.2 review fixes without authorizing sustai
     "normalized effective AutoRecall/KG/Recent/retrieval configuration",
     "runtime dependency identity",
     "B8-A7.2 continuity and traffic-origin evidence",
-    "REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED",
-    "implementation checkpoint `eec0f91`",
-    "tool_call_id_collision",
-    "primitive thresholds JSON",
+    "CLOSED / READY FOR A7.3",
+    "implementation checkpoint `47389d3`",
+    "post-TTL `toolCallId` reuse",
+    "shared threshold validation",
     "B8-A7.3 read-only health monitor and stop contract",
     "long-running runtime configuration change",
     "B8-B remains unauthorized",
@@ -80,15 +80,16 @@ test("rollout ledger requires final A7.2 review fixes without authorizing sustai
   }
 });
 
-test("devlog records final A7.2 review findings and preserves the runtime authorization boundary", () => {
+test("devlog records A7.2 closeout and preserves the runtime authorization boundary", () => {
   const doc = read(DEVLOG);
   for (const token of [
-    "F1-D-B8-A7.2: final review changes required",
-    "implementation checkpoint `eec0f91`",
-    "expired toolCallId reuse accepted=false",
-    "post-TTL reuse result=tool_call_id_collision / unknown",
-    "primitive thresholds JSON rejected=false",
-    "B8-A7.2=REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED",
+    "F1-D-B8-A7.2: final implementation review closed",
+    "implementation checkpoint `47389d3`",
+    "code-review-graph version=2.3.7",
+    "code-review-graph risk score=0.65",
+    "focused tests=41/41 passed",
+    "full suite=1574 tests / 1566 passed / 0 failed / 8 skipped",
+    "B8-A7.2=CLOSED / READY FOR A7.3",
     "B8-A7.3=NOT STARTED",
     "F1-D-B8-A7: sustained production evidence-window authorization review",
     "B8-A7 design/tooling=AUTHORIZED",

@@ -1,5 +1,35 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.2: final implementation review closed
+
+Final review accepted implementation checkpoint `47389d3`. The TTL/collision and threshold-input findings are closed: registry cleanup now precedes collision detection, post-TTL `toolCallId` reuse is valid, same-lifetime and scheduled-healthcheck collisions remain fail closed, capacity eviction does not create natural evidence, and decoded threshold JSON is validated before CLI override merging through the same contract used by the evaluator.
+
+Review evidence:
+
+```text
+code-review-graph version=2.3.7
+code-review-graph changed files=5
+code-review-graph risk score=0.65
+focused tests=41/41 passed
+independent post-TTL unconsumed-entry reuse=natural_agent_tool_call
+static check=passed
+A5 smoke=10/10 passed
+full suite=1574 tests / 1566 passed / 0 failed / 8 skipped
+git diff --check=passed
+```
+
+Current state:
+
+```text
+B8-A7.1=CLOSED
+B8-A7.2=CLOSED / READY FOR A7.3
+B8-A7.3=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+This closeout authorizes only A7.3 read-only health monitoring and stop/rollback contract implementation. It does not authorize enabling `productionEvidenceWindow`, sustained AutoRecall, long-running KG/Recent `full_fail_closed`, or B8-B removal.
+
 ### F1-D-B8-A7.2: final review changes required
 
 复核 implementation checkpoint `eec0f91`。上一轮四项 finding 已关闭：typed `before_tool_call` origin classification、origin evidence validation、per-surface leading/trailing gap，以及 zero-threshold structural readiness 均通过定向与对抗验证。最终 review 仍发现两个小但会影响长期证据可靠性的边界问题。

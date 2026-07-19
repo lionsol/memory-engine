@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.2 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED; sustained runtime window not authorized**
+> **Status: B8-A7.2 CLOSED / READY FOR A7.3; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -117,13 +117,13 @@ Rules:
 
 If a required tool surface cannot accumulate natural production traffic under the current tool-visibility policy, the removal gate remains insufficient. Do not manufacture the missing denominator by repeated probes.
 
-The four original A7.2 review findings are implemented: the origin registry uses only the typed `before_tool_call` fields (`agentId`, `sessionKey`, `sessionId`, `runId`, `toolName`, and `toolCallId`), gateway probe classification derives only from host-generated `http-`/`rpc-` IDs, origin evidence shape/source and validity are checked, per-surface leading/trailing gaps are enforced, and structural readiness cannot be bypassed with zero thresholds.
+B8-A7.2 is closed after final review of implementation checkpoint `47389d3`. The origin registry uses only the typed `before_tool_call` fields (`agentId`, `sessionKey`, `sessionId`, `runId`, `toolName`, and `toolCallId`); gateway probe classification derives only from host-generated `http-`/`rpc-` IDs; origin evidence shape/source and validity are checked; per-surface leading, trailing, and internal gaps are enforced; and structural readiness cannot be bypassed with zero thresholds.
 
-Final review still requires two small corrections before A7.2 can close. First, registry collision detection currently reads the existing entry before TTL cleanup, so a legitimate `toolCallId` reused after expiry is falsely marked `tool_call_id_collision`, emitted as `unknown`, and blocks the evidence window. Second, the CLI spreads `--thresholds` JSON before validating that the decoded value is a plain object, so `null`, number, and boolean documents silently become empty overrides instead of input error 64.
+The final guard fixes run TTL cleanup before collision detection, so a legitimate `toolCallId` may be reused after expiry while same-lifetime duplicates remain fail closed. Agent, probe, and scheduled-healthcheck registry writes share the same TTL, collision, and capacity semantics. The CLI validates decoded threshold JSON before merging overrides, and the CLI plus evaluator share one threshold contract that rejects primitive documents, arrays, unknown fields, invalid ratios, non-integer count thresholds, and negative values.
 
-The evaluator must refuse `continuity_ready` for missing natural denominator evidence or missing production surfaces, regardless of test threshold overrides. The registry must permit post-TTL ID reuse while preserving same-lifetime collision fail-closed behavior. Threshold files must be validated before merging command-line overrides.
+The evaluator refuses `continuity_ready` for missing natural denominator evidence or missing production surfaces regardless of test threshold overrides. Operator probes and scheduled healthchecks remain outside the natural denominator, and ambiguous origin remains a blocker.
 
-Historical review record: Implementation checkpoint `59a4f3e` was not review-closed because the original resolver assumed `trigger`, `toolExecutionSource`, and `invocationSource` in `before_tool_call`; implementation checkpoint `eec0f91` removes those assumptions and closes the four original findings, but remains review-pending for the TTL cleanup-order and primitive thresholds JSON corrections.
+Historical review record: implementation checkpoint `59a4f3e` was not review-closed because the original resolver assumed `trigger`, `toolExecutionSource`, and `invocationSource` in `before_tool_call`; checkpoint `eec0f91` removed those assumptions and closed the four original findings; checkpoint `47389d3` closed the TTL cleanup-order and primitive thresholds JSON findings.
 
 Historical status label: `B8-A7.2 IMPLEMENTED / REVIEW CHANGES REQUIRED`.
 
@@ -201,9 +201,9 @@ B8-B removal-gate review
 
 B8-A7.1 is closed after final review of implementation checkpoint `caf4373`. The accepted identity contract covers the local runtime dependency closure, requires all declared runtime files in filesystem and injected-entry validation paths, rejects duplicate or symlinked runtime paths, and fingerprints the same normalized effective AutoRecall/KG/Recent/retrieval configuration used by runtime behavior. Malformed higher-priority configuration fails closed and supported Recent token compatibility is preserved.
 
-A7.2 continuity and traffic-origin evidence review fixes are implemented, but final review still requires TTL cleanup ordering and primitive thresholds JSON validation. This does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, enabling sustained AutoRecall, or starting the 30-day runtime window.
+A7.2 continuity and traffic-origin evidence is closed after final review of implementation checkpoint `47389d3`. This authorizes only implementation of A7.3 read-only health monitoring and stop/rollback contract. It does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, enabling sustained AutoRecall, or starting the 30-day runtime window.
 
-The preceding review labels remain historical evidence. The current authorization boundary is `B8-A7.2 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED` and `B8-B NOT AUTHORIZED` remain unchanged.
+The preceding review labels remain historical evidence. The current authorization boundary is `B8-A7.2 CLOSED / READY FOR A7.3`; `B8-A7 sustained runtime window NOT AUTHORIZED` and `B8-B NOT AUTHORIZED` remain unchanged.
 
 Historical A7.1 closeout state: `B8-A7.1 CLOSED / READY FOR A7.2`.
 
