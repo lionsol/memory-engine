@@ -182,6 +182,48 @@ test("unsupported-schema fallback rows are rejected before production counting",
   assert.ok(snapshot.blockers.includes("unsupported_schema_version"));
 });
 
+test("canonical legacy fallback markers count even without access-mode fallback", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: [event("auto_recall", "2026-07-01T00:00:00Z", {
+      metadata: {
+        legacy_db_fallback_used: true,
+        legacy_db_fallback_channels: ["kg"],
+      },
+    })],
+    thresholds: {
+      minimum_observations: 1,
+      minimum_surface_observations: 1,
+      minimum_window_days: 0,
+    },
+  });
+  assert.equal(snapshot.counts.fallback_events, 1);
+  assert.equal(snapshot.counts.kg_fallback_events, 1);
+  assert.equal(snapshot.counts.recent_fallback_events, 0);
+  assert.ok(snapshot.blockers.includes("fallback_events_present"));
+});
+
+test("unattributed legacy fallback markers remain global fallback evidence", () => {
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: [event("auto_recall", "2026-07-01T00:00:00Z", {
+      metadata: {
+        legacy_db_fallback_used: true,
+        legacy_db_fallback_channels: [],
+      },
+    })],
+    thresholds: {
+      minimum_observations: 1,
+      minimum_surface_observations: 1,
+      minimum_window_days: 0,
+    },
+  });
+  assert.equal(snapshot.counts.fallback_events, 1);
+  assert.equal(snapshot.counts.kg_fallback_events, 0);
+  assert.equal(snapshot.counts.recent_fallback_events, 0);
+  assert.equal(snapshot.counts.fallback_channel_attribution_missing_events, 1);
+  assert.equal(snapshot.warnings[0].code, "fallback_channel_attribution_missing");
+  assert.ok(snapshot.blockers.includes("fallback_events_present"));
+});
+
 test("snapshot helper returns the same B5-compatible evidence shape", () => {
   const input = { observations: balancedEvents() };
   const direct = evaluateHybridFallbackEvidenceWindow(input);

@@ -20,6 +20,8 @@ function observation(surface, overrides = {}) {
     recent_rollout_scope: "full",
     kg_scope_required: false,
     recent_scope_required: false,
+    kg_fail_closed_scope_match: null,
+    recent_fail_closed_scope_match: null,
     kg_fail_closed_applied: true,
     recent_fail_closed_applied: true,
     ...overrides,
@@ -245,6 +247,98 @@ test("explicit non-scoped full mode can satisfy the synthetic schema capability"
     memory_engine_action_search: 2,
     memory_engine_search: 2,
   });
+});
+
+test("full mode requires an explicit null scope match marker for both channels", () => {
+  for (const value of [true, false, undefined]) {
+    for (const channel of ["kg", "recent"]) {
+      const input = fullFixture();
+      for (const row of input.observations) {
+        const key = `${channel}_fail_closed_scope_match`;
+        if (value === undefined) delete row.metadata_json[key];
+        else row.metadata_json[key] = value;
+      }
+      const report = buildFullFailClosedRolloutEvidence(input);
+      assert.notEqual(report.status, "full_fail_closed_confirmed", `${channel}:${value}`);
+      assert.equal(report.controlled_run_closeout_eligible, false, `${channel}:${value}`);
+      assert.ok(
+        report.controlled_run_blockers.some(issue => issue.code === `${channel}_full_fail_closed_marker_missing`),
+        `${channel}:${value}`,
+      );
+    }
+  }
+});
+
+test("legacy fallback markers are authoritative for rollout and controlled-run safety", () => {
+  const cases = [
+    {
+      name: "attributed kg fallback",
+      metadata: { legacy_db_fallback_used: true, legacy_db_fallback_channels: ["kg"] },
+      expectedKgFallbacks: 6,
+    },
+    {
+      name: "unattributed fallback",
+      metadata: { legacy_db_fallback_used: true, legacy_db_fallback_channels: [] },
+      expectedKgFallbacks: 0,
+    },
+    {
+      name: "contradictory recent channel marker",
+      metadata: { legacy_db_fallback_used: false, legacy_db_fallback_channels: ["recent"] },
+      expectedKgFallbacks: 0,
+    },
+  ];
+
+  for (const item of cases) {
+    const input = fullFixture();
+    for (const row of input.observations) Object.assign(row.metadata_json, item.metadata);
+    const report = buildFullFailClosedRolloutEvidence(input);
+    assert.equal(report.status, "blocked", item.name);
+    assert.equal(report.controlled_run_surface_coverage_status, "blocked", item.name);
+    assert.equal(report.controlled_run_closeout_eligible, false, item.name);
+    assert.ok(report.blockers.some(issue => issue.code === "production_fallback_events_present"), item.name);
+    assert.ok(report.controlled_run_blockers.some(issue => issue.code === "fallback_events_present"), item.name);
+    if (item.expectedKgFallbacks === 0) assert.equal(report.kg_fallback_events, 0, item.name);
+  }
+});
+
+test("explicit false empty fallback markers preserve controlled-run safety", () => {
+  const input = fullFixture();
+  for (const row of input.observations) {
+    row.metadata_json.legacy_db_fallback_used = false;
+    row.metadata_json.legacy_db_fallback_channels = [];
+  }
+  const report = buildFullFailClosedRolloutEvidence(input);
+  assert.equal(report.status, "full_fail_closed_confirmed");
+  assert.equal(report.controlled_run_closeout_eligible, true);
+  assert.deepEqual(report.controlled_run_blockers, []);
+});
+
+test("controlled-run eligibility can remain true while long-window thresholds are incomplete", () => {
+  const report = buildFullFailClosedRolloutEvidence({
+    ...fullFixture(),
+    thresholds: {
+      minimum_window_days: 30,
+      minimum_observations: 500,
+      minimum_surface_observations: 100,
+    },
+  });
+  assert.equal(report.status, "insufficient_evidence");
+  assert.equal(report.controlled_run_closeout_eligible, true);
+});
+
+test("any top-level safety blocker also disables controlled-run eligibility", () => {
+  const report = buildFullFailClosedRolloutEvidence({
+    ...fullFixture(),
+    thresholds: {
+      minimum_window_days: -1,
+      minimum_observations: 0,
+      minimum_surface_observations: 0,
+    },
+  });
+  assert.equal(report.status, "blocked");
+  assert.equal(report.controlled_run_surface_coverage_status, "blocked");
+  assert.equal(report.controlled_run_closeout_eligible, false);
+  assert.ok(report.controlled_run_blockers.some(issue => issue.code === "safety_blocker_present"));
 });
 
 test("controlled-run coverage is complete only when every production surface is observed", () => {

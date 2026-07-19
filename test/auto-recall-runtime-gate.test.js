@@ -93,6 +93,33 @@ test("runtime gate rejects non-allowlisted agents", () => {
   });
 });
 
+test("required allowlists fail closed when explicitly empty", () => {
+  assert.equal(
+    evaluateAutoRecallRuntimeGate({
+      event: hostEvent(),
+      ctx: hostContext(),
+      config: { triggerAllowlist: [] },
+    }).reason,
+    "denied_by_trigger_allowlist",
+  );
+  assert.equal(
+    evaluateAutoRecallRuntimeGate({
+      event: hostEvent(),
+      ctx: hostContext({ trigger: "heartbeat" }),
+      config: { triggerAllowlist: [] },
+    }).reason,
+    "denied_by_trigger_allowlist",
+  );
+  assert.equal(
+    evaluateAutoRecallRuntimeGate({
+      event: hostEvent(),
+      ctx: hostContext(),
+      config: { agentAllowlist: [] },
+    }).reason,
+    "denied_by_agent_allowlist",
+  );
+});
+
 test("explicit chat type and message role remain supplementary constraints", () => {
   assert.equal(
     evaluateAutoRecallRuntimeGate({
@@ -145,6 +172,7 @@ test("manifest exposes strict agent and trigger defaults plus optional compatibi
     assert.equal(schema.type, "array");
     assert.deepEqual(schema.default, defaultValue);
     assert.equal(schema.uniqueItems, true);
+    if (key === "agentAllowlist" || key === "triggerAllowlist") assert.equal(schema.minItems, 1);
     assert.equal(schema.items.type, "string");
     assert.equal(schema.items.minLength, 1);
   }

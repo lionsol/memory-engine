@@ -32,6 +32,7 @@ test("runbook documents official config schema and legacy defaults", () => {
     "temporarily expand an allowlist through validated OpenClaw configuration",
     "chatType` or `messageRole`",
     "default-deny boundary",
+    "explicitly empty required allowlist rejects every request",
   ]) {
     assert.equal(doc.includes(token), true, `missing runtime rollout token: ${token}`);
   }
@@ -53,6 +54,9 @@ test("runbook preserves canonical provenance and production-surface boundaries",
     "invalid_provenance_observation_count > 0",
     "missing_surface:auto_recall",
     "controlled_run_closeout_eligible=false",
+    "scope_match=null",
+    "legacy_db_fallback_used",
+    "markers are authoritative safety signals",
   ]) {
     assert.equal(doc.includes(token), true, `missing scope boundary token: ${token}`);
   }

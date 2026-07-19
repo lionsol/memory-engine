@@ -79,7 +79,7 @@ chatTypeAllowlist=["interactive_user_chat"]
 messageRoleAllowlist=["user"]
 ```
 
-A controlled runtime verification may temporarily expand an allowlist through validated OpenClaw configuration, provided the original values are backed up and restored. The current `before_prompt_build` contract does not require `chatType` or `messageRole`; those allowlists are supplementary constraints applied only when the host explicitly supplies the corresponding field. The agent and trigger allowlists remain the default-deny boundary. This is not permission to edit gate source, disable a gate dimension, or broaden production defaults.
+A controlled runtime verification may temporarily expand an allowlist through validated OpenClaw configuration, provided the original values are backed up and restored. The current `before_prompt_build` contract does not require `chatType` or `messageRole`; those allowlists are supplementary constraints applied only when the host explicitly supplies the corresponding field. The agent and trigger allowlists remain the default-deny boundary: an explicitly empty required allowlist rejects every request, while an empty chat/role allowlist only disables that supplementary check. This is not permission to edit gate source, disable a gate dimension, or broaden production defaults.
 
 Unknown values must fail safe to legacy behavior in runtime policy code, but the manifest schema should reject them before reload.
 
@@ -110,6 +110,8 @@ memory_engine_search
 `auto_recall=0` is an explicit closeout blocker even when both tool surfaces have valid full-mode observations. The long-window evaluator may additionally report a threshold gap, but the machine-readable controlled-run fields must contain `missing_surface:auto_recall` and `controlled_run_closeout_eligible=false`. CLI and unknown surfaces do not satisfy this requirement.
 
 The AutoRecall hook fixture is intentionally host-shaped: the event supplies `prompt` and `messages`, while trusted context supplies `agentId` and `trigger`. `chatType` and `messageRole` must not be synthesized from prompt text or treated as required host fields.
+
+Full-mode evidence is strict. KG and Recent each require `runtime_mode=full_fail_closed`, `rollout_scope=full`, `scope_required=false`, and an explicitly present `scope_match=null`. `true`, `false`, or a missing scope-match field is not full-rollout evidence. The canonical `legacy_db_fallback_used` and `legacy_db_fallback_channels` markers are authoritative safety signals; any fallback marker blocks both rollout confirmation and controlled-run closeout, including when its channel attribution is missing.
 
 ## Canonical Observation Provenance
 

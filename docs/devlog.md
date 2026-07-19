@@ -8,6 +8,8 @@
 
 同时，full fail-closed rollout evidence 增加 controlled-run surface coverage contract。`auto_recall=0` 会明确产生 `missing_surface:auto_recall`，并设置 `controlled_run_closeout_eligible=false`，而不改变现有 30 天 production window 的 threshold 语义。A6.5 完成后仍需由 edi 重新执行 Stage 4 三 surface runtime verification；B8-B 仍未授权。
 
+Review follow-up 收紧了三个边界：required `agentAllowlist` 和 `triggerAllowlist` 的显式空数组现在拒绝所有请求；KG/Recent full marker 必须显式包含 `scope_match=null`，不能从 `scope_required=false` 推断；`legacy_db_fallback_used` 与 `legacy_db_fallback_channels` 进入统一 fallback 事实源，无法归属 channel 的 fallback 仍阻塞 closeout。controlled-run eligibility 不能在任何 safety blocker 存在时为 true。Stage 4 仍待 edi 重跑，B8-B 仍未授权。
+
 ### F1-D-B8-A6 Stage 4: final config-only rerun and host-contract mismatch review
 
 完成 `f52235e` 后的最终 config-only Stage 4 rerun review。该次运行保持 repository 与 installed runtime source 不变，正式配置接受 `autoRecall.agentAllowlist=["edi","main"]`，但仍无法产生 AutoRecall observation。

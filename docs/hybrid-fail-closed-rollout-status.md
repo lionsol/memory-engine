@@ -277,6 +277,8 @@ The runtime gate therefore preserves default-deny without requiring host fields 
 
 Stage 4 remains open until edi reruns the controlled runtime procedure and produces valid three-surface evidence. B8-B remains unauthorized.
 
+Review hardening also requires explicit safety facts: empty `agentAllowlist` or `triggerAllowlist` values fail closed; full KG/Recent markers must contain `scope_match=null` as an explicit field; and canonical legacy fallback markers override access-mode summaries. Any fallback, scope mismatch, incomplete full marker, channel error, provenance/schema issue, or canary leakage forces `controlled_run_closeout_eligible=false`. A short evidence window may remain insufficient for the 30-day decision while controlled eligibility is true only when these safety facts are clean.
+
 The clean rerun must use the reviewed runtime unchanged. AutoRecall must be triggered through an already-authorized `edi` interactive user session, or another configuration-only route explicitly allowed by the reviewed code. Source edits, runtime-file edits, direct telemetry writes, and temporary gate bypasses are prohibited.
 
 ## Stage 4 Clean Rerun Review
