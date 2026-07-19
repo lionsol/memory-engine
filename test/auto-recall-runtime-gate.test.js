@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { evaluateAutoRecallRuntimeGate } from "../lib/recall/auto-recall-runtime-gate.js";
+
+const MANIFEST = new URL("../openclaw.plugin.json", import.meta.url);
 
 function allowedEvent(overrides = {}) {
   return {
@@ -91,6 +94,29 @@ test("runtime gate denies non-allowlisted agents, chat types, and roles", () => 
     }),
     { allowed: false, reason: "denied_by_message_role_allowlist", messageRole: "assistant" }
   );
+});
+
+test("manifest exposes strict runtime-gate allowlists without broadening defaults", () => {
+  const manifest = JSON.parse(readFileSync(MANIFEST, "utf8"));
+  const autoRecall = manifest.configSchema.properties.autoRecall;
+
+  assert.equal(autoRecall.additionalProperties, false);
+  const expected = {
+    agentAllowlist: ["edi"],
+    chatTypeAllowlist: ["interactive_user_chat"],
+    messageRoleAllowlist: ["user"],
+  };
+
+  for (const [key, defaultValue] of Object.entries(expected)) {
+    const schema = autoRecall.properties[key];
+    assert.equal(schema.type, "array");
+    assert.deepEqual(schema.default, defaultValue);
+    assert.equal(schema.uniqueItems, true);
+    assert.equal(schema.items.type, "string");
+    assert.equal(schema.items.minLength, 1);
+  }
+
+  assert.match(autoRecall.properties.agentAllowlist.description, /controlled runtime verification/i);
 });
 
 test("runtime gate supports config override allowlists", () => {

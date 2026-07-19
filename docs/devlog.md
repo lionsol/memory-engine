@@ -1,5 +1,46 @@
 ## 2026-07-19
 
+### F1-D-B8-A6.4: AutoRecall runtime-gate config contract
+
+Stage 4 clean rerun 保持 reviewed source/runtime 不变，并成功验证 KG/Recent 双通道 full markers、两个 tool surfaces、零 fallback/error/provenance violation 和真实 rollback；但 `auto_recall=0`，因此整体结论为 `INCONCLUSIVE`。
+
+原因是当前可用 session 入口无法同时满足默认 gate：
+
+```text
+agent=edi
+chat_type=interactive_user_chat
+role=user
+```
+
+运行时代码原本已经支持以下 config override：
+
+```text
+agentAllowlist
+chatTypeAllowlist
+messageRoleAllowlist
+```
+
+但 `openclaw.plugin.json` 的 `autoRecall.additionalProperties=false` 且未声明这些字段，因此无法通过正式 schema 做 config-only rerun。
+
+本阶段将三个字段加入官方 manifest schema，默认值保持不变：
+
+```text
+agentAllowlist=["edi"]
+chatTypeAllowlist=["interactive_user_chat"]
+messageRoleAllowlist=["user"]
+```
+
+该变更不扩大生产默认行为。下一次受控 rerun 可以临时将 `main` 加入 `agentAllowlist`，保留 `interactive_user_chat` 和 `user` 两个 gate，使用真实 main interactive user turn 产生 AutoRecall observation，并在完成后恢复原配置。禁止修改 repository 或 installed-runtime source。
+
+Stage 状态：
+
+```text
+Stage 4 clean rerun=INCONCLUSIVE / AUTO_RECALL SURFACE MISSING
+B8-A6.4 runtime-gate config contract=CLOSED
+Stage 4 next rerun=CONFIG-ONLY AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A6 Stage 4: first runtime attempt evidence review
 
 完成首次 Stage 4 runtime attempt 的证据 review。该次运行产生五条 canonical observation，并成功验证双通道 rollback，但不能关闭 Stage 4。

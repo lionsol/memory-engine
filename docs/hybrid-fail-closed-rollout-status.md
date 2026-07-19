@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-19, after review of the first F1-D-B8-A6 Stage 4 runtime attempt.
+> Last updated: 2026-07-19, after the clean Stage 4 rerun review and B8-A6.4 runtime-gate config contract.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -31,7 +31,8 @@ The authoritative operating procedures remain:
 | B8-A6 Stage 2 KG full rollout | CLOSED / PASS | Corrected retry produced four canonical runtime observations: `auto_recall=2`, `memory_engine_search=1`, `memory_engine_action_search=1`. All carried KG full markers, Recent remained `legacy_fallback`, and channel/fallback/schema violations were zero. |
 | B8-A6 Stage 3 KG rollback validation | CLOSED / PASS | Original configuration and `agent:main` model were restored; gateway reloaded; rollback search observation contained no KG full residue; post-rollback A5 smoke passed 10/10. |
 | B8-A6.3 observation provenance hardening | CLOSED | Shared validator now enforces canonical event/source/schema/search/completion/trace provenance and AutoRecall session provenance. Invalid rows remain auditable but are excluded from production denominators and block canary, rollout, evidence-window, and removal decisions. |
-| B8-A6 Stage 4 Recent full rollout | ATTEMPTED / EVIDENCE INVALID / CLEAN RERUN REQUIRED | The first runtime attempt produced five canonical observations and a successful rollback, but `auto-recall-runtime-gate.js` was temporarily modified during the rollout window. The evidence therefore came from an unreviewed runtime tree and cannot close Stage 4. Authorization remains limited to a clean rerun with no source or runtime-code changes. |
+| B8-A6 Stage 4 Recent full rollout | CLEAN RERUN INCONCLUSIVE / AUTO_RECALL SURFACE MISSING | The unmodified-runtime rerun verified KG and Recent full markers on both tool surfaces, zero fallback/error/provenance violations, and a successful rollback. It could not produce `auto_recall` because no available session satisfied the reviewed default gate `edi + interactive_user_chat + user`. Stage 4 remains open. |
+| B8-A6.4 AutoRecall runtime-gate config contract | CLOSED | The existing runtime allowlists are now declared in `openclaw.plugin.json`: `agentAllowlist`, `chatTypeAllowlist`, and `messageRoleAllowlist`. Defaults remain `edi`, `interactive_user_chat`, and `user`; controlled reruns may expand them through validated config without modifying source. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed full rollout, production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -269,6 +270,43 @@ B8-B removal=NOT AUTHORIZED
 
 The clean rerun must use the reviewed runtime unchanged. AutoRecall must be triggered through an already-authorized `edi` interactive user session, or another configuration-only route explicitly allowed by the reviewed code. Source edits, runtime-file edits, direct telemetry writes, and temporary gate bypasses are prohibited.
 
+## Stage 4 Clean Rerun Review
+
+The clean rerun kept repository and installed-runtime source unchanged and produced three canonical tool-surface observations:
+
+```text
+memory_engine_search=2
+memory_engine_action_search=1
+auto_recall=0
+KG full markers=3/3
+Recent full markers=3/3
+fallback events=0
+channel errors=0
+invalid provenance=0
+rollback=PASS
+post-rollback A5=10/10
+```
+
+The run is `INCONCLUSIVE`, not failed: the full KG/Recent wiring is healthy on both registered tool surfaces, but no available session creation path satisfied all reviewed default AutoRecall gate dimensions simultaneously:
+
+```text
+agent=edi
+chat_type=interactive_user_chat
+role=user
+```
+
+The runtime gate already supported config overrides, but the plugin manifest did not declare those fields while `autoRecall.additionalProperties=false`; therefore a validated config-only rerun was not yet possible.
+
+B8-A6.4 closes that contract gap by exposing:
+
+```text
+autoRecall.agentAllowlist default=["edi"]
+autoRecall.chatTypeAllowlist default=["interactive_user_chat"]
+autoRecall.messageRoleAllowlist default=["user"]
+```
+
+Defaults remain unchanged. The next rerun may temporarily add `main` to `agentAllowlist` through OpenClaw configuration, use a real main interactive user turn, and restore the original allowlist afterward. No source modification is allowed.
+
 ## Continuing Safety Boundary
 
 Stage 4 authorization does not authorize:
@@ -295,7 +333,7 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 
 ## Next Decision
 
-Repeat B8-A6 Stage 4 under the controlled runtime runbook without changing repository or installed-runtime source code. Stage 4 remains open because the first attempt used an unreviewed runtime gate modification even though its event-level evidence and rollback were otherwise healthy.
+Install the reviewed B8-A6.4 manifest update, then repeat only the missing Stage 4 AutoRecall coverage through validated configuration. Temporarily expand `autoRecall.agentAllowlist` to include `main`, while retaining `interactive_user_chat` and `user`; do not modify source or installed-runtime files. Reuse or regenerate the two real tool surfaces as needed for a single authoritative Stage 4 evidence window.
 
 A passing clean rerun must show both KG and Recent explicit full markers, zero fallback events, zero invalid provenance observations, no channel or schema errors, no scoped-canary metric leakage, and unchanged reviewed source/runtime code throughout the evidence window. After evidence export, both channels must be restored to `legacy_fallback` and the rollback must be verified in the real runtime.
 

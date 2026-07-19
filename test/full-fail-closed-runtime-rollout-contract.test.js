@@ -25,6 +25,10 @@ test("runbook documents official config schema and legacy defaults", () => {
     "fail_closed_canary",
     "full_fail_closed",
     "Both channel defaults remain `legacy_fallback`",
+    '"agentAllowlist": ["edi"]',
+    '"chatTypeAllowlist": ["interactive_user_chat"]',
+    '"messageRoleAllowlist": ["user"]',
+    "temporarily expand an allowlist through validated OpenClaw configuration",
   ]) {
     assert.equal(doc.includes(token), true, `missing runtime rollout token: ${token}`);
   }
@@ -105,7 +109,9 @@ test("runbook defines explicit full markers, stop conditions, and evidence thres
     "minimum_surface_observations: 100",
     "invalid observation provenance",
     "installed runtime source must remain byte-for-byte unchanged",
-    "Do not edit AutoRecall allowlists, chat-type or role gates",
+    "Only reviewed, schema-valid configuration changes are allowed",
+    "autoRecall.agentAllowlist",
+    "Do not edit gate source",
     "Post-run parity after reverting a temporary source change does not establish runtime provenance",
   ]) {
     assert.equal(doc.includes(token), true, `missing evidence token: ${token}`);

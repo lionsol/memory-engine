@@ -52,6 +52,42 @@
             "default": 8000,
             "description": "Timeout for auto recall before_prompt_build hook in milliseconds"
           },
+          "agentAllowlist": {
+            "type": "array",
+            "default": [
+              "edi"
+            ],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Agent IDs allowed to pass the AutoRecall runtime gate; defaults remain edi-only and should be expanded only for controlled runtime verification"
+          },
+          "chatTypeAllowlist": {
+            "type": "array",
+            "default": [
+              "interactive_user_chat"
+            ],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Chat types allowed to pass the AutoRecall runtime gate"
+          },
+          "messageRoleAllowlist": {
+            "type": "array",
+            "default": [
+              "user"
+            ],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Message roles allowed to pass the AutoRecall runtime gate"
+          },
           "cardFirstRuntime": {
             "type": "object",
             "additionalProperties": false,

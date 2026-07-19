@@ -18,7 +18,7 @@ test("Hybrid fail-closed rollout ledger exists and is indexed", () => {
   assert.match(index, /tool-surface-runtime-access-audit\.md/);
 });
 
-test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage 4 first-attempt review", () => {
+test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage 4 rerun status", () => {
   const doc = read(STATUS_DOC);
   for (const token of [
     "Status: Current rollout ledger",
@@ -37,8 +37,11 @@ test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage
     "hybrid-observation-provenance.md",
     "invalid_provenance_observation_count",
     "id=11087",
-    "ATTEMPTED / EVIDENCE INVALID / CLEAN RERUN REQUIRED",
+    "CLEAN RERUN INCONCLUSIVE / AUTO_RECALL SURFACE MISSING",
+    "B8-A6.4 AutoRecall runtime-gate config contract",
     "Stage 4 First Runtime Attempt Review",
+    "Stage 4 Clean Rerun Review",
+    "autoRecall.agentAllowlist default=[\"edi\"]",
     "Stage 4 reviewed-runtime provenance=false",
     "Stage 4 rollback=PASS",
     "Stage 4 Authorization Review",
@@ -76,7 +79,7 @@ test("runtime sync documentation uses the inspected extension install path", () 
   assert.doesNotMatch(doc, /\.\.\/\.\.\/extensions\/memory-engine/);
 });
 
-test("devlog records Stage 1, corrected Stage 2/3 closeout, B8-A6.3, and Stage 4 attempt review", () => {
+test("devlog records Stage 1, corrected Stage 2/3 closeout, B8-A6.3, and Stage 4 rerun review", () => {
   const devlog = read(DEVLOG);
   for (const token of [
     "## 2026-07-19",
@@ -85,6 +88,9 @@ test("devlog records Stage 1, corrected Stage 2/3 closeout, B8-A6.3, and Stage 4
     "auto_recall=2",
     "Stage 2 KG full rollout: PASS",
     "Stage 3 KG rollback: PASS",
+    "F1-D-B8-A6.4: AutoRecall runtime-gate config contract",
+    "Stage 4 clean rerun=INCONCLUSIVE / AUTO_RECALL SURFACE MISSING",
+    "Stage 4 next rerun=CONFIG-ONLY AUTHORIZED",
     "F1-D-B8-A6 Stage 4: first runtime attempt evidence review",
     "Stage 4 reviewed-runtime provenance=false",
     "Stage 4 clean rerun=REQUIRED",

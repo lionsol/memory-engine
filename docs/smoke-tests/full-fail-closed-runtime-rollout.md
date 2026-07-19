@@ -42,6 +42,14 @@ The rollout controls are top-level memory-engine plugin config fields because th
             "enabled": false,
             "agentIds": [],
             "sessionIds": []
+          },
+          "autoRecall": {
+            "enabled": false,
+            "topK": 3,
+            "timeoutMs": 8000,
+            "agentAllowlist": ["edi"],
+            "chatTypeAllowlist": ["interactive_user_chat"],
+            "messageRoleAllowlist": ["user"]
           }
         }
       }
@@ -60,6 +68,16 @@ full_fail_closed
 ```
 
 Both channel defaults remain `legacy_fallback`.
+
+The AutoRecall runtime-gate allowlists are official schema fields under `autoRecall`. Their defaults remain strict:
+
+```text
+agentAllowlist=["edi"]
+chatTypeAllowlist=["interactive_user_chat"]
+messageRoleAllowlist=["user"]
+```
+
+A controlled runtime verification may temporarily expand an allowlist through validated OpenClaw configuration, provided the original values are backed up and restored. This is not permission to edit gate source, disable a gate dimension, or broaden production defaults.
 
 Unknown values must fail safe to legacy behavior in runtime policy code, but the manifest schema should reject them before reload.
 
@@ -279,7 +297,7 @@ After KG rollback validation, restore KG full mode and enable Recent full mode:
 
 Exercise all three surfaces again.
 
-The repository checkout and installed runtime source must remain byte-for-byte unchanged throughout the Stage 4 evidence window. Only reviewed configuration changes are allowed. Do not edit AutoRecall allowlists, chat-type or role gates, Hybrid policies, wrappers, observation writers, or installed runtime files to make a surface execute. Post-run parity after reverting a temporary source change does not establish runtime provenance for observations produced while that change was active.
+The repository checkout and installed runtime source must remain byte-for-byte unchanged throughout the Stage 4 evidence window. Only reviewed, schema-valid configuration changes are allowed. A temporary `autoRecall.agentAllowlist` expansion is permitted when the reviewed manifest exposes the field, the original value is backed up, chat-type and role gates remain enabled, and the value is restored afterward. Do not edit gate source, Hybrid policies, wrappers, observation writers, or installed runtime files to make a surface execute. Post-run parity after reverting a temporary source change does not establish runtime provenance for observations produced while that change was active.
 
 Required Recent evidence:
 
