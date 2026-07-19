@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.3 IMPLEMENTED / REVIEW CHANGES REQUIRED; sustained runtime window not authorized**
+> **Status: B8-A7.3 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -161,9 +161,11 @@ Implementation checkpoint `b725dd5` is not review-closed. Final review found tha
 
 Required fixes are fail closed: observations before `authorized_at` or after `asOf` must not enter any A7 denominator and must create explicit stop conditions for the active epoch; baseline authorization, parity, product-health, healthcheck, observation, and `asOf` timestamps must use one canonical UTC ISO contract and satisfy `authorized_at <= timestamp <= asOf`; negative age must never be fresh; and scheduled-healthcheck evidence must match the trusted resolver's required identity fields before it can satisfy monitor freshness.
 
-The temporal fix binds every child evaluator to the same `authorized_at <= completed_at <= asOf` observation partition. The monitor exposes the authorized-window count and out-of-window counts, classifies future evidence separately from stale evidence, and requires scheduled healthchecks to carry the registration-owned wrapper source plus agent, session, and tool-call identity presence. These checks remain report-only and do not authorize a sustained runtime window.
+Checkpoint `3dcd55c` binds every child evaluator to the same `authorized_at <= completed_at <= asOf` observation partition. The monitor exposes authorized-window and out-of-window counts, classifies future evidence separately from stale evidence, and requires scheduled healthchecks to carry the registration-owned wrapper source plus agent, session, and tool-call identity presence.
 
-The implementation status is `B8-A7.3 IMPLEMENTED / REVIEW CHANGES REQUIRED`. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
+Final review found three remaining contract defects. First, `validateHybridTrafficOriginEvidence()` accepts `scheduled_healthcheck` on `auto_recall`, while the trusted resolver routes AutoRecall only through `before_prompt_build`; a forged AutoRecall healthcheck can therefore satisfy freshness and produce `ready_for_removal_gate`. Second, the exact canonical UTC ISO helper trims surrounding whitespace and accepts the trimmed value. Third, the summary fields are internally inconsistent: `monitor_freshness_status` can be `fresh` while a production surface is stale, and `runtime_parity_status` can be `fresh` while source/runtime drift is an active stop condition. These checks remain report-only and do not authorize a sustained runtime window.
+
+The current status is `B8-A7.3 REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED`. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
 
 ## AutoRecall Product Boundary
 

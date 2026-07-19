@@ -1,5 +1,32 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.3: temporal fix final review changes required
+
+Reviewed implementation checkpoint `3dcd55c`. The original temporal findings are closed: all child evaluators consume the same authorized observation partition, pre-authorization and post-`asOf` rows create stop conditions, future evidence is not fresh, external report timestamps use the shared canonical UTC ISO validator, and incomplete scheduled-healthcheck identity evidence is rejected.
+
+Final adversarial review found three remaining contract defects:
+
+```text
+code-review-graph version=2.3.7
+code-review-graph risk score=0.60
+focused tests=99/99 passed
+auto_recall scheduled-healthcheck validator result=valid
+trusted resolver result=unknown / non_user_trigger
+forged auto_recall healthcheck result=ready_for_removal_gate
+canonical timestamp surrounding whitespace accepted=true
+stale surface with monitor_freshness_status=fresh
+runtime parity drift with runtime_parity_status=fresh
+B8-A7.3=REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+- `validateHybridTrafficOriginEvidence()` does not restrict `scheduled_healthcheck` to `memory_engine_search` or `memory_engine_action_search`. The trusted resolver cannot emit a scheduled healthcheck for `auto_recall`, but the validator accepts it, and a full synthetic window using that forged freshness row reaches removal readiness.
+- `canonicalIsoTimestamp()` trims the input before exact comparison, so timestamps with leading or trailing whitespace are accepted despite the exact canonical contract.
+- `monitor_freshness_status` omits per-surface freshness, and `runtime_parity_status` reports only timestamp freshness. Both can say `fresh` while their own stop conditions make the top-level decision `blocked_rollback_required`.
+
+This review did not modify runtime implementation, access databases, install/reload the plugin, enable an evidence epoch, start sustained full mode, or authorize B8-B.
+
 ### F1-D-B8-A7.3: implementation review changes required
 
 Reviewed implementation checkpoint `b725dd5`. The composition architecture correctly reuses the accepted identity, continuity, fallback-window, full-rollout, and canonical provenance evaluators, and 75 focused tests pass. `code-review-graph 2.3.7` reported risk 0.55, zero stored-flow impact, and helper-level test gaps around baseline/time/freshness functions. Adversarial review confirmed four evidence-boundary defects that block A7.3 closeout.
