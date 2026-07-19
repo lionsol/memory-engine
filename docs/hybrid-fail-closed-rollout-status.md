@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-19, after B8-A6.5 implementation and review hardening closed the AutoRecall hook-contract blocker.
+> Last updated: 2026-07-19, after the final unchanged-runtime three-surface Stage 4 rerun passed and rollback was verified.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -31,9 +31,9 @@ The authoritative operating procedures remain:
 | B8-A6 Stage 2 KG full rollout | CLOSED / PASS | Corrected retry produced four canonical runtime observations: `auto_recall=2`, `memory_engine_search=1`, `memory_engine_action_search=1`. All carried KG full markers, Recent remained `legacy_fallback`, and channel/fallback/schema violations were zero. |
 | B8-A6 Stage 3 KG rollback validation | CLOSED / PASS | Original configuration and `agent:main` model were restored; gateway reloaded; rollback search observation contained no KG full residue; post-rollback A5 smoke passed 10/10. |
 | B8-A6.3 observation provenance hardening | CLOSED | Shared validator now enforces canonical event/source/schema/search/completion/trace provenance and AutoRecall session provenance. Invalid rows remain auditable but are excluded from production denominators and block canary, rollout, evidence-window, and removal decisions. |
-| B8-A6 Stage 4 Recent full rollout | AUTHORIZED / FINAL RUNTIME RERUN REQUIRED | The previous reviewed runtime verified both tool surfaces and rollback but could not produce `auto_recall` because the old gate required host fields unavailable to `before_prompt_build`. B8-A6.5 has closed that blocker; Stage 4 now requires one final unchanged-runtime three-surface rerun before closeout. |
+| B8-A6 Stage 4 Recent full rollout | CLOSED / PASS | Final unchanged-runtime rerun produced four canonical observations in one evidence window: `auto_recall=2`, `memory_engine_search=1`, and `memory_engine_action_search=1`. All carried exact KG and Recent full markers, explicit `scope_match=null`, zero fallback/error/provenance/schema/canary violations, and `controlled_run_closeout_eligible=true`. Both channels were then restored to legacy mode and a fresh rollback observation plus A5 10/10 confirmed rollback. |
 | B8-A6.4 AutoRecall runtime-gate config contract | CLOSED / INSUFFICIENT | The existing runtime allowlists are now schema-valid configuration, and `agentAllowlist=["edi","main"]` loaded successfully. This could not solve the missing `chatType/messageRole` dimensions because those values do not exist in the host hook contract. |
-| B8-A6.5 hook-contract-compatible AutoRecall gate | CLOSED / READY FOR RUNTIME RERUN | The gate now uses trusted `ctx.agentId` and `ctx.trigger` for default-deny decisions. `chatType` and `messageRole` remain optional supplementary constraints when explicitly supplied. Required allowlists fail closed when empty; full markers require explicit `scope_match=null`; unified fallback markers and all safety blockers disable controlled-run closeout. Review validation passed 63/63 focused tests, static-check 445 files, and A5 10/10. |
+| B8-A6.5 hook-contract-compatible AutoRecall gate | CLOSED / RUNTIME VERIFIED | The gate uses trusted `ctx.agentId` and `ctx.trigger` for default-deny decisions; `chatType` and `messageRole` remain optional supplementary constraints. Required allowlists fail closed when empty; full markers require explicit `scope_match=null`; unified fallback markers and all safety blockers disable controlled-run closeout. The final Stage 4 rerun produced two valid AutoRecall observations through the reviewed hook contract. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed full rollout, production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -343,6 +343,56 @@ Stage 4=INCONCLUSIVE
 
 B8-A6.5 is now implemented and review-accepted. Commits `202c9b2` and `899edce` align the gate with trusted `ctx.agentId` and `ctx.trigger`, preserve explicit denial of non-user execution paths, retain optional compatibility checks for explicit chat/role fields, and harden controlled-run evidence against empty required allowlists, incomplete full markers, canonical fallback markers, and inconsistent safety eligibility.
 
+## Stage 4 Final Runtime Rerun Closeout
+
+The final rerun used reviewed commit `6aa26e4` with repository and installed-runtime source unchanged throughout the evidence window. Four canonical production observations were exported:
+
+```text
+auto_recall=2
+memory_engine_search=1
+memory_engine_action_search=1
+```
+
+All four observations satisfied:
+
+```text
+KG runtime_mode=full_fail_closed
+KG rollout_scope=full
+KG scope_required=false
+KG scope_match=null
+Recent runtime_mode=full_fail_closed
+Recent rollout_scope=full
+Recent scope_required=false
+Recent scope_match=null
+legacy_db_fallback_used=false
+legacy_db_fallback_channels=[]
+channel_error_count=0
+invalid provenance=0
+```
+
+The controlled-run evaluator reported:
+
+```text
+status=insufficient_evidence
+controlled_run_surface_coverage_status=complete
+missing_controlled_run_surfaces=[]
+controlled_run_closeout_eligible=true
+controlled_run_blockers=[]
+blockers=[]
+```
+
+`status=insufficient_evidence` reflects only the separate 30-day, 500-observation, and 100-per-surface production-window thresholds. It does not block Stage 4 controlled-run closeout.
+
+Both channels were restored to legacy configuration. A fresh `memory_engine_search` rollback observation contained no full-mode residue, source/runtime parity remained clean, and post-rollback A5 passed 10/10.
+
+Decision:
+
+```text
+B8-A6 Stage 4=CLOSED / PASS
+B8-A6.5=CLOSED / RUNTIME VERIFIED
+B8-B removal=NOT AUTHORIZED
+```
+
 ## Continuing Safety Boundary
 
 Stage 4 authorization does not authorize:
@@ -356,7 +406,7 @@ Stage 4 authorization does not authorize:
 - removal of legacy SQL, query definitions, call sites, or `withLegacyDb` reachability;
 - push or release publication.
 
-Stage 4 is authorized only for the controlled rollout and rollback procedure. It does not authorize B8-B removal.
+Stage 4 closeout confirms the controlled rollout and rollback wiring only. It does not authorize B8-B removal or substitute for the required sustained production evidence window.
 
 ## Relevant Commits
 
@@ -367,12 +417,11 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 4a8d7a5 feat(recall): audit runtime tool surface access
 202c9b2 feat(recall): align AutoRecall gate with host hook contract
 899edce fix(recall): harden AutoRecall gate and rollout evidence
+6aa26e4 docs(recall): close A6.5 implementation review
 ```
 
 ## Next Decision
 
-Execute the final B8-A6 Stage 4 runtime rerun using reviewed commit `899edce` or a later reviewed documentation-only commit. The run must exercise `auto_recall`, `memory_engine_action_search`, and `memory_engine_search` in one authoritative evidence window and require `controlled_run_surface_coverage_status=complete`, `controlled_run_closeout_eligible=true`, and an empty `controlled_run_blockers` array.
+Stage 4 is closed. The next decision is whether to separately authorize a sustained production evidence window for possible future B8-B review. That decision must define the long-running full-mode configuration, monitoring cadence, stop conditions, configuration rollback, and ownership of the 30-day evidence record.
 
-A passing clean rerun must show both KG and Recent explicit full markers, zero fallback events, zero invalid provenance observations, no channel or schema errors, no scoped-canary metric leakage, and unchanged reviewed source/runtime code throughout the evidence window. After evidence export, both channels must be restored to `legacy_fallback` and the rollback must be verified in the real runtime.
-
-B8-B removal remains unauthorized until the required production evidence window, zero fallback and invalid-provenance counts, tested post-removal rollback strategy, complete inventory, and removal gate are independently satisfied.
+Do not remove legacy fallback code or start B8-B merely because the controlled Stage 4 rerun passed. B8-B remains unauthorized until the production evidence window reaches at least 30 days, 500 canonical observations, and 100 observations per production surface with zero fallback, invalid-provenance, schema, channel, and marker violations, plus a tested post-removal rollback strategy, complete legacy code inventory, and explicit removal-gate approval.

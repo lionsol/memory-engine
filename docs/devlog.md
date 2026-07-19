@@ -1,5 +1,60 @@
 ## 2026-07-19
 
+### F1-D-B8-A6 Stage 4: final runtime rerun closeout
+
+完成 reviewed commit `6aa26e4` 的最终三 surface runtime rerun 与证据复核，Stage 4 正式关闭。
+
+权威 evidence window 产生：
+
+```text
+auto_recall=2
+memory_engine_search=1
+memory_engine_action_search=1
+KG full markers=4/4
+Recent full markers=4/4
+legacy fallback events=0
+channel errors=0
+invalid provenance=0
+unknown/unsupported/partial events=0
+canary leakage=0
+```
+
+所有 KG/Recent full observation 均显式满足：
+
+```text
+runtime_mode=full_fail_closed
+rollout_scope=full
+scope_required=false
+scope_match=null
+legacy_db_fallback_used=false
+legacy_db_fallback_channels=[]
+```
+
+controlled-run evaluator：
+
+```text
+status=insufficient_evidence
+controlled_run_surface_coverage_status=complete
+missing_controlled_run_surfaces=[]
+controlled_run_closeout_eligible=true
+controlled_run_blockers=[]
+blockers=[]
+```
+
+`insufficient_evidence` 只对应独立的 30 天 / 500 条 / 每 surface 100 条 production window 阈值，不阻塞短时 controlled-run closeout。
+
+回滚后双通道恢复 legacy 配置，新 `memory_engine_search` observation 无 full marker residue，source/runtime parity 为零，post-rollback A5=10/10。未发生 Core DB 直接访问、memory mutation、fallback removal、push、tag 或 release。
+
+最终状态：
+
+```text
+B8-A6 Stage 4=CLOSED / PASS
+B8-A6.5=CLOSED / RUNTIME VERIFIED
+B8-B removal=NOT AUTHORIZED
+```
+
+下一步只能是单独评审并授权 sustained production evidence window；Stage 4 PASS 本身不授权 B8-B。
+
 ### F1-D-B8-A6.5: implementation review closeout
 
 完成 `202c9b2` 与 `899edce` 的实现级 review。三项 review finding 已关闭：required `agentAllowlist` / `triggerAllowlist` 显式空数组 fail closed；KG/Recent full marker 必须显式包含 `scope_match=null`；`legacy_db_fallback_used` / `legacy_db_fallback_channels` 已纳入统一 fallback 事实源并与 controlled-run eligibility 对齐。
