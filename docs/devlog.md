@@ -1,5 +1,37 @@
 ## 2026-07-19
 
+### F1-D-B8-A7: sustained production evidence-window authorization review
+
+Stage 4 已完成 controlled runtime closeout，但 30 天 production evidence window 暂不授权。评审确认现有 30 天 / 500 条 / 每 surface 100 条门槛缺少长期证据治理，直接开启 full mode 会产生不可审计窗口。
+
+阻塞项：
+
+```text
+A7.1 evidence epoch / installed runtime identity / rollout config fingerprint
+A7.2 active-day continuity / maximum gap / per-surface span / traffic origin
+A7.3 read-only health monitor / machine-readable stop and rollback status
+```
+
+当前 observation schema 未绑定 reviewed deployment，无法防止 30 天内不同 runtime 版本被合并。现有 evaluator 只用首尾时间计算窗口，无法识别长时间断档。gateway `/tools/invoke` operator probes 与自然 agent tool calls 也没有来源分类，不能让人为探针静默满足 production denominator。
+
+新增设计 runbook：
+
+```text
+docs/smoke-tests/full-fail-closed-production-evidence-window.md
+```
+
+授权边界：
+
+```text
+B8-A7 design/tooling=AUTHORIZED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+long-running autoRecall.enabled=true=NOT AUTHORIZED
+long-running KG/Recent full_fail_closed=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+下一步先实现 B8-A7.1。该阶段只允许 observation metadata、report-only evaluator、测试和文档，不访问真实 DB、不修改 runtime config、不 reload gateway、不产生人为 production denominator、不执行 memory mutation、不进入 B8-B。
+
 ### F1-D-B8-A6 Stage 4: final runtime rerun closeout
 
 完成 reviewed commit `6aa26e4` 的最终三 surface runtime rerun 与证据复核，Stage 4 正式关闭。

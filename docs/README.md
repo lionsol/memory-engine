@@ -37,7 +37,8 @@
 | 事件时间归属 | [`adr/event-time-ownership.md`](adr/event-time-ownership.md) | Accepted ADR | 确定 event-time 元数据由 engine-side sidecar 持有，禁止伪造或回写 core schema |
 | 发布与版本身份 | [`release-version-policy.md`](release-version-policy.md) | Current release policy | 区分可达发布标签、manifest version、unreleased commits 和精确 build identity |
 | 检索结果到回答的证据规则 | [`retrieval-answering-policy.md`](retrieval-answering-policy.md) | Current policy | 规定按日期回顾等场景的证据优先级，防止把派生摘要当成原始事实 |
-| Hybrid fail-closed rollout 当前状态 | [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md) | Current rollout ledger | 记录 F1-D-B8-A5/A6 阶段、真实 observation 证据、工具策略发现、Stage 2/3 门禁与 B8-B 禁止边界 |
+| Hybrid fail-closed rollout 当前状态 | [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md) | Current rollout ledger | 记录 F1-D-B8-A5/A6/A7 阶段、真实 observation 证据、持续窗口治理与 B8-B 禁止边界 |
+| Hybrid 持续生产证据窗口 | [`smoke-tests/full-fail-closed-production-evidence-window.md`](smoke-tests/full-fail-closed-production-evidence-window.md) | B8-A7 design contract | 定义 evidence epoch、runtime/config identity、窗口连续性、traffic origin、健康监控与停止条件；当前不授权长期 full mode |
 
 ### 架构速览图
 

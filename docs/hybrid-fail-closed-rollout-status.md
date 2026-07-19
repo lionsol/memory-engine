@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-19, after the final unchanged-runtime three-surface Stage 4 rerun passed and rollback was verified.
+> Last updated: 2026-07-19, after Stage 4 closeout and the B8-A7 sustained production evidence-window authorization review.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -14,6 +14,7 @@ The authoritative operating procedures remain:
 
 - [`smoke-tests/full-fail-closed-safety-smoke.md`](smoke-tests/full-fail-closed-safety-smoke.md)
 - [`smoke-tests/full-fail-closed-runtime-rollout.md`](smoke-tests/full-fail-closed-runtime-rollout.md)
+- [`smoke-tests/full-fail-closed-production-evidence-window.md`](smoke-tests/full-fail-closed-production-evidence-window.md)
 - [`smoke-tests/tool-surface-runtime-access-audit.md`](smoke-tests/tool-surface-runtime-access-audit.md)
 - [`legacy-fallback-code-inventory.md`](legacy-fallback-code-inventory.md)
 
@@ -34,7 +35,8 @@ The authoritative operating procedures remain:
 | B8-A6 Stage 4 Recent full rollout | CLOSED / PASS | Final unchanged-runtime rerun produced four canonical observations in one evidence window: `auto_recall=2`, `memory_engine_search=1`, and `memory_engine_action_search=1`. All carried exact KG and Recent full markers, explicit `scope_match=null`, zero fallback/error/provenance/schema/canary violations, and `controlled_run_closeout_eligible=true`. Both channels were then restored to legacy mode and a fresh rollback observation plus A5 10/10 confirmed rollback. |
 | B8-A6.4 AutoRecall runtime-gate config contract | CLOSED / INSUFFICIENT | The existing runtime allowlists are now schema-valid configuration, and `agentAllowlist=["edi","main"]` loaded successfully. This could not solve the missing `chatType/messageRole` dimensions because those values do not exist in the host hook contract. |
 | B8-A6.5 hook-contract-compatible AutoRecall gate | CLOSED / RUNTIME VERIFIED | The gate uses trusted `ctx.agentId` and `ctx.trigger` for default-deny decisions; `chatType` and `messageRole` remain optional supplementary constraints. Required allowlists fail closed when empty; full markers require explicit `scope_match=null`; unified fallback markers and all safety blockers disable controlled-run closeout. The final Stage 4 rerun produced two valid AutoRecall observations through the reviewed hook contract. |
-| B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed full rollout, production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
+| B8-A7 sustained production evidence window | DESIGN AUTHORIZED / RUNTIME NOT AUTHORIZED | Stage 4 proved controlled wiring, but current observations do not bind rows to one evidence epoch, installed-runtime fingerprint, rollout-config fingerprint, continuous activity pattern, or auditable traffic origin. A7.1–A7.3 evidence-governance tooling must be implemented and reviewed before any 30-day full-mode or sustained AutoRecall configuration is authorized. |
+| B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
 
@@ -420,8 +422,32 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 6aa26e4 docs(recall): close A6.5 implementation review
 ```
 
+## B8-A7 Sustained Production Evidence Authorization Review
+
+The operator approved continuation after Stage 4 closeout, which authorizes design and implementation of A7 evidence-governance tooling. It does not authorize keeping KG/Recent in `full_fail_closed` or AutoRecall enabled for 30 days.
+
+Four gaps block runtime authorization:
+
+1. observations do not identify one immutable `evidence_epoch_id`, installed-runtime build fingerprint, and rollout-config fingerprint;
+2. the current first-to-last timestamp span does not detect long gaps or observations concentrated only at the two ends of a nominal 30-day window;
+3. tool observations do not distinguish natural agent-selected use from operator `/tools/invoke` probes or scheduled healthchecks;
+4. the repository has end-of-window evaluators but no dedicated read-only health status and stop/rollback contract for an active production epoch.
+
+The required implementation sequence is:
+
+```text
+B8-A7.1 evidence epoch and deployment identity
+B8-A7.2 continuity and traffic-origin evidence
+B8-A7.3 read-only health monitor and stop contract
+B8-A7 runtime authorization review
+B8-A7 sustained production evidence window
+B8-B removal-gate review
+```
+
+The authoritative design boundary is [`smoke-tests/full-fail-closed-production-evidence-window.md`](smoke-tests/full-fail-closed-production-evidence-window.md).
+
 ## Next Decision
 
-Stage 4 is closed. The next decision is whether to separately authorize a sustained production evidence window for possible future B8-B review. That decision must define the long-running full-mode configuration, monitoring cadence, stop conditions, configuration rollback, and ownership of the 30-day evidence record.
+Implement and review B8-A7.1 before any long-running runtime configuration change. Stage 4's temporary `autoRecall.enabled=true`, `agentAllowlist=["edi","main"]`, and dual `full_fail_closed` configuration do not authorize sustained production use.
 
-Do not remove legacy fallback code or start B8-B merely because the controlled Stage 4 rerun passed. B8-B remains unauthorized until the production evidence window reaches at least 30 days, 500 canonical observations, and 100 observations per production surface with zero fallback, invalid-provenance, schema, channel, and marker violations, plus a tested post-removal rollback strategy, complete legacy code inventory, and explicit removal-gate approval.
+Do not remove legacy fallback code or start B8-B merely because the controlled Stage 4 rerun passed. B8-B remains unauthorized until one governed evidence epoch reaches the approved continuity and origin requirements, at least 30 days, 500 canonical production observations, and 100 qualifying observations per production surface with zero fallback, invalid-provenance, schema, channel, identity, origin, and marker violations, plus a tested post-removal rollback strategy, complete legacy code inventory, and explicit removal-gate approval.
