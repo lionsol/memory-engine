@@ -192,6 +192,58 @@ test("canary compatibility aliases are preserved in normalized config", () => {
   });
 });
 
+test("Recent canary accepts the legacy single token alias", () => {
+  const config = normalized({
+    pluginConfig: {
+      recentFailClosedCanary: {
+        enabled: true,
+        token: "canary-token",
+      },
+    },
+  });
+  assert.deepEqual(config.recentFailClosedCanary.tokens, ["canary-token"]);
+});
+
+test("Recent canary rejects malformed single token aliases", () => {
+  for (const token of ["", {}, ["canary-token"]]) {
+    const result = resolveEffectiveHybridRuntimeConfig({
+      pluginConfig: { recentFailClosedCanary: { enabled: true, token } },
+    });
+    assert.equal(result.valid, false, JSON.stringify(token));
+  }
+});
+
+test("Recent canary token arrays take precedence over the single token alias", () => {
+  const config = normalized({
+    pluginConfig: {
+      recentFailClosedCanary: {
+        enabled: true,
+        token: "ignored-token",
+        tokens: ["preferred-token"],
+      },
+    },
+  });
+  assert.deepEqual(config.recentFailClosedCanary.tokens, ["preferred-token"]);
+});
+
+test("malformed high-priority AutoRecall does not fall through to a lower source", () => {
+  for (const autoRecall of ["bad", null, [], 4, false]) {
+    const result = resolveEffectiveHybridRuntimeConfig({
+      pluginConfig: { autoRecall },
+      pluginEntryConfig: { autoRecall: { enabled: true, topK: 9 } },
+    });
+    assert.equal(result.valid, false, JSON.stringify(autoRecall));
+    assert.ok(result.errors.includes("invalid_object:autoRecall"), JSON.stringify(autoRecall));
+    assert.equal(result.autoRecall.enabled, false, JSON.stringify(autoRecall));
+    assert.notEqual(result.autoRecall.topK, 9, JSON.stringify(autoRecall));
+    const identity = createProductionEvidenceIdentityContext({
+      config: result,
+      configErrors: result.errors,
+    });
+    assert.equal(identity.rolloutConfigFingerprint, null, JSON.stringify(autoRecall));
+  }
+});
+
 test("invalid fail-closed modes fail safe and invalidate evidence identity", () => {
   const result = resolveEffectiveHybridRuntimeConfig({
     pluginConfig: { kgFailClosedMode: "unexpected_mode" },

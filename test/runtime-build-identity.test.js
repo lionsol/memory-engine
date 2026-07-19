@@ -6,18 +6,21 @@ import { tmpdir } from "node:os";
 import {
   buildRuntimeBuildIdentity,
   collectRuntimeBuildFiles,
+  REQUIRED_RUNTIME_FILES,
   ROOT_RUNTIME_FILES,
 } from "../lib/version/runtime-build-identity.js";
 
 function fixtureRoot() {
   const root = mkdtempSync(resolve(tmpdir(), "runtime-build-identity-"));
   mkdirSync(resolve(root, "lib"));
+  mkdirSync(resolve(root, "bin"));
   mkdirSync(resolve(root, "docs"));
   mkdirSync(resolve(root, "test"));
   writeFileSync(resolve(root, "index.js"), "export const entry = 1;\n");
   writeFileSync(resolve(root, "openclaw.plugin.json"), "{}\n");
   writeFileSync(resolve(root, "package.json"), "{\"type\":\"module\"}\n");
   for (const file of ROOT_RUNTIME_FILES) {
+    mkdirSync(resolve(root, file, ".."), { recursive: true });
     writeFileSync(resolve(root, file), `export const ${file.replaceAll("-", "_").replace(".js", "")} = 1;\n`);
   }
   writeFileSync(resolve(root, "lib/runtime.js"), "export const runtime = 1;\n");
@@ -136,6 +139,38 @@ test("required and runtime-scope symlinks fail closed", () => {
   const escapedDirectory = buildRuntimeBuildIdentity({ rootDir: root });
   assert.equal(escapedDirectory.valid, false);
   assert.ok(escapedDirectory.errors.some(error => error.startsWith("symlink_escapes_root:lib/escaped-directory")));
+});
+
+test("fileEntries require the complete declared runtime scope", () => {
+  const completeEntries = [...REQUIRED_RUNTIME_FILES, ...ROOT_RUNTIME_FILES].map(path => ({
+    path,
+    content: `${path}\n`,
+  }));
+  const complete = buildRuntimeBuildIdentity({ fileEntries: completeEntries });
+  assert.equal(complete.valid, true);
+
+  const missingAllRootFiles = buildRuntimeBuildIdentity({
+    fileEntries: REQUIRED_RUNTIME_FILES.map(path => ({ path, content: `${path}\n` })),
+  });
+  assert.equal(missingAllRootFiles.valid, false);
+  assert.ok(missingAllRootFiles.errors.includes(`missing_runtime_file:${ROOT_RUNTIME_FILES[0]}`));
+
+  const missingOneRootFile = buildRuntimeBuildIdentity({
+    fileEntries: completeEntries.filter(entry => entry.path !== ROOT_RUNTIME_FILES[0]),
+  });
+  assert.equal(missingOneRootFile.valid, false);
+  assert.ok(missingOneRootFile.errors.includes(`missing_runtime_file:${ROOT_RUNTIME_FILES[0]}`));
+});
+
+test("duplicate injected runtime paths fail closed", () => {
+  const entries = [...REQUIRED_RUNTIME_FILES, ...ROOT_RUNTIME_FILES].map(path => ({
+    path,
+    content: `${path}\n`,
+  }));
+  entries.push({ path: ROOT_RUNTIME_FILES[0], content: "duplicate\n" });
+  const result = buildRuntimeBuildIdentity({ fileEntries: entries });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.includes(`duplicate_runtime_path:${ROOT_RUNTIME_FILES[0]}`));
 });
 
 function readFileForTest(path) {

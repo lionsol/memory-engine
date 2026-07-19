@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { extname, relative, resolve } from "node:path";
+import { readFileSync, statSync } from "node:fs";
+import { relative, resolve } from "node:path";
 import {
   REQUIRED_RUNTIME_FILES,
   ROOT_RUNTIME_FILES,
@@ -12,16 +12,6 @@ const allowedRootRuntimeFiles = new Set([
   ...REQUIRED_RUNTIME_FILES,
   ...ROOT_RUNTIME_FILES,
 ]);
-
-function sourceFiles(directory, output = []) {
-  for (const name of readdirSync(directory).sort()) {
-    const path = resolve(directory, name);
-    const stats = statSync(path);
-    if (stats.isDirectory()) sourceFiles(path, output);
-    else if (extname(name) === ".js") output.push(path);
-  }
-  return output;
-}
 
 function resolveImport(sourcePath, specifier) {
   const base = resolve(sourcePath, "..");
@@ -34,6 +24,30 @@ function resolveImport(sourcePath, specifier) {
       return false;
     }
   }) || null;
+}
+
+function runtimeSourceFiles(entryPath) {
+  const pending = [entryPath];
+  const visited = new Set();
+  const output = [];
+  while (pending.length > 0) {
+    const sourcePath = pending.shift();
+    if (visited.has(sourcePath)) continue;
+    visited.add(sourcePath);
+    output.push(sourcePath);
+    const source = readFileSync(sourcePath, "utf8");
+    for (const specifier of localImports(source)) {
+      const target = resolveImport(sourcePath, specifier);
+      assert.ok(target, `unresolved local runtime import ${relative(root, sourcePath)} -> ${specifier}`);
+      const targetPath = relative(root, target).replaceAll("\\", "/");
+      assert.ok(
+        targetPath.startsWith("lib/") || allowedRootRuntimeFiles.has(targetPath),
+        `local runtime dependency is outside identity scope: ${relative(root, sourcePath)} -> ${targetPath}`,
+      );
+      pending.push(target);
+    }
+  }
+  return output;
 }
 
 function localImports(source) {
@@ -51,13 +65,13 @@ function localImports(source) {
 
 test("all local runtime imports are covered by the runtime identity scope", () => {
   const findings = [];
-  for (const sourcePath of sourceFiles(resolve(root, "lib")).concat(resolve(root, "index.js"))) {
+  for (const sourcePath of runtimeSourceFiles(resolve(root, "index.js"))) {
     const source = readFileSync(sourcePath, "utf8");
     for (const specifier of localImports(source)) {
       const target = resolveImport(sourcePath, specifier);
       assert.ok(target, `unresolved local runtime import ${relative(root, sourcePath)} -> ${specifier}`);
       const targetPath = relative(root, target).replaceAll("\\", "/");
-      if (targetPath.startsWith("lib/") || targetPath.includes("/")) continue;
+      if (targetPath.startsWith("lib/")) continue;
       findings.push({ source: relative(root, sourcePath), specifier, target: targetPath });
       assert.ok(
         allowedRootRuntimeFiles.has(targetPath),

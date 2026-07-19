@@ -8746,3 +8746,11 @@ git diff --check
 - `migration applied: no`
 - 两个命令均为 `dry_run=true`，`writes_db=false`，`migration_applied=false`。
 - full `npm test`：通过。
+
+### B8-A7.1 final compatibility and closure guard fixes: 2026-07-19
+
+- malformed higher-priority `autoRecall` objects now fail closed and no longer fall through to lower-priority configuration; safe runtime defaults are used and the rollout fingerprint is invalidated.
+- Recent canary normalization preserves the supported single-value `token` alias without expanding KG token scope behavior; malformed token aliases remain invalid.
+- runtime identity closure now includes the declared `bin/sync-memory-index.js` dependency, validates all declared root runtime files for injected `fileEntries`, and rejects duplicate injected paths.
+- dependency-closure validation follows the actual `index.js` runtime import closure and rejects reachable local dependencies outside `lib/` or the declared root runtime scope.
+- status: `B8-A7.1 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING`; A7.2, sustained runtime authorization, and B8-B remain unauthorized.
