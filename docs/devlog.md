@@ -1,5 +1,29 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.1: second implementation review changes required
+
+复核 implementation checkpoint `41892ed`。第一轮要求的 `package.json` 必需文件、runtime symlink fail-closed 和初始 config-source 统一均已实现，34 个定向测试通过；但第二轮对抗 review 仍确认三类 identity 完整性问题，因此 A7.1 尚不能关闭，也不能进入 A7.2。
+
+```text
+root-level runtime dependency coverage=incomplete
+legacy memoryEngine.recall.topK behavior preserved=false
+retrieval-sensitive memoryEngine config fingerprinted=false
+malformed compatibility AutoRecall config consistently invalidated=false
+B8-A7.1=IMPLEMENTED / SECOND REVIEW CHANGES REQUIRED
+B8-A7.2=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+具体证据：
+
+- `index.js` 与 Hybrid modules 直接或间接依赖根目录 `query-utils.js`、`auto-recall.js`、`memory-manager-runtime.js` 等文件，但当前 runtime identity 只覆盖三个必需入口与 `lib/**`。临时 fixture 修改 `query-utils.js` 后 identity 不变，仍返回 `valid=true`。
+- 旧 runtime 在 AutoRecall 未显式配置 `topK` 时读取 `memoryEngine.recall.topK`。对抗输入设置该值为 11，旧行为为 11，新 normalized resolver 将其改成 schema default 3。
+- `memoryEngine.recall` / `ranking` 会改变 FTS、vector、Recent、RRF、confidence 和 lexical gate 行为，但这些值变化时当前 `rollout_config_fingerprint` 保持不变。
+- compatibility 输入中的非法 `autoRecall.enabled`、`topK`、`timeoutMs` 等没有被一致标记 invalid；部分输入被静默转成不同运行行为，部分非法值继续进入 valid fingerprint。
+
+本 review 只更新台账和契约，不修改实现、不访问真实 DB、不 install/reload plugin、不修改真实配置、不启动 A7 runtime、不进入 B8-B。
+
 ### F1-D-B8-A7.1: identity review fixes implemented
 
 实现并验证 A7.1 review fixes：`package.json` 现在是 runtime identity 必需文件，runtime scope 内所有 symlink 均 fail closed，rollout config fingerprint 与实际 normalized effective runtime config 共用同一解析结果，并保留 legacy config source compatibility。当前仍等待最终 review，不授权 A7.2 或 sustained runtime window。
