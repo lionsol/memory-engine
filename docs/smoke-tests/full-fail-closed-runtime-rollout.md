@@ -279,6 +279,8 @@ After KG rollback validation, restore KG full mode and enable Recent full mode:
 
 Exercise all three surfaces again.
 
+The repository checkout and installed runtime source must remain byte-for-byte unchanged throughout the Stage 4 evidence window. Only reviewed configuration changes are allowed. Do not edit AutoRecall allowlists, chat-type or role gates, Hybrid policies, wrappers, observation writers, or installed runtime files to make a surface execute. Post-run parity after reverting a temporary source change does not establish runtime provenance for observations produced while that change was active.
+
 Required Recent evidence:
 
 - `recent_runtime_mode=full_fail_closed`;
@@ -301,7 +303,9 @@ Rollback both channels to `legacy_fallback` if any of the following occurs:
 - full events increment scoped-canary metrics;
 - one channel changes another channel's configured behavior;
 - unknown production surfaces, unsupported observation schema versions, or invalid observation provenance appear;
-- runtime source differs from the reviewed checkout;
+- runtime source differs from the reviewed checkout at any point in the evidence window;
+- repository or installed-runtime source is modified to bypass agent, chat-type, role, or other execution gates;
+- post-run parity is offered as a substitute for proving code parity during the evidence window;
 - controlled searches fail or return structurally invalid results.
 
 ## Read-Only Observation Export

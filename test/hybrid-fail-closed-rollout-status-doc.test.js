@@ -18,7 +18,7 @@ test("Hybrid fail-closed rollout ledger exists and is indexed", () => {
   assert.match(index, /tool-surface-runtime-access-audit\.md/);
 });
 
-test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage 4 authorization", () => {
+test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage 4 first-attempt review", () => {
   const doc = read(STATUS_DOC);
   for (const token of [
     "Status: Current rollout ledger",
@@ -37,7 +37,10 @@ test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage
     "hybrid-observation-provenance.md",
     "invalid_provenance_observation_count",
     "id=11087",
-    "AUTHORIZED / PENDING RUNTIME EXECUTION",
+    "ATTEMPTED / EVIDENCE INVALID / CLEAN RERUN REQUIRED",
+    "Stage 4 First Runtime Attempt Review",
+    "Stage 4 reviewed-runtime provenance=false",
+    "Stage 4 rollback=PASS",
     "Stage 4 Authorization Review",
     "103/103 passed",
     "B8-B legacy fallback removal",
@@ -58,6 +61,8 @@ test("rollout ledger preserves runtime and mutation safety boundaries", () => {
     "intentional corruption",
     "push or release publication",
     "Stage 4 is authorized only for the controlled rollout and rollback procedure",
+    "any source or installed-runtime code modification during the rollout evidence window",
+    "temporary bypass of AutoRecall agent, chat-type, role, or other runtime gates",
     "It does not authorize B8-B removal",
   ]) {
     assert.equal(doc.includes(token), true, `missing safety boundary token: ${token}`);
@@ -71,7 +76,7 @@ test("runtime sync documentation uses the inspected extension install path", () 
   assert.doesNotMatch(doc, /\.\.\/\.\.\/extensions\/memory-engine/);
 });
 
-test("devlog records Stage 1, corrected Stage 2/3 closeout, B8-A6.3, and Stage 4 authorization", () => {
+test("devlog records Stage 1, corrected Stage 2/3 closeout, B8-A6.3, and Stage 4 attempt review", () => {
   const devlog = read(DEVLOG);
   for (const token of [
     "## 2026-07-19",
@@ -80,8 +85,10 @@ test("devlog records Stage 1, corrected Stage 2/3 closeout, B8-A6.3, and Stage 4
     "auto_recall=2",
     "Stage 2 KG full rollout: PASS",
     "Stage 3 KG rollback: PASS",
+    "F1-D-B8-A6 Stage 4: first runtime attempt evidence review",
+    "Stage 4 reviewed-runtime provenance=false",
+    "Stage 4 clean rerun=REQUIRED",
     "F1-D-B8-A6 Stage 4: Recent full rollout authorization review",
-    "AUTHORIZED / PENDING RUNTIME EXECUTION",
     "103 tests",
     "F1-D-B8-A6.3: Hybrid observation provenance hardening",
     "invalid_provenance_observation_count",

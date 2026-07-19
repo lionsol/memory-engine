@@ -1,5 +1,52 @@
 ## 2026-07-19
 
+### F1-D-B8-A6 Stage 4: first runtime attempt evidence review
+
+完成首次 Stage 4 runtime attempt 的证据 review。该次运行产生五条 canonical observation，并成功验证双通道 rollback，但不能关闭 Stage 4。
+
+#### Valid runtime findings
+
+```text
+auto_recall=3
+memory_engine_search=1
+memory_engine_action_search=1
+KG full markers=5/5
+Recent full markers=5/5
+legacy fallback events=0
+channel errors=0
+invalid event provenance=0
+rollback observation=1
+post-rollback A5=10/10
+```
+
+当前配置已恢复：
+
+```text
+agent:main model=deepseek/deepseek-v4-flash
+autoRecall.enabled=false
+kgFailClosedMode=legacy_fallback
+recentFailClosedMode=legacy_fallback
+KG/Recent canary enabled=false
+```
+
+#### Evidence integrity failure
+
+运行期间曾临时修改 `auto-recall-runtime-gate.js`，扩展 agent allowlist 并关闭 chat-type/role gate，以产生 AutoRecall observation。虽然该文件随后恢复，最终 Git clean 且 reviewed checkout 与安装副本重新一致，但恢复后的 parity 不能证明 evidence window 使用的是 reviewed commit。
+
+因此：
+
+```text
+Stage 4 functional wiring observed=true
+Stage 4 event-level provenance valid=true
+Stage 4 reviewed-runtime provenance=false
+Stage 4 closeout=REJECTED
+Stage 4 rollback=PASS
+Stage 4 clean rerun=REQUIRED
+B8-B removal=NOT AUTHORIZED
+```
+
+clean rerun 必须保持 repository 和 installed runtime source 全程不变，只允许配置修改。AutoRecall 应通过 reviewed gate 已允许的 `edi` interactive user session 触发，不得再次修改 allowlist、chat-type、role 或其他 runtime gate，也不得直接写 telemetry。
+
 ### F1-D-B8-A6 Stage 4: Recent full rollout authorization review
 
 完成 Stage 4 的 operator authorization review，但尚未执行真实 runtime rollout。

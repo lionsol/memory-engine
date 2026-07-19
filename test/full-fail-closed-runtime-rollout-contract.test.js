@@ -104,6 +104,9 @@ test("runbook defines explicit full markers, stop conditions, and evidence thres
     "minimum_observations: 500",
     "minimum_surface_observations: 100",
     "invalid observation provenance",
+    "installed runtime source must remain byte-for-byte unchanged",
+    "Do not edit AutoRecall allowlists, chat-type or role gates",
+    "Post-run parity after reverting a temporary source change does not establish runtime provenance",
   ]) {
     assert.equal(doc.includes(token), true, `missing evidence token: ${token}`);
   }
