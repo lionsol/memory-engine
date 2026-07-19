@@ -117,19 +117,20 @@ This command reads observation reports only. It never opens a database or change
 async function auditProductionEvidenceContinuity(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   if (options.help) return { exitCode: 0, output: usage(), report: null };
-  const thresholds = options.thresholdsPath
-    ? { ...loadJson(options.thresholdsPath, "thresholds JSON"), ...options.thresholds }
-    : options.thresholds;
-  if (Array.isArray(thresholds) || (thresholds !== null && typeof thresholds !== "object")) {
-    throw new Error("thresholds JSON must be an object");
-  }
-  if (thresholds && typeof thresholds === "object" && !Array.isArray(thresholds)) {
-    const unknown = Object.keys(thresholds).find(key => !Object.values(THRESHOLD_FLAGS).includes(key));
-    if (unknown) throw new Error(`unknown threshold: ${unknown}`);
-  }
-  const { evaluateProductionEvidenceContinuity } = await import(
+  const {
+    evaluateProductionEvidenceContinuity,
+    validateProductionEvidenceContinuityThresholds,
+  } = await import(
     "../lib/recall/hybrid/production-evidence-continuity.js"
   );
+  const fileThresholds = options.thresholdsPath
+    ? loadJson(options.thresholdsPath, "thresholds JSON")
+    : {};
+  const fileValidation = validateProductionEvidenceContinuityThresholds(fileThresholds);
+  if (!fileValidation.valid) throw new Error(fileValidation.errors[0].code);
+  const thresholds = { ...fileThresholds, ...options.thresholds };
+  const mergedValidation = validateProductionEvidenceContinuityThresholds(thresholds);
+  if (!mergedValidation.valid) throw new Error(mergedValidation.errors[0].code);
   const report = evaluateProductionEvidenceContinuity({
     observations: loadObservations(options.observationsPath),
     thresholds,

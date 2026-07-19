@@ -134,6 +134,74 @@ test("registration-owned registry stores and consumes trusted contexts", () => {
   assert.equal(registry.consume("tool-1", "memory_engine_search"), null);
 });
 
+test("same tool call id collides only within the TTL", () => {
+  let currentTime = 0;
+  const registry = createHybridTrafficOriginRegistry({ ttlMs: 1000, now: () => currentTime });
+  const input = {
+    event: { toolName: "memory_engine_search", toolCallId: "tool-1" },
+    ctx: { agentId: "edi", runId: "run-1", sessionId: "session-1" },
+    surface: "memory_engine_search",
+  };
+  registry.recordBeforeToolCall(input);
+  registry.recordBeforeToolCall(input);
+  const collided = registry.consume("tool-1", "memory_engine_search");
+  assert.equal(resolveHybridTrafficOrigin({
+    surface: "memory_engine_search",
+    trustedRuntimeContext: collided,
+  }).origin, "unknown");
+
+  currentTime = 1001;
+  registry.recordBeforeToolCall(input);
+  const reused = registry.consume("tool-1", "memory_engine_search");
+  assert.equal(reused.registry_reason, null);
+  assert.equal(resolveHybridTrafficOrigin({
+    surface: "memory_engine_search",
+    trustedRuntimeContext: reused,
+  }).origin, "natural_agent_tool_call");
+});
+
+test("expired entries are not consumable and scheduled entries share collision rules", () => {
+  let currentTime = 0;
+  const registry = createHybridTrafficOriginRegistry({ ttlMs: 1000, now: () => currentTime });
+  registry.recordBeforeToolCall({
+    event: { toolCallId: "expired" },
+    ctx: { agentId: "edi", runId: "run-1", sessionId: "session-1" },
+    surface: "memory_engine_search",
+  });
+  currentTime = 1001;
+  assert.equal(registry.consume("expired", "memory_engine_search"), null);
+
+  currentTime = 0;
+  registry.recordScheduledHealthcheck({
+    toolCallId: "health-1",
+    agentId: "edi",
+    sessionId: "session-1",
+  });
+  registry.recordBeforeToolCall({
+    event: { toolCallId: "health-1" },
+    ctx: { agentId: "edi", runId: "run-1", sessionId: "session-1" },
+    surface: "memory_engine_search",
+  });
+  const collision = registry.consume("health-1", "memory_engine_search");
+  assert.equal(resolveHybridTrafficOrigin({
+    surface: "memory_engine_search",
+    trustedRuntimeContext: collision,
+  }).origin, "unknown");
+});
+
+test("registry capacity evicts the oldest entry without creating false natural origin", () => {
+  const registry = createHybridTrafficOriginRegistry({ maxEntries: 2 });
+  for (const toolCallId of ["tool-1", "tool-2", "tool-3"]) {
+    registry.recordBeforeToolCall({
+      event: { toolCallId },
+      ctx: { agentId: "edi", runId: `run-${toolCallId}`, sessionId: "session-1" },
+      surface: "memory_engine_search",
+    });
+  }
+  assert.equal(registry.consume("tool-1", "memory_engine_search"), null);
+  assert.equal(registry.consume("tool-2", "memory_engine_search")?.source, "before_tool_call");
+});
+
 test("missing trusted context is unknown and tool parameters cannot provide it", () => {
   const result = resolveHybridTrafficOrigin({
     surface: "memory_engine_search",

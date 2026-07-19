@@ -117,3 +117,16 @@ test("CLI rejects unknown flags, invalid numbers, and malformed JSON with usage 
   const path = writeFixture("bad.json", "not-json");
   await assert.rejects(() => auditProductionEvidenceContinuity(["--observations", path]));
 });
+
+test("CLI rejects primitive and invalid threshold JSON before merging overrides", async () => {
+  for (const value of [null, 5, true, [], { minimum_active_day_ratio: 1.2 }, { minimum_observations: 1.5 }, { unknown_threshold: 1 }]) {
+    const path = writeFixture("thresholds.json", JSON.stringify(value));
+    await assert.rejects(
+      () => auditProductionEvidenceContinuity([
+        "--observations", writeFixture("observations.json", JSON.stringify(reportRows())),
+        "--thresholds", path,
+      ]),
+      /invalid_thresholds|invalid_threshold|unknown_threshold/,
+    );
+  }
+});
