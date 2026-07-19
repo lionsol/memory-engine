@@ -120,6 +120,12 @@ B8-B=NOT AUTHORIZED
 
 Review follow-up 收紧了三个边界：空 `agentAllowlist` 返回 `denied_by_agent_allowlist`，空 `triggerAllowlist` 返回 `denied_by_trigger_allowlist`，两者的显式空数组均 fail closed；KG/Recent full marker 必须显式包含 `scope_match=null`，不能从 `scope_required=false` 推断；`legacy_db_fallback_used` 与 `legacy_db_fallback_channels` 进入统一 fallback 事实源，无法归属 channel 的 fallback 仍阻塞 closeout。controlled-run eligibility 不能在任何 safety blocker 存在时为 true。Stage 4 仍待 edi 重跑，B8-B 仍未授权。
 
+#### B8-A7.1 evidence epoch and deployment identity
+
+- 新增一次性 installed-runtime SHA-256 fingerprint，覆盖 `index.js`、manifest、package metadata 和 `lib/` runtime files；docs/test 变化不会改变 identity，缺失入口或逃逸 symlink 会使结果 invalid。
+- 新增 canonical rollout-config fingerprint 与显式 `productionEvidenceWindow.enabled/epochId` contract。三个 canonical production observation surfaces 记录 epoch、runtime build、config fingerprint 和 enabled marker；tool params 与 query 不能覆盖这些字段。
+- 新增 report-only identity audit，拒绝 disabled/pre-A7 rows、缺失或非法 identity、invalid provenance 及 mixed epoch/build/config。A7.1 为 `CLOSED / READY FOR A7.2`，sustained runtime window 与 B8-B 仍未授权。
+
 ### F1-D-B8-A6 Stage 4: final config-only rerun and host-contract mismatch review
 
 完成 `f52235e` 后的最终 config-only Stage 4 rerun review。该次运行保持 repository 与 installed runtime source 不变，正式配置接受 `autoRecall.agentAllowlist=["edi","main"]`，但仍无法产生 AutoRecall observation。

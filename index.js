@@ -58,6 +58,7 @@ import { createAutoRecallTurnStateManager } from "./lib/recall/auto-recall-turn-
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { recordHybridSearchObservation } from "./lib/recall/hybrid-observation.js";
+import { createProductionEvidenceIdentityContext } from "./lib/recall/hybrid/production-evidence-identity.js";
 import { createIsolatedHybridDbAccessScope } from "./lib/recall/hybrid/db-access.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
 import {
@@ -277,6 +278,10 @@ export default definePluginEntry({
     const memoryEngineConfig = getMemoryEngineConfig(api?.config || null);
     const smartAddTimeZone = getSmartAddTimeZone(api?.config || null);
     const pluginEntryConfig = api.config?.plugins?.entries?.["memory-engine"]?.config;
+    const effectivePluginConfig = api.pluginConfig || pluginEntryConfig || {};
+    const productionEvidenceIdentityContext = createProductionEvidenceIdentityContext({
+      config: effectivePluginConfig,
+    });
     const embeddingRuntimeConfig = api.config || pluginEntryConfig || null;
     const generateEmbeddingRuntime = text => generateEmbedding(text, {
       cfg: embeddingRuntimeConfig,
@@ -462,6 +467,7 @@ export default definePluginEntry({
             result,
             sessionId,
             traceId,
+            identityContext: productionEvidenceIdentityContext,
           });
           result.debug = {
             ...(result?.debug || {}),
@@ -840,6 +846,7 @@ export default definePluginEntry({
       kgFailClosedCanary,
       recentFailClosedMode,
       recentFailClosedCanary,
+      productionEvidenceIdentityContext,
       calcRealtimeConf,
       existsSync,
       readFileSync,
@@ -864,6 +871,7 @@ export default definePluginEntry({
       kgFailClosedCanary,
       recentFailClosedMode,
       recentFailClosedCanary,
+      productionEvidenceIdentityContext,
     });
     const executeMemoryEngineGet = createMemoryEngineGetExecute({
       withDb,

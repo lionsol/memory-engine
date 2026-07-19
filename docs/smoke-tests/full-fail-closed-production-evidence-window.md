@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7 design authorized; sustained runtime window not authorized**
+> **Status: B8-A7.1 CLOSED / READY FOR A7.2; B8-A7 design authorized; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -64,6 +64,21 @@ The implementation must satisfy:
 - post-change restoration does not merge the earlier and later observations into one continuous epoch.
 
 The existing observation schema may remain backward compatible, but pre-A7 rows must not satisfy an A7 production window.
+
+The plugin configuration owns the epoch declaration:
+
+```json
+{
+  "productionEvidenceWindow": {
+    "enabled": false,
+    "epochId": "<operator-authorized-epoch>"
+  }
+}
+```
+
+`enabled=false` records ordinary observations with `production_evidence_enabled=false` and no epoch. `enabled=true` without a non-empty `epochId` is invalid A7 evidence. The runtime build identity is a SHA-256 fingerprint of the installed runtime files and the rollout config fingerprint is a canonical JSON SHA-256 fingerprint; neither raw source, raw config, secrets, or prompt content is persisted.
+
+The identity audit is report-only and accepts only one epoch, one runtime build identity, and one rollout config fingerprint across canonical production surfaces. A gateway restart may continue the same epoch when runtime and rollout config are unchanged. A reinstall, runtime-source change, or rollout-sensitive configuration change requires a new epoch. Restoring a temporary change does not merge observations from before and after that change. Mixed identities, missing identity fields, disabled evidence, and invalid provenance are not A7-ready.
 
 ## A7.2 Window Continuity and Traffic Origin
 
@@ -173,5 +188,7 @@ B8-A7 runtime authorization review
 B8-A7 sustained production evidence window
 B8-B removal-gate review
 ```
+
+B8-A7.1 is implementation-complete and ready for the separate A7.2 continuity/traffic-origin work. It does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, or starting the sustained runtime window.
 
 B8-B remains `NOT AUTHORIZED` throughout A7 implementation and evidence collection.

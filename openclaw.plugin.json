@@ -205,6 +205,23 @@
             }
           }
         }
+      },
+      "productionEvidenceWindow": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {
+          "enabled": false
+        },
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "epochId": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     }
   },

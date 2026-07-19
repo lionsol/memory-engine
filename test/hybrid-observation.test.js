@@ -87,6 +87,10 @@ test("hybrid observation preserves canonical fields and derives fallback from ac
     result_count: 1,
     channel_error_count: 0,
     completed_at: "2026-07-18T10:00:00.000Z",
+    evidence_epoch_id: null,
+    runtime_build_identity: null,
+    rollout_config_fingerprint: null,
+    production_evidence_enabled: false,
     kg_shadow_mode: "shadow_fail_closed",
     kg_shadow_would_fail_closed: true,
     kg_shadow_dropped_candidate_count: 1,
@@ -138,6 +142,7 @@ test("recordHybridSearchObservation writes one canonical event and preserves wri
   assert.equal(events[0].trace_id, "trace-1");
   assert.equal(Object.hasOwn(events[0].metadata_json, "kg_access_mode"), true);
   assert.equal(Object.hasOwn(events[0].metadata_json, "recent_access_mode"), false);
+  assert.equal(events[0].metadata_json.production_evidence_enabled, false);
   assert.equal(recordHybridSearchObservation({
     recordMemoryEvent: () => {
       throw new Error("event store unavailable");
@@ -145,6 +150,30 @@ test("recordHybridSearchObservation writes one canonical event and preserves wri
     surface: "auto_recall",
     result: {},
   }), false);
+});
+
+test("identity metadata comes only from the registration context", async () => {
+  const events = [];
+  const identityContext = {
+    productionEvidenceEnabled: true,
+    evidenceEpochId: "epoch-reviewed",
+    runtimeBuildIdentity: "a".repeat(64),
+    rolloutConfigFingerprint: "b".repeat(64),
+  };
+  const runtime = createRuntime(events, {
+    productionEvidenceIdentityContext: identityContext,
+  });
+  const executeAction = createMemoryEngineExecute(runtime);
+  await executeAction("tool-call", {
+    action: "search",
+    text: "query text",
+    evidence_epoch_id: "forged-epoch",
+    runtime_build_identity: "f".repeat(64),
+  });
+  assert.equal(events[0].metadata_json.production_evidence_enabled, true);
+  assert.equal(events[0].metadata_json.evidence_epoch_id, "epoch-reviewed");
+  assert.equal(events[0].metadata_json.runtime_build_identity, "a".repeat(64));
+  assert.equal(events[0].metadata_json.rollout_config_fingerprint, "b".repeat(64));
 });
 
 test("action search and memory_engine_search emit distinct observation surfaces", async () => {
