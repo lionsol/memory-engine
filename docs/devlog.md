@@ -1,5 +1,26 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.2: implementation review changes required
+
+复核 implementation checkpoint `59a4f3e`。A7.2 已新增 traffic-origin metadata、continuity evaluator 和 report-only CLI。当前 Node 24 全量测试实际为 1562 tests、1554 passed、0 failed、8 skipped；实现报告中的 231 pass / 1 unrelated failure 不是当前可复现的全量结果。
+
+Review 确认四项阻塞问题：
+
+1. 当前 OpenClaw `before_tool_call` typed context 仅提供 `agentId/sessionKey/sessionId/runId/toolName/toolCallId` 等字段，不提供 resolver 读取的 `trigger`、`toolExecutionSource` 或 `invocationSource`。因此真实 `natural_agent_tool_call`、`operator_verification_probe` 和 `scheduled_healthcheck` 分支在当前宿主上不可达；
+2. continuity evaluator 只验证 `traffic_origin_evidence` 是 object，任意 `{source:"bogus"}` 仍可作为 natural evidence 并得到 ready；
+3. per-surface maximum gap 只计算该 surface 内相邻 observation，不计算相对于完整窗口的 leading/trailing boundary gap。构造 31 日窗口时，两项 tool surface 只在前 15 日出现，仍可得到 `continuity_ready`；
+4. 将所有 threshold override 设为 0 时，空 observations 会得到 `continuity_ready`、`evidence_epoch_id=null`，违反 ready 必须存在 qualifying identity 和三个 production surface 的不变量。
+
+```text
+B8-A7.1=CLOSED / READY FOR A7.2
+B8-A7.2=IMPLEMENTED / REVIEW CHANGES REQUIRED
+B8-A7.3=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+本 review 只更新台账与契约，不访问真实 DB、不 install/reload plugin、不修改真实配置、不启动 evidence window、不进入 B8-B。
+
 ### F1-D-B8-A7.1: final implementation review closed
 
 Final review accepted implementation checkpoint `caf4373`. The three final guard findings are closed: malformed higher-priority `autoRecall` configuration fails closed without lower-source fallthrough, the Recent canary single-value `token` alias is preserved with malformed values rejected, and runtime dependency validation covers the recursive `index.js` local-import closure plus required filesystem and injected-entry identity scope.
