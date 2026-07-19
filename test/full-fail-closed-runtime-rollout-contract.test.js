@@ -26,9 +26,12 @@ test("runbook documents official config schema and legacy defaults", () => {
     "full_fail_closed",
     "Both channel defaults remain `legacy_fallback`",
     '"agentAllowlist": ["edi"]',
+    '"triggerAllowlist": ["user"]',
     '"chatTypeAllowlist": ["interactive_user_chat"]',
     '"messageRoleAllowlist": ["user"]',
     "temporarily expand an allowlist through validated OpenClaw configuration",
+    "chatType` or `messageRole`",
+    "default-deny boundary",
   ]) {
     assert.equal(doc.includes(token), true, `missing runtime rollout token: ${token}`);
   }
@@ -48,6 +51,8 @@ test("runbook preserves canonical provenance and production-surface boundaries",
     "completed_at=canonical UTC ISO",
     "AutoRecall additionally requires a non-empty `session_id`",
     "invalid_provenance_observation_count > 0",
+    "missing_surface:auto_recall",
+    "controlled_run_closeout_eligible=false",
   ]) {
     assert.equal(doc.includes(token), true, `missing scope boundary token: ${token}`);
   }

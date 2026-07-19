@@ -5,104 +5,137 @@ import { evaluateAutoRecallRuntimeGate } from "../lib/recall/auto-recall-runtime
 
 const MANIFEST = new URL("../openclaw.plugin.json", import.meta.url);
 
-function allowedEvent(overrides = {}) {
+function hostEvent(overrides = {}) {
   return {
-    agent_id: "edi",
-    chat_type: "interactive_user_chat",
-    message_role: "user",
+    prompt: "question",
+    messages: [],
     ...overrides,
   };
 }
 
-test("runtime gate allows only default edi interactive user chat", () => {
+function hostContext(overrides = {}) {
+  return {
+    agentId: "edi",
+    trigger: "user",
+    runId: "run-1",
+    sessionId: "session-1",
+    ...overrides,
+  };
+}
+
+test("runtime gate allows a host-shaped user turn without chat or role fields", () => {
   const result = evaluateAutoRecallRuntimeGate({
-    event: allowedEvent(),
-    ctx: {},
+    event: hostEvent(),
+    ctx: hostContext(),
     config: {},
   });
 
   assert.deepEqual(result, {
     allowed: true,
     agentId: "edi",
-    chatType: "interactive_user_chat",
-    messageRole: "user",
+    trigger: "user",
+    chatType: null,
+    messageRole: null,
   });
 });
 
-test("runtime gate denies missing agent, chat type, and message role by default", () => {
-  assert.deepEqual(
+test("runtime gate keeps agent and trigger default-deny", () => {
+  assert.equal(
     evaluateAutoRecallRuntimeGate({
-      event: {
-        chat_type: "interactive_user_chat",
-        message_role: "user",
-      },
-      ctx: {},
+      event: hostEvent(),
+      ctx: { trigger: "user" },
       config: {},
-    }),
-    { allowed: false, reason: "denied_missing_agent_id" }
+    }).reason,
+    "denied_missing_agent_id",
   );
 
-  assert.deepEqual(
+  assert.equal(
     evaluateAutoRecallRuntimeGate({
-      event: {
-        agent_id: "edi",
-        message_role: "user",
-      },
-      ctx: {},
+      event: hostEvent(),
+      ctx: { agentId: "edi" },
       config: {},
-    }),
-    { allowed: false, reason: "denied_missing_chat_type" }
-  );
-
-  assert.deepEqual(
-    evaluateAutoRecallRuntimeGate({
-      event: {
-        agent_id: "edi",
-        chat_type: "interactive_user_chat",
-      },
-      ctx: {},
-      config: {},
-    }),
-    { allowed: false, reason: "denied_missing_message_role" }
+    }).reason,
+    "denied_missing_trigger",
   );
 });
 
-test("runtime gate denies non-allowlisted agents, chat types, and roles", () => {
-  assert.deepEqual(
-    evaluateAutoRecallRuntimeGate({
-      event: allowedEvent({ agent_id: "codex" }),
-      ctx: {},
+test("runtime gate rejects every known non-user trigger", () => {
+  for (const trigger of [
+    "heartbeat",
+    "cron",
+    "memory",
+    "budget",
+    "manual",
+    "timeout_recovery",
+    "overflow",
+  ]) {
+    const result = evaluateAutoRecallRuntimeGate({
+      event: hostEvent(),
+      ctx: hostContext({ trigger }),
       config: {},
-    }),
-    { allowed: false, reason: "denied_by_agent_allowlist", agentId: "codex" }
-  );
+    });
+    assert.equal(result.reason, "denied_by_trigger_allowlist", trigger);
+    assert.equal(result.trigger, trigger);
+  }
+});
 
-  assert.deepEqual(
-    evaluateAutoRecallRuntimeGate({
-      event: allowedEvent({ chat_type: "system_task" }),
-      ctx: {},
-      config: {},
-    }),
-    { allowed: false, reason: "denied_by_chat_type_allowlist", chatType: "system_task" }
-  );
+test("runtime gate rejects non-allowlisted agents", () => {
+  const result = evaluateAutoRecallRuntimeGate({
+    event: hostEvent(),
+    ctx: hostContext({ agentId: "codex" }),
+    config: {},
+  });
 
-  assert.deepEqual(
+  assert.deepEqual(result, {
+    allowed: false,
+    reason: "denied_by_agent_allowlist",
+    agentId: "codex",
+  });
+});
+
+test("explicit chat type and message role remain supplementary constraints", () => {
+  assert.equal(
     evaluateAutoRecallRuntimeGate({
-      event: allowedEvent({ message_role: "assistant" }),
-      ctx: {},
+      event: hostEvent({ chat_type: "interactive_user_chat" }),
+      ctx: hostContext(),
       config: {},
-    }),
-    { allowed: false, reason: "denied_by_message_role_allowlist", messageRole: "assistant" }
+    }).allowed,
+    true,
+  );
+  assert.equal(
+    evaluateAutoRecallRuntimeGate({
+      event: hostEvent({ chat_type: "system_task" }),
+      ctx: hostContext(),
+      config: {},
+    }).reason,
+    "denied_by_chat_type_allowlist",
+  );
+  assert.equal(
+    evaluateAutoRecallRuntimeGate({
+      event: hostEvent({ message_role: "user" }),
+      ctx: hostContext(),
+      config: {},
+    }).allowed,
+    true,
+  );
+  assert.equal(
+    evaluateAutoRecallRuntimeGate({
+      event: hostEvent({ message_role: "assistant" }),
+      ctx: hostContext(),
+      config: {},
+    }).reason,
+    "denied_by_message_role_allowlist",
   );
 });
 
-test("manifest exposes strict runtime-gate allowlists without broadening defaults", () => {
+test("manifest exposes strict agent and trigger defaults plus optional compatibility constraints", () => {
   const manifest = JSON.parse(readFileSync(MANIFEST, "utf8"));
   const autoRecall = manifest.configSchema.properties.autoRecall;
 
   assert.equal(autoRecall.additionalProperties, false);
   const expected = {
     agentAllowlist: ["edi"],
+    triggerAllowlist: ["user"],
     chatTypeAllowlist: ["interactive_user_chat"],
     messageRoleAllowlist: ["user"],
   };
@@ -117,18 +150,19 @@ test("manifest exposes strict runtime-gate allowlists without broadening default
   }
 
   assert.match(autoRecall.properties.agentAllowlist.description, /controlled runtime verification/i);
+  assert.match(autoRecall.properties.triggerAllowlist.description, /user-only/i);
 });
 
-test("runtime gate supports config override allowlists", () => {
+test("runtime gate supports camel-case config overrides", () => {
   const result = evaluateAutoRecallRuntimeGate({
-    event: {
-      agent_id: "task-planner",
+    event: hostEvent({
       chat_type: "planner_chat",
       message_role: "user",
-    },
-    ctx: {},
+    }),
+    ctx: hostContext({ agentId: "task-planner", trigger: "manual" }),
     config: {
       agentAllowlist: ["task-planner"],
+      triggerAllowlist: ["manual"],
       chatTypeAllowlist: ["planner_chat"],
       messageRoleAllowlist: ["user"],
     },
@@ -136,24 +170,46 @@ test("runtime gate supports config override allowlists", () => {
 
   assert.equal(result.allowed, true);
   assert.equal(result.agentId, "task-planner");
+  assert.equal(result.trigger, "manual");
   assert.equal(result.chatType, "planner_chat");
   assert.equal(result.messageRole, "user");
 });
 
-test("runtime gate can read agent id from ctx but requires event chat and role", () => {
+test("runtime gate preserves snake-case config aliases", () => {
   const result = evaluateAutoRecallRuntimeGate({
-    event: {
-      chat_type: "interactive_user_chat",
-      message_role: "user",
+    event: hostEvent({ chat_type: "planner_chat", message_role: "user" }),
+    ctx: hostContext({ agentId: "task-planner", trigger: "manual" }),
+    config: {
+      agent_allowlist: ["task-planner"],
+      trigger_allowlist: ["manual"],
+      chat_type_allowlist: ["planner_chat"],
+      message_role_allowlist: ["user"],
     },
-    ctx: {
-      agentId: "edi",
-    },
+  });
+
+  assert.equal(result.allowed, true);
+});
+
+test("runtime gate reads agent and trigger from trusted ctx before optional event fields", () => {
+  const result = evaluateAutoRecallRuntimeGate({
+    event: hostEvent(),
+    ctx: hostContext({ chatType: "interactive_user_chat", messageRole: "user" }),
     config: {},
   });
 
   assert.equal(result.allowed, true);
   assert.equal(result.agentId, "edi");
+  assert.equal(result.trigger, "user");
   assert.equal(result.chatType, "interactive_user_chat");
   assert.equal(result.messageRole, "user");
+});
+
+test("explicit event trigger remains a compatibility fallback", () => {
+  const result = evaluateAutoRecallRuntimeGate({
+    event: hostEvent({ trigger: "user" }),
+    ctx: { agentId: "edi" },
+    config: {},
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.trigger, "user");
 });

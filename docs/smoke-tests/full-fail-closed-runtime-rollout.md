@@ -48,6 +48,7 @@ The rollout controls are top-level memory-engine plugin config fields because th
             "topK": 3,
             "timeoutMs": 8000,
             "agentAllowlist": ["edi"],
+            "triggerAllowlist": ["user"],
             "chatTypeAllowlist": ["interactive_user_chat"],
             "messageRoleAllowlist": ["user"]
           }
@@ -73,11 +74,12 @@ The AutoRecall runtime-gate allowlists are official schema fields under `autoRec
 
 ```text
 agentAllowlist=["edi"]
+triggerAllowlist=["user"]
 chatTypeAllowlist=["interactive_user_chat"]
 messageRoleAllowlist=["user"]
 ```
 
-A controlled runtime verification may temporarily expand an allowlist through validated OpenClaw configuration, provided the original values are backed up and restored. This is not permission to edit gate source, disable a gate dimension, or broaden production defaults.
+A controlled runtime verification may temporarily expand an allowlist through validated OpenClaw configuration, provided the original values are backed up and restored. The current `before_prompt_build` contract does not require `chatType` or `messageRole`; those allowlists are supplementary constraints applied only when the host explicitly supplies the corresponding field. The agent and trigger allowlists remain the default-deny boundary. This is not permission to edit gate source, disable a gate dimension, or broaden production defaults.
 
 Unknown values must fail safe to legacy behavior in runtime policy code, but the manifest schema should reject them before reload.
 
@@ -94,6 +96,20 @@ memory_engine_search
 The two tool surfaces do not accept caller-supplied agent or session identity as trusted canary scope. During `fail_closed_canary`, a trusted AutoRecall request can match scope, while tool searches without trusted runtime scope must continue to legacy fallback. This is intentional and prevents query parameters or tool-call ids from enabling canary behavior.
 
 `full_fail_closed` does not use scope and therefore applies to all three surfaces.
+
+## Stage 4 Controlled-Run Surface Contract
+
+The Stage 4 controlled-run closeout report must observe all three canonical production surfaces at least once:
+
+```text
+auto_recall
+memory_engine_action_search
+memory_engine_search
+```
+
+`auto_recall=0` is an explicit closeout blocker even when both tool surfaces have valid full-mode observations. The long-window evaluator may additionally report a threshold gap, but the machine-readable controlled-run fields must contain `missing_surface:auto_recall` and `controlled_run_closeout_eligible=false`. CLI and unknown surfaces do not satisfy this requirement.
+
+The AutoRecall hook fixture is intentionally host-shaped: the event supplies `prompt` and `messages`, while trusted context supplies `agentId` and `trigger`. `chatType` and `messageRole` must not be synthesized from prompt text or treated as required host fields.
 
 ## Canonical Observation Provenance
 

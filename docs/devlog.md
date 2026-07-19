@@ -1,5 +1,13 @@
 ## 2026-07-19
 
+### F1-D-B8-A6.5: hook-contract-compatible AutoRecall gate
+
+修复 AutoRecall runtime gate 与当前 OpenClaw `before_prompt_build` hook contract 的不匹配。真实 hook 提供 `event.prompt/messages` 以及可信 context 的 `agentId`、`sessionId` 和 `trigger`，不保证 `chatType` 或 `messageRole`。gate 现在以 `agentAllowlist` 和默认 `triggerAllowlist=["user"]` 作为 default-deny 边界；heartbeat、cron、memory、budget、manual、timeout recovery 和 overflow 等非用户 trigger 继续拒绝。
+
+`chatTypeAllowlist` 与 `messageRoleAllowlist` 保留配置兼容性，但仅在 host/event 显式提供字段时执行补充校验，缺失不再产生 `denied_missing_chat_type` 或 `denied_missing_message_role`。manifest 默认仍为 `agentAllowlist=["edi"]`、`triggerAllowlist=["user"]`，没有扩大默认 agent，也没有修改真实 runtime 配置。
+
+同时，full fail-closed rollout evidence 增加 controlled-run surface coverage contract。`auto_recall=0` 会明确产生 `missing_surface:auto_recall`，并设置 `controlled_run_closeout_eligible=false`，而不改变现有 30 天 production window 的 threshold 语义。A6.5 完成后仍需由 edi 重新执行 Stage 4 三 surface runtime verification；B8-B 仍未授权。
+
 ### F1-D-B8-A6 Stage 4: final config-only rerun and host-contract mismatch review
 
 完成 `f52235e` 后的最终 config-only Stage 4 rerun review。该次运行保持 repository 与 installed runtime source 不变，正式配置接受 `autoRecall.agentAllowlist=["edi","main"]`，但仍无法产生 AutoRecall observation。

@@ -33,7 +33,7 @@ The authoritative operating procedures remain:
 | B8-A6.3 observation provenance hardening | CLOSED | Shared validator now enforces canonical event/source/schema/search/completion/trace provenance and AutoRecall session provenance. Invalid rows remain auditable but are excluded from production denominators and block canary, rollout, evidence-window, and removal decisions. |
 | B8-A6 Stage 4 Recent full rollout | FINAL CONFIG-ONLY RERUN INCONCLUSIVE / AUTO_RECALL HOST-CONTRACT MISMATCH | The reviewed runtime verified KG and Recent full markers on both tool surfaces, zero fallback/error/provenance violations, and successful rollback. `auto_recall` remained zero because `before_prompt_build` exposes `prompt/messages` plus agent context but no `chatType` or `messageRole`, while the plugin gate requires both fields. Stage 4 remains open. |
 | B8-A6.4 AutoRecall runtime-gate config contract | CLOSED / INSUFFICIENT | The existing runtime allowlists are now schema-valid configuration, and `agentAllowlist=["edi","main"]` loaded successfully. This could not solve the missing `chatType/messageRole` dimensions because those values do not exist in the host hook contract. |
-| B8-A6.5 hook-contract-compatible AutoRecall gate | OPEN / REQUIRED NEXT | Redesign the default-deny gate around fields the current OpenClaw hook actually provides, especially `ctx.agentId` and `ctx.trigger`, while preserving denial of heartbeat, cron, memory, budget, missing identity, and non-user turns. Add host-contract fixtures and controlled-run surface coverage enforcement before another Stage 4 rerun. |
+| B8-A6.5 hook-contract-compatible AutoRecall gate | IMPLEMENTED / RERUN REQUIRED | The gate now uses trusted `ctx.agentId` and `ctx.trigger` for default-deny decisions. `chatType` and `messageRole` remain optional supplementary constraints when explicitly supplied. The manifest exposes `triggerAllowlist=["user"]`, and the controlled-run evidence report now explicitly marks missing canonical surfaces such as `auto_recall` as closeout-ineligible. A new edi runtime rerun is still required; this change does not close Stage 4. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed full rollout, production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -268,6 +268,14 @@ Stage 4 clean rerun required=true
 Stage 4 rollback=PASS
 B8-B removal=NOT AUTHORIZED
 ```
+
+## B8-A6.5 Hook Contract and Controlled-Run Correction
+
+The previous `denied_missing_chat_type` result was caused by a plugin/host contract mismatch, not by missing external chat infrastructure. The current `before_prompt_build` event guarantees `prompt` and `messages`; trusted context supplies `agentId`, `sessionId`, and `trigger`. Normal user turns use `trigger=user`, while heartbeat, cron, memory, budget, manual, timeout-recovery, and overflow turns remain denied by the trigger allowlist.
+
+The runtime gate therefore preserves default-deny without requiring host fields that are not part of the hook contract. Explicit chat type and message role values are still validated when present, but their absence is compatible with the current host. The Stage 4 controlled-run contract independently requires at least one observation for each of `auto_recall`, `memory_engine_action_search`, and `memory_engine_search`; zero AutoRecall observations cannot be interpreted as closeout-ready.
+
+Stage 4 remains open until edi reruns the controlled runtime procedure and produces valid three-surface evidence. B8-B remains unauthorized.
 
 The clean rerun must use the reviewed runtime unchanged. AutoRecall must be triggered through an already-authorized `edi` interactive user session, or another configuration-only route explicitly allowed by the reviewed code. Source edits, runtime-file edits, direct telemetry writes, and temporary gate bypasses are prohibited.
 

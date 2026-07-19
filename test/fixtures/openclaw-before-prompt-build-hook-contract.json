@@ -1,0 +1,27 @@
+{
+  "event": {
+    "required": ["prompt", "messages"]
+  },
+  "context": {
+    "trustedFields": [
+      "runId",
+      "agentId",
+      "sessionId",
+      "messageProvider",
+      "channel",
+      "senderId",
+      "trigger"
+    ],
+    "optionalCompatibilityFields": ["chatType", "messageRole"]
+  },
+  "userTrigger": "user",
+  "nonUserTriggers": [
+    "heartbeat",
+    "cron",
+    "memory",
+    "budget",
+    "manual",
+    "timeout_recovery",
+    "overflow"
+  ]
+}

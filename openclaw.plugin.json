@@ -64,6 +64,18 @@
             },
             "description": "Agent IDs allowed to pass the AutoRecall runtime gate; defaults remain edi-only and should be expanded only for controlled runtime verification"
           },
+          "triggerAllowlist": {
+            "type": "array",
+            "default": [
+              "user"
+            ],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Trusted hook triggers allowed to pass the AutoRecall runtime gate; defaults remain user-only"
+          },
           "chatTypeAllowlist": {
             "type": "array",
             "default": [

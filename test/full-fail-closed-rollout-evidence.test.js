@@ -247,6 +247,43 @@ test("explicit non-scoped full mode can satisfy the synthetic schema capability"
   });
 });
 
+test("controlled-run coverage is complete only when every production surface is observed", () => {
+  const report = buildFullFailClosedRolloutEvidence(fullFixture());
+  assert.equal(report.controlled_run_surface_coverage_status, "complete");
+  assert.deepEqual(report.missing_controlled_run_surfaces, []);
+  assert.equal(report.controlled_run_closeout_eligible, true);
+  assert.deepEqual(report.controlled_run_blockers, []);
+});
+
+test("missing auto_recall blocks controlled-run closeout explicitly", () => {
+  const input = fullFixture();
+  input.observations = input.observations.filter(
+    row => row.metadata_json.surface !== "auto_recall",
+  );
+  const report = buildFullFailClosedRolloutEvidence(input);
+
+  assert.equal(report.controlled_run_surface_coverage_status, "incomplete");
+  assert.deepEqual(report.missing_controlled_run_surfaces, ["auto_recall"]);
+  assert.equal(report.controlled_run_closeout_eligible, false);
+  assert.ok(report.controlled_run_blockers.some(issue => issue.code === "missing_surface:auto_recall"));
+  assert.equal(report.status, "insufficient_evidence");
+});
+
+test("controlled-run coverage blocks channel errors and canary leakage", () => {
+  const input = fullFixture();
+  input.observations[0].metadata_json.channel_error_count = 1;
+  input.observations[1].metadata_json.recent_runtime_mode = "fail_closed_canary";
+  input.observations[1].metadata_json.recent_rollout_scope = "scoped_canary";
+  input.observations[1].metadata_json.recent_scope_required = true;
+  input.observations[1].metadata_json.recent_fail_closed_scope_match = true;
+  const report = buildFullFailClosedRolloutEvidence(input);
+
+  assert.equal(report.controlled_run_surface_coverage_status, "blocked");
+  assert.equal(report.controlled_run_closeout_eligible, false);
+  assert.ok(report.controlled_run_blockers.some(issue => issue.code === "channel_errors_present"));
+  assert.ok(report.controlled_run_blockers.some(issue => issue.code === "canary_leakage_present"));
+});
+
 test("output is deterministic apart from generated timestamp", () => {
   const input = fullFixture();
   const first = buildFullFailClosedRolloutEvidence(input);
