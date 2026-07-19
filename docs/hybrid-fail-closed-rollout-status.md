@@ -429,10 +429,8 @@ The operator approved continuation after Stage 4 closeout, which authorizes desi
 
 Four gaps block runtime authorization:
 
-1. observations do not identify one immutable `evidence_epoch_id`, installed-runtime build fingerprint, and rollout-config fingerprint;
-2. the current first-to-last timestamp span does not detect long gaps or observations concentrated only at the two ends of a nominal 30-day window;
-3. tool observations do not distinguish natural agent-selected use from operator `/tools/invoke` probes or scheduled healthchecks;
-4. the repository has end-of-window evaluators but no dedicated read-only health status and stop/rollback contract for an active production epoch.
+1. the repository has no dedicated read-only health status and stop/rollback contract for an active production epoch;
+2. sustained runtime authorization has not been granted or executed.
 
 The required implementation sequence is:
 
@@ -449,7 +447,9 @@ The authoritative design boundary is [`smoke-tests/full-fail-closed-production-e
 
 ## Next Decision
 
-B8-A7.1 is closed after final review of implementation checkpoint `caf4373`. The accepted contract binds observations to one explicit evidence epoch, reviewed runtime dependency identity, and normalized effective rollout/retrieval configuration. Higher-priority malformed `autoRecall` values fail closed, Recent single-token canary compatibility is preserved, and dependency-closure validation requires every declared local runtime dependency. The next implementation stage is B8-A7.2 continuity and traffic-origin evidence. Stage 4's temporary `autoRecall.enabled=true`, `agentAllowlist=["edi","main"]`, and dual `full_fail_closed` configuration still do not authorize sustained production use or any long-running runtime configuration change.
+B8-A7.1 is closed after final review of implementation checkpoint `caf4373`. The accepted contract binds observations to one explicit evidence epoch, reviewed runtime dependency identity, and normalized effective rollout/retrieval configuration. Higher-priority malformed `autoRecall` values fail closed, Recent single-token canary compatibility is preserved, and dependency-closure validation requires every declared local runtime dependency. B8-A7.2 continuity and traffic-origin tooling is implemented and remains review-pending. Stage 4's temporary `autoRecall.enabled=true`, `agentAllowlist=["edi","main"]`, and dual `full_fail_closed` configuration still do not authorize sustained production use or any long-running runtime configuration change.
+
+Current implementation state: `B8-A7.2 IMPLEMENTED / REVIEW PENDING`; sustained runtime window and B8-B remain unauthorized. The continuity evaluator counts only valid natural origins in the production denominator, reports probes and healthchecks separately, and blocks unknown or mixed identity/origin evidence.
 
 Historical ledger states `REVIEW FIXES IMPLEMENTED / THIRD REVIEW CHANGES REQUIRED`, `B8-A7.1 third review changes required`, and `FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING` remain review history rather than current authorization state.
 

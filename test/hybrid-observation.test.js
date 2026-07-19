@@ -91,6 +91,15 @@ test("hybrid observation preserves canonical fields and derives fallback from ac
     runtime_build_identity: null,
     rollout_config_fingerprint: null,
     production_evidence_enabled: false,
+    traffic_origin: "unknown",
+    traffic_origin_evidence: {
+      source: "untrusted_context",
+      agent_id_present: false,
+      run_id_present: false,
+      session_id_present: false,
+      trigger: null,
+    },
+    traffic_origin_schema_version: 1,
     kg_shadow_mode: "shadow_fail_closed",
     kg_shadow_would_fail_closed: true,
     kg_shadow_dropped_candidate_count: 1,
@@ -178,7 +187,16 @@ test("identity metadata comes only from the registration context", async () => {
 
 test("action search and memory_engine_search emit distinct observation surfaces", async () => {
   const events = [];
-  const runtime = createRuntime(events);
+  const runtime = createRuntime(events, {
+    resolveTrafficOriginContext: () => ({
+      source: "openclaw_runtime",
+      agentId: "edi",
+      runId: "run-1",
+      sessionId: "session-1",
+      trigger: "user",
+      toolExecutionSource: "model_selected",
+    }),
+  });
   const executeAction = createMemoryEngineExecute(runtime);
   const executeSearch = createMemoryEngineSearchExecute(runtime);
 
@@ -192,6 +210,10 @@ test("action search and memory_engine_search emit distinct observation surfaces"
   assert.deepEqual(events.map(event => event.event_type), [
     "hybrid_search_observation",
     "hybrid_search_observation",
+  ]);
+  assert.deepEqual(events.map(event => event.metadata_json.traffic_origin), [
+    "natural_agent_tool_call",
+    "natural_agent_tool_call",
   ]);
 
   const cliEvents = [];

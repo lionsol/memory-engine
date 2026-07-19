@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.1 CLOSED / READY FOR A7.2; B8-A7.2 not started; sustained runtime window not authorized**
+> **Status: B8-A7.2 IMPLEMENTED / REVIEW PENDING; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -191,8 +191,10 @@ B8-B removal-gate review
 
 B8-A7.1 is closed after final review of implementation checkpoint `caf4373`. The accepted identity contract covers the local runtime dependency closure, requires all declared runtime files in filesystem and injected-entry validation paths, rejects duplicate or symlinked runtime paths, and fingerprints the same normalized effective AutoRecall/KG/Recent/retrieval configuration used by runtime behavior. Malformed higher-priority configuration fails closed and supported Recent token compatibility is preserved.
 
-A7.2 continuity and traffic-origin evidence is now the next authorized implementation stage. This does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, enabling sustained AutoRecall, or starting the 30-day runtime window.
+A7.2 continuity and traffic-origin evidence is implemented but review-pending. This does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, enabling sustained AutoRecall, or starting the 30-day runtime window.
 
-The preceding review labels remain historical evidence. The current authorization boundary is `B8-A7.1 CLOSED / READY FOR A7.2` and `B8-A7 sustained runtime window NOT AUTHORIZED`.
+The preceding review labels remain historical evidence. The current authorization boundary is `B8-A7.2 IMPLEMENTED / REVIEW PENDING`; `B8-A7 sustained runtime window NOT AUTHORIZED` and `B8-B NOT AUTHORIZED` remain unchanged.
+
+Historical A7.1 closeout state: `B8-A7.1 CLOSED / READY FOR A7.2`.
 
 B8-B remains `NOT AUTHORIZED` throughout A7 implementation and evidence collection.

@@ -304,6 +304,39 @@ export default definePluginEntry({
     const kgFailClosedCanary = effectiveRuntimeConfig.kgFailClosedCanary;
     const recentFailClosedMode = effectiveRuntimeConfig.recentFailClosedMode;
     const recentFailClosedCanary = effectiveRuntimeConfig.recentFailClosedCanary;
+    const trustedToolTrafficOrigins = new Map();
+    const resolveTrafficOriginContext = toolCallId => {
+      if (!toolCallId) return null;
+      const context = trustedToolTrafficOrigins.get(toolCallId) || null;
+      trustedToolTrafficOrigins.delete(toolCallId);
+      return context;
+    };
+    if (typeof api.on === "function") {
+      api.on("before_tool_call", async (event, ctx) => {
+        const toolName = event?.toolName || ctx?.toolName || null;
+        if (toolName !== "memory_engine" && toolName !== "memory_engine_search") return;
+        const toolCallId = event?.toolCallId || ctx?.toolCallId || null;
+        if (!toolCallId) return;
+        if (trustedToolTrafficOrigins.size >= 1024) {
+          const oldest = trustedToolTrafficOrigins.keys().next().value;
+          trustedToolTrafficOrigins.delete(oldest);
+        }
+        trustedToolTrafficOrigins.set(toolCallId, {
+          source: "openclaw_runtime",
+          agentId: ctx?.agentId ?? ctx?.agent_id ?? ctx?.agentIdentity ?? null,
+          runId: ctx?.runId ?? ctx?.run_id ?? event?.runId ?? null,
+          sessionId: ctx?.sessionId ?? ctx?.session_id ?? ctx?.sessionKey ?? null,
+          trigger: ctx?.trigger ?? event?.trigger ?? null,
+          toolExecutionSource: ctx?.toolExecutionSource
+            ?? ctx?.tool_execution_source
+            ?? ctx?.invocationSource
+            ?? ctx?.invocation_source
+            ?? event?.toolExecutionSource
+            ?? event?.invocationSource
+            ?? null,
+        });
+      });
+    }
     if (autoRecallConfig.enabled && typeof api.on === "function") {
       const autoRecallTopK = autoRecallConfig.topK;
       const autoRecallTimeoutMs = autoRecallConfig.timeoutMs;
@@ -452,6 +485,10 @@ export default definePluginEntry({
               agentIdentity: ctx?.agentIdentity ?? ctx?.agentId ?? event?.agentId ?? null,
               sessionIdentity: sessionId,
               requestIdentity: traceId,
+              agentId: ctx?.agentId ?? ctx?.agent_id ?? ctx?.agentIdentity ?? event?.agentId ?? null,
+              runId: runKey,
+              sessionId,
+              trigger: ctx?.trigger ?? event?.trigger ?? null,
             },
           });
           recordHybridSearchObservation({
@@ -461,6 +498,13 @@ export default definePluginEntry({
             sessionId,
             traceId,
             identityContext: productionEvidenceIdentityContext,
+            trafficOriginContext: {
+              source: "openclaw_runtime",
+              agentId: ctx?.agentId ?? ctx?.agent_id ?? ctx?.agentIdentity ?? event?.agentId ?? null,
+              runId: runKey,
+              sessionId,
+              trigger: ctx?.trigger ?? event?.trigger ?? null,
+            },
           });
           result.debug = {
             ...(result?.debug || {}),
@@ -840,6 +884,7 @@ export default definePluginEntry({
       recentFailClosedMode,
       recentFailClosedCanary,
       productionEvidenceIdentityContext,
+      resolveTrafficOriginContext,
       calcRealtimeConf,
       existsSync,
       readFileSync,
@@ -865,6 +910,7 @@ export default definePluginEntry({
       recentFailClosedMode,
       recentFailClosedCanary,
       productionEvidenceIdentityContext,
+      resolveTrafficOriginContext,
     });
     const executeMemoryEngineGet = createMemoryEngineGetExecute({
       withDb,

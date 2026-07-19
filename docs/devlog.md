@@ -25,6 +25,14 @@ B8-B removal=NOT AUTHORIZED
 
 This closeout authorizes only A7.2 continuity and traffic-origin tooling. It does not authorize enabling `productionEvidenceWindow`, sustained AutoRecall, long-running KG/Recent `full_fail_closed`, or B8-B removal.
 
+### F1-D-B8-A7.2: continuity and traffic-origin evidence implemented
+
+- 新增 trusted `traffic-origin` resolver：AutoRecall 仅由 `before_prompt_build` trusted `trigger=user` 产生 `natural_user_turn`；tool surface 只有明确的 trusted model-selection/agent-turn context 才产生 `natural_agent_tool_call`，operator probe 和 scheduled healthcheck 分开记录，无法证明时为 `unknown`。
+- canonical `hybrid_search_observation` 增加 `traffic_origin`、`traffic_origin_evidence` 和 `traffic_origin_schema_version`，保持 observation `schema_version=1`；tool args、query 和 prompt 不能覆盖 origin。
+- 新增只读 `production-evidence-continuity` evaluator/CLI，按单一 A7.1 identity、UTC active days、calendar span、相邻事件最大 gap 和 per-surface continuity 评估；natural denominator 排除 probe、healthcheck、unknown、CLI 和 synthetic rows。
+- 默认 continuity thresholds 仅作为 evaluator defaults，不授权生产值：30 日窗口、24 active UTC days、0.8 active-day ratio、72 小时最大 gap、500 natural observations、每 surface 100 条和 15 active days。
+- 状态：`B8-A7.2 IMPLEMENTED / REVIEW PENDING`；`B8-A7 sustained runtime window NOT AUTHORIZED`；`B8-B NOT AUTHORIZED`。
+
 ### F1-D-B8-A7.1: third implementation review changes required
 
 复核 implementation checkpoint `e607019`。第二轮要求的 root runtime dependency hashing、AutoRecall `topK` compatibility、retrieval-sensitive config fingerprint、environment thresholds 和 malformed field handling 已大体实现，42 个定向测试通过；但最终对抗 review 仍确认三个 fail-closed/compatibility 缺口，因此 A7.1 尚不能关闭，也不能进入 A7.2。
