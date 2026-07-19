@@ -1,5 +1,25 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.2: final review changes required
+
+复核 implementation checkpoint `eec0f91`。上一轮四项 finding 已关闭：typed `before_tool_call` origin classification、origin evidence validation、per-surface leading/trailing gap，以及 zero-threshold structural readiness 均通过定向与对抗验证。最终 review 仍发现两个小但会影响长期证据可靠性的边界问题。
+
+```text
+expired toolCallId reuse accepted=false
+post-TTL reuse result=tool_call_id_collision / unknown
+primitive thresholds JSON rejected=false
+B8-A7.2=REVIEW FIXES IMPLEMENTED / FINAL REVIEW CHANGES REQUIRED
+B8-A7.3=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+- `createHybridTrafficOriginRegistry.recordBeforeToolCall()` 在执行 TTL cleanup 前读取旧 entry；同一 ID 在过期后合法复用仍被标记 collision。该 observation 会成为 `unknown`，而 unknown origin 会阻塞整个 evidence epoch。
+- continuity CLI 对 `--thresholds` 文件先执行 object spread，再检查类型；JSON `null`、数字或布尔值会被静默转换为空 override 并使用默认 thresholds，而不是作为 CLI/input error 返回 64。
+- 当前定向 review tests 37/37 通过；上一轮 canonical 对抗输入已验证 bogus origin blocked、missing surface blocked、tool surface 后半窗口消失产生 trailing-gap evidence gaps。实现代码未在本 review 中修改。
+
+本 review 不访问真实 DB、不 install/reload plugin、不修改真实配置、不启动 sustained runtime、不进入 B8-B。
+
 ### F1-D-B8-A7.2: review fixes implemented
 
 复核 checkpoint `59a4f3e` 的四项问题已修复，当前等待 review：
