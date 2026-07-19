@@ -24,7 +24,13 @@ function observation(surface, overrides = {}) {
     recent_fail_closed_applied: true,
     ...overrides,
   };
-  return { event_type: "hybrid_search_observation", metadata_json: metadata };
+  return {
+    event_type: "hybrid_search_observation",
+    source: `hybrid.${surface}`,
+    session_id: surface === "auto_recall" ? `session-${metadata.completed_at}` : null,
+    trace_id: `trace-${surface}-${metadata.completed_at}`,
+    metadata_json: metadata,
+  };
 }
 
 function fullFixture(overrides = {}) {
@@ -206,6 +212,26 @@ test("full runtime marker requires explicit non-scoped semantics", () => {
   assert.equal(report.status, "insufficient_evidence");
   assert.equal(report.kg_mode, "unknown");
   assert.equal(report.recent_mode, "unknown");
+});
+
+test("invalid canonical provenance blocks rollout evidence without entering the denominator", () => {
+  const input = fullFixture();
+  const invalid = observation("auto_recall", {
+    completed_at: null,
+  });
+  invalid.id = 11087;
+  invalid.source = null;
+  invalid.session_id = null;
+  invalid.trace_id = null;
+  input.observations.push(invalid);
+
+  const report = buildFullFailClosedRolloutEvidence(input);
+  assert.equal(report.status, "blocked");
+  assert.equal(report.observation_count, 6);
+  assert.equal(report.invalid_provenance_observation_count, 1);
+  assert.deepEqual(report.invalid_provenance_observation_ids, [11087]);
+  assert.ok(report.blockers.some(issue => issue.code === "invalid_observation_provenance_present"));
+  assert.equal(report.evidence.provenance.reason_distribution.source_mismatch, 1);
 });
 
 test("explicit non-scoped full mode can satisfy the synthetic schema capability", () => {

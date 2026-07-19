@@ -34,6 +34,8 @@ test("rollout ledger records Stage 2 and Stage 3 closeout plus the provenance bo
     "kg_runtime_mode=full_fail_closed on all 4 observations",
     "B8-A6 Stage 3 KG rollback validation",
     "B8-A6.3 observation provenance hardening",
+    "hybrid-observation-provenance.md",
+    "invalid_provenance_observation_count",
     "id=11087",
     "REVIEW ELIGIBLE / NOT AUTHORIZED",
     "B8-B legacy fallback removal",
@@ -66,7 +68,7 @@ test("runtime sync documentation uses the inspected extension install path", () 
   assert.doesNotMatch(doc, /\.\.\/\.\.\/extensions\/memory-engine/);
 });
 
-test("devlog records Stage 1 and corrected Stage 2/3 closeout", () => {
+test("devlog records Stage 1, corrected Stage 2/3 closeout, and B8-A6.3", () => {
   const devlog = read(DEVLOG);
   for (const token of [
     "## 2026-07-19",
@@ -75,7 +77,9 @@ test("devlog records Stage 1 and corrected Stage 2/3 closeout", () => {
     "auto_recall=2",
     "Stage 2 KG full rollout: PASS",
     "Stage 3 KG rollback: PASS",
-    "observation provenance hardening",
+    "F1-D-B8-A6.3: Hybrid observation provenance hardening",
+    "invalid_provenance_observation_count",
+    "id=11087",
     "## 2026-07-18",
     "Combined Stage 1 evidence",
     "observed_hybrid_events=8",

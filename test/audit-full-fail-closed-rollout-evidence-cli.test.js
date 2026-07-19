@@ -17,13 +17,17 @@ function tempFile(extension, content) {
 }
 
 function event(surface, overrides = {}) {
+  const completedAt = "2026-07-15T00:00:00.000Z";
   return {
     event_type: "hybrid_search_observation",
+    source: `hybrid.${surface}`,
+    session_id: surface === "auto_recall" ? `session-${surface}` : null,
+    trace_id: `trace-${surface}`,
     metadata_json: {
       schema_version: 1,
       surface,
       search_executed: true,
-      completed_at: "2026-07-15T00:00:00.000Z",
+      completed_at: completedAt,
       kg_access_mode: "full_fail_closed",
       recent_access_mode: "full_fail_closed",
       kg_runtime_mode: "full_fail_closed",

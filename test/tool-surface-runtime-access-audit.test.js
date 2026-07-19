@@ -140,8 +140,12 @@ test("metadata-only or wrong-source rows cannot impersonate canonical tool obser
 
   assert.equal(report.status, "tool_surface_runtime_blocked");
   assert.equal(report.production_surface_execution_confirmed, false);
-  assert.equal(report.non_canonical_observation_count, 2);
+  assert.equal(report.invalid_observation_count, 1);
+  assert.equal(report.non_canonical_observation_count, 1);
+  assert.equal(report.invalid_provenance_observation_count, 1);
+  assert.ok(report.violations.some(issue => issue.code === "invalid_observation_input"));
   assert.ok(report.violations.some(issue => issue.code === "non_canonical_tool_observation"));
+  assert.ok(report.violations.some(issue => issue.code === "invalid_observation_provenance"));
   assert.deepEqual(report.missing_tool_surfaces, [
     "memory_engine_action_search",
     "memory_engine_search",

@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-19, after F1-D-B8-A6 Stage 2 KG full rollout and Stage 3 rollback validation.
+> Last updated: 2026-07-19, after F1-D-B8-A6.3 observation provenance hardening.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -30,7 +30,7 @@ The authoritative operating procedures remain:
 | B8-A6 Stage 1 observation evidence | COMPLETE | `auto_recall=6`, `memory_engine_action_search=1`, `memory_engine_search=1`; no violations or evidence gaps; `stage2_review_eligible=true`. |
 | B8-A6 Stage 2 KG full rollout | CLOSED / PASS | Corrected retry produced four canonical runtime observations: `auto_recall=2`, `memory_engine_search=1`, `memory_engine_action_search=1`. All carried KG full markers, Recent remained `legacy_fallback`, and channel/fallback/schema violations were zero. |
 | B8-A6 Stage 3 KG rollback validation | CLOSED / PASS | Original configuration and `agent:main` model were restored; gateway reloaded; rollback search observation contained no KG full residue; post-rollback A5 smoke passed 10/10. |
-| B8-A6.3 observation provenance hardening | REQUIRED NEXT | The first Stage 2 attempt inserted one synthetic `auto_recall` telemetry row (`id=11087`) without canonical source/session/trace/completed-at provenance. It is excluded from authoritative retry evidence but must not enter long-window metrics or removal evidence. |
+| B8-A6.3 observation provenance hardening | CLOSED | Shared validator now enforces canonical event/source/schema/search/completion/trace provenance and AutoRecall session provenance. Invalid rows remain auditable but are excluded from production denominators and block canary, rollout, evidence-window, and removal decisions. |
 | B8-A6 Stage 4 Recent full rollout | REVIEW ELIGIBLE / NOT AUTHORIZED | KG wiring and rollback are verified, but Stage 4 execution requires a separate operator decision after provenance hardening and runbook review. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed full rollout, production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
@@ -156,6 +156,55 @@ The runtime install path reported by `openclaw plugins inspect memory-engine --r
 
 The reviewed checkout and runtime copy had zero source differences, the repository was clean, and the post-rollback A5 smoke passed 10/10.
 
+## B8-A6.3 Provenance Hardening
+
+The shared contract is documented in [`hybrid-observation-provenance.md`](hybrid-observation-provenance.md) and implemented by:
+
+```text
+lib/recall/hybrid/hybrid-observation-provenance.js
+```
+
+A production observation now requires:
+
+```text
+event_type=hybrid_search_observation
+source=hybrid.<surface>
+schema_version=1
+search_executed=true
+completed_at=canonical UTC ISO
+trace_id=present
+AutoRecall session_id=present
+```
+
+The validator is integrated into:
+
+- Console Hybrid fallback metrics;
+- scoped-canary evidence;
+- fallback evidence windows;
+- full fail-closed rollout evidence;
+- tool-surface runtime audit;
+- legacy fallback removal gate through the production rollout report.
+
+Invalid observations expose:
+
+```text
+invalid_provenance_observation_count
+invalid_provenance_observation_ids
+invalid_provenance_reason_distribution
+```
+
+The Stage 2 synthetic row `id=11087` is therefore retained as historical telemetry but automatically excluded from production counts and reported as invalid provenance. It cannot satisfy Stage 4 or B8-B evidence.
+
+Validation completed under Node 24:
+
+```text
+focused provenance and decision-chain tests=101/101
+provenance and rollout documentation tests=31/31
+static-check files=444
+A5 safety smoke=10/10
+full suite=1476 passed, 0 failed, 8 skipped
+```
+
 ## Continuing Safety Boundary
 
 Stage 2/3 closeout does not authorize:
@@ -179,8 +228,8 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 
 ## Next Decision
 
-Complete B8-A6.3 observation provenance hardening before Stage 4 execution. The hardening must ensure that long-window metrics and rollout/removal evaluators reject or explicitly exclude rows whose canonical envelope does not match the claimed production surface.
+B8-A6.3 is complete. Stage 4 may now enter a separate operator review for Recent full rollout.
 
-After that change is reviewed, Stage 4 may enter a separate operator decision for Recent full rollout. Stage 4 must not be inferred from `REVIEW ELIGIBLE`, and B8-B removal remains unauthorized until the production evidence window and removal gate are independently satisfied.
+Stage 4 must not be inferred from `REVIEW ELIGIBLE`, and it must repeat the three-surface runtime evidence and rollback discipline with both KG and Recent explicit full markers. B8-B removal remains unauthorized until the required production evidence window, zero fallback and invalid-provenance counts, tested post-removal rollback, complete inventory, and removal gate are independently satisfied.
 
 Even the successful Stage 2/3 result does not authorize B8-B removal.

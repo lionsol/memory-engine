@@ -27,6 +27,7 @@ function readyInput(overrides = {}) {
       unknown_surface_events: 0,
       missing_schema_version_events: 0,
       unsupported_schema_version_events: 0,
+      invalid_provenance_observation_count: 0,
     },
     codeReachability: { inventory_complete: true, known_dynamic_references: 0 },
     rollbackStrategy: { strategy: "release_revert", tested: true, documented: true, owner_assigned: true },
@@ -68,6 +69,14 @@ test("Recent review rollback blocks regardless of sample volume", () => {
   }));
   assert.equal(result.decision, "blocked");
   assert.ok(result.blockers.some(issue => issue.code === "recent_canary_review_requires_rollback"));
+});
+
+test("invalid production observation provenance blocks removal", () => {
+  const result = evaluateLegacyFallbackRemovalGate(readyInput({
+    productionRollout: { invalid_provenance_observation_count: 1 },
+  }));
+  assert.equal(result.decision, "blocked");
+  assert.ok(result.blockers.some(issue => issue.code === "invalid_observation_provenance_present"));
 });
 
 test("production fallback events block removal", () => {

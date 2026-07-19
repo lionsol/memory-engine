@@ -7,16 +7,25 @@ const IN_WINDOW = "2026-05-29 12:00:00";
 const OUT_WINDOW = "2026-05-01 12:00:00";
 
 function debugRow(id, metadata, createdAt = IN_WINDOW, eventType = "hybrid_search_observation") {
-  const payload = eventType === "hybrid_search_observation" && metadata && typeof metadata === "object"
+  const isHybridObservation = eventType === "hybrid_search_observation";
+  const completedAt = typeof createdAt === "string" && createdAt.trim()
+    ? new Date(`${createdAt.replace(" ", "T").replace(/Z$/, "")}Z`).toISOString()
+    : null;
+  const payload = isHybridObservation && metadata && typeof metadata === "object"
     ? {
+      schema_version: 1,
       surface: "memory_engine_search",
       search_executed: true,
+      completed_at: completedAt,
       ...metadata,
     }
     : metadata;
+  const surface = payload && typeof payload === "object" ? payload.surface : null;
   return {
     id,
     event_type: eventType,
+    source: isHybridObservation && surface ? `hybrid.${surface}` : null,
+    session_id: surface === "auto_recall" ? `session-${id}` : null,
     trace_id: `trace-${id}`,
     metadata_json: typeof payload === "string" ? payload : JSON.stringify(payload),
     created_at: createdAt,
@@ -48,6 +57,9 @@ test("hybrid fallback observability: empty data returns zero summary", () => {
       production_observed_by_surface: {},
       excluded_from_production_by_surface: {},
       unknown_surface_events: 0,
+      invalid_provenance_observation_count: 0,
+      invalid_provenance_observation_ids: [],
+      invalid_provenance_reason_distribution: {},
       fully_observed_by_surface: {},
       fallback_by_surface: {},
       kg_attempted_events: 0,
@@ -445,7 +457,7 @@ test("CLI observations are visible by surface but excluded from the production d
     cli_search: 1,
     memory_engine_search: 1,
   });
-  assert.deepEqual(summary.fallback_by_surface, { cli_search: 1 });
+  assert.deepEqual(summary.fallback_by_surface, {});
   assert.deepEqual(summary.excluded_from_production_by_surface, { cli_search: 1 });
 });
 
@@ -491,6 +503,36 @@ test("schema distributions expose mixed, missing, and unsupported versions", () 
   assert.deepEqual(summary.observation_schema_versions, { "1": 2, "2": 1, unknown: 1 });
   assert.equal(summary.missing_schema_version_events, 1);
   assert.equal(summary.unsupported_schema_version_events, 1);
+});
+
+test("invalid AutoRecall provenance is visible but excluded from production metrics", () => {
+  const invalid = debugRow(11087, {
+    surface: "auto_recall",
+    kg_access_mode: "legacy_fallback",
+    recent_access_mode: "isolated",
+    completed_at: null,
+  });
+  invalid.source = null;
+  invalid.session_id = null;
+  invalid.trace_id = null;
+
+  const summary = buildHybridFallbackObservabilitySummary([
+    invalid,
+    debugRow(11088, {
+      surface: "memory_engine_search",
+      kg_access_mode: "isolated",
+      recent_access_mode: "isolated",
+    }),
+  ], { windowDays: 7, nowMs: NOW_MS });
+
+  assert.equal(summary.observed_hybrid_events, 1);
+  assert.deepEqual(summary.production_observed_by_surface, { memory_engine_search: 1 });
+  assert.equal(summary.invalid_provenance_observation_count, 1);
+  assert.deepEqual(summary.invalid_provenance_observation_ids, [11087]);
+  assert.equal(summary.invalid_provenance_reason_distribution.source_mismatch, 1);
+  assert.equal(summary.invalid_provenance_reason_distribution.missing_auto_recall_session_id, 1);
+  assert.equal(summary.fallback_events, 0);
+  assert.deepEqual(summary.fallback_by_surface, {});
 });
 
 test("search_executed controls the production denominator without hiding coverage", () => {

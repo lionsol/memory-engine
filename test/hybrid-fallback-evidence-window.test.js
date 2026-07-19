@@ -9,9 +9,15 @@ import {
 const SURFACES = ["auto_recall", "memory_engine_action_search", "memory_engine_search"];
 
 function event(surface, timestamp, overrides = {}) {
+  const completedAtInput = overrides.completed_at ?? timestamp;
+  const completedAt = typeof completedAtInput === "string" && completedAtInput.trim()
+    ? new Date(completedAtInput).toISOString()
+    : null;
   const metadata = {
     surface,
     schema_version: 1,
+    search_executed: true,
+    completed_at: completedAt,
     kg_access_mode: "isolated",
     recent_access_mode: "isolated",
     ...overrides.metadata,
@@ -19,10 +25,14 @@ function event(surface, timestamp, overrides = {}) {
   const row = {
     ...overrides,
     event_type: "hybrid_search_observation",
+    source: `hybrid.${surface}`,
+    session_id: surface === "auto_recall" ? `session-${timestamp || "missing"}` : null,
+    trace_id: `trace-${surface}-${timestamp || "missing"}`,
     metadata_json: JSON.stringify(metadata),
     created_at: timestamp,
   };
   delete row.metadata;
+  delete row.completed_at;
   return row;
 }
 
@@ -87,7 +97,7 @@ test("completed_at takes precedence over created_at", () => {
   assert.equal(snapshot.window.duration_days, 1);
 });
 
-test("missing production timestamp creates an evidence gap", () => {
+test("missing canonical completion timestamp blocks production evidence", () => {
   const snapshot = evaluateHybridFallbackEvidenceWindow({
     observations: [event("auto_recall", null)],
     thresholds: {
@@ -96,9 +106,40 @@ test("missing production timestamp creates an evidence gap", () => {
       minimum_window_days: 0,
     },
   });
-  assert.equal(snapshot.decision, "insufficient_evidence");
+  assert.equal(snapshot.decision, "blocked");
   assert.equal(snapshot.counts.missing_timestamp_events, 1);
-  assert.ok(snapshot.gaps.includes("missing_timestamp_events"));
+  assert.equal(snapshot.counts.invalid_provenance_observation_events, 1);
+  assert.ok(snapshot.blockers.includes("invalid_observation_provenance"));
+});
+
+test("invalid AutoRecall provenance is isolated with ids and reason distribution", () => {
+  const invalid = event("auto_recall", "2026-07-01T00:00:00Z");
+  invalid.id = 11087;
+  invalid.source = null;
+  invalid.session_id = null;
+  invalid.trace_id = null;
+  const metadata = JSON.parse(invalid.metadata_json);
+  metadata.completed_at = null;
+  invalid.metadata_json = JSON.stringify(metadata);
+
+  const snapshot = evaluateHybridFallbackEvidenceWindow({
+    observations: [
+      invalid,
+      event("memory_engine_search", "2026-07-01T00:00:00Z"),
+    ],
+    thresholds: {
+      minimum_observations: 1,
+      minimum_surface_observations: 0,
+      minimum_window_days: 0,
+    },
+  });
+
+  assert.equal(snapshot.decision, "blocked");
+  assert.equal(snapshot.counts.production_events, 1);
+  assert.equal(snapshot.invalid_provenance_observation_count, 1);
+  assert.deepEqual(snapshot.invalid_provenance_observation_ids, [11087]);
+  assert.equal(snapshot.invalid_provenance_reason_distribution.source_mismatch, 1);
+  assert.ok(snapshot.blockers.includes("invalid_observation_provenance"));
 });
 
 test("CLI observations are excluded from production evidence", () => {
@@ -119,7 +160,7 @@ test("unknown surface is a hard blocker", () => {
   assert.ok(snapshot.blockers.includes("unknown_surface_contamination"));
 });
 
-test("fallback and unsupported schema are hard blockers", () => {
+test("unsupported-schema fallback rows are rejected before production counting", () => {
   const snapshot = evaluateHybridFallbackEvidenceWindow({
     observations: [event("auto_recall", "2026-07-01T00:00:00Z", {
       metadata: {
@@ -134,7 +175,10 @@ test("fallback and unsupported schema are hard blockers", () => {
     },
   });
   assert.equal(snapshot.decision, "blocked");
-  assert.ok(snapshot.blockers.includes("fallback_events_present"));
+  assert.equal(snapshot.counts.production_events, 0);
+  assert.equal(snapshot.counts.fallback_events, 0);
+  assert.equal(snapshot.counts.invalid_provenance_observation_events, 1);
+  assert.ok(snapshot.blockers.includes("invalid_observation_provenance"));
   assert.ok(snapshot.blockers.includes("unsupported_schema_version"));
 });
 

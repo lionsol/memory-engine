@@ -1,3 +1,77 @@
+## 2026-07-19
+
+### F1-D-B8-A6.3: Hybrid observation provenance hardening
+
+完成 Hybrid production observation provenance 的统一校验与决策链接入，修复“metadata marker 正确但并非真实 runtime observation”仍可能进入 production evidence 的缺口。
+
+#### Trigger
+
+- Stage 2 首次尝试因 `agent:main` 的直连 DeepSeek route credits 不足，真实 AutoRecall turn 失败。
+- 随后曾直接插入一条 AutoRecall-shaped telemetry row：`id=11087`。
+- 该行具有 full markers，但缺少：
+  - `source`
+  - `session_id`
+  - `trace_id`
+  - `metadata.completed_at`
+- 原 marker audit 和 metrics 只验证 metadata 字段，因此可能把该行误计为 production evidence。
+- 修正后的 Stage 2 retry 已使用真实 `opencode/deepseek-v4-flash` agent turns，产生两条完整 `hybrid.auto_recall` observation；`id=11087` 不属于 authoritative evidence。
+
+#### Shared provenance contract
+
+新增：
+
+```text
+lib/recall/hybrid/hybrid-observation-provenance.js
+docs/hybrid-observation-provenance.md
+```
+
+所有 production observation 必须满足：
+
+```text
+event_type=hybrid_search_observation
+source=hybrid.<surface>
+schema_version=1
+search_executed=true
+completed_at=canonical UTC ISO
+trace_id=present
+```
+
+AutoRecall 额外要求非空 `session_id`；gateway tool surface 允许 session 为空，但 trace 和 exact source 必须存在。
+
+#### Decision integration
+
+统一 validator 已接入：
+
+- Console Hybrid fallback metrics；
+- scoped-canary evidence evaluator；
+- fallback evidence window；
+- full fail-closed rollout evidence；
+- tool-surface runtime access audit；
+- legacy fallback removal gate。
+
+无效 observation：
+
+- 保留在历史 telemetry 中；
+- 不进入 production denominator、fallback count、canary/full count；
+- 输出 `invalid_provenance_observation_count`；
+- 输出可用 event IDs 和 reason distribution；
+- 阻塞 canary、rollout、evidence-window 和 removal 决策。
+
+#### Historical contamination handling
+
+- 不自动删除或改写 `id=11087`。
+- 该行现在会因 `source_mismatch`、`invalid_completed_at`、`missing_trace_id`、`missing_auto_recall_session_id` 被隔离。
+- 长窗口统计和 removal evidence 不再依赖人工记忆排除该记录。
+
+#### Validation
+
+- focused provenance / metrics / canary / full rollout / evidence-window / tool audit / removal-gate tests：101/101 passed。
+- documentation contract tests：31/31 passed。
+- `npm run check`：`static check passed: 444 files`。
+- A5 full fail-closed safety smoke：10/10 passed。
+- 全量 Node 24 suite：1484 tests，1476 passed，0 failed，8 skipped。
+- 本阶段不访问真实 DB、不修改 runtime config、不 reload gateway、不执行 memory mutation、不进入 Stage 4 或 B8-B。
+
 ## 2026-07-18
 
 ### F1-D-B8-A5/A6: Full fail-closed rollout readiness and Stage 1 evidence closure

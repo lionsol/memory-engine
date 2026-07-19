@@ -18,13 +18,18 @@ function tempObservations(rows) {
 }
 
 function event(surface, overrides = {}) {
+  const completedAt = "2026-07-18T14:00:00.000Z";
   return {
     event_type: "hybrid_search_observation",
-    created_at: "2026-07-18T14:00:00.000Z",
+    source: `hybrid.${surface}`,
+    session_id: surface === "auto_recall" ? `session-${surface}` : null,
+    trace_id: `trace-${surface}`,
+    created_at: completedAt,
     metadata_json: {
       schema_version: 1,
       surface,
       search_executed: true,
+      completed_at: completedAt,
       legacy_db_fallback_used: false,
       legacy_db_fallback_channels: [],
       channel_error_count: 0,

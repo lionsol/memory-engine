@@ -208,11 +208,14 @@ Required rows:
 ```text
 surface=memory_engine_search
 surface=memory_engine_action_search
+source=hybrid.<surface>
+trace_id=present
+completed_at=canonical UTC ISO
 search_executed=true
 channel_error_count=0
 ```
 
-A manually written row, a CLI result labelled with a production surface, or a direct wrapper call is not canonical production evidence.
+The complete provenance contract is [`../hybrid-observation-provenance.md`](../hybrid-observation-provenance.md). A manually written row, a CLI result labelled with a production surface, a metadata-only replay, or a direct wrapper call is not canonical production evidence.
 
 ## Tool-Surface Access Evaluation
 
@@ -289,7 +292,8 @@ The B8-A6.2 runtime audit passes when:
 - `tools.effective` is captured and its visibility result is reported honestly;
 - both tool invocations return `ok=true` and `source=plugin`;
 - both canonical production surfaces are exported;
-- both observations have `search_executed=true`;
+- both observations have `search_executed=true`, exact `source`, non-empty `trace_id`, and canonical `completed_at`;
+- `invalid_provenance_observation_count=0`;
 - channel errors are zero;
 - no memory mutation action is executed;
 - source/runtime copies remain aligned;

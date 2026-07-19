@@ -34,6 +34,7 @@ const reports = {
     unknown_surface_events: 0,
     missing_schema_version_events: 0,
     unsupported_schema_version_events: 0,
+    invalid_provenance_observation_count: 0,
   },
   reachability: { inventory_complete: true, known_dynamic_references: 0 },
   strategy: { strategy: "release_revert", tested: true, documented: true, owner_assigned: true },

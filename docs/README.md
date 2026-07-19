@@ -64,6 +64,7 @@
 - **事件时间治理**：见 [`adr/event-time-ownership.md`](adr/event-time-ownership.md)。不允许用 `updated_at`、文件 mtime、批量写入时间或路径日期推断精确事件时间。
 - **运行时副本同步**：见 [`runtime-sync.md`](runtime-sync.md)。源码修改只有重新安装或 reload 后才会影响 OpenClaw 实际运行插件。
 - **版本与发布身份**：见 [`release-version-policy.md`](release-version-policy.md)。只使用当前提交可达的最近发布标签；非祖先历史上的更大版本号不得覆盖当前 release line。
+- [`hybrid-observation-provenance.md`](hybrid-observation-provenance.md)：Hybrid production observation 的 canonical envelope、surface-specific provenance、无效记录隔离和 removal-gate 阻塞契约。
 - [Legacy fallback code inventory](legacy-fallback-code-inventory.md)：说明 legacy fallback 静态扫描范围、finding 分类、计数语义、完整性规则及 removal-gate 集成方式。
 
 ### 质量评估与人工治理
@@ -97,7 +98,7 @@
 | 插件注册、工具命名或 OpenClaw 集成 | `AGENTS.md` → `agent-memory-tool-strategy.md` → `openclaw-memory-contract-compat.md` |
 | CLI、tool、checkpoint、maintenance 入口 | `AGENTS.md` → `memory-entry-boundary-audit.md` |
 | DB attach、schema、写路径或迁移 | `AGENTS.md` → `adr/event-time-ownership.md` → 相关代码与 DB safety tests |
-| hybrid search、autoRecall、注入或强化 | `agent-memory-tool-strategy.md` → `retrieval-answering-policy.md` → `hybrid-fail-closed-rollout-status.md` → AutoRecall object model / runbook |
+| hybrid search、autoRecall、注入或强化 | `agent-memory-tool-strategy.md` → `retrieval-answering-policy.md` → `hybrid-observation-provenance.md` → `hybrid-fail-closed-rollout-status.md` → AutoRecall object model / runbook |
 | 质量评分、污染审计或标注 | `memory-quality-eval-mvp-v4.md` → `human-annotation-gold-set.md` |
 | 数据清理或 apply 工具 | 对应 cleanup/apply design → 备份与 rollback 规则 → targeted tests |
 | Console reports / annotations | `human-annotation-gold-set.md` → `smoke-tests/console-annotation-report-handoff.md` |

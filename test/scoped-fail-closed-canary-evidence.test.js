@@ -8,13 +8,18 @@ import {
 const FIXTURE = new URL("./fixtures/scoped-fail-closed-canary-no-opportunity.jsonl", import.meta.url);
 
 function row(surface, overrides = {}) {
+  const completedAt = "2026-07-18T14:00:00.000Z";
   return {
     event_type: "hybrid_search_observation",
-    created_at: "2026-07-18T14:00:00.000Z",
+    source: `hybrid.${surface}`,
+    session_id: surface === "auto_recall" ? `session-${surface}` : null,
+    trace_id: `trace-${surface}`,
+    created_at: completedAt,
     metadata_json: {
       schema_version: 1,
       surface,
       search_executed: true,
+      completed_at: completedAt,
       legacy_db_fallback_used: false,
       legacy_db_fallback_channels: [],
       channel_error_count: 0,
@@ -142,40 +147,31 @@ test("Recent canary suppression is evaluated without a Recent would-have-fallbac
     channel_error_count: 0,
     kg_access_mode: "isolated",
     kg_runtime_mode: "legacy_fallback",
+    kg_rollout_scope: null,
+    kg_scope_required: null,
+    kg_fail_closed_scope_match: null,
   };
   const observations = [
-    {
-      event_type: "hybrid_search_observation",
-      metadata_json: {
-        ...base,
-        surface: "auto_recall",
-        recent_access_mode: "isolated_blocked",
-        recent_runtime_mode: "fail_closed_canary",
-        recent_rollout_scope: "scoped_canary",
-        recent_scope_required: true,
-        recent_fail_closed_scope_match: true,
-        recent_fail_closed_applied: true,
-        recent_fail_closed_fallback_suppressed: true,
-      },
-    },
-    {
-      event_type: "hybrid_search_observation",
-      metadata_json: {
-        ...base,
-        surface: "memory_engine_action_search",
-        recent_access_mode: "isolated",
-        recent_runtime_mode: "legacy_fallback",
-      },
-    },
-    {
-      event_type: "hybrid_search_observation",
-      metadata_json: {
-        ...base,
-        surface: "memory_engine_search",
-        recent_access_mode: "isolated",
-        recent_runtime_mode: "legacy_fallback",
-      },
-    },
+    row("auto_recall", {
+      ...base,
+      recent_access_mode: "isolated_blocked",
+      recent_runtime_mode: "fail_closed_canary",
+      recent_rollout_scope: "scoped_canary",
+      recent_scope_required: true,
+      recent_fail_closed_scope_match: true,
+      recent_fail_closed_applied: true,
+      recent_fail_closed_fallback_suppressed: true,
+    }),
+    row("memory_engine_action_search", {
+      ...base,
+      recent_access_mode: "isolated",
+      recent_runtime_mode: "legacy_fallback",
+    }),
+    row("memory_engine_search", {
+      ...base,
+      recent_access_mode: "isolated",
+      recent_runtime_mode: "legacy_fallback",
+    }),
   ];
 
   const report = buildScopedFailClosedCanaryEvidence({ observations, channel: "recent" });
@@ -185,6 +181,28 @@ test("Recent canary suppression is evaluated without a Recent would-have-fallbac
   assert.equal(report.fallback_suppression_failure_count, 0);
   assert.equal(report.surface_coverage_status, "complete");
   assert.equal(report.stage2_review_eligible, true);
+});
+
+test("synthetic AutoRecall provenance cannot satisfy canary evidence", () => {
+  const invalid = row("auto_recall");
+  invalid.id = 11087;
+  invalid.source = null;
+  invalid.session_id = null;
+  invalid.trace_id = null;
+  invalid.metadata_json.completed_at = null;
+
+  const report = buildScopedFailClosedCanaryEvidence({
+    observations: [invalid],
+    channel: "kg",
+  });
+
+  assert.equal(report.status, "canary_safety_violation");
+  assert.equal(report.observation_count, 0);
+  assert.equal(report.invalid_provenance_observation_count, 1);
+  assert.deepEqual(report.invalid_provenance_observation_ids, [11087]);
+  assert.equal(report.invalid_provenance_reason_distribution.source_mismatch, 1);
+  assert.ok(report.violations.some(issue => issue.code === "invalid_observation_provenance"));
+  assert.ok(report.evidence_gaps.some(issue => issue.code === "auto_recall_canary_scope_hit_missing"));
 });
 
 test("tool scope, other-channel rollout, errors, and failed suppression block the canary", () => {
@@ -221,16 +239,17 @@ test("tool scope, other-channel rollout, errors, and failed suppression block th
   assert.equal(report.stage2_review_eligible, false);
 });
 
-test("non-executed observations do not satisfy scope or surface coverage", () => {
+test("non-executed observations are invalid production provenance", () => {
   const report = buildScopedFailClosedCanaryEvidence({
     observations: [row("auto_recall", { search_executed: false })],
     channel: "kg",
   });
-  assert.equal(report.status, "canary_scope_not_confirmed");
+  assert.equal(report.status, "canary_safety_violation");
   assert.equal(report.search_executed_observation_count, 0);
   assert.equal(report.search_not_executed_count, 1);
+  assert.equal(report.invalid_provenance_observation_count, 1);
   assert.equal(report.production_observed_by_surface.auto_recall, 0);
-  assert.ok(report.warnings.some(issue => issue.code === "search_not_executed_observations_excluded"));
+  assert.ok(report.violations.some(issue => issue.code === "invalid_observation_provenance"));
   assert.ok(report.evidence_gaps.some(issue => issue.code === "surface_observation_missing:auto_recall"));
 });
 

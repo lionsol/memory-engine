@@ -39,6 +39,7 @@ test("documentation index defines authority levels and key governance entrypoint
     "adr/event-time-ownership.md",
     "release-version-policy.md",
     "retrieval-answering-policy.md",
+    "hybrid-observation-provenance.md",
     "memory-quality-eval-mvp-v4.md",
     "human-annotation-gold-set.md",
     "smoke-tests/README.md",

@@ -65,6 +65,11 @@ test("runbook uses canonical observations and repeatable report inputs", () => {
     "--observations /tmp/memory-engine-auto-recall-canary-observations.jsonl",
     "--observations /tmp/memory-engine-tool-surface-observations.jsonl",
     "event_type",
+    "hybrid-observation-provenance.md",
+    "source=hybrid.<surface>",
+    "trace_id=present",
+    "completed_at=canonical UTC ISO",
+    "invalid_provenance_observation_count=0",
     "metadata-only redacted replay",
   ]) {
     assert.equal(doc.includes(token), true, `missing evidence token: ${token}`);

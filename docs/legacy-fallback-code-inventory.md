@@ -263,7 +263,7 @@ known_dynamic_references === 0
 
 其他计数主要用于描述删除影响面、规划 B8-B 删除步骤、定位残留 runtime/config/test dependencies、比较删除前后 inventory，以及验证 query、call site 和 DB entrypoint 是否逐步归零。高计数本身不直接构成 blocker；例如 `legacy_query_call_sites = 10` 说明当前仍有 10 个分类后的 call-site findings，但不表示 inventory 不完整。
 
-真正进入代码删除阶段前，removal gate 还必须同时满足：full fail-closed rollout 已完成、production evidence window 达标、KG/Recent fallback event 为零、replacement rollback strategy 已测试，以及没有 observation/schema blocker。
+真正进入代码删除阶段前，removal gate 还必须同时满足：full fail-closed rollout 已完成、production evidence window 达标、KG/Recent fallback event 为零、`invalid_provenance_observation_count=0`、replacement rollback strategy 已测试，以及没有 observation/schema/provenance blocker。Canonical provenance 规则见 [`hybrid-observation-provenance.md`](hybrid-observation-provenance.md)。
 
 ## Current Snapshot
 

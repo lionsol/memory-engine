@@ -30,7 +30,7 @@ test("runbook documents official config schema and legacy defaults", () => {
   }
 });
 
-test("runbook preserves trusted-scope and production-surface boundaries", () => {
+test("runbook preserves canonical provenance and production-surface boundaries", () => {
   const doc = readRunbook();
   for (const token of [
     "auto_recall",
@@ -39,6 +39,11 @@ test("runbook preserves trusted-scope and production-surface boundaries", () => 
     "do not accept caller-supplied agent or session identity",
     "tool searches without trusted runtime scope must continue to legacy fallback",
     "`full_fail_closed` does not use scope",
+    "hybrid-observation-provenance.md",
+    "source=hybrid.<surface>",
+    "completed_at=canonical UTC ISO",
+    "AutoRecall additionally requires a non-empty `session_id`",
+    "invalid_provenance_observation_count > 0",
   ]) {
     assert.equal(doc.includes(token), true, `missing scope boundary token: ${token}`);
   }
@@ -98,6 +103,7 @@ test("runbook defines explicit full markers, stop conditions, and evidence thres
     "minimum_window_days: 30",
     "minimum_observations: 500",
     "minimum_surface_observations: 100",
+    "invalid observation provenance",
   ]) {
     assert.equal(doc.includes(token), true, `missing evidence token: ${token}`);
   }
@@ -109,6 +115,8 @@ test("runbook uses the canonical metrics summary CLI for JSON and JSONL evidence
     "bin/summarize-hybrid-search-observations.js",
     "buildHybridFallbackObservabilitySummary",
     "does not open SQLite or contact the runtime",
+    "invalid_provenance_observation_count=0",
+    "invalid_provenance_observation_ids=[]",
   ]) {
     assert.equal(doc.includes(token), true, `missing observation summary token: ${token}`);
   }

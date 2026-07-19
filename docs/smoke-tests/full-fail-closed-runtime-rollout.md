@@ -77,6 +77,25 @@ The two tool surfaces do not accept caller-supplied agent or session identity as
 
 `full_fail_closed` does not use scope and therefore applies to all three surfaces.
 
+## Canonical Observation Provenance
+
+Production evidence must satisfy [`../hybrid-observation-provenance.md`](../hybrid-observation-provenance.md).
+
+Every counted row requires:
+
+```text
+event_type=hybrid_search_observation
+source=hybrid.<surface>
+schema_version=1
+search_executed=true
+completed_at=canonical UTC ISO
+trace_id=present
+```
+
+AutoRecall additionally requires a non-empty `session_id`. Tool surfaces may omit `session_id` when executed through official gateway `tools.invoke`, but they must retain a non-empty trace ID and exact source.
+
+A manually inserted row, metadata-only replay, direct wrapper call, or CLI result labelled as a production surface is not production evidence. Invalid rows remain auditable but are excluded from production denominators and must produce `invalid_provenance_observation_count > 0`, which blocks rollout and removal decisions.
+
 ## Stage 0: Baseline Install
 
 Keep both channels explicitly in legacy mode:
@@ -281,7 +300,7 @@ Rollback both channels to `legacy_fallback` if any of the following occurs:
 - a full-mode observation lacks explicit full rollout markers;
 - full events increment scoped-canary metrics;
 - one channel changes another channel's configured behavior;
-- unknown production surfaces or unsupported observation schema versions appear;
+- unknown production surfaces, unsupported observation schema versions, or invalid observation provenance appear;
 - runtime source differs from the reviewed checkout;
 - controlled searches fail or return structurally invalid results.
 
@@ -321,6 +340,16 @@ Generate the canonical metrics summary directly from JSON or JSONL instead of us
 ```
 
 The summary CLI invokes the same `buildHybridFallbackObservabilitySummary` used by the Console metrics service. It reads report files only and does not open SQLite or contact the runtime.
+
+Before accepting a window, confirm:
+
+```text
+invalid_provenance_observation_count=0
+invalid_provenance_observation_ids=[]
+invalid_provenance_reason_distribution={}
+```
+
+Any non-zero invalid provenance count is a blocker, even when rollout markers otherwise look correct.
 
 Evaluate the full-rollout observations:
 

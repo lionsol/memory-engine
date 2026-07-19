@@ -12,12 +12,18 @@ import {
 } from "../bin/audit-hybrid-fallback-evidence-window.js";
 
 function event(surface, createdAt) {
+  const completedAt = new Date(createdAt).toISOString();
   return {
     event_type: "hybrid_search_observation",
+    source: `hybrid.${surface}`,
+    session_id: surface === "auto_recall" ? `session-${surface}` : null,
+    trace_id: `trace-${surface}`,
     created_at: createdAt,
     metadata_json: JSON.stringify({
       surface,
       schema_version: 1,
+      search_executed: true,
+      completed_at: completedAt,
       kg_access_mode: "isolated",
       recent_access_mode: "isolated",
     }),

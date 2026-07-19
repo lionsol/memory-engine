@@ -8,6 +8,10 @@ import { resolve } from "node:path";
 import Database from "better-sqlite3";
 import { tableExists } from "../lib/db/schema.js";
 import { readUnifiedMemoryEvents } from "../console/services/metrics-service.js";
+import {
+  PRODUCTION_HYBRID_OBSERVATION_SURFACES,
+  validateProductionHybridObservationProvenance,
+} from "../lib/recall/hybrid/hybrid-observation-provenance.js";
 
 const EVENTS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS memory_events (
@@ -203,11 +207,13 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
       },
       {
         event_type: "hybrid_search_observation",
+        source: "hybrid.memory_engine_search",
         trace_id: "hybrid-isolated",
         metadata_json: JSON.stringify({
           schema_version: 1,
           surface: "memory_engine_search",
           search_executed: true,
+          completed_at: "2026-05-29T12:00:00.000Z",
           kg_access_mode: "isolated",
           recent_access_mode: "isolated",
         }),
@@ -227,11 +233,13 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
       },
       {
         event_type: "hybrid_search_observation",
+        source: "hybrid.memory_engine_action_search",
         trace_id: "hybrid-kg-fallback",
         metadata_json: JSON.stringify({
           schema_version: 1,
           surface: "memory_engine_action_search",
           search_executed: true,
+          completed_at: "2026-05-29T12:00:00.000Z",
           kg_access_mode: "legacy_fallback",
           kg_isolated_fallback_reason: "text_id_invariant_failed",
         }),
@@ -241,12 +249,14 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
   try {
     const source = readFileSync(new URL("../console/services/metrics-service.js", import.meta.url), "utf8");
     const transformed = source
-      .replace(/^import[^\n]*\n/gm, "")
+      .replace(/^import[\s\S]*?;\n/gm, "")
       .replace(/export function /g, "function ");
     const context = {
       tableExists,
       withDb: fn => fn(engineDb),
       getMemoryEngineConfig: () => ({ metrics: { windowDays: 7, topN: 10 } }),
+      PRODUCTION_HYBRID_OBSERVATION_SURFACES,
+      validateProductionHybridObservationProvenance,
       Date,
       Math,
       JSON,
@@ -286,6 +296,9 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
       production_observed_by_surface: { memory_engine_action_search: 1, memory_engine_search: 1 },
       excluded_from_production_by_surface: {},
       unknown_surface_events: 0,
+      invalid_provenance_observation_count: 0,
+      invalid_provenance_observation_ids: [],
+      invalid_provenance_reason_distribution: {},
       fully_observed_by_surface: { memory_engine_search: 1 },
       fallback_by_surface: { memory_engine_action_search: 1 },
       kg_attempted_events: 2,

@@ -1,5 +1,9 @@
 import { tableExists, withDb } from "./db.js";
 import { getMemoryEngineConfig } from "../../lib/config/runtime.js";
+import {
+  PRODUCTION_HYBRID_OBSERVATION_SURFACES,
+  validateProductionHybridObservationProvenance,
+} from "../../lib/recall/hybrid/hybrid-observation-provenance.js";
 
 function round(value, digits = 3) {
   if (!Number.isFinite(value)) return 0;
@@ -154,11 +158,9 @@ function addMetricDistributionValue(counts, value) {
   counts.set(key, (counts.get(key) || 0) + 1);
 }
 
-const PRODUCTION_HYBRID_OBSERVATION_SURFACES = new Set([
-  "auto_recall",
-  "memory_engine_action_search",
-  "memory_engine_search",
-]);
+const PRODUCTION_HYBRID_OBSERVATION_SURFACE_SET = new Set(
+  PRODUCTION_HYBRID_OBSERVATION_SURFACES,
+);
 
 export function buildHybridFallbackObservabilitySummary(
   rows,
@@ -221,6 +223,9 @@ export function buildHybridFallbackObservabilitySummary(
   const observationSchemaVersions = new Map();
   let missingSchemaVersionEvents = 0;
   let unsupportedSchemaVersionEvents = 0;
+  let invalidProvenanceObservationCount = 0;
+  const invalidProvenanceObservationIds = [];
+  const invalidProvenanceReasonCounts = new Map();
   let observationStartAtMs = null;
 
   for (const row of withinWindow) {
@@ -261,10 +266,19 @@ export function buildHybridFallbackObservabilitySummary(
     const kgIsFallback = metadata.kg_access_mode === "legacy_fallback";
     const recentIsFallback = metadata.recent_access_mode === "guarded_fallback";
     const hasFallback = kgIsFallback || recentIsFallback;
-    if (hasFallback) addMetricDistributionValue(fallbackBySurface, surface);
 
-    const isProductionSurface = PRODUCTION_HYBRID_OBSERVATION_SURFACES.has(surface);
-    const contributesToProduction = isProductionSurface && searchExecuted;
+    const isProductionSurface = PRODUCTION_HYBRID_OBSERVATION_SURFACE_SET.has(surface);
+    const provenance = isProductionSurface
+      ? validateProductionHybridObservationProvenance(row)
+      : null;
+    if (provenance && !provenance.valid) {
+      invalidProvenanceObservationCount += 1;
+      if (provenance.row_id !== null && provenance.row_id !== undefined) {
+        invalidProvenanceObservationIds.push(provenance.row_id);
+      }
+      for (const reason of provenance.reasons) addMetricDistributionValue(invalidProvenanceReasonCounts, reason);
+    }
+    const contributesToProduction = isProductionSurface && searchExecuted && provenance?.valid === true;
     if (contributesToProduction) {
       addMetricDistributionValue(productionObservedBySurface, surface);
       if (fullyObserved) addMetricDistributionValue(fullyObservedBySurface, surface);
@@ -274,6 +288,7 @@ export function buildHybridFallbackObservabilitySummary(
 
     if (!contributesToProduction) continue;
 
+    if (hasFallback) addMetricDistributionValue(fallbackBySurface, surface);
     observedHybridEvents += 1;
     if (hasKgMode) {
       kgAttemptedEvents += 1;
@@ -396,6 +411,9 @@ export function buildHybridFallbackObservabilitySummary(
     production_observed_by_surface: sortMetricDistribution(productionObservedBySurface),
     excluded_from_production_by_surface: sortMetricDistribution(excludedFromProductionBySurface),
     unknown_surface_events: unknownSurfaceEvents,
+    invalid_provenance_observation_count: invalidProvenanceObservationCount,
+    invalid_provenance_observation_ids: invalidProvenanceObservationIds,
+    invalid_provenance_reason_distribution: sortMetricDistribution(invalidProvenanceReasonCounts),
     fully_observed_by_surface: sortMetricDistribution(fullyObservedBySurface),
     fallback_by_surface: sortMetricDistribution(fallbackBySurface),
     kg_attempted_events: kgAttemptedEvents,
