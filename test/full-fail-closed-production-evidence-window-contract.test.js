@@ -24,6 +24,7 @@ test("B8-A7 production evidence-window runbook exists and is indexed", () => {
 test("runbook blocks sustained runtime until identity continuity origin and monitoring exist", () => {
   const doc = read(RUNBOOK);
   for (const token of [
+    "B8-A7.1 IMPLEMENTED / REVIEW CHANGES REQUIRED",
     "B8-A7 design authorized; sustained runtime window not authorized",
     "evidence_epoch_id",
     "runtime_build_identity",
@@ -53,6 +54,10 @@ test("rollout ledger records A7 design authorization without runtime authorizati
     "B8-A7 sustained production evidence window",
     "DESIGN AUTHORIZED / RUNTIME NOT AUTHORIZED",
     "B8-A7.1 evidence epoch and deployment identity",
+    "IMPLEMENTED / REVIEW CHANGES REQUIRED",
+    "package.json",
+    "symlink",
+    "normalized effective configuration",
     "B8-A7.2 continuity and traffic-origin evidence",
     "B8-A7.3 read-only health monitor and stop contract",
     "long-running runtime configuration change",
@@ -65,6 +70,9 @@ test("rollout ledger records A7 design authorization without runtime authorizati
 test("devlog preserves A7 safety boundary", () => {
   const doc = read(DEVLOG);
   for (const token of [
+    "F1-D-B8-A7.1: implementation review changes required",
+    "B8-A7.1=IMPLEMENTED / REVIEW CHANGES REQUIRED",
+    "B8-A7.2=NOT STARTED",
     "F1-D-B8-A7: sustained production evidence-window authorization review",
     "B8-A7 design/tooling=AUTHORIZED",
     "B8-A7 sustained runtime window=NOT AUTHORIZED",

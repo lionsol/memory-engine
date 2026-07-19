@@ -1,5 +1,24 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.1: implementation review changes required
+
+复核 commit `250435d` 的 evidence epoch、runtime build identity 与 rollout config fingerprint 实现。主要 observation wiring、identity evaluator、CLI 和默认关闭边界方向正确，但 A7.1 尚不能关闭，也不能进入 A7.2。
+
+Review 发现三项 identity 完整性缺口：
+
+1. 删除 `package.json` 后 runtime identity 仍返回 `valid=true`，与 fingerprint 必须覆盖 package manifest 的契约不符；
+2. `lib/` 内指向仓库内部目录的 symlink 会被静默跳过，目标 runtime JS 内容变化不会改变 identity；
+3. identity fingerprint 使用 `api.pluginConfig || pluginEntryConfig`，而 AutoRecall、KG 和 Recent 的实际运行值仍通过多来源 compatibility chain 解析，因此实际 runtime config 可能变化而 fingerprint 不变。
+
+```text
+B8-A7.1=IMPLEMENTED / REVIEW CHANGES REQUIRED
+B8-A7.2=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+本 review 仅执行 repository 只读检查、纯临时目录对抗验证和定向测试；未访问真实 DB、未安装或 reload plugin、未修改真实配置、未开启 production evidence window、未进入 B8-B。
+
 ### F1-D-B8-A7: sustained production evidence-window authorization review
 
 Stage 4 已完成 controlled runtime closeout，但 30 天 production evidence window 暂不授权。评审确认现有 30 天 / 500 条 / 每 surface 100 条门槛缺少长期证据治理，直接开启 full mode 会产生不可审计窗口。
