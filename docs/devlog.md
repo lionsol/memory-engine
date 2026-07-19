@@ -1,5 +1,30 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.3: implementation review changes required
+
+Reviewed implementation checkpoint `b725dd5`. The composition architecture correctly reuses the accepted identity, continuity, fallback-window, full-rollout, and canonical provenance evaluators, and 75 focused tests pass. `code-review-graph 2.3.7` reported risk 0.55, zero stored-flow impact, and helper-level test gaps around baseline/time/freshness functions. Adversarial review confirmed four evidence-boundary defects that block A7.3 closeout.
+
+```text
+pre-authorization 31-day evidence accepted=true
+pre-authorization result=ready_for_removal_gate
+future-dated observation/parity/product/healthcheck accepted=true
+future evidence ages=negative and fresh
+non-canonical baseline/report timestamps accepted=true
+impossible scheduled-healthcheck identity accepted=true
+impossible healthcheck result=ready_for_removal_gate
+focused tests=75/75 passed
+B8-A7.3=IMPLEMENTED / REVIEW CHANGES REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+- `baseline.authorized_at` is format-checked but never bounds the observations supplied to identity, continuity, fallback, full-rollout, or freshness evaluation. A fixture with 31 days of matching observations before authorization plus only a few post-authorization rows returns removal-ready.
+- `freshnessStatus()` treats negative ages as fresh. An `asOf` earlier than all canonical observations, parity, product-health, and scheduled-healthcheck reports still returns removal-ready.
+- Baseline, parity, product-health, and CLI `asOf` validation use `Date.parse()` rather than the canonical UTC ISO contract already used by observation provenance. Natural-language dates, date-only strings, and normalized impossible dates are accepted.
+- Scheduled-healthcheck freshness accepts `traffic_origin_valid=true` and `source=scheduled_healthcheck_wrapper` even when agent/session/tool-call presence is false. That row cannot be produced as valid by the registration-owned resolver but can still satisfy healthcheck freshness and removal readiness.
+
+This review changes only documentation and review state. It does not access real DBs, install/reload the plugin, modify configuration, start the sustained window, execute rollback, or enter B8-B.
+
 ### F1-D-B8-A7.3: read-only health monitor implemented
 
 Implemented the A7.3 report-only health monitor and CLI. It composes the existing A7.1 identity, A7.2 continuity/origin, fallback evidence-window, and full fail-closed rollout reports over one observation set. The new layer validates an active authorized baseline, exact epoch/build/config identity, runtime/source parity, product-health status, scheduled-healthcheck freshness, and wall-clock freshness at an explicit `asOf`.
