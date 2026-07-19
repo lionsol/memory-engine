@@ -21,14 +21,14 @@ test("B8-A7 production evidence-window runbook exists and is indexed", () => {
   assert.match(read(DOCS_INDEX), /full-fail-closed-production-evidence-window\.md/);
 });
 
-test("runbook blocks sustained runtime until identity continuity origin and monitoring exist", () => {
+test("runbook closes A7.1 while blocking sustained runtime until continuity origin and monitoring exist", () => {
   const doc = read(RUNBOOK);
   for (const token of [
-    "B8-A7.1 third review changes required",
-    "malformed higher-priority `autoRecall`",
-    "single-value `token` alias",
-    "dependency-closure validation",
-    "B8-A7 design authorized; sustained runtime window not authorized",
+    "B8-A7.1 CLOSED / READY FOR A7.2",
+    "implementation checkpoint `caf4373`",
+    "local runtime dependency closure",
+    "normalized effective AutoRecall/KG/Recent/retrieval configuration",
+    "B8-A7 sustained runtime window NOT AUTHORIZED",
     "evidence_epoch_id",
     "runtime_build_identity",
     "rollout_config_fingerprint",
@@ -51,16 +51,16 @@ test("runbook blocks sustained runtime until identity continuity origin and moni
   }
 });
 
-test("rollout ledger records A7 design authorization without runtime authorization", () => {
+test("rollout ledger closes A7.1 without authorizing sustained runtime", () => {
   const doc = read(STATUS);
   for (const token of [
     "B8-A7 sustained production evidence window",
     "DESIGN AUTHORIZED / RUNTIME NOT AUTHORIZED",
     "B8-A7.1 evidence epoch and deployment identity",
-    "REVIEW FIXES IMPLEMENTED / THIRD REVIEW CHANGES REQUIRED",
-    "malformed high-priority `autoRecall` object",
-    "single-value `token` alias",
-    "dependency-closure guard",
+    "CLOSED / READY FOR A7.2",
+    "implementation checkpoint `caf4373`",
+    "normalized effective AutoRecall/KG/Recent/retrieval configuration",
+    "runtime dependency identity",
     "B8-A7.2 continuity and traffic-origin evidence",
     "B8-A7.3 read-only health monitor and stop contract",
     "long-running runtime configuration change",
@@ -70,14 +70,13 @@ test("rollout ledger records A7 design authorization without runtime authorizati
   }
 });
 
-test("devlog preserves A7 safety boundary", () => {
+test("devlog records A7.1 closeout and preserves the runtime authorization boundary", () => {
   const doc = read(DEVLOG);
   for (const token of [
-    "F1-D-B8-A7.1: third implementation review changes required",
-    "B8-A7.1=REVIEW FIXES IMPLEMENTED / THIRD REVIEW CHANGES REQUIRED",
-    "malformed high-priority autoRecall source rejected=false",
-    "Recent canary single-value token alias preserved=false",
-    "dependency closure guard covers non-lib subdirectories=false",
+    "F1-D-B8-A7.1: final implementation review closed",
+    "B8-A7.1=CLOSED / READY FOR A7.2",
+    "focused tests=48/48 passed",
+    "runtime identity file_count=131",
     "B8-A7.2=NOT STARTED",
     "F1-D-B8-A7: sustained production evidence-window authorization review",
     "B8-A7 design/tooling=AUTHORIZED",

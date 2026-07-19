@@ -1,5 +1,30 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.1: final implementation review closed
+
+Final review accepted implementation checkpoint `caf4373`. The three final guard findings are closed: malformed higher-priority `autoRecall` configuration fails closed without lower-source fallthrough, the Recent canary single-value `token` alias is preserved with malformed values rejected, and runtime dependency validation covers the recursive `index.js` local-import closure plus required filesystem and injected-entry identity scope.
+
+Review evidence:
+
+```text
+focused tests=48/48 passed
+current repository runtime identity valid=true
+runtime identity file_count=131
+runtime identity SHA-256 present=true
+source worktree clean before closeout docs
+```
+
+Current state:
+
+```text
+B8-A7.1=CLOSED / READY FOR A7.2
+B8-A7.2=NOT STARTED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+This closeout authorizes only A7.2 continuity and traffic-origin tooling. It does not authorize enabling `productionEvidenceWindow`, sustained AutoRecall, long-running KG/Recent `full_fail_closed`, or B8-B removal.
+
 ### F1-D-B8-A7.1: third implementation review changes required
 
 复核 implementation checkpoint `e607019`。第二轮要求的 root runtime dependency hashing、AutoRecall `topK` compatibility、retrieval-sensitive config fingerprint、environment thresholds 和 malformed field handling 已大体实现，42 个定向测试通过；但最终对抗 review 仍确认三个 fail-closed/compatibility 缺口，因此 A7.1 尚不能关闭，也不能进入 A7.2。

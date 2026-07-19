@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.1 final review fixes implemented / review pending; B8-A7.2 not started; sustained runtime window not authorized**
+> **Status: B8-A7.1 CLOSED / READY FOR A7.2; B8-A7.2 not started; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -189,10 +189,10 @@ B8-A7 sustained production evidence window
 B8-B removal-gate review
 ```
 
-B8-A7.1 final review fixes are implemented but remain review-pending. A malformed higher-priority `autoRecall` object now fails closed instead of falling through to lower-priority configuration; the Recent canary single-value `token` alias remains compatible; and dependency-closure validation requires every declared root runtime dependency in both filesystem and injected-entry paths. This does not authorize A7.2, enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, or starting the sustained runtime window.
+B8-A7.1 is closed after final review of implementation checkpoint `caf4373`. The accepted identity contract covers the local runtime dependency closure, requires all declared runtime files in filesystem and injected-entry validation paths, rejects duplicate or symlinked runtime paths, and fingerprints the same normalized effective AutoRecall/KG/Recent/retrieval configuration used by runtime behavior. Malformed higher-priority configuration fails closed and supported Recent token compatibility is preserved.
 
-The preceding gate records were `B8-A7.1 IMPLEMENTED / REVIEW CHANGES REQUIRED`, `B8-A7.1 second review changes required`, and `B8-A7.1 dependency/config closure fixes implemented / review pending`. They remain historical evidence. The current state is `B8-A7.1 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING`; the authorization boundary is still `B8-A7 design authorized; sustained runtime window not authorized`.
+A7.2 continuity and traffic-origin evidence is now the next authorized implementation stage. This does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, enabling sustained AutoRecall, or starting the 30-day runtime window.
 
-The older status label `B8-A7.1 third review changes required` is retained only as historical evidence; it is not the current authorization state.
+The preceding review labels remain historical evidence. The current authorization boundary is `B8-A7.1 CLOSED / READY FOR A7.2` and `B8-A7 sustained runtime window NOT AUTHORIZED`.
 
 B8-B remains `NOT AUTHORIZED` throughout A7 implementation and evidence collection.
