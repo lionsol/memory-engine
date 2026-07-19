@@ -68,6 +68,7 @@
 - [`hybrid-observation-provenance.md`](hybrid-observation-provenance.md)：Hybrid production observation 的 canonical envelope、surface-specific provenance、无效记录隔离和 removal-gate 阻塞契约。
 - [`smoke-tests/full-fail-closed-production-evidence-window.md`](smoke-tests/full-fail-closed-production-evidence-window.md)：B8-A7 evidence epoch、installed-runtime/config identity、continuity、traffic-origin 和 sustained-window 授权边界。
 - `bin/audit-production-evidence-continuity.js`：只读读取 JSON/JSONL observation，评估 A7.2 natural-origin denominator、active UTC days、gap 和 per-surface continuity；不授权 sustained runtime。
+- `bin/audit-production-evidence-health.js`：只读组合 A7.1/A7.2 identity、continuity、full-rollout、fallback、parity 和 product-health 报告，输出 stop/rollback 与 removal-gate readiness；不启动 sustained runtime。
 - [Legacy fallback code inventory](legacy-fallback-code-inventory.md)：说明 legacy fallback 静态扫描范围、finding 分类、计数语义、完整性规则及 removal-gate 集成方式。
 
 ### 质量评估与人工治理

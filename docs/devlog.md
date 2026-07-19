@@ -1,5 +1,17 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.3: read-only health monitor implemented
+
+Implemented the A7.3 report-only health monitor and CLI. It composes the existing A7.1 identity, A7.2 continuity/origin, fallback evidence-window, and full fail-closed rollout reports over one observation set. The new layer validates an active authorized baseline, exact epoch/build/config identity, runtime/source parity, product-health status, scheduled-healthcheck freshness, and wall-clock freshness at an explicit `asOf`.
+
+The monitor returns `healthy_collecting`, `insufficient_evidence`, `blocked_rollback_required`, or `ready_for_removal_gate`. Safety conditions such as identity drift, fallback, invalid provenance/schema/origin, full-marker loss, canary leakage, stale monitoring evidence, parity drift, and product rollback health take precedence over ordinary evidence gaps. The CLI is read-only and only recommends rollback; it does not mutate configuration or runtime state.
+
+```text
+B8-A7.3 IMPLEMENTED / REVIEW PENDING
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7.2: final implementation review closed
 
 Final review accepted implementation checkpoint `47389d3`. The TTL/collision and threshold-input findings are closed: registry cleanup now precedes collision detection, post-TTL `toolCallId` reuse is valid, same-lifetime and scheduled-healthcheck collisions remain fail closed, capacity eviction does not create natural evidence, and decoded threshold JSON is validated before CLI override merging through the same contract used by the evaluator.

@@ -90,7 +90,7 @@ test("devlog records A7.2 closeout and preserves the runtime authorization bound
     "focused tests=41/41 passed",
     "full suite=1574 tests / 1566 passed / 0 failed / 8 skipped",
     "B8-A7.2=CLOSED / READY FOR A7.3",
-    "B8-A7.3=NOT STARTED",
+    "B8-A7.3 IMPLEMENTED / REVIEW PENDING",
     "F1-D-B8-A7: sustained production evidence-window authorization review",
     "B8-A7 design/tooling=AUTHORIZED",
     "B8-A7 sustained runtime window=NOT AUTHORIZED",

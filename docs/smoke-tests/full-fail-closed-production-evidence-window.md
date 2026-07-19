@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.2 CLOSED / READY FOR A7.3; sustained runtime window not authorized**
+> **Status: B8-A7.3 IMPLEMENTED / REVIEW PENDING; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -154,6 +154,10 @@ Immediate stop and rollback conditions include:
 - unexpected AutoRecall behavior requiring product rollback.
 
 The monitor must remain read-only. It may recommend rollback and return a non-zero exit code, but it must not silently edit OpenClaw configuration.
+
+The A7.3 implementation is report-only and combines the existing identity, continuity, fallback-window, and full-rollout evidence builders. It additionally validates one active authorized baseline, runtime/source parity, product-health status, scheduled-healthcheck freshness, and wall-clock freshness at an explicit `asOf`. Its statuses are `healthy_collecting`, `insufficient_evidence`, `blocked_rollback_required`, and `ready_for_removal_gate`; the last status only permits a separate removal-gate review and does not authorize sustained runtime or code deletion.
+
+The implementation status is `B8-A7.3 IMPLEMENTED / REVIEW PENDING`. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
 
 ## AutoRecall Product Boundary
 
