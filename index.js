@@ -60,6 +60,7 @@ import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync
 import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { recordHybridSearchObservation } from "./lib/recall/hybrid-observation.js";
 import { createProductionEvidenceIdentityContext } from "./lib/recall/hybrid/production-evidence-identity.js";
+import { createHybridTrafficOriginRegistry } from "./lib/recall/hybrid/traffic-origin.js";
 import { createIsolatedHybridDbAccessScope } from "./lib/recall/hybrid/db-access.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
 import {
@@ -304,36 +305,20 @@ export default definePluginEntry({
     const kgFailClosedCanary = effectiveRuntimeConfig.kgFailClosedCanary;
     const recentFailClosedMode = effectiveRuntimeConfig.recentFailClosedMode;
     const recentFailClosedCanary = effectiveRuntimeConfig.recentFailClosedCanary;
-    const trustedToolTrafficOrigins = new Map();
-    const resolveTrafficOriginContext = toolCallId => {
-      if (!toolCallId) return null;
-      const context = trustedToolTrafficOrigins.get(toolCallId) || null;
-      trustedToolTrafficOrigins.delete(toolCallId);
-      return context;
-    };
+    const trustedToolTrafficOrigins = createHybridTrafficOriginRegistry();
+    const resolveTrafficOriginContext = (toolCallId, surface = null) => (
+      trustedToolTrafficOrigins.consume(toolCallId, surface)
+    );
     if (typeof api.on === "function") {
       api.on("before_tool_call", async (event, ctx) => {
         const toolName = event?.toolName || ctx?.toolName || null;
         if (toolName !== "memory_engine" && toolName !== "memory_engine_search") return;
-        const toolCallId = event?.toolCallId || ctx?.toolCallId || null;
-        if (!toolCallId) return;
-        if (trustedToolTrafficOrigins.size >= 1024) {
-          const oldest = trustedToolTrafficOrigins.keys().next().value;
-          trustedToolTrafficOrigins.delete(oldest);
-        }
-        trustedToolTrafficOrigins.set(toolCallId, {
-          source: "openclaw_runtime",
-          agentId: ctx?.agentId ?? ctx?.agent_id ?? ctx?.agentIdentity ?? null,
-          runId: ctx?.runId ?? ctx?.run_id ?? event?.runId ?? null,
-          sessionId: ctx?.sessionId ?? ctx?.session_id ?? ctx?.sessionKey ?? null,
-          trigger: ctx?.trigger ?? event?.trigger ?? null,
-          toolExecutionSource: ctx?.toolExecutionSource
-            ?? ctx?.tool_execution_source
-            ?? ctx?.invocationSource
-            ?? ctx?.invocation_source
-            ?? event?.toolExecutionSource
-            ?? event?.invocationSource
-            ?? null,
+        trustedToolTrafficOrigins.recordBeforeToolCall({
+          event,
+          ctx,
+          surface: toolName === "memory_engine_search"
+            ? "memory_engine_search"
+            : "memory_engine_action_search",
         });
       });
     }
@@ -499,7 +484,7 @@ export default definePluginEntry({
             traceId,
             identityContext: productionEvidenceIdentityContext,
             trafficOriginContext: {
-              source: "openclaw_runtime",
+              source: "before_prompt_build",
               agentId: ctx?.agentId ?? ctx?.agent_id ?? ctx?.agentIdentity ?? event?.agentId ?? null,
               runId: runKey,
               sessionId,

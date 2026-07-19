@@ -97,8 +97,11 @@ test("hybrid observation preserves canonical fields and derives fallback from ac
       agent_id_present: false,
       run_id_present: false,
       session_id_present: false,
+      tool_call_id_present: false,
       trigger: null,
     },
+    traffic_origin_valid: false,
+    traffic_origin_reasons: ["missing_trusted_context"],
     traffic_origin_schema_version: 1,
     kg_shadow_mode: "shadow_fail_closed",
     kg_shadow_would_fail_closed: true,
@@ -189,12 +192,11 @@ test("action search and memory_engine_search emit distinct observation surfaces"
   const events = [];
   const runtime = createRuntime(events, {
     resolveTrafficOriginContext: () => ({
-      source: "openclaw_runtime",
+      source: "before_tool_call",
       agentId: "edi",
       runId: "run-1",
       sessionId: "session-1",
-      trigger: "user",
-      toolExecutionSource: "model_selected",
+      toolCallId: "tool-1",
     }),
   });
   const executeAction = createMemoryEngineExecute(runtime);

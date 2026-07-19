@@ -1,5 +1,20 @@
 ## 2026-07-19
 
+### F1-D-B8-A7.2: review fixes implemented
+
+复核 checkpoint `59a4f3e` 的四项问题已修复，当前等待 review：
+
+- `before_tool_call` origin 只使用宿主 typed contract 的 `agentId/sessionKey/sessionId/runId/toolName/toolCallId`；不再依赖 `trigger`、`toolExecutionSource` 或 `invocationSource`，并通过 registration-owned registry 管理 TTL、容量、consume 和冲突。
+- observation 增加 `traffic_origin_valid` 与 `traffic_origin_reasons`；continuity evaluator 对每种 origin 的 trusted source、字段形状、surface 匹配和 validity 做严格校验。
+- per-surface gap 同时计算 internal、leading、trailing 和 effective gap；完整 natural window 的边界缺口不能被其他 surface 掩盖。
+- threshold override 不能绕过自然 observation、单一 identity 或三个 production surface 的结构性要求；未知 threshold、非法 ratio 和非整数计数输入 fail closed。
+
+```text
+B8-A7.2 REVIEW FIXES IMPLEMENTED / REVIEW PENDING
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7.2: implementation review changes required
 
 复核 implementation checkpoint `59a4f3e`。A7.2 已新增 traffic-origin metadata、continuity evaluator 和 report-only CLI。当前 Node 24 全量测试实际为 1562 tests、1554 passed、0 failed、8 skipped；实现报告中的 231 pass / 1 unrelated failure 不是当前可复现的全量结果。

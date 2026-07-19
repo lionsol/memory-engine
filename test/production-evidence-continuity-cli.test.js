@@ -17,6 +17,23 @@ const identity = {
 };
 
 function row(surface, origin) {
+  const evidence = origin === "natural_user_turn"
+    ? {
+      source: "before_prompt_build",
+      agent_id_present: true,
+      run_id_present: true,
+      session_id_present: true,
+      tool_call_id_present: false,
+      trigger: "user",
+    }
+    : {
+      source: "before_tool_call_agent",
+      agent_id_present: true,
+      run_id_present: true,
+      session_id_present: true,
+      tool_call_id_present: true,
+      trigger: null,
+    };
   return {
     event_type: "hybrid_search_observation",
     source: `hybrid.${surface}`,
@@ -29,7 +46,9 @@ function row(surface, origin) {
       completed_at: "2026-07-01T00:00:00.000Z",
       traffic_origin: origin,
       traffic_origin_schema_version: 1,
-      traffic_origin_evidence: { source: "trusted_runtime_context" },
+      traffic_origin_evidence: evidence,
+      traffic_origin_valid: true,
+      traffic_origin_reasons: [],
       ...identity,
     },
   };

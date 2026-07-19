@@ -11,6 +11,12 @@ const THRESHOLD_FLAGS = Object.freeze({
   "--minimum-surface-observations": "minimum_surface_observations",
   "--minimum-surface-active-days": "minimum_surface_active_days",
 });
+const INTEGER_THRESHOLD_KEYS = new Set([
+  "minimum_observations",
+  "minimum_surface_observations",
+  "minimum_active_utc_days",
+  "minimum_surface_active_days",
+]);
 
 function readFlagValue(argv, index, flagName) {
   const value = argv[index + 1];
@@ -21,6 +27,13 @@ function readFlagValue(argv, index, flagName) {
 function parseNumber(value, flagName) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${flagName} expects a finite non-negative number`);
+  const key = THRESHOLD_FLAGS[flagName];
+  if (INTEGER_THRESHOLD_KEYS.has(key) && !Number.isInteger(parsed)) {
+    throw new Error(`${flagName} expects an integer`);
+  }
+  if (key === "minimum_active_day_ratio" && parsed > 1) {
+    throw new Error(`${flagName} expects a number between 0 and 1`);
+  }
   return parsed;
 }
 
@@ -107,6 +120,13 @@ async function auditProductionEvidenceContinuity(argv = process.argv.slice(2)) {
   const thresholds = options.thresholdsPath
     ? { ...loadJson(options.thresholdsPath, "thresholds JSON"), ...options.thresholds }
     : options.thresholds;
+  if (Array.isArray(thresholds) || (thresholds !== null && typeof thresholds !== "object")) {
+    throw new Error("thresholds JSON must be an object");
+  }
+  if (thresholds && typeof thresholds === "object" && !Array.isArray(thresholds)) {
+    const unknown = Object.keys(thresholds).find(key => !Object.values(THRESHOLD_FLAGS).includes(key));
+    if (unknown) throw new Error(`unknown threshold: ${unknown}`);
+  }
   const { evaluateProductionEvidenceContinuity } = await import(
     "../lib/recall/hybrid/production-evidence-continuity.js"
   );
