@@ -79,7 +79,7 @@ chatTypeAllowlist=["interactive_user_chat"]
 messageRoleAllowlist=["user"]
 ```
 
-A controlled runtime verification may temporarily expand an allowlist through validated OpenClaw configuration, provided the original values are backed up and restored. The current `before_prompt_build` contract does not require `chatType` or `messageRole`; those allowlists are supplementary constraints applied only when the host explicitly supplies the corresponding field. The agent and trigger allowlists remain the default-deny boundary: an explicitly empty required allowlist rejects every request, while an empty chat/role allowlist only disables that supplementary check. This is not permission to edit gate source, disable a gate dimension, or broaden production defaults.
+A controlled runtime verification may temporarily expand an allowlist through validated OpenClaw configuration, provided the original values are backed up and restored. The current `before_prompt_build` contract does not require `chatType` or `messageRole`; those allowlists are supplementary constraints applied only when the host explicitly supplies the corresponding field. The agent and trigger allowlists remain the default-deny boundary: an empty `agentAllowlist` returns `denied_by_agent_allowlist`, an empty `triggerAllowlist` returns `denied_by_trigger_allowlist`, and both reject every request. In other words, an explicitly empty required allowlist rejects every request. An empty chat/role allowlist only disables that supplementary check. This is not permission to edit gate source, disable a gate dimension, or broaden production defaults.
 
 Unknown values must fail safe to legacy behavior in runtime policy code, but the manifest schema should reject them before reload.
 

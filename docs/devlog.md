@@ -1,5 +1,28 @@
 ## 2026-07-19
 
+### F1-D-B8-A6.5: implementation review closeout
+
+完成 `202c9b2` 与 `899edce` 的实现级 review。三项 review finding 已关闭：required `agentAllowlist` / `triggerAllowlist` 显式空数组 fail closed；KG/Recent full marker 必须显式包含 `scope_match=null`；`legacy_db_fallback_used` / `legacy_db_fallback_channels` 已纳入统一 fallback 事实源并与 controlled-run eligibility 对齐。
+
+验证结果：
+
+```text
+focused review tests=63/63
+static-check files=445
+A5 safety smoke=10/10
+git diff --check=passed
+```
+
+决策：
+
+```text
+B8-A6.5=CLOSED / READY FOR RUNTIME RERUN
+B8-A6 Stage 4=AUTHORIZED / FINAL RUNTIME RERUN REQUIRED
+B8-B=NOT AUTHORIZED
+```
+
+本 review 未访问真实 DB、未修改 runtime 配置、未 reload gateway、未产生真实 observation、未执行 memory mutation、未进入 B8-B。
+
 ### F1-D-B8-A6.5: hook-contract-compatible AutoRecall gate
 
 修复 AutoRecall runtime gate 与当前 OpenClaw `before_prompt_build` hook contract 的不匹配。真实 hook 提供 `event.prompt/messages` 以及可信 context 的 `agentId`、`sessionId` 和 `trigger`，不保证 `chatType` 或 `messageRole`。gate 现在以 `agentAllowlist` 和默认 `triggerAllowlist=["user"]` 作为 default-deny 边界；heartbeat、cron、memory、budget、manual、timeout recovery 和 overflow 等非用户 trigger 继续拒绝。
@@ -8,7 +31,7 @@
 
 同时，full fail-closed rollout evidence 增加 controlled-run surface coverage contract。`auto_recall=0` 会明确产生 `missing_surface:auto_recall`，并设置 `controlled_run_closeout_eligible=false`，而不改变现有 30 天 production window 的 threshold 语义。A6.5 完成后仍需由 edi 重新执行 Stage 4 三 surface runtime verification；B8-B 仍未授权。
 
-Review follow-up 收紧了三个边界：required `agentAllowlist` 和 `triggerAllowlist` 的显式空数组现在拒绝所有请求；KG/Recent full marker 必须显式包含 `scope_match=null`，不能从 `scope_required=false` 推断；`legacy_db_fallback_used` 与 `legacy_db_fallback_channels` 进入统一 fallback 事实源，无法归属 channel 的 fallback 仍阻塞 closeout。controlled-run eligibility 不能在任何 safety blocker 存在时为 true。Stage 4 仍待 edi 重跑，B8-B 仍未授权。
+Review follow-up 收紧了三个边界：空 `agentAllowlist` 返回 `denied_by_agent_allowlist`，空 `triggerAllowlist` 返回 `denied_by_trigger_allowlist`，两者的显式空数组均 fail closed；KG/Recent full marker 必须显式包含 `scope_match=null`，不能从 `scope_required=false` 推断；`legacy_db_fallback_used` 与 `legacy_db_fallback_channels` 进入统一 fallback 事实源，无法归属 channel 的 fallback 仍阻塞 closeout。controlled-run eligibility 不能在任何 safety blocker 存在时为 true。Stage 4 仍待 edi 重跑，B8-B 仍未授权。
 
 ### F1-D-B8-A6 Stage 4: final config-only rerun and host-contract mismatch review
 
