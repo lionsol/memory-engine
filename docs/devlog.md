@@ -1,5 +1,22 @@
 ## 2026-07-20
 
+### F1-D-B8-A7-R3B: host metadata publisher source audit
+
+Audited the installed OpenClaw 2026.6.9 source statically. Install, update, uninstall, enable, and disable lifecycle functions converge on the host-owned persisted `installed_plugin_index` SQLite writer, but the current registry refresh path can enter discovery and the gateway startup path loads plugin runtime. No R3A ordinary-file manifest publisher, no-load boundary, startup reconciliation hook, or atomic file-publication hook was found.
+
+Decision:
+
+    B8-A7-R3B host publisher source=NOT FOUND / BLOCKED
+    B8-A7-R3A synthetic manifest contract=PASSED
+    real host publisher=NOT AUTHORIZED
+    production manifest consumer=NOT AUTHORIZED
+    real OpenClaw metadata path=NOT AUTHORIZED
+    host integration=NOT STARTED
+    host remediation execution=NOT AUTHORIZED
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 ### F1-D-B8-A7-R3A: third review fixes
 
 Added a synthetic real-manifest duplicate-key scenario, explicit atomic replacement evidence that the old descriptor remains complete generation `1` while the new final snapshot is complete generation `2`, and a smoke-level hardlink scenario. Hardlink results include the dedicated `manifest_hardlink` blocker while retaining link-count evidence. No host integration or production metadata access is authorized.

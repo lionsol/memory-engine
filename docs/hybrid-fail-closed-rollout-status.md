@@ -22,6 +22,7 @@ The authoritative operating procedures remain:
 
 The B8-A7-R1 remediation runbook is [sustained-runtime-remediation.md](smoke-tests/sustained-runtime-remediation.md).
 The B8-A7-R2A metadata-source audit is [openclaw-no-load-plugin-metadata-audit.md](smoke-tests/openclaw-no-load-plugin-metadata-audit.md).
+The B8-A7-R3B host publisher source audit is [openclaw-host-metadata-publisher-source-audit.md](smoke-tests/openclaw-host-metadata-publisher-source-audit.md).
 
 Current remediation boundary:
 
@@ -51,7 +52,8 @@ Current remediation boundary:
 | B8-A7 sustained production evidence window | WITHHELD / REMEDIATION REQUIRED | The 2026-07-20 authorization review found source/runtime drift, ABI mismatch, active-memory enabled, missing installed A7.4 methods, and natural-traffic/product-health blockers. The B8-A7-R1 remediation procedure is implemented pending EDI verification; no runtime activation is authorized. |
 | B8-A7-R2A existing OpenClaw metadata API audit | VERIFIED / CLOSED | The current OpenClaw 2026.6.9 installed-plugin index is persisted in shared state SQLite; its helper opens the database without a read-only contract and the snapshot loader falls back to discovery. Existing API remains blocked for Phase 0. |
 | B8-A7-R2B synthetic read-only state-DB feasibility harness | PASSED / CLOSED | Synthetic verification is complete. The live state-DB reader remains blocked because WAL/SHM filesystem changes violate zero-write evidence and immutable reading retained the checkpointed revision. No syscall trace is required for the feasibility decision. |
-| B8-A7-R3A host-published metadata manifest synthetic contract | THIRD REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING | Real manifest-field duplicate-key rejection, atomic old/new generation assertions, smoke-level hardlink rejection, expected-versus-actual scenario decisions, symlink evidence, and manifest-artifact-only consumer fingerprints are implemented. Host publisher integration, real metadata path resolution, and production consumption remain unauthorized. |
+| B8-A7-R3A host-published metadata manifest synthetic contract | PASSED | Synthetic canonical JSON, duplicate-key rejection, atomic old/new generation assertions, tombstone, symlink/hardlink identity checks, and zero-consumer-write evidence are internally coherent. This does not authorize host integration or production consumption. |
+| B8-A7-R3B host metadata publisher integration-point source audit | NOT FOUND / BLOCKED | Install/update/uninstall lifecycle owners and the shared SQLite index writer exist, but no no-load R3A manifest publisher, startup reconciliation hook, or atomic ordinary-file publication boundary was found. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
