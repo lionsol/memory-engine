@@ -85,7 +85,7 @@ readPersistedInstalledPluginIndexFromSqlite()
   -> openOpenClawStateDatabase()
 ~~~
 
-The inspected openOpenClawStateDatabase() implementation does not establish a passive file-reader contract. It opens a DatabaseSync connection without readOnly=true, calls ensureOpenClawStatePermissions, configures SQLite connection pragmas, calls ensureSchema, and caches the connection. These permission, WAL/pragmas, schema, and connection-cache operations are outside the Phase 0 no-load boundary even when the eventual query is a read.
+The inspected openOpenClawStateDatabase() implementation does not establish a passive file-reader contract. It opens a DatabaseSync connection without readOnly=true, calls ensureOpenClawStatePermissions, calls configureSqliteConnectionPragmas() to configure SQLite connection pragmas, calls ensureSchema, and caches the connection. These permission, WAL/pragmas, schema, and connection-cache operations are outside the Phase 0 no-load boundary even when the eventual query is a read.
 
 The plugin registry command calls inspectPersistedInstalledPluginIndex(), which reads persisted state and builds a current index for comparison. It is therefore not a pure file metadata API, regardless of the command name inspect.
 
