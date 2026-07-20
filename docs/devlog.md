@@ -1,5 +1,20 @@
 ## 2026-07-20
 
+### F1-D-B8-A7-R3A: second review fixes
+
+Hardened the synthetic host-published metadata manifest contract. The consumer now scans original JSON text with a standard-JSON tokenizer before `JSON.parse` and rejects duplicate keys as `manifest_duplicate_key`. Smoke scenarios record expected and actual validity/blocking semantics, so negative validation fixtures pass when rejected and only unexpected failures block the aggregate decision. Symlink rejection is asserted with zero observable consumer writes, and zero-write fingerprints cover only the final manifest plus temporary manifest artifacts rather than unrelated sibling files.
+
+Current boundary:
+
+    B8-A7-R3A second review fixes=IMPLEMENTED / EDI VERIFICATION PENDING
+    real host publisher=NOT AUTHORIZED
+    production manifest consumer=NOT AUTHORIZED
+    real OpenClaw metadata path=NOT AUTHORIZED
+    host integration=NOT STARTED
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 ### F1-D-B8-A7-R2B: synthetic state-DB read-only feasibility harness
 
 Added a synthetic-only `node:sqlite` feasibility harness and report-only CLI. It creates private temporary databases, exercises rollback-journal and WAL/SHM visibility, missing-SHM and WAL-based non-writable-directory behavior, compares normal and immutable readers across a post-open B-to-C writer mutation, rejects INSERT/UPDATE/DELETE/DDL writes, verifies database locations, fingerprints reader phases with BigInt nanosecond metadata, and always removes its temporary root. Exact checkpointed-A, WAL-committed-B, and wal-post-open-C revision markers provide the freshness oracle, and failed opens/queries retain after fingerprints. It accepts no external database or state path and does not import OpenClaw or memory-engine runtime code.

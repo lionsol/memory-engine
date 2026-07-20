@@ -53,7 +53,7 @@ The envelope is versioned and canonical:
 
 Installed state requires lexical absolute install/source paths and does not read either path. Absent tombstones require `install=null` and `absent_reason` equal to `uninstalled`, `disabled-by-host-policy`, or `install-record-missing`. A missing final file is not an absent tombstone and fails closed.
 
-The canonical serializer sorts object keys lexicographically, preserves array order, emits UTF-8 two-space JSON with one trailing newline and no BOM. The consumer rejects files over 64 KiB, invalid UTF-8, NUL, duplicate keys as observed through canonical-byte mismatch, alternate whitespace/order, trailing data, and unsupported schema or state combinations.
+The canonical serializer sorts object keys lexicographically, preserves array order, emits UTF-8 two-space JSON with one trailing newline and no BOM. Before `JSON.parse`, the consumer scans the original JSON text and rejects duplicate keys with `manifest_duplicate_key`; it also rejects files over 64 KiB, invalid UTF-8, NUL, alternate whitespace/order, trailing data, and unsupported schema or state combinations.
 
 ## Tombstone Behavior
 
@@ -61,7 +61,7 @@ Uninstall or authoritative absence must publish a complete tombstone through the
 
 ## Synthetic Scenario Coverage
 
-The smoke covers valid installed and absent snapshots, installed-to-absent replacement, orphan and interrupted temporary files, failed replacement preserving the old snapshot, old-descriptor versus new-final atomic replacement, malformed/canonical/schema failures, oversized files, symlink and hardlink identity failures, consumer zero-write fingerprints, CommonJS require isolation, and external-argument rejection.
+The smoke covers valid installed and absent snapshots, installed-to-absent replacement, orphan and interrupted temporary files, failed replacement preserving the old snapshot, old-descriptor versus new-final atomic replacement, malformed/canonical/schema failures, oversized files, symlink and hardlink identity failures, consumer zero-write fingerprints, CommonJS require isolation, and external-argument rejection. Each scenario records `expected_valid`, `actual_valid`, and `expected_block`; expected invalid fixtures are PASS when the consumer rejects them, and only unexpected failures contribute to the global decision. Consumer fingerprints are restricted to the final manifest and its temporary-manifest artifacts, not unrelated sibling files.
 
 ## Not Proven
 
@@ -116,7 +116,7 @@ Current state:
 ```text
 B8-A7-R2B synthetic harness verification=PASSED / CLOSED
 B8-A7-R2B standalone read-only live state-DB reader feasibility=BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN
-B8-A7-R3A host-published metadata manifest synthetic contract=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R3A host-published metadata manifest synthetic contract=SECOND REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
 real host publisher=NOT AUTHORIZED
 production manifest consumer=NOT AUTHORIZED
 real metadata path resolution=NOT AUTHORIZED

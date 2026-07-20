@@ -23,6 +23,8 @@ test("manifest constants, canonical serialization, and atomic publication are ex
   assert.match(LIBRARY, /MANIFEST_NAME = ["']memory-engine\.install-metadata\.json["']/);
   assert.match(LIBRARY, /function sortedValue/);
   assert.match(LIBRARY, /Object\.keys\(value\)\.sort/);
+  assert.match(LIBRARY, /detectDuplicateJsonKeys/);
+  assert.match(LIBRARY, /manifest_duplicate_key/);
   assert.match(LIBRARY, /O_CREAT/);
   assert.match(LIBRARY, /O_EXCL/);
   assert.match(LIBRARY, /O_WRONLY/);
@@ -44,6 +46,16 @@ test("consumer uses descriptor identity checks and does not inspect install path
   assert.match(LIBRARY, /manifest_changed_during_read/);
   assert.match(LIBRARY, /source_type: "host_published_plugin_metadata_manifest"/);
   assert.match(LIBRARY, /observable_write_detected/);
+  assert.match(LIBRARY, /fingerprintManifestArtifacts/);
+  assert.doesNotMatch(LIBRARY, /function fingerprintFileTree/);
+});
+
+test("smoke separates expected invalid scenarios from unexpected failures", () => {
+  assert.match(LIBRARY, /expected_valid/);
+  assert.match(LIBRARY, /actual_valid/);
+  assert.match(LIBRARY, /expected_block/);
+  assert.match(LIBRARY, /unexpected_failures/);
+  assert.match(LIBRARY, /scenario_validity_mismatch/);
 });
 
 test("CLI preserves the CommonJS lazy-import boundary", () => {

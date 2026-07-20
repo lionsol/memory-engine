@@ -25,9 +25,11 @@ import {
   canonicalJson,
   compareSyntheticFingerprints,
   createSyntheticManifest,
+  fingerprintManifestArtifacts,
   fingerprintSyntheticTree,
   publishSyntheticManifestAtomic,
   readSyntheticManifestSnapshot,
+  runSyntheticManifestSmoke,
 } from "../lib/ops/synthetic-host-plugin-metadata-manifest.js";
 
 const require = createRequire(import.meta.url);
@@ -139,6 +141,9 @@ test("canonical and schema failures are rejected", () => {
       const snapshot = readSyntheticManifestSnapshot(root);
       assert.equal(snapshot.valid, false, name);
       assert.ok(snapshot.blockers.length > 0, name);
+      if (name === "duplicate-key") {
+        assert.ok(snapshot.blockers.includes("manifest_duplicate_key"));
+      }
     }, name);
   }
 });
@@ -155,6 +160,7 @@ test("oversized, symlinked, and hardlinked final files fail closed", () => {
     const snapshot = readSyntheticManifestSnapshot(root);
     assert.equal(snapshot.valid, false);
     assert.ok(snapshot.blockers.includes("manifest_symlink"));
+    assert.equal(snapshot.observable_write_detected, false);
   }, "symlink");
   withRoot((root) => {
     const source = path.join(root, "source");
@@ -164,6 +170,29 @@ test("oversized, symlinked, and hardlinked final files fail closed", () => {
     assert.equal(snapshot.valid, false);
     assert.ok(snapshot.blockers.includes("manifest_link_count_invalid"));
   }, "hardlink");
+});
+
+test("negative smoke scenarios pass when their expected invalidity is observed", () => {
+  const report = runSyntheticManifestSmoke();
+  const malformed = report.scenarios.find((scenario) => scenario.id === "malformed-json");
+  const duplicate = report.scenarios.find((scenario) => scenario.id === "duplicate-key");
+  assert.equal(malformed.status, "PASS");
+  assert.equal(malformed.expected_valid, false);
+  assert.equal(malformed.actual_valid, false);
+  assert.equal(malformed.expected_block, true);
+  assert.equal(duplicate.status, "PASS");
+  assert.equal(duplicate.actual_valid, false);
+  assert.deepEqual(report.blockers, []);
+});
+
+test("consumer artifact fingerprints ignore unrelated sibling files", () => {
+  withRoot((root) => {
+    publishSyntheticManifestAtomic(root, createSyntheticManifest());
+    const before = fingerprintManifestArtifacts(root);
+    writeFileForTest(path.join(root, "metrics.log"), "not a manifest artifact");
+    const after = fingerprintManifestArtifacts(root);
+    assert.equal(compareSyntheticFingerprints(before, after).observable_write_detected, false);
+  }, "fingerprint-scope");
 });
 
 function writeFileForTest(filePath, text) {
