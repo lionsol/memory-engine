@@ -22,10 +22,12 @@ test("audit records the writable state-database helper evidence", () => {
     "installed_plugin_index",
     "readPersistedInstalledPluginIndexFromSqlite()",
     "openOpenClawStateDatabase()",
-    "DatabaseSync without readOnly=true",
+    "DatabaseSync",
+    "without readOnly=true",
     "ensureOpenClawStatePermissions",
     "configureSqliteConnectionPragmas",
     "ensureSchema",
+    "caches the connection",
     "loadInstalledPluginIndexWithDiscovery",
   ]) {
     includes(text, value);
@@ -36,7 +38,7 @@ test("audit distinguishes existing API blockage from unassessed standalone reade
   const text = auditDocument();
   for (const value of [
     "Existing OpenClaw registry/snapshot API=BLOCKED FOR PHASE 0",
-    "Existing OpenClaw metadata API=BLOCKED / REVIEW FIXES IMPLEMENTED",
+    "B8-A7-R2A existing OpenClaw metadata API=BLOCKED / REVIEW FIXES IMPLEMENTED",
     "standalone read-only state-DB reader feasibility=NOT ASSESSED",
     "B8-A7-R2B: standalone read-only OpenClaw state-DB reader feasibility audit",
     "B8-A7-R2B standalone read-only state-DB reader feasibility=NOT STARTED",
