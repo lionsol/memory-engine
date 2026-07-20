@@ -4,11 +4,12 @@
 
 Audited the local OpenClaw 2026.6.9 plugin-registry implementation without executing OpenClaw commands or loading plugin code. The current installed-plugin index resolves through the OpenClaw state directory to state/openclaw.sqlite and reads the installed_plugin_index table. Its snapshot loader performs policy/source/manifest/package staleness checks and falls back to derived plugin discovery when persisted data is missing or stale. The legacy plugins/installs.json path is retired for current storage.
 
-Because the candidate is SQLite-backed and the complete snapshot path can enter discovery, no authoritative pure-file no-load metadata source is proven. R2A is blocked; no reader is implemented and host remediation remains unauthorized.
+The existing registry/snapshot API is blocked for Phase 0 because readPersistedInstalledPluginIndexFromSqlite() reaches openOpenClawStateDatabase(), which opens DatabaseSync without readOnly=true, ensures state permissions, configures SQLite pragmas, ensures schema, and caches the connection. The complete snapshot path also performs stale checks and can enter derived discovery. SQLite storage alone does not prove plugin loading, and a standalone read-only state-DB reader may be feasible, but its feasibility is not assessed. R2A review fixes are implemented; R2B is not started.
 
 Current boundary:
 
-    B8-A7-R2A no-load metadata source=BLOCKED / SOURCE NOT PROVEN
+    B8-A7-R2A existing OpenClaw metadata API=BLOCKED / REVIEW FIXES IMPLEMENTED
+    B8-A7-R2B standalone read-only state-DB reader feasibility=NOT STARTED
     host remediation execution=NOT AUTHORIZED
     B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED

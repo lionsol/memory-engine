@@ -1,6 +1,8 @@
 # B8-A7-R2A OpenClaw No-Load Plugin Metadata Source Audit
 
-> **B8-A7-R2A no-load metadata source=BLOCKED / SOURCE NOT PROVEN**
+> **B8-A7-R2A existing OpenClaw metadata API=BLOCKED / REVIEW FIXES IMPLEMENTED**
+>
+> **B8-A7-R2B standalone read-only state-DB reader feasibility=NOT STARTED**
 >
 > **host remediation execution=NOT AUTHORIZED**
 >
@@ -75,6 +77,15 @@ loadInstalledPluginIndexInstallRecordsSync()
        -> openOpenClawStateDatabase()
        -> db.prepare(SELECT ... FROM installed_plugin_index ...)
 ~~~
+
+The concrete persisted-index helper path is:
+
+~~~text
+readPersistedInstalledPluginIndexFromSqlite()
+  -> openOpenClawStateDatabase()
+~~~
+
+The inspected openOpenClawStateDatabase() implementation does not establish a passive file-reader contract. It opens a DatabaseSync connection without readOnly=true, calls ensureOpenClawStatePermissions, configures SQLite connection pragmas, calls ensureSchema, and caches the connection. These permission, WAL/pragmas, schema, and connection-cache operations are outside the Phase 0 no-load boundary even when the eventual query is a read.
 
 The plugin registry command calls inspectPersistedInstalledPluginIndex(), which reads persisted state and builds a current index for comparison. It is therefore not a pure file metadata API, regardless of the command name inspect.
 
@@ -160,9 +171,10 @@ installPath, sourcePath, version, and installedAt are persisted install-record f
 
 ## No-Load Side-Effect Audit
 
-The candidate fails the required pure-file contract:
+The existing OpenClaw registry/snapshot API fails the required Phase 0 pure-file contract:
 
 * the canonical persisted index is read from SQLite through openOpenClawStateDatabase() and SQL preparation;
+* that helper opens the state database without an explicit readOnly=true contract and may ensure permissions, configure SQLite pragmas, ensure schema, and cache a writable connection;
 * loadPluginRegistrySnapshotWithMetadata() performs stale policy, source, manifest, package, diagnostics, config-path, bundled-root, and recovered-install checks;
 * missing or stale persisted data falls back to loadInstalledPluginIndexWithDiscovery();
 * the discovery path reads plugin roots and manifests and is a plugin discovery path, not a proven passive file reader;
@@ -182,7 +194,7 @@ does not initialize LanceDB
 does not mutate registry/state/config
 ~~~
 
-Even if the SQLite read itself does not import the memory-engine entrypoint, it is not a pure-file source and the full snapshot path has discovery fallbacks. No-load has therefore not been proven.
+SQLite-backed metadata does not by itself prove that plugin code is loaded. The demonstrated blockers are the existing helper's database-open/permission/schema/WAL behavior and the snapshot loader's discovery fallback. No-load has not been proven for the existing API.
 
 ## Authority and Staleness Analysis
 
@@ -199,11 +211,18 @@ Pure-file checks that could be deferred to a future reader include ordinary-dire
 ## Decision
 
 ~~~text
-B8-A7-R2A no-load metadata source=BLOCKED / SOURCE NOT PROVEN
+B8-A7-R2A existing OpenClaw metadata API=BLOCKED / REVIEW FIXES IMPLEMENTED
+B8-A7-R2B standalone read-only state-DB reader feasibility=NOT STARTED
 host remediation execution=NOT AUTHORIZED
 ~~~
 
-The current OpenClaw implementation does not expose a proven authoritative pure-file, no-load source for installed plugin metadata. Do not use:
+The current OpenClaw registry/snapshot API is not acceptable for Phase 0:
+
+~~~text
+Existing OpenClaw registry/snapshot API=BLOCKED FOR PHASE 0
+~~~
+
+Do not use:
 
 ~~~text
 openclaw plugins inspect
@@ -237,9 +256,33 @@ Phase 0 result=blocked
 host remediation execution=NOT AUTHORIZED
 ~~~
 
+## R2B Registration
+
+The next phase is registered but not implemented:
+
+~~~text
+B8-A7-R2B: standalone read-only OpenClaw state-DB reader feasibility audit
+standalone read-only state-DB reader feasibility=NOT ASSESSED
+~~~
+
+Its future audit must cover:
+
+~~~text
+node:sqlite readOnly=true
+file-must-exist behavior
+WAL and SHM behavior
+schema-version validation
+fixed index_key
+policyHash and generatedAt staleness
+duplicate/malformed records
+absolute installPath validation
+symlink policy
+zero writes and zero discovery
+~~~
+
 ## Conditional Future Reader Design
 
-No reader is implemented by this audit. If a future OpenClaw release exposes a documented pure-file snapshot, a report-only reader may accept an explicit, already-resolved source path or state directory and an expected plugin id of memory-engine.
+No reader is implemented by this audit. A standalone read-only OpenClaw state-DB reader may be feasible, but its feasibility is NOT ASSESSED. It must not be inferred from the existing helper and is not authorized by this document. If R2B proves a safe implementation, a report-only reader may accept an explicit, already-resolved state database path and an expected plugin id of memory-engine.
 
 Its output contract would be:
 
@@ -264,10 +307,11 @@ The reader must read only one explicitly authorized ordinary file, never output 
 
 ## Continuing Authorization Boundary
 
-This audit only determines the status of a possible metadata source. It does not authorize implementing or executing a reader, changing configuration, installing/reloading the plugin, creating a scheduler, enabling an evidence epoch, starting A7, or entering B8-B.
+This audit only determines the status of the existing metadata API and registers R2B. It does not authorize implementing or executing a reader, changing configuration, installing/reloading the plugin, creating a scheduler, enabling an evidence epoch, starting A7, or entering B8-B.
 
 ~~~text
-B8-A7-R2A no-load metadata source=BLOCKED / SOURCE NOT PROVEN
+B8-A7-R2A existing OpenClaw metadata API=BLOCKED / REVIEW FIXES IMPLEMENTED
+B8-A7-R2B standalone read-only state-DB reader feasibility=NOT STARTED
 host remediation execution=NOT AUTHORIZED
 B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED

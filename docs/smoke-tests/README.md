@@ -17,7 +17,7 @@ This directory keeps manual smoke-test runbooks for workflows that are important
 
 ## When to Use
 
-Review [openclaw-no-load-plugin-metadata-audit.md](openclaw-no-load-plugin-metadata-audit.md) before any future attempt to identify an installed plugin runtime path for sustained-runtime remediation. This audit is source-only and does not authorize OpenClaw CLI commands, plugin discovery, runtime loading, configuration changes, or A7.
+Review [openclaw-no-load-plugin-metadata-audit.md](openclaw-no-load-plugin-metadata-audit.md) before any future attempt to identify an installed plugin runtime path for sustained-runtime remediation. This audit is source-only and does not authorize OpenClaw CLI commands, plugin discovery, runtime loading, configuration changes, or A7. R2B standalone read-only state-DB reader feasibility is not started.
 
 The B8-A7-R1 remediation procedure is documented in [sustained-runtime-remediation.md](sustained-runtime-remediation.md). It is an operator plan only and does not authorize configuration mutation, plugin install/reload, scheduler creation, healthcheck traffic, epoch activation, A7, or B8-B removal.
 
