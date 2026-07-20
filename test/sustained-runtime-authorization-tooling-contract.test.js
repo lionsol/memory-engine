@@ -123,3 +123,19 @@ test("active evidence starts only after finalization and A7.4 closes without run
   assert.match(combined, /B8-B(?: removal)?(?:=|\s+)NOT AUTHORIZED/i);
   assert.doesNotMatch(combined, /B8-A7 sustained runtime window(?:=|\s+)(?:AUTHORIZED|ACTIVE)/i);
 });
+
+test("the first real-environment authorization decision is fail-closed and auditable", () => {
+  const decision = source("docs/smoke-tests/sustained-runtime-authorization-decision-20260720.md");
+  const ledger = source("docs/hybrid-fail-closed-rollout-status.md");
+  assert.match(decision, /AUTHORIZATION WITHHELD\s*\/\s*REMEDIATION REQUIRED/i);
+  assert.match(decision, /source_runtime_equal=false/);
+  assert.match(decision, /difference_count=25/);
+  assert.match(decision, /NODE_MODULE_VERSION=137/);
+  assert.match(decision, /active_memory_enabled=true/);
+  assert.match(decision, /natural_observation_count=0/);
+  assert.match(decision, /status=not_evaluated/);
+  assert.match(decision, /No authorization plan, active baseline, evidence epoch, or runtime mutation may be produced/i);
+  assert.match(ledger, /B8-A7 sustained runtime authorization WITHHELD\s*\/\s*REMEDIATION REQUIRED/i);
+  assert.match(decision, /B8-A7 sustained runtime window=NOT AUTHORIZED/i);
+  assert.match(decision, /B8-B removal=NOT AUTHORIZED/i);
+});

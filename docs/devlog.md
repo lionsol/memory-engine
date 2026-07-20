@@ -9010,6 +9010,21 @@ git diff --check
 - status: `B8-A7.1 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING`; A7.2, sustained runtime authorization, and B8-B remain unauthorized.
 ## 2026-07-20
 
+### F1-D-B8-A7: sustained runtime authorization withheld after real-environment review
+
+- Reviewed source checkpoint: `e8140c2` on `main`.
+- `openclaw plugins inspect memory-engine --runtime --json` identified OpenClaw `2026.6.9`, installed plugin `0.8.22`, and install root `~/.openclaw/extensions/memory-engine`.
+- Source/runtime parity failed: `difference_count=25`, source build `3a3dc277...`, runtime build `86d04dd7...`; the installed runtime lacks the A7.4 preflight and scheduled-healthcheck gateway methods.
+- Inspection exposed a native ABI mismatch: installed `better-sqlite3` uses `NODE_MODULE_VERSION 137`, while the OpenClaw CLI process requires `127`. No rebuild or reinstall was executed.
+- The current config remains valid and pre-activation: AutoRecall disabled, KG/Recent `legacy_fallback`, production evidence disabled, no epoch.
+- Runtime boundary failed because active-memory is absent from config and therefore resolves enabled by OpenClaw default semantics.
+- Read-only 30-day observation export produced 35 rows but zero qualifying natural observations: 34 invalid origin-evidence rows and one invalid-provenance row. Forecast status: `blocked`.
+- AutoRecall product health status: `not_evaluated`; 24-hour telemetry had 65 events, zero injections, p95 latency 4094 ms, max latency 7300 ms, and no exact-key quality review.
+- Authorization decision: `WITHHELD / REMEDIATION REQUIRED`.
+- No config backup, authorization plan, install/reload, config mutation, scheduler, evidence epoch, active baseline, rollback, memory mutation, push, tag, or release was performed.
+- Decision record: `docs/smoke-tests/sustained-runtime-authorization-decision-20260720.md`.
+- Current boundaries: `B8-A7 sustained runtime window=NOT AUTHORIZED`; `B8-B removal=NOT AUTHORIZED`.
+
 ### F1-D-B8-A7.3: final evidence status fixes implemented
 
 Implemented the final A7.3 review fixes: scheduled-healthcheck evidence is now limited to tool surfaces, canonical UTC timestamps reject surrounding whitespace, parity health is distinct from parity freshness, and monitor freshness includes all canonical surfaces plus healthcheck, parity, and product-health evidence. `B8-A7.3 FINAL REVIEW FIXES IMPLEMENTED / REVIEW PENDING`; sustained runtime remains unauthorized and B8-B remains unauthorized.
