@@ -13,11 +13,12 @@ This directory keeps manual smoke-test runbooks for workflows that are important
 | [`full-fail-closed-production-evidence-window.md`](full-fail-closed-production-evidence-window.md) | F1-D-B8-A7 sustained production evidence governance: epoch/build identity, continuity, traffic origin, monitoring, and stop conditions | Design/tooling only until A7 runtime authorization; no sustained full mode, AutoRecall expansion, manufactured traffic, memory mutation, or B8-B removal |
 | [`sustained-runtime-authorization-tooling.md`](sustained-runtime-authorization-tooling.md) | F1-D-B8-A7.4 loaded-runtime preflight, parity/product-health generation, scheduled healthcheck, epoch projection, natural-traffic forecast, authorization plan, and read-only monitor cycle | Report-only/dry-run implementation; no real config change, install/reload, scheduler, epoch activation, rollback execution, push, or B8-B removal |
 | [`sustained-runtime-authorization-decision-20260720.md`](sustained-runtime-authorization-decision-20260720.md) | First real-environment B8-A7 sustained-runtime authorization review after A7.4 closure | Authorization withheld: records parity, ABI, active-memory, natural-traffic, product-health, and preflight blockers without runtime mutation |
+| [`openclaw-state-db-readonly-feasibility.md`](openclaw-state-db-readonly-feasibility.md) | B8-A7-R2B synthetic-only `node:sqlite` read-only state-DB feasibility matrix | Synthetic temporary databases only; no real OpenClaw state, plugin loading, discovery, configuration, or production reader authorization |
 | [`tool-surface-runtime-access-audit.md`](tool-surface-runtime-access-audit.md) | F1-D-B8-A6.2 registry vs effective tool visibility audit plus controlled `tools.invoke` production-surface verification | Search-only gateway invocation; no persistent policy widening, memory mutation, Core DB access, Stage 2 auto-authorization, or legacy removal |
 
 ## When to Use
 
-Review [openclaw-no-load-plugin-metadata-audit.md](openclaw-no-load-plugin-metadata-audit.md) before any future attempt to identify an installed plugin runtime path for sustained-runtime remediation. This audit is source-only and does not authorize OpenClaw CLI commands, plugin discovery, runtime loading, configuration changes, or A7. R2B standalone read-only state-DB reader feasibility is not started.
+Review [openclaw-no-load-plugin-metadata-audit.md](openclaw-no-load-plugin-metadata-audit.md) before any future attempt to identify an installed plugin runtime path for sustained-runtime remediation. This audit is source-only and does not authorize OpenClaw CLI commands, plugin discovery, runtime loading, configuration changes, or A7. Review [openclaw-state-db-readonly-feasibility.md](openclaw-state-db-readonly-feasibility.md) for the synthetic-only R2B feasibility harness; it does not authorize a production reader or real state-DB access.
 
 The B8-A7-R1 remediation procedure is documented in [sustained-runtime-remediation.md](sustained-runtime-remediation.md). It is an operator plan only and does not authorize configuration mutation, plugin install/reload, scheduler creation, healthcheck traffic, epoch activation, A7, or B8-B removal.
 
@@ -68,6 +69,9 @@ node --test test/full-fail-closed-runtime-rollout-contract.test.js
 node --test test/sustained-runtime-authorization-tooling-contract.test.js
 node --test test/sustained-runtime-remediation-contract.test.js
 node --test test/openclaw-no-load-plugin-metadata-audit-contract.test.js
+node --test test/openclaw-state-db-readonly-feasibility-contract.test.js
+node --test test/openclaw-state-db-readonly-feasibility.test.js
+npm run smoke:openclaw-state-db-readonly
 node --test test/tool-surface-runtime-access-audit-doc.test.js
 node --test test/agent-memory-tool-strategy.test.js
 ```

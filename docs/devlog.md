@@ -1,5 +1,19 @@
 ## 2026-07-20
 
+### F1-D-B8-A7-R2B: synthetic state-DB read-only feasibility harness
+
+Added a synthetic-only `node:sqlite` feasibility harness and report-only CLI. It creates private temporary databases, exercises rollback-journal and WAL/SHM visibility, missing-SHM and non-writable-directory behavior, compares an immutable URI read, rejects SQL writes, fingerprints database and sidecar files, and always removes its temporary root. It accepts no external database or state path and does not import OpenClaw or memory-engine runtime code.
+
+Current boundary:
+
+    B8-A7-R2B synthetic feasibility harness=IMPLEMENTED / EDI VERIFICATION PENDING
+    standalone production reader=NOT AUTHORIZED
+    real OpenClaw state-DB access=NOT AUTHORIZED
+    host remediation execution=NOT AUTHORIZED
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 ### F1-D-B8-A7-R2A: OpenClaw no-load plugin metadata source audit
 
 Audited the local OpenClaw 2026.6.9 plugin-registry implementation without executing OpenClaw commands or loading plugin code. The current installed-plugin index resolves through the OpenClaw state directory to state/openclaw.sqlite and reads the installed_plugin_index table. Its snapshot loader performs policy/source/manifest/package staleness checks and falls back to derived plugin discovery when persisted data is missing or stale. The legacy plugins/installs.json path is retired for current storage.
