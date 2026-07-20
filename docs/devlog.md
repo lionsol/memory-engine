@@ -1,14 +1,16 @@
 ## 2026-07-20
 
-### F1-D-B8-A7-R1: sustained runtime remediation procedure implemented
+### F1-D-B8-A7-R1: remediation review fixes implemented
 
 Added the operator runbook and static contract for the withheld sustained-runtime authorization findings. The procedure requires separate evidence for the OpenClaw CLI Node/ABI, gateway Node/ABI, and native dependency ABI; an independent owner-only exact configuration backup; explicit active-memory effective enabled=false; reviewed-source installation under the final gateway runtime; source_runtime_equal=true with difference_count=0; safe initial AutoRecall/KG/Recent/evidence settings; and loaded-runtime preflight before any later authorization review.
 
 The procedure permits only preflight verification in this phase and defines fail-closed stop and byte-for-byte rollback gates. It does not install or reload the plugin, change real configuration, create a scheduler, enable an epoch, call scheduled healthcheck, access databases, generate traffic, or authorize A7/B8-B.
 
+Review fixes now separate original C0 and active-memory-disabled C1 configuration checkpoints, add a prior runtime recovery gate before install/reload, collect CLI identity without a preselected Node path, and assign loaded-host, source/runtime parity, and scheduler inventory facts to separate evidence reports. Configuration-failure, install-failure, and complete-abandonment rollback branches preserve the authorization boundary without requiring C0 restoration to keep active-memory disabled.
+
 Current boundary:
 
-    B8-A7-R1 remediation procedure=IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R1 remediation procedure=REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
     B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
     B8-B removal=NOT AUTHORIZED

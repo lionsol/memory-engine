@@ -36,6 +36,24 @@ test("runbook records all three runtime ABI identities and equality gate", () =>
   }
 });
 
+test("Phase 0 collects identities without preselecting a Node runtime", () => {
+  const text = runbook();
+  const phase0 = text.slice(
+    text.indexOf("## Phase 0:"),
+    text.indexOf("## Phase 1:"),
+  );
+  assert.doesNotMatch(phase0, /export PATH|Node 22|Node 24/);
+  for (const value of [
+    "command -v openclaw",
+    "readlink -f",
+    "startup method",
+    "actual service process or service definition",
+    "original operator environment",
+  ]) {
+    has(phase0, value);
+  }
+});
+
 test("runbook requires an independent exact configuration backup", () => {
   const text = runbook();
   for (const value of [
@@ -52,6 +70,28 @@ test("runbook requires an independent exact configuration backup", () => {
   }
 });
 
+test("runbook defines independent C0 and C1 checkpoints and rollback branches", () => {
+  const text = runbook();
+  for (const value of [
+    "C0 Original Configuration Checkpoint",
+    "C1 Safe Configuration Checkpoint",
+    "only intended semantic difference",
+    "reduced/sanitized diff",
+    "Configuration remediation failure",
+    "Plugin installation or reload failure",
+    "Complete abandonment",
+    "Restore C0 byte-for-byte",
+    "retain or restore C1",
+    "B8-A7 authorization remains WITHHELD",
+  ]) {
+    has(text, value);
+  }
+  assert.doesNotMatch(
+    text,
+    /restore C0[\s\S]{0,180}active-memory disabled/,
+  );
+});
+
 test("runbook preserves the safe initial state and disables active-memory", () => {
   const text = runbook();
   for (const value of [
@@ -66,6 +106,37 @@ test("runbook preserves the safe initial state and disables active-memory", () =
     "no evidence epoch",
     "no scheduler or cron",
     "difference_count=0",
+  ]) {
+    has(text, value);
+  }
+});
+
+test("runbook separates preflight, parity, and scheduler evidence", () => {
+  const text = runbook();
+  for (const value of [
+    "Preflight is responsible for proving only the loaded-host facts",
+    "does not independently prove source/runtime parity or host scheduler state",
+    "Runtime/Source Parity Evidence",
+    "source_runtime_equal=true",
+    "reviewed dependency closure matches",
+    "Host Scheduler Inventory Evidence",
+    "actual OpenClaw scheduler inventory",
+    "user systemd timer inventory",
+    "user crontab",
+  ]) {
+    has(text, value);
+  }
+});
+
+test("runbook requires prior runtime recovery before installation", () => {
+  const text = runbook();
+  for (const value of [
+    "Prior Runtime Recovery Gate",
+    "Immutable source recovery",
+    "Independent runtime rollback artifact",
+    "lockfile identity",
+    "install/reload=NOT AUTHORIZED",
+    "does not rely on the current installed directory",
   ]) {
     has(text, value);
   }
