@@ -4,12 +4,17 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
 import {
   CHECKPOINT_REVISION,
+  createSyntheticDatabase,
   WAL_REVISION,
+  POST_OPEN_WAL_REVISION,
   compareFingerprints,
   fingerprintTree,
+  probeSqlWriteRejections,
   runStateDbReadonlyFeasibilitySmoke,
+  runReadOnlyChecks,
   TEMP_PREFIX,
 } from "../lib/ops/sqlite-readonly-feasibility.js";
 
@@ -75,8 +80,35 @@ test("synthetic readonly feasibility smoke returns the complete report schema an
 
   const immutable = report.scenarios.find((scenario) => scenario.id === "immutable-live-wal");
   assert.equal(immutable.expected_revision, WAL_REVISION);
-  assert.equal(immutable.normal_latest_row_visible, immutable.normal_observed_revision === WAL_REVISION);
-  assert.equal(immutable.immutable_latest_row_visible, immutable.immutable_observed_revision === WAL_REVISION);
+  assert.notEqual(CHECKPOINT_REVISION, WAL_REVISION);
+  assert.notEqual(WAL_REVISION, POST_OPEN_WAL_REVISION);
+  assert.equal(typeof immutable.reader_phase_1_diff, "object");
+  assert.equal(typeof immutable.reader_phase_2_diff, "object");
+  assert.equal(typeof immutable.normal_location_matches, "boolean");
+  assert.equal(typeof immutable.immutable_location_matches, "boolean");
+  assert.equal(immutable.immutable_candidate_allowed, false);
+  assert.ok([
+    "saw-post-open-update",
+    "retained-stale-snapshot",
+    "query-failed-after-update",
+    "uri-or-location-unproven",
+    "other",
+  ].includes(immutable.immutable_behavior));
+  assert.equal(immutable.normal_post_update_revision === POST_OPEN_WAL_REVISION,
+    immutable.normal_post_update_latest_visible);
+  assert.equal(immutable.normal_latest_row_visible,
+    immutable.normal_initial_latest_visible && immutable.normal_post_update_latest_visible);
+
+  const nonWritable = report.scenarios.find((scenario) => scenario.id === "non-writable-directory");
+  if (nonWritable.status === "SKIPPED") {
+    assert.ok(nonWritable.blockers.includes("permission_model_not_enforceable"));
+  } else {
+    assert.equal(nonWritable.fixture_wal_present, true);
+    assert.equal(nonWritable.fixture_shm_present, true);
+    assert.equal(nonWritable.directory_writable_before, true);
+    assert.equal(nonWritable.directory_writable_during, false);
+    assert.equal(nonWritable.expected_revision, WAL_REVISION);
+  }
 });
 
 test("the synthetic report does not expose absolute temporary paths", () => {
@@ -110,5 +142,96 @@ test("fingerprints detect metadata changes without a content change", () => {
     assert.equal(diff.content_changed_files.includes("fixture.txt"), false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("fingerprints report newly created sidecars as observable writes", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), `${TEMP_PREFIX}sidecar-`));
+  try {
+    const before = fingerprintTree(directory);
+    writeFileSync(path.join(directory, "fixture.sqlite-shm"), "synthetic-shm");
+    const after = fingerprintTree(directory);
+    const diff = compareFingerprints(before, after);
+    assert.equal(diff.sidecar_created, true);
+    assert.ok(diff.new_files.includes("fixture.sqlite-shm"));
+    assert.equal(diff.observable_write_detected, true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("read-only open failures retain an after fingerprint and stable error code", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), `${TEMP_PREFIX}failure-`));
+  const databasePath = path.join(directory, "broken.sqlite");
+  try {
+    writeFileSync(databasePath, "not-a-sqlite-database");
+    const before = fingerprintTree(directory);
+    const result = {
+      expected_revision: CHECKPOINT_REVISION,
+      blockers: [],
+    };
+    runReadOnlyChecks(result, databasePath, before, directory);
+    assert.equal(typeof result.open_error_code, "string");
+    assert.equal(typeof result.after_fingerprint, "object");
+    assert.ok(result.blockers.length > 0);
+    assert.equal(JSON.stringify(result).includes(directory), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the shared SQL probe distinguishes writable success from read-only rejection", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), `${TEMP_PREFIX}write-probe-`));
+  const databasePath = path.join(directory, "probe.sqlite");
+  try {
+    const writable = createSyntheticDatabase(databasePath);
+    const writableResult = probeSqlWriteRejections(writable);
+    writable.close();
+    assert.deepEqual(writableResult, {
+      insert: false,
+      update: false,
+      delete: false,
+      ddl: false,
+    });
+
+    const readOnly = new DatabaseSync(databasePath, { readOnly: true });
+    const readOnlyResult = probeSqlWriteRejections(readOnly);
+    readOnly.close();
+    assert.deepEqual(readOnlyResult, {
+      insert: true,
+      update: true,
+      delete: true,
+      ddl: true,
+    });
+    assert.equal(Object.values(readOnlyResult).every(Boolean), true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("scenario write rejection summary is mathematically consistent", () => {
+  const report = runStateDbReadonlyFeasibilitySmoke();
+  for (const scenario of report.scenarios) {
+    assert.equal(
+      scenario.sql_write_rejected,
+      Object.values(scenario.sql_write_rejections).every(Boolean),
+    );
+    if (scenario.status === "PASS") assert.equal(scenario.blockers.length, 0);
+    if (scenario.status === "BLOCKED" || scenario.status === "SKIPPED") {
+      assert.ok(scenario.blockers.length > 0);
+    }
+  }
+  const provisional = report.decision.includes("PROVISIONAL");
+  const blocked = report.decision.includes("BLOCKED");
+  assert.equal(provisional || blocked, true);
+  if (provisional) {
+    assert.equal(report.blockers.length, 0);
+    assert.equal(report.scenarios.every((scenario) => scenario.status === "PASS"), true);
+  }
+  if (blocked) {
+    assert.equal(
+      report.scenarios.some((scenario) => scenario.status === "BLOCKED" || scenario.status === "SKIPPED"),
+      true,
+    );
   }
 });

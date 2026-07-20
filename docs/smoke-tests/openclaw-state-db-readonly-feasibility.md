@@ -71,7 +71,7 @@ The WAL experiment is synthetic and does not prove behavior against an OpenClaw 
 
 ## Immutable Risk Model
 
-The `immutable-live-wal` scenario compares a normal WAL-aware read-only reader with an `immutable=1` URI read. It records whether the immutable reader sees the WAL row. An immutable reader that misses the row is a freshness warning/blocker for this harness, and it is never treated as a safe workaround.
+The `immutable-live-wal` scenario compares a normal WAL-aware read-only reader with an `immutable=1` URI read, then performs a post-open writer mutation from revision B to revision C while both readers remain open. Normal reader freshness requires B initially and C after the mutation. Immutable behavior is recorded as seeing C, retaining a stale snapshot, failing the query, or being unproven; it is never a production-reader candidate even if it sees C. Reader phase 1 and phase 2 fingerprints are compared separately so the writer's B-to-C mutation is not classified as reader write evidence. Both connection targets are verified with `database.location()`.
 
 The following rule remains mandatory regardless of the synthetic result:
 
@@ -88,7 +88,7 @@ immutable=1 must not be used against a live concurrently mutable OpenClaw state 
 | `wal-latest-committed-row` | Latest committed WAL row is visible; WAL/SHM changes block. |
 | `wal-without-shm` | Open/query result and any SHM creation or WAL change are recorded explicitly. |
 | `non-writable-directory` | Keep a WAL/SHM fixture open, enforce ordinary-user directory permissions where possible, and record permission/filesystem evidence; otherwise report `SKIPPED`, not pass. |
-| `immutable-live-wal` | Compare normal WAL-aware visibility with immutable URI visibility and retain the immutable safety rule. |
+| `immutable-live-wal` | Compare normal and immutable visibility across a post-open B-to-C mutation, verify both locations, separate reader phase fingerprints, and retain the immutable safety rule. |
 
 ## Decision Rules
 
@@ -144,7 +144,7 @@ syscall_trace_status:
 ## Continuing Authorization Boundary
 
 ```text
-B8-A7-R2B synthetic feasibility harness=REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R2B synthetic feasibility harness=SECOND REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
 standalone production reader=NOT AUTHORIZED
 real OpenClaw state-DB access=NOT AUTHORIZED
 host remediation execution=NOT AUTHORIZED

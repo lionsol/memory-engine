@@ -28,8 +28,22 @@ test("synthetic feasibility uses a private temporary family and fixed synthetic 
   assert.match(LIBRARY, /lstatSync\([^)]*\{ bigint: true \}/);
   assert.match(LIBRARY, /CHECKPOINT_REVISION/);
   assert.match(LIBRARY, /WAL_REVISION/);
+  assert.match(LIBRARY, /POST_OPEN_WAL_REVISION/);
+  assert.match(LIBRARY, /database\.location\(\)/);
+  assert.match(LIBRARY, /normal_post_update_revision/);
+  assert.match(LIBRARY, /immutable_post_update_revision/);
+  assert.match(LIBRARY, /immutable_candidate_allowed/);
+  assert.match(LIBRARY, /reader_phase_1_diff/);
+  assert.match(LIBRARY, /reader_phase_2_diff/);
+  assert.match(LIBRARY, /probeSqlWriteRejections/);
   assert.match(LIBRARY, /expected_revision/);
   assert.match(LIBRARY, /observed_revision/);
+  assert.match(LIBRARY, /database\.location\(\)/);
+  assert.match(LIBRARY, /normal_post_update_revision/);
+  assert.match(LIBRARY, /immutable_post_update_revision/);
+  assert.match(LIBRARY, /immutable_candidate_allowed/);
+  assert.match(LIBRARY, /reader_phase_1_diff/);
+  assert.match(LIBRARY, /reader_phase_2_diff/);
 });
 
 test("CLI accepts only json output mode and rejects external database paths", () => {
