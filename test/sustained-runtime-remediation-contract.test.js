@@ -75,6 +75,11 @@ test("runbook defines independent C0 and C1 checkpoints and rollback branches", 
   for (const value of [
     "C0 Original Configuration Checkpoint",
     "C1 Safe Configuration Checkpoint",
+    "distinct backup path",
+    "inode distinct from both the live file and C0",
+    "The live config, C0, and C1 paths must remain different",
+    "C0 must not be a symlink or hardlink",
+    "C1 must not be a symlink or hardlink",
     "only intended semantic difference",
     "reduced/sanitized diff",
     "Configuration remediation failure",
@@ -88,8 +93,28 @@ test("runbook defines independent C0 and C1 checkpoints and rollback branches", 
   }
   assert.doesNotMatch(
     text,
-    /restore C0[\s\S]{0,180}active-memory disabled/,
+    /backup at the same live path/,
   );
+});
+
+test("runbook defines sanitized semantic diff without exposing raw configuration", () => {
+  const text = runbook();
+  for (const value of [
+    "raw configuration contents",
+    "secrets",
+    "tokens",
+    "environment variables",
+    "normalized configuration paths",
+    "boolean states",
+    "changed_semantic_path_count=1",
+    "active_memory_effective_enabled_before=true",
+    "active_memory_effective_enabled_after=false",
+    "unrelated_semantic_change_count=0",
+    "C1 must exactly match the live configuration after",
+    "C0 must continue to exactly match the original",
+  ]) {
+    has(text, value);
+  }
 });
 
 test("runbook preserves the safe initial state and disables active-memory", () => {

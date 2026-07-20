@@ -1,6 +1,6 @@
 # B8-A7-R1 Sustained Runtime Remediation
 
-> **B8-A7-R1 remediation procedure=REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING**
+> **B8-A7-R1 remediation procedure=FINAL REVIEW FIX IMPLEMENTED / EDI VERIFICATION PENDING**
 >
 > **B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED**
 >
@@ -66,19 +66,19 @@ Any exceptional rebuild requires separate written authorization naming the targe
 
 ## Phase 2: C0 Original Configuration Checkpoint
 
-Obtain the live path from OpenClaw:
+Obtain and record the authoritative live-config path identity from OpenClaw:
 
 ```bash
 CONFIG_PATH="$(openclaw config file)"
 ```
 
-C0 is the independent checkpoint of the original pre-remediation configuration. Before any approved configuration action, create an independent ordinary-file backup. It must not be a symlink, hardlink, or alias of the live file, must be owner-only readable, and must preserve the exact original bytes. Record only the live path, backup path, SHA-256, byte count, permissions, and UTC timestamp. Do not copy configuration contents or secrets into this repository.
+C0 is the independent checkpoint of the original pre-remediation configuration. Before any approved configuration action, create an independent ordinary-file backup at a distinct backup path. The live config, C0, and later C1 paths must all be different, and their inodes must all be different. C0 must not be a symlink or hardlink, must be owner-only readable, and must preserve the exact original bytes. Record only the authoritative live path identity, backup path, SHA-256, byte count, permissions, inode identity, and UTC timestamp. Do not overwrite the live config to create a backup, and do not copy configuration contents or secrets into this repository.
 
-The gate is not satisfied by a path-only snapshot or a generated merge patch. Verify separate regular-file identity, link count, ownership, byte hash, size, and permissions. C0 must remain available until remediation is closed or explicitly abandoned.
+The gate is not satisfied by a path-only snapshot or a generated merge patch. Verify separate regular-file identity, distinct path and inode, link count, ownership, byte hash, size, and permissions. C0 must continue to match the original pre-remediation live configuration and remain available until remediation is closed or explicitly abandoned.
 
 ## Phase 3: C1 Safe Configuration Checkpoint
 
-Confirm the effective configuration path and schema semantics for `active-memory` before preparing a minimal patch. Apply no other configuration change. After the approved patch, create C1 as a second independent ordinary-file backup at the same live path. C1 must record its path, SHA-256, byte count, permissions, and UTC timestamp with the same symlink, hardlink, ownership, and byte-identity checks as C0.
+Confirm the effective configuration path and schema semantics for `active-memory` before preparing a minimal patch; the runbook must not guess the configuration path. Apply no other configuration change. C1 is an independent backup of the post-patch live configuration. It is bound to the same authoritative live-config path identity, but it must be stored at a distinct backup path with an inode distinct from both the live file and C0. The live config, C0, and C1 paths must remain different. C1 must not be a symlink or hardlink and must record its path, SHA-256, byte count, permissions, inode identity, and UTC timestamp with the same ownership and byte-identity checks as C0.
 
 The only intended semantic difference between C0 and C1 is:
 
@@ -86,7 +86,16 @@ The only intended semantic difference between C0 and C1 is:
 active-memory effective enabled=false
 ```
 
-Use a reduced/sanitized diff to prove that C0 and C1 differ only in the explicit active-memory disablement. The diff must not include configuration values, secrets, unrelated plugin changes, memory slots, tools policy, agents, AutoRecall, KG/Recent modes, canary scopes, evidence settings, or scheduler settings.
+Use a reduced/sanitized semantic diff to prove that C0 and C1 differ only in the explicit active-memory disablement. It must not include raw configuration contents, secrets, tokens, environment variables, or unrelated values. It may contain normalized configuration paths, boolean states, change counts, and verification results. The effective configuration path and semantics must be confirmed from the OpenClaw schema/runtime before execution, not guessed by this runbook. The minimum evidence is:
+
+```text
+changed_semantic_path_count=1
+active_memory_effective_enabled_before=true
+active_memory_effective_enabled_after=false
+unrelated_semantic_change_count=0
+```
+
+C1 must exactly match the live configuration after the approved active-memory disable patch; C0 must continue to exactly match the original pre-remediation configuration.
 
 After approved application, the boundary report must prove:
 
@@ -245,7 +254,7 @@ node --test test/sustained-runtime-remediation-contract.test.js
 ## Current Authorization Boundary
 
 ```text
-B8-A7-R1 remediation procedure=REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R1 remediation procedure=FINAL REVIEW FIX IMPLEMENTED / EDI VERIFICATION PENDING
 B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED
