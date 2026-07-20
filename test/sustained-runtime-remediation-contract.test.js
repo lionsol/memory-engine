@@ -54,6 +54,43 @@ test("Phase 0 collects identities without preselecting a Node runtime", () => {
   }
 });
 
+test("Phase 0 requires a proven no-load metadata source and fails closed otherwise", () => {
+  const text = runbook();
+  const phase0 = text.slice(
+    text.indexOf("## Phase 0:"),
+    text.indexOf("## Phase 1:"),
+  );
+  assert.doesNotMatch(
+    phase0,
+    /openclaw plugins inspect memory-engine --runtime --json/,
+  );
+  for (const value of [
+    "No-Load Metadata Gate",
+    "authoritative no-load metadata source",
+    "does not import plugin entrypoint",
+    "does not register plugin",
+    "does not initialize plugin",
+    "does not access memory-engine/core DB",
+    "does not initialize LanceDB",
+    "installed runtime metadata=no-load source unavailable",
+    "Phase 0 result=blocked",
+    "host remediation execution=NOT AUTHORIZED",
+  ]) {
+    has(phase0, value);
+  }
+});
+
+test("loaded-runtime checks are later and do not replace no-load planning", () => {
+  const text = runbook();
+  const phase0End = text.indexOf("## Phase 1:");
+  const loadedRuntime = text.indexOf("## Phase 7: Loaded-Runtime Preflight Only");
+  assert.ok(phase0End >= 0);
+  assert.ok(loadedRuntime > phase0End);
+  has(text.slice(loadedRuntime), "After reviewed install and separate authorization");
+  has(text.slice(loadedRuntime), "not part of the no-load baseline");
+  has(text, "Prior Runtime Recovery Gate");
+});
+
 test("runbook requires an independent exact configuration backup", () => {
   const text = runbook();
   for (const value of [
@@ -181,11 +218,11 @@ test("runbook is an operator procedure, not an executable mutation path", () => 
   const text = runbook();
   for (const value of [
     "does not change OpenClaw configuration",
-    "does not install or reload the plugin",
-    "does not access either database",
-    "does not create a scheduler",
-    "does not enable an evidence epoch",
-    "does not generate production traffic",
+    "No runbook command deliberately queries or mutates either database",
+    "does not change OpenClaw configuration",
+    "does not create or invoke any scheduler",
+    "enable an evidence epoch",
+    "generate production traffic",
   ]) {
     has(text, value);
   }

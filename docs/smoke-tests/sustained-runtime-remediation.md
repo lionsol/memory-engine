@@ -1,6 +1,6 @@
 # B8-A7-R1 Sustained Runtime Remediation
 
-> **B8-A7-R1 remediation procedure=FINAL REVIEW FIX IMPLEMENTED / EDI VERIFICATION PENDING**
+> **B8-A7-R1 remediation procedure=NO-LOAD BASELINE FIX IMPLEMENTED / EDI VERIFICATION PENDING**
 >
 > **B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED**
 >
@@ -12,7 +12,7 @@
 
 This is the operator-owned remediation plan for the 2026-07-20 sustained-runtime authorization findings. It defines read-only checks, separately approved host actions, and fail-closed verification gates. It is not an authorization to activate A7.
 
-This phase does not change OpenClaw configuration, install or reload the plugin, rebuild native dependencies, access either database, create a scheduler, enable an evidence epoch, generate production traffic, or remove legacy fallback code. No step is complete until EDI verifies the resulting evidence.
+This phase does not change OpenClaw configuration, install or reload the plugin, rebuild native dependencies, create a scheduler, enable an evidence epoch, generate production traffic, or remove legacy fallback code. No runbook command deliberately queries or mutates either database. Any command capable of importing or starting the plugin is outside the no-load baseline and requires a separate gate because plugin initialization may access runtime storage. No step is complete until EDI verifies the resulting evidence.
 
 Known blockers are recorded in [the 2026-07-20 authorization decision](sustained-runtime-authorization-decision-20260720.md): source/runtime parity is non-zero, A7.4 methods are missing from the installed runtime, CLI and native dependency ABIs differ, `active-memory` is effectively enabled, the natural traffic forecast is not ready, and AutoRecall product health is not evaluated.
 
@@ -27,14 +27,37 @@ git status --short --branch
 git rev-parse --show-toplevel
 command -v openclaw
 readlink -f "$(command -v openclaw)"
-openclaw plugins inspect memory-engine --runtime --json
 openclaw config file
 ```
+
+### No-Load Metadata Gate
+
+Do not use a command merely because it is named `inspect` or `list`. Before reading the installed runtime path or install metadata, identify an authoritative no-load metadata source and record how it was verified. The source must be shown, from OpenClaw CLI source, formal documentation, or a local implementation, to:
+
+```text
+does not import plugin entrypoint
+does not register plugin
+does not initialize plugin
+does not access memory-engine/core DB
+does not initialize LanceDB
+```
+
+An already verified OpenClaw install registry, configuration registration record, or other pure-file metadata source may be used only when its authority and no-load behavior are documented. Do not guess an installed path from a conventional directory.
+
+If no such source is available:
+
+```text
+installed runtime metadata=no-load source unavailable
+Phase 0 result=blocked
+host remediation execution=NOT AUTHORIZED
+```
+
+Do not substitute `openclaw plugins inspect` or any other plugin discovery command. Phase 0 is complete only after the no-load source and its evidence are recorded.
 
 Record separately, with provenance and timestamps:
 
 * reviewed source root and fixed reviewed commit;
-* installed runtime root from `openclaw plugins inspect memory-engine --runtime --json`;
+* installed runtime root and install metadata from the verified no-load source;
 * the resolved `openclaw` executable, its startup method, and the CLI Node executable, Node version, and `process.versions.modules`;
 * gateway/service executable, startup method, Node executable, Node version, and ABI from the actual service process or service definition;
 * installed `better-sqlite3` ABI;
@@ -125,7 +148,7 @@ Before installing or reloading reviewed source, establish one recoverable source
 * reviewed restore and integrity-verification steps exist;
 * recovery does not rely on the current installed directory continuing to exist in place.
 
-If neither recovery source is valid:
+If neither recovery source is valid, or if no-load metadata cannot establish the installed runtime identity without starting the plugin:
 
 ```text
 install/reload=NOT AUTHORIZED
@@ -143,7 +166,7 @@ difference_count=0
 source_build_identity=runtime_build_identity
 ```
 
-The installed runtime must include the A7.4 preflight and scheduled-healthcheck gateway methods. Any missing method, unexpected file, parity difference, or identity mismatch is a stop condition.
+The installed runtime must include the A7.4 preflight and scheduled-healthcheck gateway methods. Any missing method, unexpected file, parity difference, or identity mismatch is a stop condition. This is a later loaded-runtime check under separate authorization, not a replacement for Phase 0 no-load recovery planning.
 
 ## Phase 6: Preserve the Safe Initial Configuration
 
@@ -162,7 +185,7 @@ Full fail-closed, sustained AutoRecall, production evidence, an epoch, or schedu
 
 ## Phase 7: Loaded-Runtime Preflight Only
 
-After reviewed install, verify these operator-read gateway methods are registered:
+After reviewed install and separate authorization, verify these operator-read gateway methods are registered:
 
 ```text
 memoryEngine.sustainedRuntimePreflight
@@ -171,7 +194,7 @@ memoryEngine.productionEvidenceHealthcheck
 
 Only the preflight method may be called in this phase. Do not call the scheduled healthcheck because sustained configuration is not enabled and no traffic should be manufactured.
 
-Preflight is responsible for proving only the loaded-host facts: actual OpenClaw runtime version, live config file path/SHA-256/byte count, installed runtime build identity, effective rollout configuration fingerprint, safe effective configuration, active-memory boundary, AutoRecall disabled, KG/Recent legacy modes, production evidence disabled with no epoch, and no activation state. A method catalog alone is insufficient. Preflight does not independently prove source/runtime parity or host scheduler state.
+Preflight is responsible for proving only the loaded-host facts: actual OpenClaw runtime version, live config file path/SHA-256/byte count, installed runtime build identity, effective rollout configuration fingerprint, safe effective configuration, active-memory boundary, AutoRecall disabled, KG/Recent legacy modes, production evidence disabled with no epoch, and no activation state. A method catalog alone is insufficient. Preflight does not independently prove source/runtime parity or host scheduler state. This is the first phase in which a plugin-capable command is allowed, and it is not part of the no-load baseline.
 
 ## Runtime/Source Parity Evidence
 
@@ -254,7 +277,7 @@ node --test test/sustained-runtime-remediation-contract.test.js
 ## Current Authorization Boundary
 
 ```text
-B8-A7-R1 remediation procedure=FINAL REVIEW FIX IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R1 remediation procedure=NO-LOAD BASELINE FIX IMPLEMENTED / EDI VERIFICATION PENDING
 B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED

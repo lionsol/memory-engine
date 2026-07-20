@@ -10,7 +10,7 @@ Review fixes now separate original C0 and active-memory-disabled C1 configuratio
 
 Current boundary:
 
-    B8-A7-R1 remediation procedure=FINAL REVIEW FIX IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R1 remediation procedure=NO-LOAD BASELINE FIX IMPLEMENTED / EDI VERIFICATION PENDING
     B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
     B8-B removal=NOT AUTHORIZED

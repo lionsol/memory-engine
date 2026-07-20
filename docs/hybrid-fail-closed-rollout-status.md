@@ -24,7 +24,7 @@ The B8-A7-R1 remediation runbook is [sustained-runtime-remediation.md](smoke-tes
 
 Current remediation boundary:
 
-    B8-A7-R1 remediation procedure=FINAL REVIEW FIX IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R1 remediation procedure=NO-LOAD BASELINE FIX IMPLEMENTED / EDI VERIFICATION PENDING
     B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
     B8-B removal=NOT AUTHORIZED
