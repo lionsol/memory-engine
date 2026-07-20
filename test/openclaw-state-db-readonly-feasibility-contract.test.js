@@ -77,5 +77,6 @@ test("decision and report boundaries do not authorize production access", () => 
   assert.match(LIBRARY, /SYSCALL PROOF REQUIRED/);
   assert.match(LIBRARY, /real_path_accessed: false/);
   assert.match(LIBRARY, /plugin_imported: false/);
-  assert.match(CLI, /process\.exitCode = 64/);
+  assert.match(CLI, /return 64/);
+  assert.match(CLI, /process\.exitCode = code/);
 });

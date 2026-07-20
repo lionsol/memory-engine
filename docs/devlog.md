@@ -16,6 +16,21 @@ Current boundary:
     B8-A7 sustained runtime window=NOT AUTHORIZED
     B8-B removal=NOT AUTHORIZED
 
+The first authoritative synthetic evidence record after module-boundary repair was reviewed without rerunning the harness in this documentation checkpoint: Node v24.8.0, module ABI 137, SQLite 3.50.4, and HEAD `908c846`. Missing-database and rollback-journal passed; WAL latest-row and non-writable scenarios observed SHM changes, WAL-without-SHM observed SHM creation, and immutable retained `checkpointed-A` while the normal reader advanced from `wal-committed-B` to `wal-post-open-C`. The filesystem evidence is sufficient to reject the current zero-write design without syscall tracing.
+
+Current boundary:
+
+    B8-A7-R2B synthetic feasibility harness=EXPERIMENTAL EVIDENCE VALID / ASSERTION ALIGNMENT IMPLEMENTED / EDI CLOSURE PENDING
+    B8-A7-R2B standalone read-only live state-DB reader feasibility=BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN
+    synthetic syscall trace=NOT REQUIRED FOR R2B FEASIBILITY DECISION
+    synthetic syscall trace diagnostic execution=NOT AUTHORIZED
+    standalone production reader=NOT AUTHORIZED
+    real OpenClaw state-DB access=NOT AUTHORIZED
+    host remediation execution=NOT AUTHORIZED
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 ### F1-D-B8-A7-R2A: OpenClaw no-load plugin metadata source audit
 
 Audited the local OpenClaw 2026.6.9 plugin-registry implementation without executing OpenClaw commands or loading plugin code. The current installed-plugin index resolves through the OpenClaw state directory to state/openclaw.sqlite and reads the installed_plugin_index table. Its snapshot loader performs policy/source/manifest/package staleness checks and falls back to derived plugin discovery when persisted data is missing or stale. The legacy plugins/installs.json path is retired for current storage.

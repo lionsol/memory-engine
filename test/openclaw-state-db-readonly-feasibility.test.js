@@ -190,7 +190,7 @@ test("fingerprints report newly created sidecars as observable writes", () => {
   }
 });
 
-test("read-only open failures retain an after fingerprint and stable error code", () => {
+test("read-only open or query failures retain an after fingerprint and stable error code", () => {
   const directory = mkdtempSync(path.join(tmpdir(), `${TEMP_PREFIX}failure-`));
   const databasePath = path.join(directory, "broken.sqlite");
   try {
@@ -201,9 +201,15 @@ test("read-only open failures retain an after fingerprint and stable error code"
       blockers: [],
     };
     runReadOnlyChecks(result, databasePath, before, directory);
-    assert.equal(typeof result.open_error_code, "string");
+    const failureCode = result.open_error_code ?? result.query_error_code;
+    assert.equal(typeof failureCode, "string");
     assert.equal(typeof result.after_fingerprint, "object");
     assert.ok(result.blockers.length > 0);
+    assert.equal(
+      result.blockers.includes("read_only_open_failed")
+        || result.blockers.includes("read_only_query_failed"),
+      true,
+    );
     assert.equal(JSON.stringify(result).includes(directory), false);
   } finally {
     rmSync(directory, { recursive: true, force: true });

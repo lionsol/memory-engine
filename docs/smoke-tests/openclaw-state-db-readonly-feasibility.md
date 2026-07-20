@@ -114,6 +114,59 @@ This harness can never emit `FEASIBLE`, `ACCEPTED`, or an authorization to imple
 B8-A7-R2B standalone read-only live state-DB reader feasibility=BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN
 ```
 
+## Experimental Evidence Record
+
+The EDI synthetic run recorded this environment:
+
+```text
+Node=v24.8.0
+NODE_MODULE_VERSION=137
+SQLite=3.50.4
+HEAD=908c846
+```
+
+The scenario summary was:
+
+```text
+missing-database=PASS
+rollback-journal=PASS
+wal-latest-committed-row=BLOCKED / existing SHM content changed
+wal-without-shm=BLOCKED / SHM created
+non-writable-directory=BLOCKED / existing SHM content changed
+immutable-live-wal=BLOCKED / normal reader modified SHM; immutable reader retained checkpointed-A
+```
+
+The freshness evidence was:
+
+```text
+normal reader:
+  initial=wal-committed-B
+  post-update=wal-post-open-C
+
+immutable reader:
+  initial=checkpointed-A
+  post-update=checkpointed-A
+  behavior=retained-stale-snapshot
+  candidate_allowed=false
+```
+
+The current decision is:
+
+```text
+B8-A7-R2B synthetic harness verification=EXPERIMENTAL EVIDENCE VALID / ASSERTION ALIGNMENT IMPLEMENTED / EDI CLOSURE PENDING
+B8-A7-R2B standalone read-only live state-DB reader feasibility=BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN
+synthetic syscall trace=NOT REQUIRED FOR R2B FEASIBILITY DECISION
+synthetic syscall trace diagnostic execution=NOT AUTHORIZED
+standalone production reader=NOT AUTHORIZED
+real OpenClaw state-DB access=NOT AUTHORIZED
+host remediation execution=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+Directory non-writability does not imply that an existing SHM file cannot be modified. Filesystem fingerprints already establish observable SHM writes; a syscall trace may diagnose the mechanism but is not required to reject the current zero-write design.
+
 ## EDI Execution Instructions
 
 EDI may run the synthetic-only command after reviewing the source and contract tests:
