@@ -99,6 +99,7 @@ test("synthetic readonly feasibility smoke returns the complete report schema an
     "saw-post-open-update",
     "retained-stale-snapshot",
     "query-failed-after-update",
+    "initial-query-failed",
     "uri-or-location-unproven",
     "other",
   ].includes(immutable.immutable_behavior));
