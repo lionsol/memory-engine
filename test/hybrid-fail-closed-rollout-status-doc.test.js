@@ -61,6 +61,17 @@ test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage
     "103/103 passed",
     "B8-B legacy fallback removal",
     "NOT AUTHORIZED",
+    "B8-A7-R3A host-published metadata manifest synthetic contract",
+    "IMPLEMENTED / EDI CLOSURE PENDING",
+    "canonical JSON",
+    "duplicate-key rejection",
+    "BOM/NUL rejection",
+    "permission rejection",
+    "atomic old/new generation",
+    "symlink/hardlink rejection",
+    "zero-consumer-write evidence",
+    "B8-A7-R3B host metadata publisher integration-point source audit",
+    "NOT FOUND / BLOCKED",
   ]) {
     assert.equal(doc.includes(token), true, `missing rollout ledger token: ${token}`);
   }

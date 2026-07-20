@@ -60,11 +60,15 @@ test("smoke separates expected invalid scenarios from unexpected failures", () =
   assert.match(LIBRARY, /atomic_snapshot_mismatch/);
   assert.match(LIBRARY, /final-hardlink/);
   assert.match(LIBRARY, /manifest_hardlink/);
+  assert.match(LIBRARY, /manifest_bom/);
+  assert.match(LIBRARY, /manifest_nul/);
+  assert.match(LIBRARY, /node_version: process\.version/);
+  assert.match(LIBRARY, /node_module_version: process\.versions\.modules/);
 });
 
 test("CLI preserves the CommonJS lazy-import boundary", () => {
   assert.equal(BIN_PACKAGE.type, "commonjs");
-  assert.match(CLI, /await import\(["']\.\.\/lib\/ops\/synthetic-host-plugin-metadata-manifest\.js["']\)/);
+  assert.match(CLI, /await import\(\s*["']\.\.\/lib\/ops\/synthetic-host-plugin-metadata-manifest\.js["']\s*\)/);
   assert.match(CLI, /module\.exports\s*=\s*\{\s*main/s);
   assert.match(CLI, /require\.main === module/);
   assert.doesNotMatch(CLI, /^\s*import\s+/m);

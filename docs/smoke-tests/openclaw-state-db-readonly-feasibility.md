@@ -150,7 +150,7 @@ immutable reader:
   candidate_allowed=false
 ```
 
-The current decision is:
+## Historical Intermediate State: Earlier EDI Decision
 
 ```text
 B8-A7-R2B synthetic harness verification=EXPERIMENTAL EVIDENCE VALID / ASSERTION ALIGNMENT IMPLEMENTED / EDI CLOSURE PENDING
@@ -194,7 +194,7 @@ blockers:
 syscall_trace_status:
 ```
 
-## Continuing Authorization Boundary
+## Historical Intermediate State: Continuing Authorization Boundary
 
 ```text
 B8-A7-R2B synthetic feasibility harness=MODULE-BOUNDARY FIXES IMPLEMENTED / EDI RE-VERIFICATION PENDING
@@ -206,6 +206,16 @@ host remediation execution=NOT AUTHORIZED
 B8-A7 sustained runtime authorization=WITHHELD
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED
+```
+
+## Final Current State
+
+The earlier EDI and module-boundary entries in this document are historical intermediate states and are not current decisions.
+
+```text
+B8-A7-R2B synthetic harness verification=PASSED / CLOSED
+B8-A7-R2B standalone read-only live state-DB reader feasibility=BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN
+synthetic syscall trace=NOT REQUIRED FOR R2B FEASIBILITY DECISION
 ```
 
 This document does not authorize a production reader, OpenClaw state access, remediation execution, an evidence epoch, sustained runtime, or legacy fallback removal.

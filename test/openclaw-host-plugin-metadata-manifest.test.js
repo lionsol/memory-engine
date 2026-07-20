@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import {
+  chmodSync,
   closeSync,
   constants,
   existsSync,
@@ -177,12 +178,33 @@ test("oversized, symlinked, and hardlinked final files fail closed", () => {
   }, "hardlink");
 });
 
+test("manifest with group/world permissions fails closed", () => {
+  withRoot((root) => {
+    writeFinal(root, Buffer.from(canonicalJson(createSyntheticManifest()), "utf8"));
+    const finalPath = path.join(root, MANIFEST_NAME);
+    chmodSync(finalPath, 0o644);
+    try {
+      const snapshot = readSyntheticManifestSnapshot(root);
+      assert.equal(snapshot.valid, false);
+      assert.ok(snapshot.blockers.includes("manifest_permissions_invalid"));
+      assert.equal(snapshot.observable_write_detected, false);
+    } finally {
+      chmodSync(finalPath, 0o600);
+    }
+  }, "permissions");
+});
+
 test("negative smoke scenarios pass when their expected invalidity is observed", () => {
   const report = runSyntheticManifestSmoke();
   const malformed = report.scenarios.find((scenario) => scenario.id === "malformed-json");
   const duplicate = report.scenarios.find((scenario) => scenario.id === "duplicate-key");
   const manifestDuplicate = report.scenarios.find((scenario) => scenario.id === "duplicate-manifest-key");
+  const bom = report.scenarios.find((scenario) => scenario.id === "bom");
+  const nul = report.scenarios.find((scenario) => scenario.id === "nul");
   const hardlink = report.scenarios.find((scenario) => scenario.id === "final-hardlink");
+  assert.equal(report.scenarios.length, 16);
+  assert.equal(report.node_version, process.version);
+  assert.equal(report.node_module_version, process.versions.modules ?? null);
   assert.equal(malformed.status, "PASS");
   assert.equal(malformed.expected_valid, false);
   assert.equal(malformed.actual_valid, false);
@@ -192,6 +214,16 @@ test("negative smoke scenarios pass when their expected invalidity is observed",
   assert.equal(manifestDuplicate.status, "PASS");
   assert.equal(manifestDuplicate.actual_valid, false);
   assert.ok(manifestDuplicate.blockers.includes("manifest_duplicate_key"));
+  assert.equal(bom.status, "PASS");
+  assert.equal(bom.expected_valid, false);
+  assert.equal(bom.actual_valid, false);
+  assert.equal(bom.expected_block, true);
+  assert.ok(bom.blockers.includes("manifest_bom"));
+  assert.equal(nul.status, "PASS");
+  assert.equal(nul.expected_valid, false);
+  assert.equal(nul.actual_valid, false);
+  assert.equal(nul.expected_block, true);
+  assert.ok(nul.blockers.includes("manifest_nul"));
   assert.equal(hardlink.status, "PASS");
   assert.equal(hardlink.actual_valid, false);
   assert.ok(hardlink.blockers.includes("manifest_hardlink"));

@@ -1,5 +1,18 @@
 ## 2026-07-20
 
+### F1-D-B8-A7-R3A: repository closure fixes
+
+Aligned the R3A repository contracts without changing the host integration boundary: the multiline CommonJS lazy-import assertion now accepts formatting whitespace; POSIX permission behavior coverage rejects group/world-readable manifests; the synthetic smoke emits Node runtime identity; and BOM/NUL raw-fixture scenarios are included in the 16-scenario matrix. R2B, R3A, and R3B current-state documents now distinguish historical intermediate states from the current ledger.
+
+Current boundary:
+
+    B8-A7-R3A repository closure fixes=IMPLEMENTED / EDI CLOSURE PENDING
+    B8-A7-R3B host publisher source=NOT FOUND / BLOCKED
+    EDI verification pending
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 ### F1-D-B8-A7-R3B: host metadata publisher source audit
 
 Audited the installed OpenClaw 2026.6.9 source statically. Install, update, uninstall, enable, and disable lifecycle functions converge on the host-owned persisted `installed_plugin_index` SQLite writer, but the current registry refresh path can enter discovery and the gateway startup path loads plugin runtime. No R3A ordinary-file manifest publisher, no-load boundary, startup reconciliation hook, or atomic file-publication hook was found.
