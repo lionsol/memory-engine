@@ -96,7 +96,10 @@ test("runbook requires an independent exact configuration backup", () => {
   for (const value of [
     "openclaw config file",
     "independent ordinary-file backup",
-    "not be a symlink, hardlink",
+    "C0 must not be a symlink or hardlink",
+    "C1 must not be a symlink or hardlink",
+    "distinct backup path",
+    "inode distinct from both the live file and C0",
     "owner-only",
     "exact original bytes",
     "SHA-256",
@@ -118,7 +121,7 @@ test("runbook defines independent C0 and C1 checkpoints and rollback branches", 
     "C0 must not be a symlink or hardlink",
     "C1 must not be a symlink or hardlink",
     "only intended semantic difference",
-    "reduced/sanitized diff",
+    "reduced/sanitized semantic diff",
     "Configuration remediation failure",
     "Plugin installation or reload failure",
     "Complete abandonment",
@@ -218,11 +221,9 @@ test("runbook is an operator procedure, not an executable mutation path", () => 
   const text = runbook();
   for (const value of [
     "does not change OpenClaw configuration",
+    "install or reload the plugin",
     "No runbook command deliberately queries or mutates either database",
-    "does not change OpenClaw configuration",
     "does not create or invoke any scheduler",
-    "enable an evidence epoch",
-    "generate production traffic",
   ]) {
     has(text, value);
   }
