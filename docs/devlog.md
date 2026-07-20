@@ -1,5 +1,22 @@
 ## 2026-07-20
 
+### F1-D-B8-A7-R3A: final documentation closeout
+
+EDI verified the 16-scenario synthetic manifest smoke, runtime identity, canonical rejection, permission rejection, symlink/hardlink rejection, atomic generation separation, and zero-consumer-write behavior. The only remaining focused-test failure was the rollout ledger missing the exact `symlink/hardlink rejection` closeout token.
+
+This change closes the documentation ledger and updates R3A to `PASSED / CLOSED` pending the final all-green EDI rerun.
+
+Current boundary:
+
+    B8-A7-R3A final documentation closeout=IMPLEMENTED / FINAL EDI RERUN PENDING
+    B8-A7-R3B host publisher source=NOT FOUND / BLOCKED
+    real host publisher=NOT AUTHORIZED
+    production manifest consumer=NOT AUTHORIZED
+    host integration implementation=NOT STARTED
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 ### F1-D-B8-A7-R3A: repository closure fixes
 
 Aligned the R3A repository contracts without changing the host integration boundary: the multiline CommonJS lazy-import assertion now accepts formatting whitespace; POSIX permission behavior coverage rejects group/world-readable manifests; the synthetic smoke emits Node runtime identity; and BOM/NUL raw-fixture scenarios are included in the 16-scenario matrix. R2B, R3A, and R3B current-state documents now distinguish historical intermediate states from the current ledger.

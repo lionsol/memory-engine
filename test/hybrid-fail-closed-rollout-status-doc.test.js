@@ -62,7 +62,7 @@ test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage
     "B8-B legacy fallback removal",
     "NOT AUTHORIZED",
     "B8-A7-R3A host-published metadata manifest synthetic contract",
-    "IMPLEMENTED / EDI CLOSURE PENDING",
+    "PASSED / CLOSED",
     "canonical JSON",
     "duplicate-key rejection",
     "BOM/NUL rejection",

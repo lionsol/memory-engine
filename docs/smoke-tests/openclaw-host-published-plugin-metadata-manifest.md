@@ -116,7 +116,7 @@ Current state:
 ```text
 B8-A7-R2B synthetic harness verification=PASSED / CLOSED
 B8-A7-R2B standalone read-only live state-DB reader feasibility=BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN
-B8-A7-R3A repository closure fixes=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R3A synthetic manifest contract=PASSED / CLOSED
 B8-A7-R3B host publisher source=NOT FOUND / BLOCKED
 real host publisher=NOT AUTHORIZED
 production manifest consumer=NOT AUTHORIZED
@@ -126,3 +126,5 @@ B8-A7 sustained runtime authorization=WITHHELD
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED
 ```
+
+The final EDI closeout evidence verified the 16-scenario synthetic manifest smoke, runtime identity, canonical rejection, permission rejection, symlink/hardlink rejection, atomic generation separation, and zero-consumer-write behavior. The only pre-closeout focused-test failure was the rollout ledger's missing exact `symlink/hardlink rejection` token; this documentation update closes that ledger gap pending the final all-green EDI rerun. Host integration and production readiness remain unproven.
