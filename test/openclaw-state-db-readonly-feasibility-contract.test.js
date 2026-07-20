@@ -36,6 +36,13 @@ test("synthetic feasibility uses a private temporary family and fixed synthetic 
   assert.match(LIBRARY, /reader_phase_1_diff/);
   assert.match(LIBRARY, /reader_phase_2_diff/);
   assert.match(LIBRARY, /probeSqlWriteRejections/);
+  assert.match(LIBRARY, /classifyImmutableBehavior/);
+  assert.match(LIBRARY, /immutable_database_shape_not_verified/);
+  assert.match(LIBRARY, /immutable_initial_query_failed/);
+  assert.match(LIBRARY, /immutable_post_update_query_failed/);
+  assert.match(LIBRARY, /initial-query-failed/);
+  assert.match(LIBRARY, /retained-stale-snapshot/);
+  assert.match(LIBRARY, /immutable_candidate_allowed/);
   assert.match(LIBRARY, /expected_revision/);
   assert.match(LIBRARY, /observed_revision/);
   assert.match(LIBRARY, /database\.location\(\)/);

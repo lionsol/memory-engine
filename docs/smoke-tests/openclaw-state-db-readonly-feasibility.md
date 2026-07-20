@@ -71,7 +71,7 @@ The WAL experiment is synthetic and does not prove behavior against an OpenClaw 
 
 ## Immutable Risk Model
 
-The `immutable-live-wal` scenario compares a normal WAL-aware read-only reader with an `immutable=1` URI read, then performs a post-open writer mutation from revision B to revision C while both readers remain open. Normal reader freshness requires B initially and C after the mutation. Immutable behavior is recorded as seeing C, retaining a stale snapshot, failing the query, or being unproven; it is never a production-reader candidate even if it sees C. Reader phase 1 and phase 2 fingerprints are compared separately so the writer's B-to-C mutation is not classified as reader write evidence. Both connection targets are verified with `database.location()`.
+The `immutable-live-wal` scenario compares a normal WAL-aware read-only reader with an `immutable=1` URI read, then performs a post-open writer mutation from revision B to revision C while both readers remain open. Normal reader freshness requires B initially and C after the mutation. Immutable initial or post-open query failure, or failure to verify the synthetic table shape, blocks the required scenario. Immutable behavior is classified with location proof first, then query errors, then revision observations: A-to-A and B-to-B are retained stale snapshots, while B-to-C is a post-open update. It is never a production-reader candidate even if it sees C. Reader phase 1 and phase 2 fingerprints are compared separately so the writer's B-to-C mutation is not classified as reader write evidence. Both connection targets are verified with `database.location()`.
 
 The following rule remains mandatory regardless of the synthetic result:
 
@@ -144,7 +144,7 @@ syscall_trace_status:
 ## Continuing Authorization Boundary
 
 ```text
-B8-A7-R2B synthetic feasibility harness=SECOND REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R2B synthetic feasibility harness=THIRD REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
 standalone production reader=NOT AUTHORIZED
 real OpenClaw state-DB access=NOT AUTHORIZED
 host remediation execution=NOT AUTHORIZED

@@ -11,6 +11,7 @@ import {
   WAL_REVISION,
   POST_OPEN_WAL_REVISION,
   compareFingerprints,
+  classifyImmutableBehavior,
   fingerprintTree,
   probeSqlWriteRejections,
   runStateDbReadonlyFeasibilitySmoke,
@@ -63,6 +64,13 @@ test("synthetic readonly feasibility smoke returns the complete report schema an
     assert.ok(Array.isArray(scenario.content_changed_files));
     assert.ok(Array.isArray(scenario.metadata_changed_files));
     assert.ok(Array.isArray(scenario.blockers));
+    if (scenario.id === "immutable-live-wal") {
+      if (!scenario.immutable_database_shape_verified
+        || scenario.immutable_initial_query_error_code
+        || scenario.immutable_post_update_query_error_code) {
+        assert.notEqual(scenario.status, "PASS");
+      }
+    }
   }
 
   const missing = report.scenarios.find((scenario) => scenario.id === "missing-database");
@@ -182,9 +190,10 @@ test("read-only open failures retain an after fingerprint and stable error code"
 
 test("the shared SQL probe distinguishes writable success from read-only rejection", () => {
   const directory = mkdtempSync(path.join(tmpdir(), `${TEMP_PREFIX}write-probe-`));
-  const databasePath = path.join(directory, "probe.sqlite");
+  const writableDatabasePath = path.join(directory, "writable-probe.sqlite");
+  const readOnlyDatabasePath = path.join(directory, "readonly-probe.sqlite");
   try {
-    const writable = createSyntheticDatabase(databasePath);
+    const writable = createSyntheticDatabase(writableDatabasePath);
     const writableResult = probeSqlWriteRejections(writable);
     writable.close();
     assert.deepEqual(writableResult, {
@@ -194,7 +203,16 @@ test("the shared SQL probe distinguishes writable success from read-only rejecti
       ddl: false,
     });
 
-    const readOnly = new DatabaseSync(databasePath, { readOnly: true });
+    const readOnlyFixture = createSyntheticDatabase(readOnlyDatabasePath);
+    readOnlyFixture.close();
+    const freshCheck = new DatabaseSync(readOnlyDatabasePath, { readOnly: true });
+    const probeCount = freshCheck.prepare(
+      "SELECT COUNT(*) AS count FROM installed_plugin_index WHERE index_key = ?",
+    ).get("plugin-registry-write-probe-insert").count;
+    freshCheck.close();
+    assert.equal(Number(probeCount), 0);
+
+    const readOnly = new DatabaseSync(readOnlyDatabasePath, { readOnly: true });
     const readOnlyResult = probeSqlWriteRejections(readOnly);
     readOnly.close();
     assert.deepEqual(readOnlyResult, {
@@ -206,6 +224,44 @@ test("the shared SQL probe distinguishes writable success from read-only rejecti
     assert.equal(Object.values(readOnlyResult).every(Boolean), true);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("immutable behavior classification is deterministic and fail closed", () => {
+  const cases = [
+    [
+      "location mismatch takes precedence",
+      { locationMatches: false, initialRevision: "checkpointed-A", postRevision: POST_OPEN_WAL_REVISION },
+      "uri-or-location-unproven",
+    ],
+    [
+      "A to A is stale",
+      { locationMatches: true, initialRevision: CHECKPOINT_REVISION, postRevision: CHECKPOINT_REVISION },
+      "retained-stale-snapshot",
+    ],
+    [
+      "B to B is stale",
+      { locationMatches: true, initialRevision: WAL_REVISION, postRevision: WAL_REVISION },
+      "retained-stale-snapshot",
+    ],
+    [
+      "B to C sees post-open update",
+      { locationMatches: true, initialRevision: WAL_REVISION, postRevision: POST_OPEN_WAL_REVISION },
+      "saw-post-open-update",
+    ],
+    [
+      "post query failure wins over initial query failure",
+      { locationMatches: true, initialQueryError: "initial", postQueryError: "post", initialRevision: WAL_REVISION },
+      "query-failed-after-update",
+    ],
+    [
+      "initial query failure is retained",
+      { locationMatches: true, initialQueryError: "initial", initialRevision: null, postRevision: null },
+      "initial-query-failed",
+    ],
+  ];
+  for (const [name, input, expected] of cases) {
+    assert.equal(classifyImmutableBehavior(input), expected, name);
   }
 });
 
