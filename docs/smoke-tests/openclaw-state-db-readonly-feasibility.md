@@ -48,7 +48,7 @@ The fixed synthetic record is `index_key=plugin-registry` and `plugin_id=memory-
 
 ## Fingerprint Method
 
-Before and after every reader operation, the harness records relative path, existence, file type, mode, inode, link count, byte size, `mtime_ns`, `ctime_ns`, and SHA-256 for files. It includes the database, `-wal`, `-shm`, `-journal`, and directory entries. Access time is intentionally excluded because a normal read may update it without representing a content or metadata write.
+Before and after every reader operation, the harness records relative path, existence, file type, mode, inode, link count, byte size, `mtime_ns`, `ctime_ns`, and SHA-256 for files. Stat values use BigInt nanosecond precision and are serialized as strings to avoid unsafe integer conversion. It includes the database, `-wal`, `-shm`, `-journal`, and directory entries. Access time is intentionally excluded because a normal read may update it without representing a content or metadata write. Failed opens and queries still produce an after fingerprint and comparison.
 
 The report separates:
 
@@ -67,7 +67,7 @@ Any relevant fingerprint change is observable-write evidence and blocks the feas
 
 The matrix includes a clean rollback-journal database, a WAL database with an uncheckpointed committed row and existing WAL/SHM files, and a WAL copy with the SHM file absent. The reader must see the latest committed WAL row and must not create or change any sidecar. A changed SHM file is reported and fails the zero-write requirement; it is not treated as harmless coordination.
 
-The WAL experiment is synthetic and does not prove behavior against an OpenClaw database. It only identifies the facts that a future reader authorization would need to reproduce under syscall tracing.
+The WAL experiment is synthetic and does not prove behavior against an OpenClaw database. Freshness is proven only by an exact distinct revision marker: checkpointed `checkpointed-A` versus WAL-committed `wal-committed-B`, not by a positive timestamp or a shared install path. It only identifies the facts that a future reader authorization would need to reproduce under syscall tracing.
 
 ## Immutable Risk Model
 
@@ -87,12 +87,20 @@ immutable=1 must not be used against a live concurrently mutable OpenClaw state 
 | `rollback-journal` | Query sees the committed row; SQL writes and DDL are rejected; files are unchanged. |
 | `wal-latest-committed-row` | Latest committed WAL row is visible; WAL/SHM changes block. |
 | `wal-without-shm` | Open/query result and any SHM creation or WAL change are recorded explicitly. |
-| `non-writable-directory` | Enforce ordinary-user directory permissions where possible; otherwise report `SKIPPED`, not pass. |
+| `non-writable-directory` | Keep a WAL/SHM fixture open, enforce ordinary-user directory permissions where possible, and record permission/filesystem evidence; otherwise report `SKIPPED`, not pass. |
 | `immutable-live-wal` | Compare normal WAL-aware visibility with immutable URI visibility and retain the immutable safety rule. |
 
 ## Decision Rules
 
 The decision is immediately blocked if any required scenario is blocked or skipped, if a reader creates or changes database/WAL/SHM/journal files, if the latest committed WAL row is not visible, if a read-only open requires directory write access, or if a required result is inconclusive.
+
+The SQL probe reports independent `INSERT`, `UPDATE`, `DELETE`, and DDL rejection; all four must be true for `sql_write_rejected=true`:
+
+```text
+sql_write_rejections={insert, update, delete, ddl}
+```
+
+The immutable scenario constructs a URL with `pathToFileURL()` and an explicit `immutable=1` query parameter, verifies the synthetic table, and records normal and immutable revisions separately. If URI semantics cannot be proven, it blocks rather than silently falling back.
 
 The only non-blocked result is provisional:
 
@@ -136,7 +144,7 @@ syscall_trace_status:
 ## Continuing Authorization Boundary
 
 ```text
-B8-A7-R2B synthetic feasibility harness=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R2B synthetic feasibility harness=REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
 standalone production reader=NOT AUTHORIZED
 real OpenClaw state-DB access=NOT AUTHORIZED
 host remediation execution=NOT AUTHORIZED

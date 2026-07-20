@@ -13,7 +13,8 @@ test("synthetic feasibility production files stay outside real runtime boundarie
     assert.doesNotMatch(source, /OPENCLAW_STATE_DIR/);
     assert.doesNotMatch(source, /from ["'].*(?:openclaw|memory-engine|lancedb)/i);
     assert.doesNotMatch(source, /import\s+[^;]+(?:plugin|discovery|loader|lancedb)/i);
-    assert.doesNotMatch(source, /(?:execFile|spawn|exec)\s*\(/);
+    assert.doesNotMatch(source, /node:child_process|from ["']child_process["']/);
+    assert.doesNotMatch(source, /\b(?:spawn|spawnSync|execFile|execFileSync|execSync)\s*\(/);
   }
 });
 
@@ -24,6 +25,11 @@ test("synthetic feasibility uses a private temporary family and fixed synthetic 
   assert.match(LIBRARY, /rmSync\(tempRoot, \{ recursive: true, force: true \}\)/);
   assert.match(LIBRARY, /new DatabaseSync\(.*readOnly: true/s);
   assert.match(LIBRARY, /installed_plugin_index/);
+  assert.match(LIBRARY, /lstatSync\([^)]*\{ bigint: true \}/);
+  assert.match(LIBRARY, /CHECKPOINT_REVISION/);
+  assert.match(LIBRARY, /WAL_REVISION/);
+  assert.match(LIBRARY, /expected_revision/);
+  assert.match(LIBRARY, /observed_revision/);
 });
 
 test("CLI accepts only json output mode and rejects external database paths", () => {

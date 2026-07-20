@@ -1,10 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { runStateDbReadonlyFeasibilitySmoke, TEMP_PREFIX } from "../lib/ops/sqlite-readonly-feasibility.js";
+import {
+  CHECKPOINT_REVISION,
+  WAL_REVISION,
+  compareFingerprints,
+  fingerprintTree,
+  runStateDbReadonlyFeasibilitySmoke,
+  TEMP_PREFIX,
+} from "../lib/ops/sqlite-readonly-feasibility.js";
 
 function tempFamilies() {
   return readdirSync(tmpdir()).filter((entry) => entry.startsWith(TEMP_PREFIX)).sort();
@@ -57,6 +64,19 @@ test("synthetic readonly feasibility smoke returns the complete report schema an
   assert.equal(missing.open_succeeded, false);
   assert.equal(missing.database_created, false);
   assert.equal(missing.sidecar_created, false);
+
+  const rollback = report.scenarios.find((scenario) => scenario.id === "rollback-journal");
+  assert.equal(rollback.expected_revision, CHECKPOINT_REVISION);
+  assert.equal(rollback.latest_row_visible, rollback.observed_revision === CHECKPOINT_REVISION);
+
+  const wal = report.scenarios.find((scenario) => scenario.id === "wal-latest-committed-row");
+  assert.equal(wal.expected_revision, WAL_REVISION);
+  assert.equal(wal.latest_row_visible, wal.observed_revision === WAL_REVISION);
+
+  const immutable = report.scenarios.find((scenario) => scenario.id === "immutable-live-wal");
+  assert.equal(immutable.expected_revision, WAL_REVISION);
+  assert.equal(immutable.normal_latest_row_visible, immutable.normal_observed_revision === WAL_REVISION);
+  assert.equal(immutable.immutable_latest_row_visible, immutable.immutable_observed_revision === WAL_REVISION);
 });
 
 test("the synthetic report does not expose absolute temporary paths", () => {
@@ -73,4 +93,22 @@ test("the smoke CLI rejects external-path arguments", () => {
   });
   assert.equal(result.status, 64);
   assert.match(result.stderr, /unknown argument/);
+});
+
+test("fingerprints detect metadata changes without a content change", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), `${TEMP_PREFIX}metadata-`));
+  const filePath = path.join(directory, "fixture.txt");
+  try {
+    writeFileSync(filePath, "stable-content");
+    const before = fingerprintTree(directory);
+    const contentBefore = readFileSync(filePath, "utf8");
+    utimesSync(filePath, new Date(1000), new Date(5000));
+    const after = fingerprintTree(directory);
+    const diff = compareFingerprints(before, after);
+    assert.deepEqual(readFileSync(filePath, "utf8"), contentBefore);
+    assert.ok(diff.metadata_changed_files.includes("fixture.txt"));
+    assert.equal(diff.content_changed_files.includes("fixture.txt"), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

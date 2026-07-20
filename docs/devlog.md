@@ -2,11 +2,11 @@
 
 ### F1-D-B8-A7-R2B: synthetic state-DB read-only feasibility harness
 
-Added a synthetic-only `node:sqlite` feasibility harness and report-only CLI. It creates private temporary databases, exercises rollback-journal and WAL/SHM visibility, missing-SHM and non-writable-directory behavior, compares an immutable URI read, rejects SQL writes, fingerprints database and sidecar files, and always removes its temporary root. It accepts no external database or state path and does not import OpenClaw or memory-engine runtime code.
+Added a synthetic-only `node:sqlite` feasibility harness and report-only CLI. It creates private temporary databases, exercises rollback-journal and WAL/SHM visibility, missing-SHM and WAL-based non-writable-directory behavior, compares an immutable URI read, rejects INSERT/UPDATE/DELETE/DDL writes, fingerprints database and sidecar files with BigInt nanosecond metadata, and always removes its temporary root. Exact checkpointed-A and WAL-committed-B revision markers provide the freshness oracle, and failed opens/queries retain after fingerprints. It accepts no external database or state path and does not import OpenClaw or memory-engine runtime code.
 
 Current boundary:
 
-    B8-A7-R2B synthetic feasibility harness=IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R2B synthetic feasibility harness=REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
     standalone production reader=NOT AUTHORIZED
     real OpenClaw state-DB access=NOT AUTHORIZED
     host remediation execution=NOT AUTHORIZED
