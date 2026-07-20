@@ -61,7 +61,7 @@ Uninstall or authoritative absence must publish a complete tombstone through the
 
 ## Synthetic Scenario Coverage
 
-The smoke covers valid installed and absent snapshots, installed-to-absent replacement, orphan and interrupted temporary files, failed replacement preserving the old snapshot, old-descriptor versus new-final atomic replacement, malformed/canonical/schema failures, oversized files, symlink and hardlink identity failures, consumer zero-write fingerprints, CommonJS require isolation, and external-argument rejection. Each scenario records `expected_valid`, `actual_valid`, and `expected_block`; expected invalid fixtures are PASS when the consumer rejects them, and only unexpected failures contribute to the global decision. Consumer fingerprints are restricted to the final manifest and its temporary-manifest artifacts, not unrelated sibling files.
+The smoke covers valid installed and absent snapshots, installed-to-absent replacement, orphan and interrupted temporary files, failed replacement preserving the old snapshot, old-descriptor versus new-final atomic replacement with complete generation assertions, generic and real manifest-field duplicate keys, malformed/canonical/schema failures, oversized files, symlink and hardlink identity failures including a smoke-level hardlink scenario, consumer zero-write fingerprints, CommonJS require isolation, and external-argument rejection. Each scenario records `expected_valid`, `actual_valid`, and `expected_block`; expected invalid fixtures are PASS when the consumer rejects them, and only unexpected failures contribute to the global decision. Consumer fingerprints are restricted to the final manifest and its temporary-manifest artifacts, not unrelated sibling files.
 
 ## Not Proven
 
@@ -116,7 +116,7 @@ Current state:
 ```text
 B8-A7-R2B synthetic harness verification=PASSED / CLOSED
 B8-A7-R2B standalone read-only live state-DB reader feasibility=BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN
-B8-A7-R3A host-published metadata manifest synthetic contract=SECOND REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R3A host-published metadata manifest synthetic contract=THIRD REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
 real host publisher=NOT AUTHORIZED
 production manifest consumer=NOT AUTHORIZED
 real metadata path resolution=NOT AUTHORIZED

@@ -56,6 +56,10 @@ test("smoke separates expected invalid scenarios from unexpected failures", () =
   assert.match(LIBRARY, /expected_block/);
   assert.match(LIBRARY, /unexpected_failures/);
   assert.match(LIBRARY, /scenario_validity_mismatch/);
+  assert.match(LIBRARY, /duplicate-manifest-key/);
+  assert.match(LIBRARY, /atomic_snapshot_mismatch/);
+  assert.match(LIBRARY, /final-hardlink/);
+  assert.match(LIBRARY, /manifest_hardlink/);
 });
 
 test("CLI preserves the CommonJS lazy-import boundary", () => {

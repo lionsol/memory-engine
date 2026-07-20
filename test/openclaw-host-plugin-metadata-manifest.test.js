@@ -118,11 +118,15 @@ test("replacement keeps old descriptor content while the final path exposes new 
     const finalPath = path.join(root, MANIFEST_NAME);
     const fd = openSync(finalPath, constants.O_RDONLY);
     publishSyntheticManifestAtomic(root, createSyntheticManifest({ generation: "2", publication_id: "b".repeat(64) }));
-    const old = JSON.parse(readFileSync(fd, "utf8"));
+    const oldText = readFileSync(fd, "utf8");
+    const old = JSON.parse(oldText);
     closeSync(fd);
     const current = readSyntheticManifestSnapshot(root);
     assert.equal(old.generation, "1");
     assert.equal(current.generation, "2");
+    assert.notEqual(old.generation, current.generation);
+    assert.equal(canonicalJson(old), oldText);
+    assert.equal(current.valid, true);
   });
 });
 
@@ -169,6 +173,7 @@ test("oversized, symlinked, and hardlinked final files fail closed", () => {
     const snapshot = readSyntheticManifestSnapshot(root);
     assert.equal(snapshot.valid, false);
     assert.ok(snapshot.blockers.includes("manifest_link_count_invalid"));
+    assert.ok(snapshot.blockers.includes("manifest_hardlink"));
   }, "hardlink");
 });
 
@@ -176,12 +181,20 @@ test("negative smoke scenarios pass when their expected invalidity is observed",
   const report = runSyntheticManifestSmoke();
   const malformed = report.scenarios.find((scenario) => scenario.id === "malformed-json");
   const duplicate = report.scenarios.find((scenario) => scenario.id === "duplicate-key");
+  const manifestDuplicate = report.scenarios.find((scenario) => scenario.id === "duplicate-manifest-key");
+  const hardlink = report.scenarios.find((scenario) => scenario.id === "final-hardlink");
   assert.equal(malformed.status, "PASS");
   assert.equal(malformed.expected_valid, false);
   assert.equal(malformed.actual_valid, false);
   assert.equal(malformed.expected_block, true);
   assert.equal(duplicate.status, "PASS");
   assert.equal(duplicate.actual_valid, false);
+  assert.equal(manifestDuplicate.status, "PASS");
+  assert.equal(manifestDuplicate.actual_valid, false);
+  assert.ok(manifestDuplicate.blockers.includes("manifest_duplicate_key"));
+  assert.equal(hardlink.status, "PASS");
+  assert.equal(hardlink.actual_valid, false);
+  assert.ok(hardlink.blockers.includes("manifest_hardlink"));
   assert.deepEqual(report.blockers, []);
 });
 

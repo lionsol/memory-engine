@@ -1,5 +1,19 @@
 ## 2026-07-20
 
+### F1-D-B8-A7-R3A: third review fixes
+
+Added a synthetic real-manifest duplicate-key scenario, explicit atomic replacement evidence that the old descriptor remains complete generation `1` while the new final snapshot is complete generation `2`, and a smoke-level hardlink scenario. Hardlink results include the dedicated `manifest_hardlink` blocker while retaining link-count evidence. No host integration or production metadata access is authorized.
+
+Current boundary:
+
+    B8-A7-R3A third review fixes=IMPLEMENTED / EDI VERIFICATION PENDING
+    real host publisher=NOT AUTHORIZED
+    production consumer=NOT AUTHORIZED
+    real OpenClaw metadata path=NOT AUTHORIZED
+    host integration=NOT STARTED
+    A7=NOT AUTHORIZED
+    B8-B=NOT AUTHORIZED
+
 ### F1-D-B8-A7-R3A: second review fixes
 
 Hardened the synthetic host-published metadata manifest contract. The consumer now scans original JSON text with a standard-JSON tokenizer before `JSON.parse` and rejects duplicate keys as `manifest_duplicate_key`. Smoke scenarios record expected and actual validity/blocking semantics, so negative validation fixtures pass when rejected and only unexpected failures block the aggregate decision. Symlink rejection is asserted with zero observable consumer writes, and zero-write fingerprints cover only the final manifest plus temporary manifest artifacts rather than unrelated sibling files.
