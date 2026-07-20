@@ -212,6 +212,25 @@
         "default": {
           "enabled": false
         },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "enabled": {
+                  "const": true
+                }
+              },
+              "required": [
+                "enabled"
+              ]
+            },
+            "then": {
+              "required": [
+                "epochId"
+              ]
+            }
+          }
+        ],
         "properties": {
           "enabled": {
             "type": "boolean",

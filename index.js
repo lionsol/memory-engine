@@ -21,6 +21,7 @@ import { appendSmartAdd } from "./smart-add.js";
 import {
   HOME_DIR,
   INDEX_SYNC_WATCH_DIRS,
+  OPENCLAW_CONFIG_PATH,
   SMART_ADD_DIR,
   WORKSPACE,
   getSharedMemoryManager,
@@ -61,6 +62,8 @@ import { hybridSearch as runHybridSearch } from "./lib/recall/hybrid-search.js";
 import { recordHybridSearchObservation } from "./lib/recall/hybrid-observation.js";
 import { createProductionEvidenceIdentityContext } from "./lib/recall/hybrid/production-evidence-identity.js";
 import { createHybridTrafficOriginRegistry } from "./lib/recall/hybrid/traffic-origin.js";
+import { registerProductionEvidenceHealthcheckGateway } from "./lib/recall/hybrid/production-evidence-healthcheck-gateway.js";
+import { registerSustainedRuntimePreflightGateway } from "./lib/recall/hybrid/sustained-runtime-preflight-gateway.js";
 import { createIsolatedHybridDbAccessScope } from "./lib/recall/hybrid/db-access.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
 import {
@@ -299,6 +302,14 @@ export default definePluginEntry({
     const generateEmbeddingRuntime = text => generateEmbedding(text, {
       cfg: embeddingRuntimeConfig,
       apiConfig: api.config || null,
+    });
+    registerSustainedRuntimePreflightGateway({
+      api,
+      effectiveRuntimeConfig,
+      effectiveRuntimeConfigValid,
+      effectiveRuntimeConfigErrors,
+      productionEvidenceIdentityContext,
+      openclawConfigPath: OPENCLAW_CONFIG_PATH,
     });
     const autoRecallConfig = effectiveRuntimeConfig.autoRecall;
     const kgFailClosedMode = effectiveRuntimeConfig.kgFailClosedMode;
@@ -896,6 +907,16 @@ export default definePluginEntry({
       recentFailClosedCanary,
       productionEvidenceIdentityContext,
       resolveTrafficOriginContext,
+    });
+    registerProductionEvidenceHealthcheckGateway({
+      api,
+      trafficOriginRegistry: trustedToolTrafficOrigins,
+      executeMemoryEngineSearch,
+      executeMemoryEngineAction,
+      productionEvidenceWindow: effectiveRuntimeConfig.productionEvidenceWindow,
+      kgFailClosedMode,
+      recentFailClosedMode,
+      autoRecallEnabled: autoRecallConfig.enabled,
     });
     const executeMemoryEngineGet = createMemoryEngineGetExecute({
       withDb,
