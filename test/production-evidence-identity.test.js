@@ -67,6 +67,8 @@ test("manifest keeps evidence identity disabled by default and validates epoch s
   assert.equal(schema.default.enabled, false);
   assert.equal(schema.properties.enabled.default, false);
   assert.equal(schema.properties.epochId.minLength, 1);
+  assert.deepEqual(schema.allOf[0].then.required, ["epochId"]);
+  assert.equal(schema.allOf[0].if.properties.enabled.const, true);
 });
 
 test("one epoch, build, and config across all production surfaces is ready", () => {

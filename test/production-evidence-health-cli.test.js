@@ -8,12 +8,20 @@ import { auditProductionEvidenceHealth, exitCodeForStatus, parseArgs } from "../
 const baseline = {
   schema_version: 1,
   active: true,
+  activation_source: "sustained_runtime_activation_finalizer",
+  authorization_plan_generated_at: "2026-06-30T00:00:00.000Z",
   evidence_epoch_id: "epoch-1",
   runtime_build_identity: "a".repeat(64),
   rollout_config_fingerprint: "b".repeat(64),
   expected_kg_mode: "full_fail_closed",
   expected_recent_mode: "full_fail_closed",
+  openclaw_runtime_version: "2026.7.1",
+  openclaw_config_file_path: "/home/lionsol/.openclaw/openclaw.json",
+  openclaw_config_file_sha256: "c".repeat(64),
+  openclaw_config_file_byte_count: 1024,
+  openclaw_config_fingerprint: "d".repeat(64),
   authorized_at: "2026-06-30T00:00:00.000Z",
+  activated_at: "2026-06-30T00:05:00.000Z",
 };
 const parity = {
   schema_version: 1,
@@ -33,7 +41,7 @@ function row(surface, origin = surface === "auto_recall" ? "natural_user_turn" :
   const evidence = origin === "natural_user_turn"
     ? { source: "before_prompt_build", agent_id_present: true, run_id_present: true, session_id_present: true, tool_call_id_present: false, trigger: "user" }
     : origin === "scheduled_healthcheck"
-      ? { source: "scheduled_healthcheck_wrapper", agent_id_present: true, run_id_present: false, session_id_present: true, tool_call_id_present: true }
+      ? { source: "scheduled_healthcheck_wrapper", agent_id_present: true, run_id_present: false, session_id_present: true, tool_call_id_present: true, healthcheck_run_id: "healthcheck-run-cli" }
       : { source: "before_tool_call_agent", agent_id_present: true, run_id_present: true, session_id_present: true, tool_call_id_present: true };
   return {
     event_type: "hybrid_search_observation",
@@ -93,7 +101,13 @@ function args(observationsPath, overrides = {}) {
 }
 
 test("CLI accepts JSON and JSONL report inputs and pretty output", async () => {
-  const rows = [row("auto_recall"), row("memory_engine_search"), row("memory_engine_action_search"), row("memory_engine_search", "scheduled_healthcheck")];
+  const rows = [
+    row("auto_recall"),
+    row("memory_engine_search"),
+    row("memory_engine_action_search"),
+    row("memory_engine_search", "scheduled_healthcheck"),
+    row("memory_engine_action_search", "scheduled_healthcheck"),
+  ];
   const json = fixture("observations.json", JSON.stringify(rows));
   const result = await auditProductionEvidenceHealth(args(json, { pretty: true }));
   assert.equal(result.exitCode, 1);

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULT_AUTO_RECALL,
+  normalizeEvidenceWindow,
   resolveEffectiveHybridRuntimeConfig,
 } from "../lib/config/effective-hybrid-runtime-config.js";
 import {
@@ -251,6 +252,51 @@ test("invalid fail-closed modes fail safe and invalidate evidence identity", () 
   assert.equal(result.valid, false);
   assert.equal(result.kgFailClosedMode, "legacy_fallback");
   assert.ok(result.errors.includes("invalid_mode:kgFailClosedMode"));
+});
+
+test("normalizeEvidenceWindow directly enforces explicit enabled and epoch semantics", () => {
+  const defaultErrors = [];
+  assert.deepEqual(normalizeEvidenceWindow(undefined, defaultErrors), {
+    enabled: false,
+    epochId: null,
+  });
+  assert.deepEqual(defaultErrors, []);
+
+  const enabledErrors = [];
+  assert.deepEqual(normalizeEvidenceWindow({ enabled: true }, enabledErrors), {
+    enabled: true,
+    epochId: null,
+  });
+  assert.deepEqual(enabledErrors, ["missing_string:productionEvidenceWindow.epochId"]);
+
+  const validErrors = [];
+  assert.deepEqual(normalizeEvidenceWindow({ enabled: true, epochId: "  epoch-1  " }, validErrors), {
+    enabled: true,
+    epochId: "epoch-1",
+  });
+  assert.deepEqual(validErrors, []);
+
+  const malformedErrors = [];
+  assert.deepEqual(normalizeEvidenceWindow("invalid", malformedErrors), {
+    enabled: false,
+    epochId: null,
+  });
+  assert.deepEqual(malformedErrors, ["invalid_object:productionEvidenceWindow"]);
+});
+
+test("enabled production evidence requires a non-empty epoch before runtime activation", () => {
+  const result = resolveEffectiveHybridRuntimeConfig({
+    pluginConfig: { productionEvidenceWindow: { enabled: true } },
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.productionEvidenceWindow.enabled, true);
+  assert.equal(result.productionEvidenceWindow.epochId, null);
+  assert.ok(result.errors.includes("missing_string:productionEvidenceWindow.epochId"));
+  const identity = createProductionEvidenceIdentityContext({
+    config: result,
+    configErrors: result.errors,
+  });
+  assert.equal(identity.rolloutConfigFingerprint, null);
 });
 
 test("malformed compatibility values use safe runtime values and invalidate identity", () => {

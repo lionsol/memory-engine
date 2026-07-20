@@ -11,12 +11,20 @@ import {
 const BASELINE = {
   schema_version: 1,
   active: true,
+  activation_source: "sustained_runtime_activation_finalizer",
+  authorization_plan_generated_at: "2026-06-30T00:00:00.000Z",
   evidence_epoch_id: "epoch-1",
   runtime_build_identity: "a".repeat(64),
   rollout_config_fingerprint: "b".repeat(64),
   expected_kg_mode: "full_fail_closed",
   expected_recent_mode: "full_fail_closed",
+  openclaw_runtime_version: "2026.7.1",
+  openclaw_config_file_path: "/home/lionsol/.openclaw/openclaw.json",
+  openclaw_config_file_sha256: "c".repeat(64),
+  openclaw_config_file_byte_count: 1024,
+  openclaw_config_fingerprint: "d".repeat(64),
   authorized_at: "2026-06-30T00:00:00.000Z",
+  activated_at: "2026-06-30T00:05:00.000Z",
 };
 
 const PARITY = {
@@ -57,6 +65,7 @@ function originEvidence(origin) {
     session_id_present: true,
     tool_call_id_present: true,
     ...(origin === "operator_verification_probe" ? { tool_call_transport: "http" } : {}),
+    ...(origin === "scheduled_healthcheck" ? { healthcheck_run_id: "healthcheck-run-1" } : {}),
   };
 }
 
@@ -118,10 +127,12 @@ function rowsForDays(days = 2, options = {}) {
     }
   }
   if (options.includeHealthcheck !== false) {
-    rows.push(row("memory_engine_search", `2026-07-${String(days).padStart(2, "0")}T00:30:00.000Z`, {
-      ...options,
-      origin: "scheduled_healthcheck",
-    }));
+    for (const surface of ["memory_engine_search", "memory_engine_action_search"]) {
+      rows.push(row(surface, `2026-07-${String(days).padStart(2, "0")}T00:30:00.000Z`, {
+        ...options,
+        origin: "scheduled_healthcheck",
+      }));
+    }
   }
   return rows;
 }
@@ -136,7 +147,9 @@ function fullWindowRows() {
       }
     }
   }
-  observations.push(row("memory_engine_search", "2026-08-01T00:30:00.000Z", { origin: "scheduled_healthcheck" }));
+  for (const surface of ["memory_engine_search", "memory_engine_action_search"]) {
+    observations.push(row(surface, "2026-08-01T00:30:00.000Z", { origin: "scheduled_healthcheck" }));
+  }
   return observations;
 }
 
@@ -160,15 +173,20 @@ test("clean short window is healthy_collecting, not rollback", () => {
   assert.equal(report.latest_healthcheck_at, "2026-07-02T00:30:00.000Z");
 });
 
-test("pre-authorization observations are excluded and stop the active epoch", () => {
+test("pre-activation observations are excluded and stop the active epoch", () => {
   const report = evaluate(rowsForDays(2), {
-    baseline: { ...BASELINE, authorized_at: "2026-07-02T00:00:00.000Z" },
+    baseline: {
+      ...BASELINE,
+      authorization_plan_generated_at: "2026-07-01T23:55:00.000Z",
+      authorized_at: "2026-07-01T23:55:00.000Z",
+      activated_at: "2026-07-02T00:00:00.000Z",
+    },
     asOf: "2026-07-02T02:00:00.000Z",
   });
   assert.equal(report.status, "blocked_rollback_required");
-  assert.ok(report.stop_conditions.some(item => item.code === "observation_before_authorization"));
-  assert.equal(report.observation_before_authorization_count, 3);
-  assert.equal(report.authorized_window_observation_count, 4);
+  assert.ok(report.stop_conditions.some(item => item.code === "observation_before_evidence_start"));
+  assert.equal(report.observation_before_evidence_start_count, 3);
+  assert.equal(report.authorized_window_observation_count, 5);
 });
 
 test("future observations and reports are never fresh", () => {
@@ -182,41 +200,74 @@ test("future observations and reports are never fresh", () => {
   assert.equal(freshnessStatus(Date.parse("2026-07-02T00:00:00.000Z"), Date.parse("2026-07-01T00:00:00.000Z"), 26), "future");
 });
 
-test("authorization and report timestamps obey the same window", () => {
-  const asOfAfterAuthorization = evaluate(rowsForDays(2), {
-    baseline: { ...BASELINE, authorized_at: "2026-07-03T00:00:00.000Z" },
+test("activation and report timestamps obey the same evidence window", () => {
+  const asOfBeforeActivation = evaluate(rowsForDays(2), {
+    baseline: {
+      ...BASELINE,
+      authorization_plan_generated_at: "2026-07-02T23:55:00.000Z",
+      authorized_at: "2026-07-02T23:55:00.000Z",
+      activated_at: "2026-07-03T00:00:00.000Z",
+    },
     asOf: "2026-07-02T02:00:00.000Z",
   });
-  assert.ok(asOfAfterAuthorization.stop_conditions.some(item => item.code === "baseline_authorized_after_as_of"));
+  assert.ok(asOfBeforeActivation.stop_conditions.some(item => item.code === "baseline_evidence_start_after_as_of"));
 
   const parityBefore = evaluate(rowsForDays(2), {
-    baseline: { ...BASELINE, authorized_at: "2026-07-02T00:00:00.000Z" },
+    baseline: {
+      ...BASELINE,
+      authorization_plan_generated_at: "2026-07-01T23:55:00.000Z",
+      authorized_at: "2026-07-01T23:55:00.000Z",
+      activated_at: "2026-07-02T00:00:00.000Z",
+    },
     runtimeParity: { ...PARITY, checked_at: "2026-07-01T23:00:00.000Z" },
     asOf: "2026-07-02T02:00:00.000Z",
   });
-  assert.ok(parityBefore.stop_conditions.some(item => item.code === "runtime_parity_before_authorization"));
+  assert.ok(parityBefore.stop_conditions.some(item => item.code === "runtime_parity_before_evidence_start"));
 
   const productBefore = evaluate(rowsForDays(2), {
-    baseline: { ...BASELINE, authorized_at: "2026-07-02T00:00:00.000Z" },
+    baseline: {
+      ...BASELINE,
+      authorization_plan_generated_at: "2026-07-01T23:55:00.000Z",
+      authorized_at: "2026-07-01T23:55:00.000Z",
+      activated_at: "2026-07-02T00:00:00.000Z",
+    },
     productHealth: { ...HEALTH, checked_at: "2026-07-01T23:00:00.000Z" },
     asOf: "2026-07-02T02:00:00.000Z",
   });
-  assert.ok(productBefore.stop_conditions.some(item => item.code === "product_health_before_authorization"));
+  assert.ok(productBefore.stop_conditions.some(item => item.code === "product_health_before_evidence_start"));
 
   const healthcheckBefore = evaluate(rowsForDays(2), {
-    baseline: { ...BASELINE, authorized_at: "2026-07-03T00:00:00.000Z" },
+    baseline: {
+      ...BASELINE,
+      authorization_plan_generated_at: "2026-07-02T23:55:00.000Z",
+      authorized_at: "2026-07-02T23:55:00.000Z",
+      activated_at: "2026-07-03T00:00:00.000Z",
+    },
     asOf: "2026-07-03T02:00:00.000Z",
   });
-  assert.ok(healthcheckBefore.stop_conditions.some(item => item.code === "healthcheck_before_authorization"));
+  assert.ok(healthcheckBefore.stop_conditions.some(item => item.code === "healthcheck_before_evidence_start"));
 });
 
-test("invalid external timestamps fail the active monitor", () => {
+test("invalid external timestamps and hand-written active baselines fail the active monitor", () => {
   assert.equal(validateBaseline({ ...BASELINE, authorized_at: "2026-07-01" }).valid, false);
+  assert.equal(validateBaseline({ ...BASELINE, activation_source: undefined }).valid, false);
+  assert.equal(validateBaseline({ ...BASELINE, authorization_plan_generated_at: "2026-06-29T00:00:00.000Z" }).valid, false);
   assert.equal(validateRuntimeParity({ ...PARITY, checked_at: "2026-07-01T00:00:00Z" }).valid, false);
   assert.equal(validateProductHealth({ ...HEALTH, checked_at: "2026-07-01T08:00:00+08:00" }).valid, false);
   const report = evaluate(rowsForDays(), { asOf: "July 1, 2026" });
   assert.equal(report.status, "blocked_rollback_required");
   assert.ok(report.stop_conditions.some(item => item.code === "invalid_as_of"));
+});
+
+test("partial scheduled healthcheck run cannot satisfy freshness", () => {
+  const observations = rowsForDays(2, { includeHealthcheck: false });
+  observations.push(row("memory_engine_search", "2026-07-02T00:30:00.000Z", {
+    origin: "scheduled_healthcheck",
+  }));
+  const report = evaluate(observations);
+  assert.equal(report.status, "blocked_rollback_required");
+  assert.equal(report.latest_healthcheck_at, null);
+  assert.ok(report.stop_conditions.some(item => item.code === "healthcheck_missing"));
 });
 
 test("impossible scheduled healthcheck evidence cannot satisfy freshness", () => {

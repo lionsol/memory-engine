@@ -234,6 +234,7 @@ test("expired entries are not consumable and scheduled entries share collision r
   currentTime = 0;
   registry.recordScheduledHealthcheck({
     toolCallId: "health-1",
+    healthcheckRunId: "health-run-1",
     agentId: "edi",
     sessionId: "session-1",
   });
