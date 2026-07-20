@@ -429,10 +429,7 @@ a0d1bb9 feat(recall): prepare controlled full fail closed rollout
 
 The operator approved continuation after Stage 4 closeout, which authorizes design and implementation of A7 evidence-governance tooling. It does not authorize keeping KG/Recent in `full_fail_closed` or AutoRecall enabled for 30 days.
 
-Four gaps block runtime authorization:
-
-1. the repository has no dedicated read-only health status and stop/rollback contract for an active production epoch;
-2. sustained runtime authorization has not been granted or executed.
+A7.3 closed the read-only health status and stop/rollback contract. The subsequent runtime authorization review withheld real runtime authorization until parity generation, product-health generation, plugin-owned scheduled healthchecks, epoch projection, natural-traffic forecasting, authorization-plan validation, and read-only monitor orchestration were implemented and reviewed.
 
 The required implementation sequence is:
 
@@ -441,6 +438,8 @@ B8-A7.1 evidence epoch and deployment identity
 B8-A7.2 continuity and traffic-origin evidence
 B8-A7.3 read-only health monitor and stop contract
 B8-A7 runtime authorization review
+B8-A7.4 sustained runtime authorization tooling
+B8-A7.4 implementation review
 B8-A7 sustained production evidence window
 B8-B removal-gate review
 ```
@@ -461,7 +460,11 @@ Checkpoint `3dcd55c` final review fixes were completed by implementation checkpo
 
 Final review accepted `cc88825`. Independent adversarial checks confirmed that a forged `auto_recall` scheduled healthcheck is rejected, a single stale production surface makes `monitor_freshness_status` non-fresh, runtime/source drift reports `runtime_parity_status=drift` while preserving separate freshness, and canonical timestamps reject surrounding whitespace. Node 24 validation passed 57 focused tests, static-check for 467 files, A5 safety smoke 10/10, and the full 1597-test suite with 1589 passed, 0 failed, and 8 skipped. `code-review-graph 2.3.7` reported risk 0.55, zero affected stored flows, and five helper-level test-gap hints that were covered by direct tests or adversarial review.
 
-Current state: `B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW`. This closes design/tooling review only. `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
+Historical state: `B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW`. The runtime authorization review was completed and withheld real activation pending A7.4 tooling.
+
+A7.4 artifact review additionally closed three artifact-chain defects. Activation now rejects authorization plans older than one hour or internally inconsistent plans, and the post-apply preflight must read the same live OpenClaw config path bound by the pre-activation backup. The active evidence lower bound is the finalizer-owned `activated_at`, so observations between operator approval and activation finalization are blocked and excluded from DB export, epoch projection, continuity, identity, fallback, full-rollout, parity/product freshness, and healthcheck freshness. Rollback verification now requires the finalized activation-baseline report and cannot certify a legacy state when no active epoch was proven. Adversarial tests cover stale/tampered plans, wrong live-config paths, hand-written baselines, pre-activation rows, and missing activation artifacts.
+
+Current state: `B8-A7.4 CLOSED / READY FOR SEPARATE SUSTAINED RUNTIME AUTHORIZATION DECISION`. The final implementation review closed after 171/171 focused tests, static check across 506 files, A5 safety smoke 10/10, and the full 1675-test suite with 1667 passed, 0 failed, and 8 skipped. Host-SDK registration integration verified both operator-read gateway methods through the installed OpenClaw SDK. A full code-review-graph snapshot using tree-sitter-javascript 0.25.0 covered 406 files, 146 flows, and 11 communities; it reported heuristic risk 0.85, 110 helper-level gap hints, and zero affected stored flows. Review hardening binds authorization to a loaded-runtime preflight no more than one hour old, exact live config-file path/SHA-256/byte count, an independent byte-identical owner-only backup, source/runtime parity, a 30-day natural-traffic forecast, auditable recent injection samples, and explicit approvals. Scheduled healthcheck freshness requires both tool surfaces under one run identity. The plan exposes a manifest-valid config patch and only an inactive baseline template; the separate read-only post-apply finalizer is the sole path that can emit an active baseline. Continuous monitoring and rollback verification revalidate the same identities. No real configuration, install/reload, scheduler, epoch, rollback, push, tag, or release was executed. `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
 
 Historical A7.2 review state: implementation checkpoint `59a4f3e` was `IMPLEMENTED / REVIEW CHANGES REQUIRED`; checkpoint `eec0f91` closed the four main origin/continuity findings but remained review-pending for TTL cleanup ordering and primitive thresholds JSON. Checkpoint `47389d3` closed those final findings.
 

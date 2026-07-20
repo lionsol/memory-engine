@@ -1,3 +1,40 @@
+## 2026-07-20
+
+### F1-D-B8-A7.4: sustained runtime authorization tooling implemented
+
+Implemented the dry-run/report-only tooling required by the sustained runtime authorization review. Added runtime/source parity generation over the accepted runtime dependency closure, auditable AutoRecall product-health evaluation bound to exact injection keys, a plugin-owned `operator.read` scheduled healthcheck limited to the two tool surfaces and grouped by one run identity, raw evidence plus blocking epoch projection, natural traffic forecasting, an exact independent config-backup manifest, a machine-readable authorization/rollback plan, a post-apply activation-baseline finalizer, one-cycle read-only monitoring, and post-rollback verification.
+
+Effective config normalization and the manifest now fail closed when `productionEvidenceWindow.enabled=true` lacks a non-empty `epochId`. The authorization plan requires a clean legacy starting state, clean/fresh parity, a loaded-runtime preflight no more than one hour old, a ready 30-day natural traffic forecast, active-memory explicitly disabled, exact live/backup config byte identity, exact sustained config, and explicit approval for every user-visible or operational change. It separates the normalized evidence snapshot from the manifest-valid OpenClaw merge patch and emits only an inactive baseline template. The separate finalizer emits an active baseline only after post-apply loaded-runtime, raw config-file, epoch, mode, version, build, and parity verification.
+
+Implementation and artifact review found and closed several cross-module contract defects: the initial plan exposed a derived effective config as if writable; product quality review was count-only; rollback consumed `generatedAt` while A5 emits `generated_at`; a backup was not proven to be an independent byte-identical live-config copy; one scheduled surface could satisfy healthcheck freshness; and a pre-apply plan could emit an active baseline. The artifact review then found three additional lifecycle gaps: activation did not bind the post-apply preflight to the exact live config path or reject stale/internally inconsistent plans; active evidence incorrectly began at `authorized_at` instead of `activated_at`; and rollback verification did not require proof that the runtime had actually reached a finalized active baseline. All now fail closed, with direct adversarial tests.
+
+Final implementation review validation:
+
+```text
+A7/A7.4 focused tests=171/171 passed
+static check=506 files passed
+A5 full fail-closed safety smoke=10/10 passed
+full suite=1675 tests / 1667 passed / 0 failed / 8 skipped
+host-SDK plugin registration integration=passed
+code-review-graph parser=tree-sitter-javascript 0.25.0 from the project venv
+code-review-graph full snapshot=406 files / 146 flows / 11 communities
+code-review-graph affected stored flows=0
+code-review-graph heuristic risk=0.85
+code-review-graph helper-level test-gap hints=118
+```
+
+The graph score is driven by central tiny helpers and callback nodes; it identified no affected stored flow. Load-bearing authorization, config patch, activation baseline, product-health, healthcheck, monitor, exact backup, and rollback paths have direct and end-to-end coverage.
+
+Current boundary:
+
+```text
+B8-A7.4=CLOSED / READY FOR SEPARATE SUSTAINED RUNTIME AUTHORIZATION DECISION
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+No real DB mutation, OpenClaw config change, install/reload, scheduler, evidence epoch, healthcheck call, rollback, push, tag, or release was performed.
+
 ## 2026-07-19
 
 ### F1-D-B8-A7.3: final implementation review closed

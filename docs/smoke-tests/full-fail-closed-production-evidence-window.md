@@ -1,6 +1,6 @@
 # Full Fail-Closed Production Evidence Window
 
-> **Status: B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW; sustained runtime window not authorized**
+> **Status: B8-A7.4 CLOSED / READY FOR SEPARATE SUSTAINED RUNTIME AUTHORIZATION DECISION; sustained runtime window not authorized**
 >
 > Stage 4 controlled runtime verification is closed and passed. This runbook defines the additional governance required before keeping KG and Recent in `full_fail_closed` long enough to support the B8-B removal gate.
 
@@ -173,7 +173,40 @@ Final review accepted implementation checkpoint `cc88825`. The shared origin val
 
 Independent Node 24 validation passed 57 focused tests, static-check for 467 files, the A5 safety smoke at 10/10, and the full 1597-test suite with 1589 passed, 0 failed, and 8 skipped. `code-review-graph 2.3.7` reported risk 0.55, zero affected stored flows, and five helper-level test-gap hints covered by direct tests or adversarial checks.
 
-The current status is `B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW`. This authorizes only a separate review of the sustained-runtime configuration, thresholds, monitoring cadence, and rollback plan. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
+The current status is `B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW`. This authorized the completed configuration/operations review only. That review withheld runtime authorization until the missing machine-executable tooling was implemented. The sustained runtime window remains `NOT AUTHORIZED`, and B8-B remains `NOT AUTHORIZED`.
+
+## A7.4 Sustained Runtime Authorization Tooling
+
+A7.4 implements the dry-run/report-only tooling required by the authorization review:
+
+```text
+runtime/source parity generator
+effective Hybrid runtime config report generator
+auditable AutoRecall product-health generator with exact injection sample keys
+plugin-owned two-surface scheduled tool healthcheck gateway method with shared run identity
+raw evidence plus blocking epoch projection
+natural traffic forecast audit
+active-memory runtime-boundary report using OpenClaw default-enabled semantics
+plugin-owned loaded-runtime preflight binding host version/build/effective config/raw config-file identity/boundary
+exact independent config-backup manifest with live path/byte hash/effective fingerprint
+machine-readable authorization plan builder with manifest-valid config patch and inactive baseline template
+post-apply read-only activation-baseline finalizer
+one-cycle read-only monitor orchestration bound to the finalized baseline
+post-rollback verifier for exact restore, probes, parity, and A5 smoke
+enabled-without-epoch config fail-closed validation
+```
+
+The detailed runbook is [`sustained-runtime-authorization-tooling.md`](sustained-runtime-authorization-tooling.md).
+
+The gateway healthcheck is restricted to `memory_engine_search` and `memory_engine_action_search`, is operator-read scoped, and remains outside the natural denominator. Healthcheck freshness requires both surfaces under one shared run identity. The authorization plan emits only an inactive baseline template; a separate post-apply finalizer is the only path that can emit an active baseline after revalidating a fresh, internally consistent plan, the exact authorized live config path, loaded-runtime identity, and parity. The evidence window begins at the finalizer's `activated_at`, not at the earlier operator approval time. Transition observations between approval and activation are blocked and excluded. Rollback verification also requires the finalized activation-baseline artifact, so a legacy restored state cannot be labeled as a successful rollback for a runtime window that was never proven active. The monitor cycle writes report artifacts only and does not install/reload the plugin, edit configuration, create a scheduler, start an epoch, or execute rollback.
+
+Current implementation state:
+
+```text
+B8-A7.4=CLOSED / READY FOR SEPARATE SUSTAINED RUNTIME AUTHORIZATION DECISION
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
 
 ## AutoRecall Product Boundary
 
@@ -193,18 +226,20 @@ Stage 4's temporary config override does not authorize a 30-day AutoRecall rollo
 
 ## Evidence Evaluation Sequence
 
-After A7.1–A7.3 are implemented and reviewed:
+After A7.1–A7.4 are implemented and review-closed, and after a separate operator runtime authorization:
 
-1. back up configuration and record the reviewed runtime fingerprint;
-2. create a new unique evidence epoch;
-3. enable only the explicitly authorized sustained configuration;
-4. verify source/runtime parity and the first canonical observations;
-5. run the read-only health audit throughout the window;
-6. rollback immediately on any blocker;
-7. export observations for exactly one epoch;
-8. evaluate continuity, origins, fallback safety, markers, schema, and provenance;
-9. run the existing full-rollout evidence evaluator;
-10. run a fresh legacy-fallback removal-gate audit.
+1. create an independent byte-identical config backup and bind it to the loaded runtime preflight;
+2. create a new unique evidence epoch and generate an approved manifest-valid config patch;
+3. enable only the explicitly authorized sustained configuration through a separate operator path;
+4. capture post-apply loaded-runtime preflight and source/runtime parity;
+5. revalidate the fresh authorization artifact and finalize the active baseline against the same authorized live config path; an inactive or hand-written template cannot start evidence collection;
+6. start the evidence clock at `activated_at`, then obtain the first canonical observations and a complete two-surface scheduled healthcheck run;
+7. run the read-only health audit throughout the window;
+8. rollback immediately on any blocker and preserve the activation-baseline report as rollback evidence;
+9. export observations for exactly one epoch beginning at `activated_at`;
+10. evaluate continuity, origins, fallback safety, markers, schema, and provenance;
+11. run the existing full-rollout evidence evaluator;
+12. run a fresh legacy-fallback removal-gate audit.
 
 A7 completion does not itself authorize deletion. The next decision after a healthy window is a separate B8-B removal authorization review.
 
@@ -215,6 +250,8 @@ B8-A7.1 evidence epoch and deployment identity
 B8-A7.2 continuity and traffic-origin evidence
 B8-A7.3 read-only health monitor and stop contract
 B8-A7 runtime authorization review
+B8-A7.4 sustained runtime authorization tooling
+B8-A7.4 implementation review
 B8-A7 sustained production evidence window
 B8-B removal-gate review
 ```
@@ -223,7 +260,7 @@ B8-A7.1 is closed after final review of implementation checkpoint `caf4373`. The
 
 A7.2 continuity and traffic-origin evidence is closed after final review of implementation checkpoint `47389d3`; its historical closeout label is `B8-A7.2 CLOSED / READY FOR A7.3`. This authorized only implementation of A7.3 read-only health monitoring and stop/rollback contract. It does not authorize enabling `productionEvidenceWindow`, keeping either channel in `full_fail_closed`, enabling sustained AutoRecall, or starting the 30-day runtime window.
 
-The preceding review labels remain historical evidence. The current authorization boundary is `B8-A7.3 CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW`; `B8-A7 sustained runtime window NOT AUTHORIZED` and `B8-B NOT AUTHORIZED` remain unchanged.
+The preceding review labels remain historical evidence. The current boundary is `B8-A7.4 CLOSED / READY FOR SEPARATE SUSTAINED RUNTIME AUTHORIZATION DECISION`; `B8-A7 sustained runtime window NOT AUTHORIZED` and `B8-B NOT AUTHORIZED` remain unchanged.
 
 Historical A7.1 closeout state: `B8-A7.1 CLOSED / READY FOR A7.2`.
 

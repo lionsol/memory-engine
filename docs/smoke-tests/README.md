@@ -11,6 +11,7 @@ This directory keeps manual smoke-test runbooks for workflows that are important
 | [`full-fail-closed-safety-smoke.md`](full-fail-closed-safety-smoke.md) | F1-D-B8-A5 Hybrid Search full fail-closed matrix across all production surfaces | Synthetic SQLite `:memory:` fixtures only; no real DB, plugin reload, config mutation, network call, report write, or legacy code removal |
 | [`full-fail-closed-runtime-rollout.md`](full-fail-closed-runtime-rollout.md) | F1-D-B8-A6 controlled plugin reload, scoped-canary evidence classification, channel-by-channel rollout, rollback, observation export, and short controlled-run evidence procedure | Real runtime changes require an operator; report evaluators read JSON/JSONL only; Engine DB access is read-only observation export only; B8-B removal remains prohibited |
 | [`full-fail-closed-production-evidence-window.md`](full-fail-closed-production-evidence-window.md) | F1-D-B8-A7 sustained production evidence governance: epoch/build identity, continuity, traffic origin, monitoring, and stop conditions | Design/tooling only until A7 runtime authorization; no sustained full mode, AutoRecall expansion, manufactured traffic, memory mutation, or B8-B removal |
+| [`sustained-runtime-authorization-tooling.md`](sustained-runtime-authorization-tooling.md) | F1-D-B8-A7.4 loaded-runtime preflight, parity/product-health generation, scheduled healthcheck, epoch projection, natural-traffic forecast, authorization plan, and read-only monitor cycle | Report-only/dry-run implementation; no real config change, install/reload, scheduler, epoch activation, rollback execution, push, or B8-B removal |
 | [`tool-surface-runtime-access-audit.md`](tool-surface-runtime-access-audit.md) | F1-D-B8-A6.2 registry vs effective tool visibility audit plus controlled `tools.invoke` production-surface verification | Search-only gateway invocation; no persistent policy widening, memory mutation, Core DB access, Stage 2 auto-authorization, or legacy removal |
 
 ## When to Use
@@ -59,6 +60,7 @@ The runbooks are also covered by static tests so that key links, workflow steps,
 npm run smoke:console-annotation-handoff
 npm run smoke:full-fail-closed
 node --test test/full-fail-closed-runtime-rollout-contract.test.js
+node --test test/sustained-runtime-authorization-tooling-contract.test.js
 node --test test/tool-surface-runtime-access-audit-doc.test.js
 node --test test/agent-memory-tool-strategy.test.js
 ```
