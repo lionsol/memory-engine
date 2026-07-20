@@ -17,6 +17,8 @@ This directory keeps manual smoke-test runbooks for workflows that are important
 
 ## When to Use
 
+The B8-A7-R1 remediation procedure is documented in [sustained-runtime-remediation.md](sustained-runtime-remediation.md). It is an operator plan only and does not authorize configuration mutation, plugin install/reload, scheduler creation, healthcheck traffic, epoch activation, A7, or B8-B removal.
+
 Run or review the Console annotation/report handoff smoke whenever changing:
 
 - `console/views/annotations.ejs`
@@ -62,6 +64,7 @@ npm run smoke:console-annotation-handoff
 npm run smoke:full-fail-closed
 node --test test/full-fail-closed-runtime-rollout-contract.test.js
 node --test test/sustained-runtime-authorization-tooling-contract.test.js
+node --test test/sustained-runtime-remediation-contract.test.js
 node --test test/tool-surface-runtime-access-audit-doc.test.js
 node --test test/agent-memory-tool-strategy.test.js
 ```

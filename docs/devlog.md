@@ -1,5 +1,18 @@
 ## 2026-07-20
 
+### F1-D-B8-A7-R1: sustained runtime remediation procedure implemented
+
+Added the operator runbook and static contract for the withheld sustained-runtime authorization findings. The procedure requires separate evidence for the OpenClaw CLI Node/ABI, gateway Node/ABI, and native dependency ABI; an independent owner-only exact configuration backup; explicit active-memory effective enabled=false; reviewed-source installation under the final gateway runtime; source_runtime_equal=true with difference_count=0; safe initial AutoRecall/KG/Recent/evidence settings; and loaded-runtime preflight before any later authorization review.
+
+The procedure permits only preflight verification in this phase and defines fail-closed stop and byte-for-byte rollback gates. It does not install or reload the plugin, change real configuration, create a scheduler, enable an epoch, call scheduled healthcheck, access databases, generate traffic, or authorize A7/B8-B.
+
+Current boundary:
+
+    B8-A7-R1 remediation procedure=IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 ### F1-D-B8-A7.4: sustained runtime authorization tooling implemented
 
 Implemented the dry-run/report-only tooling required by the sustained runtime authorization review. Added runtime/source parity generation over the accepted runtime dependency closure, auditable AutoRecall product-health evaluation bound to exact injection keys, a plugin-owned `operator.read` scheduled healthcheck limited to the two tool surfaces and grouped by one run identity, raw evidence plus blocking epoch projection, natural traffic forecasting, an exact independent config-backup manifest, a machine-readable authorization/rollback plan, a post-apply activation-baseline finalizer, one-cycle read-only monitoring, and post-rollback verification.

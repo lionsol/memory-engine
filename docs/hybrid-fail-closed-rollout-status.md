@@ -20,6 +20,15 @@ The authoritative operating procedures remain:
 
 ## Current Stage Ledger
 
+The B8-A7-R1 remediation runbook is [sustained-runtime-remediation.md](smoke-tests/sustained-runtime-remediation.md).
+
+Current remediation boundary:
+
+    B8-A7-R1 remediation procedure=IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 | Stage | Status | Evidence / decision |
 | --- | --- | --- |
 | B8-A5 deterministic full fail-closed safety smoke | CLOSED | Synthetic matrix covers KG and Recent suppression, rollback, three production surfaces, observation markers, and channel isolation. |
@@ -38,7 +47,7 @@ The authoritative operating procedures remain:
 | B8-A7.1 evidence epoch and deployment identity | CLOSED / READY FOR A7.2 | Final review accepted implementation checkpoint `caf4373`. Runtime identity covers the reviewed local dependency closure and fails closed on missing, symlinked, duplicated, or undeclared runtime paths. The rollout fingerprint uses one normalized effective AutoRecall/KG/Recent/retrieval configuration, includes non-secret effective environment thresholds, preserves supported compatibility aliases, and invalidates malformed inputs. |
 | B8-A7.2 continuity and traffic-origin evidence | CLOSED / READY FOR A7.3 | Final review accepted implementation checkpoint `47389d3`. Origin classification follows the typed host hook contract; registration-owned origin contexts are TTL/collision/capacity guarded; origin evidence and three-surface structural readiness are fail closed; per-surface leading, trailing, and internal gaps are enforced; and CLI/evaluator threshold validation shares one contract that rejects primitive, unknown, and malformed inputs. |
 | B8-A7.3 read-only health monitor and stop contract | CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW | Final review accepted implementation checkpoint `cc88825`. Scheduled healthchecks are restricted to tool production surfaces, canonical UTC timestamps are exact, authorized time bounds feed every child evaluator, and parity/product-health states are separated from freshness with internally consistent removal-readiness invariants. |
-| B8-A7 sustained production evidence window | DESIGN AUTHORIZED / RUNTIME NOT AUTHORIZED | A7.1–A7.3 governance tooling is review-closed. The next step is a separate sustained-runtime authorization review; no 30-day full-mode, sustained AutoRecall, scheduler, or production evidence epoch is authorized. |
+| B8-A7 sustained production evidence window | WITHHELD / REMEDIATION REQUIRED | The 2026-07-20 authorization review found source/runtime drift, ABI mismatch, active-memory enabled, missing installed A7.4 methods, and natural-traffic/product-health blockers. The B8-A7-R1 remediation procedure is implemented pending EDI verification; no runtime activation is authorized. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
