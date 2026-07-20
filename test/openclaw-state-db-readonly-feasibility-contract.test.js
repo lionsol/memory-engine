@@ -6,6 +6,7 @@ import path from "node:path";
 const ROOT = new URL("../", import.meta.url).pathname;
 const LIBRARY = readFileSync(path.join(ROOT, "lib/ops/sqlite-readonly-feasibility.js"), "utf8");
 const CLI = readFileSync(path.join(ROOT, "bin/run-openclaw-state-db-readonly-feasibility-smoke.js"), "utf8");
+const BIN_PACKAGE = JSON.parse(readFileSync(path.join(ROOT, "bin/package.json"), "utf8"));
 
 test("synthetic feasibility production files stay outside real runtime boundaries", () => {
   for (const source of [LIBRARY, CLI]) {
@@ -57,6 +58,18 @@ test("CLI accepts only json output mode and rejects external database paths", ()
   assert.match(CLI, /arg !== ["']--json["']/);
   assert.doesNotMatch(CLI, /--db|--path|--state-dir/);
   assert.doesNotMatch(CLI, /process\.env/);
+});
+
+test("CLI preserves the CommonJS module boundary and lazy-loads the ESM library", () => {
+  assert.equal(BIN_PACKAGE.type, "commonjs");
+  assert.match(CLI, /await import\(["']\.\.\/lib\/ops\/sqlite-readonly-feasibility\.js["']\)/);
+  assert.match(CLI, /module\.exports\s*=\s*\{\s*main/s);
+  assert.match(CLI, /require\.main === module/);
+  assert.doesNotMatch(CLI, /^\s*import\s+/m);
+  assert.match(LIBRARY, /mkdtempSync/);
+  assert.match(LIBRARY, /from "node:fs"/);
+  assert.match(LIBRARY, /import \{ tmpdir \} from "node:os"/);
+  assert.doesNotMatch(LIBRARY, /import \{[^}]*mkdtempSync[^}]*\} from "node:os"/s);
 });
 
 test("decision and report boundaries do not authorize production access", () => {

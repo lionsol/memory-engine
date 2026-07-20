@@ -4,6 +4,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { DatabaseSync } from "node:sqlite";
 import {
   CHECKPOINT_REVISION,
@@ -22,6 +23,8 @@ import {
 function tempFamilies() {
   return readdirSync(tmpdir()).filter((entry) => entry.startsWith(TEMP_PREFIX)).sort();
 }
+
+const require = createRequire(import.meta.url);
 
 test("synthetic readonly feasibility smoke returns the complete report schema and cleans up", () => {
   const before = tempFamilies();
@@ -134,6 +137,24 @@ test("the smoke CLI rejects external-path arguments", () => {
   });
   assert.equal(result.status, 64);
   assert.match(result.stderr, /unknown argument/);
+});
+
+test("requiring the CommonJS CLI does not execute the smoke", () => {
+  const before = tempFamilies();
+  let outputWrites = 0;
+  const originalWrite = process.stdout.write;
+  process.stdout.write = (...args) => {
+    outputWrites += 1;
+    return originalWrite.apply(process.stdout, args);
+  };
+  try {
+    const cli = require("../bin/run-openclaw-state-db-readonly-feasibility-smoke.js");
+    assert.equal(typeof cli.main, "function");
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  assert.equal(outputWrites, 0);
+  assert.deepEqual(tempFamilies(), before);
 });
 
 test("fingerprints detect metadata changes without a content change", () => {

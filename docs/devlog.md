@@ -6,7 +6,9 @@ Added a synthetic-only `node:sqlite` feasibility harness and report-only CLI. It
 
 Current boundary:
 
-    B8-A7-R2B synthetic feasibility harness=THIRD REVIEW FIXES IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R2B synthetic feasibility harness=MODULE-BOUNDARY FIXES IMPLEMENTED / EDI RE-VERIFICATION PENDING
+    previous EDI run=FAILED BEFORE HARNESS ENTRY / NON-AUTHORITATIVE
+    synthetic syscall trace=NOT AUTHORIZED
     standalone production reader=NOT AUTHORIZED
     real OpenClaw state-DB access=NOT AUTHORIZED
     host remediation execution=NOT AUTHORIZED
