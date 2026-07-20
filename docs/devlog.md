@@ -1,5 +1,19 @@
 ## 2026-07-20
 
+### F1-D-B8-A7-R2A: OpenClaw no-load plugin metadata source audit
+
+Audited the local OpenClaw 2026.6.9 plugin-registry implementation without executing OpenClaw commands or loading plugin code. The current installed-plugin index resolves through the OpenClaw state directory to state/openclaw.sqlite and reads the installed_plugin_index table. Its snapshot loader performs policy/source/manifest/package staleness checks and falls back to derived plugin discovery when persisted data is missing or stale. The legacy plugins/installs.json path is retired for current storage.
+
+Because the candidate is SQLite-backed and the complete snapshot path can enter discovery, no authoritative pure-file no-load metadata source is proven. R2A is blocked; no reader is implemented and host remediation remains unauthorized.
+
+Current boundary:
+
+    B8-A7-R2A no-load metadata source=BLOCKED / SOURCE NOT PROVEN
+    host remediation execution=NOT AUTHORIZED
+    B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 ### F1-D-B8-A7-R1: remediation review fixes implemented
 
 Added the operator runbook and static contract for the withheld sustained-runtime authorization findings. The procedure requires separate evidence for the OpenClaw CLI Node/ABI, gateway Node/ABI, and native dependency ABI; an independent owner-only exact configuration backup; explicit active-memory effective enabled=false; reviewed-source installation under the final gateway runtime; source_runtime_equal=true with difference_count=0; safe initial AutoRecall/KG/Recent/evidence settings; and loaded-runtime preflight before any later authorization review.
