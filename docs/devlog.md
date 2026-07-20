@@ -16,6 +16,26 @@ Current boundary:
     B8-A7 sustained runtime window=NOT AUTHORIZED
     B8-B removal=NOT AUTHORIZED
 
+R2B closure records the synthetic feasibility decision as valid experimental evidence: the harness passed its verification, while the standalone live state-DB reader remains `BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN` due to observable WAL/SHM writes and immutable stale-read behavior. Synthetic syscall tracing is not required for this feasibility decision and remains unauthorized.
+
+### F1-D-B8-A7-R3A: host-published metadata manifest contract
+
+Added a synthetic-only canonical JSON manifest publisher, atomic replacement algorithm, read-only descriptor consumer, installed/absent tombstones, file identity checks, and a CommonJS smoke wrapper with lazy ESM import. No host integration point, real metadata path, production consumer, or real state access has been implemented.
+
+Current boundary:
+
+    B8-A7-R2B synthetic harness verification=PASSED / CLOSED
+    B8-A7-R2B standalone read-only live state-DB reader feasibility=BLOCKED / ZERO-WRITE OR FRESHNESS NOT PROVEN
+    B8-A7-R3A host-published metadata manifest synthetic contract=IMPLEMENTED / EDI VERIFICATION PENDING
+    real host publisher=NOT AUTHORIZED
+    production manifest consumer=NOT AUTHORIZED
+    real metadata path resolution=NOT AUTHORIZED
+    host integration source audit=NOT STARTED
+    host remediation execution=NOT AUTHORIZED
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
 The first authoritative synthetic evidence record after module-boundary repair was reviewed without rerunning the harness in this documentation checkpoint: Node v24.8.0, module ABI 137, SQLite 3.50.4, and HEAD `908c846`. Missing-database and rollback-journal passed; WAL latest-row and non-writable scenarios observed SHM changes, WAL-without-SHM observed SHM creation, and immutable retained `checkpointed-A` while the normal reader advanced from `wal-committed-B` to `wal-post-open-C`. The filesystem evidence is sufficient to reject the current zero-write design without syscall tracing.
 
 Current boundary:

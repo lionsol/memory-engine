@@ -14,6 +14,7 @@ This directory keeps manual smoke-test runbooks for workflows that are important
 | [`sustained-runtime-authorization-tooling.md`](sustained-runtime-authorization-tooling.md) | F1-D-B8-A7.4 loaded-runtime preflight, parity/product-health generation, scheduled healthcheck, epoch projection, natural-traffic forecast, authorization plan, and read-only monitor cycle | Report-only/dry-run implementation; no real config change, install/reload, scheduler, epoch activation, rollback execution, push, or B8-B removal |
 | [`sustained-runtime-authorization-decision-20260720.md`](sustained-runtime-authorization-decision-20260720.md) | First real-environment B8-A7 sustained-runtime authorization review after A7.4 closure | Authorization withheld: records parity, ABI, active-memory, natural-traffic, product-health, and preflight blockers without runtime mutation |
 | [`openclaw-state-db-readonly-feasibility.md`](openclaw-state-db-readonly-feasibility.md) | B8-A7-R2B synthetic-only `node:sqlite` read-only state-DB feasibility matrix | Synthetic temporary databases only; no real OpenClaw state, plugin loading, discovery, configuration, or production reader authorization |
+| [`openclaw-host-published-plugin-metadata-manifest.md`](openclaw-host-published-plugin-metadata-manifest.md) | B8-A7-R3A synthetic host-published plugin metadata manifest contract | Synthetic ordinary-file publisher/consumer only; no host integration, real metadata path, OpenClaw state access, or production reader authorization |
 | [`tool-surface-runtime-access-audit.md`](tool-surface-runtime-access-audit.md) | F1-D-B8-A6.2 registry vs effective tool visibility audit plus controlled `tools.invoke` production-surface verification | Search-only gateway invocation; no persistent policy widening, memory mutation, Core DB access, Stage 2 auto-authorization, or legacy removal |
 
 ## When to Use
@@ -72,6 +73,9 @@ node --test test/openclaw-no-load-plugin-metadata-audit-contract.test.js
 node --test test/openclaw-state-db-readonly-feasibility-contract.test.js
 node --test test/openclaw-state-db-readonly-feasibility.test.js
 npm run smoke:openclaw-state-db-readonly
+node --test test/openclaw-host-plugin-metadata-manifest-contract.test.js
+node --test test/openclaw-host-plugin-metadata-manifest.test.js
+npm run smoke:openclaw-host-metadata-manifest
 node --test test/tool-surface-runtime-access-audit-doc.test.js
 node --test test/agent-memory-tool-strategy.test.js
 ```
