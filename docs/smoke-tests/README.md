@@ -67,6 +67,7 @@ npm run smoke:full-fail-closed
 node --test test/full-fail-closed-runtime-rollout-contract.test.js
 node --test test/sustained-runtime-authorization-tooling-contract.test.js
 node --test test/sustained-runtime-remediation-contract.test.js
+node --test test/openclaw-no-load-plugin-metadata-audit-contract.test.js
 node --test test/tool-surface-runtime-access-audit-doc.test.js
 node --test test/agent-memory-tool-strategy.test.js
 ```
