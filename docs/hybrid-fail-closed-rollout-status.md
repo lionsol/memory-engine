@@ -28,14 +28,16 @@ The B8-A7-R3B host publisher source audit is [openclaw-host-metadata-publisher-s
 The strict-profile B8-A7-R4 metadata ownership decision is [host-plugin-metadata-ownership.md](adr/host-plugin-metadata-ownership.md).
 The strict-profile B8-A7-R5 host publisher integration design is [openclaw-host-plugin-metadata-publisher-integration-design.md](openclaw-host-plugin-metadata-publisher-integration-design.md).
 The current B8-A7-R6 personal deployment decision is [personal-deployment-safety-profile.md](adr/personal-deployment-safety-profile.md).
+The B8-A7-R6.1 read-only baseline audit is [personal-deployment-read-only-baseline.md](smoke-tests/personal-deployment-read-only-baseline.md).
 
 Current remediation boundary:
 
     B8-A7-R1 strict no-load remediation=HISTORICAL / SUPERSEDED FOR PERSONAL DEPLOYMENT
     B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY
     B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY
-    B8-A7-R6 personal deployment safety profile=ACCEPTED
-    B8-A7-R6 personal deployment remediation=IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
+    B8-A7-R6 personal deployment remediation=VERIFIED / CURRENT
+    B8-A7-R6.1 read-only baseline audit=IMPLEMENTED / EDI VERIFICATION PENDING
     OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
     B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
@@ -66,7 +68,8 @@ Current remediation boundary:
 | B8-A7-R3B host metadata publisher integration-point source audit | NOT FOUND / BLOCKED | Install/update/uninstall lifecycle owners and the shared SQLite index writer exist, but no no-load R3A manifest publisher, startup reconciliation hook, or atomic ordinary-file publication boundary was found. |
 | B8-A7-R4 strict metadata ownership decision | PASSED / CLOSED / REFERENCE ONLY | For a strict no-load authority profile, OpenClaw host core is the single valid publisher owner. The package audit, shadow-publisher rejection, and direct-SQLite rejection remain valid, but absence of a publisher is not a blocker for the current personal deployment. |
 | B8-A7-R5 strict OpenClaw host publisher integration design | PASSED / CLOSED / REFERENCE ONLY | Retains the durable publication and startup-barrier design for a future platform deployment. Upstream implementation, PR, private fork, real publisher, and production consumer are not planned for the current personal route. |
-| B8-A7-R6 personal deployment safety profile | ACCEPTED / REMEDIATION DESIGN IMPLEMENTED | Accepts operator-controlled plugin inspection and post-load runtime evidence, while preserving core-DB read-only, exact runtime parity, explicit active-memory disablement, ABI checks, tests, backups, rollback, and feature-level fail-closed behavior. |
+| B8-A7-R6 personal deployment safety profile | PASSED / CLOSED | Accepts operator-controlled plugin inspection and post-load runtime evidence, while preserving core-DB read-only, exact runtime parity, explicit active-memory disablement, ABI checks, tests, backups, rollback, and feature-level fail-closed behavior. Repository verification closed at commit `555d131` with 1727 passed, 0 failed, and 8 skipped. |
+| B8-A7-R6.1 personal deployment read-only baseline | IMPLEMENTED / EDI VERIFICATION PENDING | Defines a no-mutation audit that correlates reviewed source, OpenClaw CLI/Gateway identity, cold plugin inspection, installed-runtime parity, native ABI, effective config, active-memory boundary, loaded Gateway methods, tests, and A5 smoke. It can recommend only a separate mutation-authorization review or remain blocked. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -574,7 +577,31 @@ no pre-discovery authority barrier
 
 Operator-controlled cold plugin inspection, exact installed-runtime identity, and post-load Gateway evidence must agree. Uncertainty disables AutoRecall, automatic reinforcement, full modes, evidence collection, and any sustained epoch; it does not require blocking all plugin management or diagnostic loading.
 
-Current R6 state: `B8-A7-R6 personal deployment safety profile ACCEPTED`; `personal deployment remediation runbook IMPLEMENTED / EDI VERIFICATION PENDING`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
+Current R6 state: `B8-A7-R6 personal deployment safety profile PASSED / CLOSED`; `personal deployment remediation runbook VERIFIED / CURRENT`; `B8-A7-R6.1 read-only baseline audit IMPLEMENTED / EDI VERIFICATION PENDING`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
+
+## B8-A7-R6.1 Personal Deployment Read-Only Baseline
+
+The active R6.1 audit is [`smoke-tests/personal-deployment-read-only-baseline.md`](smoke-tests/personal-deployment-read-only-baseline.md). It is the first executable evidence step under the personal profile, but it remains read-only with respect to OpenClaw configuration, installed plugin files, Gateway process state, native dependencies, databases, and activation state.
+
+R6.1 correlates:
+
+```text
+reviewed repository identity
+OpenClaw CLI and live Gateway process identity
+cold memory-engine and active-memory inspection
+current installed runtime root
+source/runtime parity and build identity
+Gateway Node/native module ABI compatibility
+live effective Hybrid configuration
+active-memory effective state
+current loaded Gateway method registration
+runtime preflight when already available
+tests and A5 fail-closed smoke
+```
+
+The allowed decision is only `BASELINE READY FOR SEPARATE MUTATION AUTHORIZATION` or `BASELINE BLOCKED`. Readiness does not authorize a config patch, backup, install/synchronization, native rebuild, plugin reload, Gateway restart, AutoRecall activation, production evidence, or an evidence epoch.
+
+Current R6.1 state: `B8-A7-R6.1 read-only baseline audit IMPLEMENTED / EDI VERIFICATION PENDING`; `configuration mutation NOT AUTHORIZED`; `plugin install/reload NOT AUTHORIZED`; `Gateway restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
 
 Historical A7.2 review state: implementation checkpoint `59a4f3e` was `IMPLEMENTED / REVIEW CHANGES REQUIRED`; checkpoint `eec0f91` closed the four main origin/continuity findings but remained review-pending for TTL cleanup ordering and primitive thresholds JSON. Checkpoint `47389d3` closed those final findings.
 

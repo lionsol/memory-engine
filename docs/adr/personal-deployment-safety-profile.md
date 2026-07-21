@@ -140,7 +140,7 @@ The earlier SQLite, discovery, and startup-order audits remain historical techni
 ```text
 B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY
 B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY
-B8-A7-R6 personal deployment safety profile=ACCEPTED
+B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
 OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
 OpenClaw private fork=NOT REQUIRED / NOT PLANNED
 OpenClaw source modification=NOT AUTHORIZED
@@ -156,4 +156,5 @@ B8-B removal=NOT AUTHORIZED
 - The current implementation effort returns to memory-engine and operator-run deployment verification.
 - The strict R4/R5 design remains available if memory-engine later becomes multi-user, distributed, unattended, or externally managed.
 - The historical 2026-07-20 authorization findings remain unresolved until the personal-deployment remediation runbook is executed and independently verified.
+- The first active follow-up is the read-only R6.1 baseline audit in [`../smoke-tests/personal-deployment-read-only-baseline.md`](../smoke-tests/personal-deployment-read-only-baseline.md); it may classify blockers but cannot authorize or perform mutations.
 - This ADR does not authorize config mutation, plugin install/reload, Gateway restart, AutoRecall activation, a sustained evidence epoch, or B8-B removal.

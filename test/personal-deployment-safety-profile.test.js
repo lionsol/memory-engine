@@ -131,7 +131,7 @@ test("ledger and devlog record the current R6 boundary", () => {
       [
         "B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY",
         "B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY",
-        "B8-A7-R6 personal deployment safety profile=ACCEPTED",
+        "B8-A7-R6 personal deployment safety profile=PASSED / CLOSED",
         "OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED",
         "B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED",
         "B8-A7 sustained runtime window=NOT AUTHORIZED",

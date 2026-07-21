@@ -251,8 +251,9 @@ cold, installed-runtime, and Gateway evidence disagree
 ## Current Boundary
 
 ```text
-B8-A7-R6 personal deployment safety profile=ACCEPTED
-personal deployment remediation runbook=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
+personal deployment remediation runbook=VERIFIED / CURRENT
+B8-A7-R6.1 read-only baseline audit=IMPLEMENTED / EDI VERIFICATION PENDING
 OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
 OpenClaw private fork=NOT REQUIRED / NOT PLANNED
 OpenClaw source modification=NOT AUTHORIZED

@@ -35,7 +35,8 @@
 | OpenClaw 兼容性与插件契约 | [`openclaw-memory-contract-compat.md`](openclaw-memory-contract-compat.md) | Contract analysis | 解释 slot、工具命名空间、DB 隔离、prompt supplement 和兼容策略 |
 | 运行入口与 action/service 边界 | [`memory-entry-boundary-audit.md`](memory-entry-boundary-audit.md) | Audit + governance baseline | 盘点 canonical、shim、legacy 和 unsafe entrypoints，约束业务逻辑不得绕过 canonical action/service layer |
 | 事件时间归属 | [`adr/event-time-ownership.md`](adr/event-time-ownership.md) | Accepted ADR | 确定 event-time 元数据由 engine-side sidecar 持有，禁止伪造或回写 core schema |
-| 个人部署安全配置 | [`adr/personal-deployment-safety-profile.md`](adr/personal-deployment-safety-profile.md) | Accepted current ADR | 当前单用户路线：保留数据安全、运行副本身份、冲突插件禁用、测试和回滚硬门；接受 operator cold inspection 与 post-load runtime evidence，不要求 OpenClaw host publisher |
+| 个人部署安全配置 | [`adr/personal-deployment-safety-profile.md`](adr/personal-deployment-safety-profile.md) | Passed / closed current ADR | 当前单用户路线：保留数据安全、运行副本身份、冲突插件禁用、测试和回滚硬门；接受 operator cold inspection 与 post-load runtime evidence，不要求 OpenClaw host publisher |
+| 个人部署只读基线 | [`smoke-tests/personal-deployment-read-only-baseline.md`](smoke-tests/personal-deployment-read-only-baseline.md) | R6.1 design-only audit | 在不改配置、不安装、不 reload 的前提下关联 CLI、Gateway、cold inspect、installed runtime、ABI、active-memory、方法注册和测试证据 |
 | 插件元数据发布归属 | [`adr/host-plugin-metadata-ownership.md`](adr/host-plugin-metadata-ownership.md) | Strict-profile reference ADR | 若未来恢复平台级 no-load authority profile，权威安装元数据及普通文件发布只能由 OpenClaw host core 持有；拒绝 memory-engine shadow publisher 与直接 SQLite 消费 |
 | OpenClaw host publisher 集成设计 | [`openclaw-host-plugin-metadata-publisher-integration-design.md`](openclaw-host-plugin-metadata-publisher-integration-design.md) | Strict-profile R5 reference | 保留 required plugin ids、durable outbox、v2 manifest、语义提交和启动屏障设计；当前个人部署不实施、不提 PR、不维护 fork |
 | 发布与版本身份 | [`release-version-policy.md`](release-version-policy.md) | Current release policy | 区分可达发布标签、manifest version、unreleased commits 和精确 build identity |
@@ -68,6 +69,7 @@
 - **事件时间治理**：见 [`adr/event-time-ownership.md`](adr/event-time-ownership.md)。不允许用 `updated_at`、文件 mtime、批量写入时间或路径日期推断精确事件时间。
 - **当前个人部署安全配置**：见 [`adr/personal-deployment-safety-profile.md`](adr/personal-deployment-safety-profile.md)。当前路线不要求 OpenClaw PR、private fork、host publisher 或 no-load authority proof；状态不确定时关闭 AutoRecall、自动强化、full mode 和 evidence window，而不是阻止全部插件加载。
 - **个人部署 remediation**：见 [`smoke-tests/personal-deployment-sustained-runtime-remediation.md`](smoke-tests/personal-deployment-sustained-runtime-remediation.md)。通过 operator cold inspection、精确 installed-runtime identity、post-load Gateway inspection、显式禁用 active-memory、测试、备份和 rollback 形成当前授权证据。
+- **R6.1 只读基线审计**：见 [`smoke-tests/personal-deployment-read-only-baseline.md`](smoke-tests/personal-deployment-read-only-baseline.md)。只收集当前 CLI/Gateway、插件 cold/loaded 状态、source/runtime parity、ABI、active-memory 和安全配置证据；任何 mutation 仍需单独授权。
 - **严格平台级插件元数据发布治理**：见 [`adr/host-plugin-metadata-ownership.md`](adr/host-plugin-metadata-ownership.md) 与 [`openclaw-host-plugin-metadata-publisher-integration-design.md`](openclaw-host-plugin-metadata-publisher-integration-design.md)。如果未来恢复多用户、无人值守或外部控制场景，权威发布必须由 OpenClaw host core 持有；memory-engine 仍不得 shadow publish 或直接消费共享 SQLite。
 - **运行时副本同步**：见 [`runtime-sync.md`](runtime-sync.md)。源码修改只有重新安装或 reload 后才会影响 OpenClaw 实际运行插件。
 - **版本与发布身份**：见 [`release-version-policy.md`](release-version-policy.md)。只使用当前提交可达的最近发布标签；非祖先历史上的更大版本号不得覆盖当前 release line。

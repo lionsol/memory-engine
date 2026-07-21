@@ -1,5 +1,27 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.1: personal-deployment read-only baseline
+
+Closed the R6 repository decision after commit `555d131` and EDI verification: focused contracts passed, static check covered 518 files, the full suite completed with 1727 passed, 0 failed, and 8 skipped, and `git diff --check` was clean.
+
+Added a bounded read-only baseline audit that correlates the reviewed repository, OpenClaw CLI and live Gateway process identity, cold plugin inspection, current installed runtime root, source/runtime parity, Gateway/native ABI compatibility, live effective configuration, active-memory state, loaded Gateway registrations, runtime preflight when already available, repository tests, and A5 fail-closed smoke.
+
+R6.1 writes only reduced evidence artifacts under `/tmp`. It does not authorize or perform config backup, config mutation, install/synchronization, reload, Gateway restart, native rebuild, AutoRecall/full/evidence activation, scheduler creation, an evidence epoch, rollback, B8-B, push, tag, or release.
+
+Current boundary:
+
+```text
+B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
+personal deployment remediation runbook=VERIFIED / CURRENT
+B8-A7-R6.1 read-only baseline audit=IMPLEMENTED / EDI VERIFICATION PENDING
+configuration mutation=NOT AUTHORIZED
+plugin install/reload=NOT AUTHORIZED
+Gateway restart=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6: adopt the personal-deployment safety profile
 
 Reclassified the R4/R5 host-publisher work as a strict platform-grade reference rather than a current implementation prerequisite. memory-engine is a single-operator local plugin, so an OpenClaw upstream PR, private fork, durable host publication journal, ordinary-file authority projection, and pre-discovery reconciliation barrier are disproportionate to the current risk and maintenance model.
@@ -22,8 +44,8 @@ Current boundary:
 ```text
 B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY
 B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY
-B8-A7-R6 personal deployment safety profile=ACCEPTED
-personal deployment remediation runbook=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
+personal deployment remediation runbook=VERIFIED / CURRENT
 OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
 OpenClaw private fork=NOT REQUIRED / NOT PLANNED
 OpenClaw source modification=NOT AUTHORIZED
