@@ -6,6 +6,14 @@ const BASELINE = new URL(
   "../docs/smoke-tests/personal-deployment-read-only-baseline.md",
   import.meta.url,
 );
+const DECISION = new URL(
+  "../docs/smoke-tests/personal-deployment-read-only-baseline-decision-20260721.md",
+  import.meta.url,
+);
+const R6_2 = new URL(
+  "../docs/smoke-tests/host-activation-boundary-compatibility.md",
+  import.meta.url,
+);
 const INDEX = new URL("../docs/README.md", import.meta.url);
 const LEDGER = new URL("../docs/hybrid-fail-closed-rollout-status.md", import.meta.url);
 const DEVLOG = new URL("../docs/devlog.md", import.meta.url);
@@ -20,10 +28,14 @@ function requireTokens(text, tokens, label) {
   }
 }
 
-test("R6.1 personal read-only baseline exists and is indexed", () => {
+test("R6.1 baseline, decision, and R6.2 compatibility contract exist and are indexed", () => {
   assert.equal(existsSync(BASELINE), true);
+  assert.equal(existsSync(DECISION), true);
+  assert.equal(existsSync(R6_2), true);
   const index = read(INDEX);
   assert.match(index, /personal-deployment-read-only-baseline\.md/);
+  assert.match(index, /personal-deployment-read-only-baseline-decision-20260721\.md/);
+  assert.match(index, /host-activation-boundary-compatibility\.md/);
 });
 
 test("R6.1 baseline correlates repository, host, installed, config, and loaded evidence", () => {
@@ -39,6 +51,9 @@ test("R6.1 baseline correlates repository, host, installed, config, and loaded e
       "Native ABI Identity",
       "Effective Config and Conflict Boundary",
       "Loaded Gateway Evidence",
+      "Do not add `--runtime`",
+      "plugins inspect --runtime",
+      "exclusion from a non-empty `plugins.allow`",
       "Existing Test and Smoke Evidence",
       "build-runtime-source-parity-report.js",
       "build-effective-hybrid-runtime-config-report.js",
@@ -84,7 +99,54 @@ test("R6.1 baseline is evidence-only and preserves mutation boundaries", () => {
   );
 });
 
-test("R6 closure and R6.1 state are recorded in ledger and devlog", () => {
+test("R6.1 decision records the real blocked baseline and next contract repair", () => {
+  const decision = read(DECISION);
+  requireTokens(
+    decision,
+    [
+      "Decision: BASELINE BLOCKED",
+      "16b912fb89a742f702a1912bd6cdbf5eff0c7194",
+      "source_runtime_equal=false",
+      "difference_count=28",
+      "memoryEngine.sustainedRuntimePreflight=unknown method",
+      "activation_reason=not in allowlist",
+      "active_memory_actual_host_state=disabled",
+      "active_memory_boundary_report=invalid for current host semantics",
+      "clean_window_observable_memory_mutation=false",
+      "static_check_file_count=519",
+      "full_fail_closed_safety_smoke=10/10 pass",
+      "B8-A7-R6.2 host activation boundary compatibility=REQUIRED / NOT STARTED",
+      "plugin install/reload=NOT AUTHORIZED",
+      "B8-A7 sustained runtime window=NOT AUTHORIZED",
+    ],
+    "R6.1 decision",
+  );
+});
+
+test("R6.2 contract records host activation ordering and live read-only closeout", () => {
+  const r6_2 = read(R6_2);
+  requireTokens(
+    r6_2,
+    [
+      "B8-A7-R6.2 Host Activation Boundary Compatibility",
+      "plugins.enabled=false",
+      "active-memory in plugins.deny",
+      "non-empty plugins.allow excluding the plugin id",
+      "disabled_by_plugins_allowlist",
+      "active_memory_allowlist_configured",
+      "active_memory_allowlisted",
+      "active_memory_denylisted",
+      "37 tests passed",
+      "status=clean",
+      "B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING",
+      "B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED",
+      "plugin install/reload=NOT AUTHORIZED",
+    ],
+    "R6.2 contract",
+  );
+});
+
+test("R6 closure, R6.1 blocked state, and R6.2 implementation are recorded", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(
       text,
@@ -92,11 +154,19 @@ test("R6 closure and R6.1 state are recorded in ledger and devlog", () => {
     );
     assert.match(
       text,
-      /personal deployment remediation runbook(?:=|\s+)VERIFIED \/ CURRENT/,
+      /B8-A7-R6\.1 read-only baseline execution(?:=|\s+)PASSED/,
     );
     assert.match(
       text,
-      /B8-A7-R6\.1 read-only baseline audit(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.1 baseline decision(?:=|\s+)BASELINE BLOCKED/,
+    );
+    assert.match(
+      text,
+      /B8-A7-R6\.2 host activation boundary compatibility(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+    );
+    assert.match(
+      text,
+      /B8-A7-R6\.3 runtime-remediation authorization design(?:=|\s+)NOT STARTED/,
     );
     assert.match(
       text,

@@ -155,6 +155,8 @@ openclaw plugins inspect active-memory --json
 
 Record command availability and actual output rather than assuming flags exist.
 
+Do not add `--runtime` to these commands. In OpenClaw 2026.6.9, `plugins inspect --runtime` imports the plugin into the CLI process; it does not query the already-running Gateway and may initialize plugin storage under a different Node ABI.
+
 Required reduced fields:
 
 ```text
@@ -288,11 +290,11 @@ production_evidence_enabled=false
 evidence_epoch_present=false
 ```
 
-Under the OpenClaw active-memory semantics already audited by the repository, an absent or unspecified enabled field must not be treated as disabled.
+Resolve the complete installed OpenClaw activation policy rather than inspecting only `plugins.entries.active-memory`. Accepted disable evidence includes a global plugin disable, denylist, explicit entry/config disable, or exclusion from a non-empty `plugins.allow`. A missing entry alone is not proof in either direction.
 
 ## Phase G: Loaded Gateway Evidence
 
-Use current Gateway runtime inspection without reloading or restarting it.
+Use current Gateway RPC or another host runtime surface that queries the already-running Gateway without reloading or restarting it. CLI-local plugin import such as `plugins inspect --runtime` is forbidden for R6.1.
 
 Record whether these methods are currently registered:
 
@@ -435,7 +437,9 @@ cold, installed, and loaded evidence disagreement
 ```text
 B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
 personal deployment remediation runbook=VERIFIED / CURRENT
-B8-A7-R6.1 read-only baseline audit=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.1 read-only baseline execution=PASSED / BASELINE BLOCKED
+B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED
 configuration mutation=NOT AUTHORIZED
 plugin install/reload=NOT AUTHORIZED
 Gateway restart=NOT AUTHORIZED

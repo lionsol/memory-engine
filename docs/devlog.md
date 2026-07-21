@@ -1,6 +1,54 @@
 ## 2026-07-21
 
-### F1-D-B8-A7-R6.1: personal-deployment read-only baseline
+### F1-D-B8-A7-R6.2: align the active-memory boundary with host activation policy
+
+Implemented the source-only R6.2 repair after the real R6.1 baseline proved that OpenClaw `2026.6.9` disables bundled `active-memory` when it is excluded from a non-empty `plugins.allow`, while the memory-engine boundary resolver incorrectly treated the missing plugin entry as default-enabled.
+
+The resolver now validates and models `plugins.enabled`, `plugins.allow`, `plugins.deny`, plugin entry/config booleans, non-empty allowlist exclusion, and bundled default enablement. Reduced reports add only booleans for global activation, allowlist configuration/membership, and denylist membership; raw config and allow/deny contents remain excluded.
+
+Focused downstream verification passed 37/37 across boundary, config backup, preflight, authorization, monitor, activation, and rollback contracts. A live-config read-only cross-check returned `clean / disabled_by_plugins_allowlist` with Gateway PID `676` unchanged. No config, install, reload, Gateway restart, native rebuild, database mutation, or activation action was performed.
+
+Current boundary:
+
+```text
+B8-A7-R6.1 read-only baseline execution=PASSED
+B8-A7-R6.1 baseline decision=BASELINE BLOCKED
+B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED
+configuration mutation=NOT AUTHORIZED
+plugin install/reload=NOT AUTHORIZED
+Gateway restart=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+### F1-D-B8-A7-R6.1: execute the personal-deployment read-only baseline
+
+Executed the R6.1 audit against reviewed commit `16b912f` and installed OpenClaw `2026.6.9`. A clean evidence window from `2026-07-21T07:54:43.635Z` through `2026-07-21T07:55:54.668Z` preserved the Gateway PID/start identity, core and engine SQLite/WAL/SHM metadata, LanceDB file count/bytes/latest identities, config identity, installed runtime identity, and clean Git worktree.
+
+The healthy evidence is: Gateway Node `v24.8.0` / ABI `137`, Gateway RPC healthy, memory-engine loaded by the live Gateway, active-memory disabled because it is excluded from the non-empty host `plugins.allow`, AutoRecall disabled, KG/Recent in `legacy_fallback`, production evidence disabled with no epoch, static check over 519 files, full suite with zero failures, and A5 smoke 10/10.
+
+The baseline is blocked by 28 source/runtime differences, missing installed `memoryEngine.sustainedRuntimePreflight` and healthcheck source, incomplete loaded-tool catalog evidence, and a memory-engine boundary resolver that ignores host allowlist/denylist activation ordering and therefore emits a false active-memory conflict.
+
+A pre-window exploratory `plugins inspect --runtime` call was rejected as baseline evidence because it imports memory-engine into the Node 22 CLI process, attempted plugin storage initialization, and failed against the ABI 137 extension binary. The clean window was restarted without that command. R6.1 now explicitly forbids CLI-local runtime import and requires already-running Gateway RPC or host runtime evidence.
+
+Current boundary:
+
+```text
+B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
+B8-A7-R6.1 read-only baseline execution=PASSED
+B8-A7-R6.1 baseline decision=BASELINE BLOCKED
+B8-A7-R6.2 host activation boundary compatibility=REQUIRED / NOT STARTED
+configuration mutation=NOT AUTHORIZED
+plugin install/reload=NOT AUTHORIZED
+Gateway restart=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+### F1-D-B8-A7-R6.1: personal-deployment read-only baseline design
 
 Closed the R6 repository decision after commit `555d131` and EDI verification: focused contracts passed, static check covered 518 files, the full suite completed with 1727 passed, 0 failed, and 8 skipped, and `git diff --check` was clean.
 

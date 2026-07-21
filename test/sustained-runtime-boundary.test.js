@@ -24,6 +24,63 @@ test("active-memory absence is conflict because OpenClaw runtime defaults it ena
   assert.deepEqual(report.blockers, ["active_memory_enabled"]);
 });
 
+test("non-empty host allowlist exclusion disables bundled active-memory", () => {
+  const report = buildSustainedRuntimeBoundaryReport({
+    openclawConfig: {
+      plugins: {
+        allow: ["memory-engine", "memory-core"],
+        entries: { "memory-engine": { enabled: true } },
+      },
+    },
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.status, "clean");
+  assert.equal(report.active_memory_enabled, false);
+  assert.equal(report.active_memory_resolution, "disabled_by_plugins_allowlist");
+  assert.equal(report.active_memory_allowlist_configured, true);
+  assert.equal(report.active_memory_allowlisted, false);
+  assert.deepEqual(report.blockers, []);
+});
+
+test("allowlisting active-memory preserves bundled default enablement", () => {
+  const report = buildSustainedRuntimeBoundaryReport({
+    openclawConfig: {
+      plugins: {
+        allow: ["memory-engine", "active-memory"],
+        entries: {},
+      },
+    },
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.status, "conflict");
+  assert.equal(report.active_memory_enabled, true);
+  assert.equal(report.active_memory_resolution, "enabled_by_active_memory_runtime_default");
+  assert.equal(report.active_memory_allowlisted, true);
+});
+
+test("global disable and denylist precede bundled default enablement", () => {
+  const globalDisabled = buildSustainedRuntimeBoundaryReport({
+    openclawConfig: { plugins: { enabled: false, allow: ["active-memory"], entries: {} } },
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(globalDisabled.status, "clean");
+  assert.equal(globalDisabled.active_memory_resolution, "disabled_by_plugins_global");
+
+  const denylisted = buildSustainedRuntimeBoundaryReport({
+    openclawConfig: {
+      plugins: {
+        allow: ["active-memory"],
+        deny: ["active-memory"],
+        entries: { "active-memory": { enabled: true } },
+      },
+    },
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(denylisted.status, "clean");
+  assert.equal(denylisted.active_memory_resolution, "disabled_by_plugins_denylist");
+  assert.equal(denylisted.active_memory_denylisted, true);
+});
+
 test("either plugin entry false or plugin config false explicitly closes active-memory", () => {
   const entryDisabled = buildSustainedRuntimeBoundaryReport({
     openclawConfig: { plugins: { entries: { "active-memory": { enabled: false } } } },
@@ -38,6 +95,22 @@ test("either plugin entry false or plugin config false explicitly closes active-
   });
   assert.equal(configDisabled.status, "clean");
   assert.equal(configDisabled.active_memory_resolution, "disabled_by_plugin_config");
+});
+
+test("malformed plugin activation policy fails closed", () => {
+  const invalidAllow = buildSustainedRuntimeBoundaryReport({
+    openclawConfig: { plugins: { allow: "active-memory", entries: {} } },
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(invalidAllow.status, "invalid");
+  assert.ok(invalidAllow.blockers.includes("invalid_array:plugins.allow"));
+
+  const invalidGlobal = buildSustainedRuntimeBoundaryReport({
+    openclawConfig: { plugins: { enabled: "false", entries: {} } },
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(invalidGlobal.status, "invalid");
+  assert.ok(invalidGlobal.blockers.includes("invalid_boolean:plugins.enabled"));
 });
 
 test("malformed active-memory config fails closed", () => {

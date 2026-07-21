@@ -45,7 +45,7 @@ configuration and runtime changes require recoverable backups
 installed runtime identity must match the reviewed source closure
 unexpected symlinks, duplicate runtime paths, or undeclared files block authorization
 Node/native-module ABI must be compatible with the Gateway runtime
-active-memory must be explicitly disabled before memory-engine AutoRecall is enabled
+active-memory must be explicitly disabled by the effective OpenClaw host activation policy before memory-engine AutoRecall is enabled
 required memory-engine Gateway methods and tool registrations must be present
 focused tests, static checks, full tests, and fail-closed safety smoke must pass
 legacy fallback remains available until the separate B8-B removal gate passes
@@ -59,7 +59,7 @@ The personal profile may combine operator-controlled cold and runtime evidence:
 OpenClaw-supported plugin list or inspect output
 persisted OpenClaw configuration snapshot and hash
 installed runtime path, file inventory, and build identity
-post-load Gateway runtime inspection
+post-load Gateway RPC or host runtime inspection that queries the already-running Gateway rather than importing the plugin into a CLI process
 memory-engine operator-read preflight methods
 focused and full test results
 fail-closed safety smoke
@@ -99,8 +99,8 @@ Before a sustained runtime window can be separately authorized, the operator mus
 2. Reviewed source commit and installed runtime closure have zero unexplained drift.
 3. Native dependency ABI is compatible with the Gateway Node runtime.
 4. OpenClaw reports memory-engine installed and enabled through a supported operator command.
-5. active-memory is explicitly configured disabled and the effective state is confirmed.
-6. Gateway runtime inspection shows the reviewed memory-engine methods and tools registered.
+5. active-memory is disabled by an explicit effective host-policy mechanism and the state is confirmed. Accepted mechanisms include a global plugin disable, denylist, plugin entry/config `enabled=false`, or exclusion from a non-empty `plugins.allow`; a missing entry alone is not proof.
+6. Gateway RPC or host runtime inspection shows the reviewed memory-engine methods and tools registered. CLI-local plugin import such as `plugins inspect --runtime` is not Gateway evidence.
 7. AutoRecall, KG full, Recent full, production evidence, scheduler, and epoch are still inactive before authorization.
 8. Focused tests, static check, full suite, and A5 fail-closed smoke are green.
 9. Configuration and installed-runtime rollback sources are complete and independently verified.

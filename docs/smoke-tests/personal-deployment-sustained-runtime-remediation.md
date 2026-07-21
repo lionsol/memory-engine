@@ -50,7 +50,7 @@ active-memory effective configuration
 AutoRecall, KG, Recent, evidence, scheduler, and epoch state
 ```
 
-Use supported OpenClaw operator commands from the installed version. Record the exact command and raw output location. Cold inspection may use plugin list or inspect output. Runtime inspection may be collected only after the current Gateway is confirmed healthy.
+Use supported OpenClaw operator commands from the installed version. Record the exact command and raw output location. Cold inspection may use plugin list or inspect output. Loaded-runtime evidence must query the already-running Gateway. Do not use CLI-local plugin import such as `openclaw plugins inspect memory-engine --runtime`; it can initialize plugin storage under the CLI Node runtime and is not Gateway evidence.
 
 Do not treat discovery output alone as authoritative. Correlate it with the installed runtime closure, effective config, and Gateway registrations.
 
@@ -99,19 +99,32 @@ Do not rebuild native dependencies in the existing production runtime in place. 
 
 Stop if the candidate contains unexplained source/runtime drift, duplicate paths, unexpected generated files, symlinks, or incompatible native modules.
 
-## Phase 3: Explicitly Disable the Conflicting Memory Plugin
+## Phase 3: Prove the Conflicting Memory Plugin Is Disabled
 
-Confirm the installed OpenClaw version's actual configuration semantics for `active-memory`. Do not guess a key path.
+Confirm the installed OpenClaw version's actual activation semantics for `active-memory`. Do not guess a key path or treat a missing entry as the whole policy.
 
-Prepare the smallest config patch that makes the effective state explicitly disabled. Create a post-change backup C1 after the approved patch.
+Accepted explicit host-policy disable mechanisms include:
+
+```text
+plugins.enabled=false
+active-memory present in plugins.deny
+plugins.entries.active-memory.enabled=false
+plugins.entries.active-memory.config.enabled=false when supported by that version
+active-memory excluded from a non-empty plugins.allow
+```
+
+If the current configuration already disables active-memory through one of these mechanisms, do not create a needless patch. Record `C1` as the exact safe configuration checkpoint; it may be byte-identical to C0.
+
+If active-memory is still effectively enabled or ambiguous, a separate approval must authorize the smallest config patch. Create C1 only after that approved patch.
 
 Verify:
 
 ```text
 active-memory effective enabled=false
+host activation reason is recorded
 C0 remains an exact pre-change backup
-C1 exactly matches the live post-change config
-C0 and C1 differ only in the reviewed active-memory change
+C1 exactly matches the accepted safe live config
+C0 and C1 are identical when no patch was needed, or differ only in the reviewed active-memory change
 no AutoRecall/full/evidence/scheduler/epoch setting changed
 ```
 
@@ -154,7 +167,7 @@ duplicate runtime path violations=0
 
 ### Loaded Gateway evidence
 
-Use runtime inspection and the memory-engine operator-read preflight to confirm:
+Use Gateway RPC or another host runtime surface that queries the already-running Gateway, plus the memory-engine operator-read preflight, to confirm:
 
 ```text
 expected Gateway methods are registered
@@ -202,8 +215,8 @@ Rollback must restore:
 
 ```text
 R0 when the reviewed runtime must be removed
-C1 when retaining explicit active-memory disablement
-C0 only when abandoning the entire remediation and accepting the original conflict state
+C1 when retaining the accepted safe host-policy state; C1 may equal C0 when no config patch was needed
+C0 only when abandoning an approved config mutation and intentionally restoring the exact pre-change state
 ```
 
 After rollback, confirm Gateway health, loaded plugin identity, safe feature state, and A5 smoke.
@@ -253,7 +266,9 @@ cold, installed-runtime, and Gateway evidence disagree
 ```text
 B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
 personal deployment remediation runbook=VERIFIED / CURRENT
-B8-A7-R6.1 read-only baseline audit=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.1 read-only baseline execution=PASSED / BASELINE BLOCKED
+B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED
 OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
 OpenClaw private fork=NOT REQUIRED / NOT PLANNED
 OpenClaw source modification=NOT AUTHORIZED
