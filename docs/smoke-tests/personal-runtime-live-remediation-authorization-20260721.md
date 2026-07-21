@@ -687,7 +687,7 @@ final Gateway healthy=true
 A5 smoke=10/10 pass
 ```
 
-R6.5.1 introduces `memory-engine-config-semantic-equivalence-v1`, which permits only a canonical monotonic `meta.lastTouchedAt` update as the sole changed JSON path. It remains source-only and pending independent EDI verification. A retry is not authorized by the original execution approval.
+R6.5.1 introduces `memory-engine-config-semantic-equivalence-v1`, which permits only a canonical monotonic `meta.lastTouchedAt` update as the sole changed JSON path. Independent EDI verification passed and the repair is closed. A retry is not authorized by the original execution approval.
 
 ## Current Boundary
 
@@ -701,7 +701,7 @@ candidate currently active=FALSE
 old runtime restored=TRUE
 configuration restored to exact C0=TRUE
 memory data restored from D0=FALSE / NOT REQUIRED
-B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 R6.5 live retry=NOT AUTHORIZED
 explicit retry approval=NOT RECEIVED
 candidate artifact=VALIDATED / FROZEN / EPHEMERAL

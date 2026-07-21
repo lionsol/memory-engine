@@ -375,7 +375,7 @@ Current source-level result:
 
 ```text
 B8-A7-R6.5 live remediation attempt=ROLLED BACK / SAFE
-B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 memory-engine-config-semantic-equivalence-v1 real preserved-config check=PASS
 R6.5 live retry=NOT AUTHORIZED
 explicit retry approval=NOT RECEIVED
@@ -399,7 +399,7 @@ final engine and LanceDB identities equal D_PRE_INSTALL=true
 A retry requires:
 
 ```text
-commit and independent verification of R6.5.1
+closed R6.5.1 implementation and independent verification
 clean repository worktree
 revalidation of the same candidate identities
 fresh C0 and R0
@@ -454,7 +454,7 @@ candidate currently active=false
 old runtime restored=true
 configuration restored to exact C0=true
 memory data restored from D0=false / NOT REQUIRED
-B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 R6.5 live retry=NOT AUTHORIZED
 explicit retry approval=NOT RECEIVED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED

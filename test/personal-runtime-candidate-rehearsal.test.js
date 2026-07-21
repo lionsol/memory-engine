@@ -164,7 +164,7 @@ test("R6.4 preserves the real environment and keeps R6.5 separate", () => {
       "B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE",
       "candidate Gateway activation=NOT REACHED",
       "old runtime restored=TRUE",
-      "B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING",
+      "B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED",
       "R6.5 live retry=NOT AUTHORIZED",
       "explicit retry approval=NOT RECEIVED",
       "live retry candidate install/reload=NOT AUTHORIZED",
@@ -196,7 +196,7 @@ test("ledger and devlog retain R6.4 closeout and record the later safe R6.5 roll
     );
     assert.match(text, /B8-A7-R6\.5 live remediation execution(?:=|\s+)ROLLED BACK \/ SAFE/);
     assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
-    assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /R6\.5 live retry(?:=|\s+)NOT AUTHORIZED/);
   }
 });

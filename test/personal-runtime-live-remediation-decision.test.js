@@ -96,13 +96,13 @@ test("R6.5 rollback restores old runtime exact C0 Gateway health and A5", () => 
   ], "R6.5 rollback closeout");
 });
 
-test("R6.5.1 remains source-only and a retry requires new approval", () => {
+test("R6.5.1 is closed and a retry still requires new approval", () => {
   const decision = read(DECISION);
   requireTokens(decision, [
-    "B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING",
+    "B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED",
     "R6.5 live retry=NOT AUTHORIZED",
     "explicit retry approval=NOT RECEIVED",
-    "commit and independent verification of R6.5.1",
+    "closed R6.5.1 implementation and independent verification",
     "fresh C0 and R0",
     "fresh D0",
     "new exact operator retry authorization",
@@ -118,7 +118,7 @@ test("ledger and devlog record safe rollback and pending semantic repair", () =>
     assert.match(text, /old runtime restored(?:=|\s+)TRUE/i);
     assert.match(
       text,
-      /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(text, /R6\.5 live retry(?:=|\s+)NOT AUTHORIZED/);
     assert.match(

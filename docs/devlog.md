@@ -14,7 +14,7 @@ Post-rollback repository closeout passed 56/56 focused execution/authorization/c
 
 A correct recursive JSON diff found one change only: `meta.lastTouchedAt`, from `2026-07-19T08:01:53.000Z` to `2026-07-21T11:55:54.599Z`. Added `memory-engine-config-semantic-equivalence-v1`, a report-only fail-closed comparator that permits only this canonical monotonic host timestamp path and rejects every other config change without emitting secret values. The preserved real transaction pair returns `approved_host_metadata_change`, canonical semantic equality, and no unexpected paths.
 
-Repository and closeout validation passed 70/70 focused R6.1-R6.5.1 and authorization-chain tests, 7/7 semantic-equivalence unit/CLI tests, static check over 529 files, the full suite with 1781 passed, 0 failed, and 8 skipped, A5 smoke 10/10, and `git diff --check`. Final read-only production verification confirmed Gateway PID `275493`, exact C0 bytes, old runtime/R0 parity zero, source/candidate parity zero, and unchanged final engine/LanceDB identities. The transaction root `/tmp/memory-engine-r6.5-live-2415dfe` must remain because the current install record points to its fresh R0 source path.
+Repository and closeout validation passed 70/70 focused R6.1-R6.5.1 and authorization-chain tests, 7/7 semantic-equivalence unit/CLI tests, static check over 529 files, the full suite with 1781 passed, 0 failed, and 8 skipped, A5 smoke 10/10, and `git diff --check`. Independent EDI closeout then passed the requested 7-test scope at 52/52, repeated static check over 529 files, the full suite at 1781 passed / 0 failed / 8 skipped, A5 smoke 10/10, `git diff --check`, and a clean worktree. R6.5.1 is therefore passed and closed. Final read-only production verification confirmed Gateway PID `275493`, exact C0 bytes, old runtime/R0 parity zero, source/candidate parity zero, and unchanged final engine/LanceDB identities. The transaction root `/tmp/memory-engine-r6.5-live-2415dfe` must remain because the current install record points to its fresh R0 source path.
 
 Current boundary:
 
@@ -25,7 +25,7 @@ candidate Gateway activation=NOT REACHED
 old runtime restored=TRUE
 configuration restored to exact C0=TRUE
 memory data restored from D0=FALSE / NOT REQUIRED
-B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 R6.5 live retry=NOT AUTHORIZED
 explicit retry approval=NOT RECEIVED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED

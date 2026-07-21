@@ -229,7 +229,7 @@ candidate Gateway activation=NOT REACHED
 old runtime restored=TRUE
 configuration restored to exact C0=TRUE
 memory data restored from D0=FALSE / NOT REQUIRED
-B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 R6.5 live retry=NOT AUTHORIZED
 explicit retry approval=NOT RECEIVED
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
@@ -253,7 +253,7 @@ B8-B removal=NOT AUTHORIZED
 
 ## 运行同步后的必要验证
 
-未来只有在 R6.5.1 独立验证、提交并获得新的精确 retry 授权后，才能再次验证：
+未来只有在已关闭的 R6.5.1 基础上获得新的精确 retry 授权，并重新创建 fresh C0/R0/H0/D0 后，才能再次验证：
 
 ```text
 installed source/runtime parity=0

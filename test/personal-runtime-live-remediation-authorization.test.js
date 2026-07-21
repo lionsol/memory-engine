@@ -145,7 +145,7 @@ test("R6.5 records exact approval, safe rollback, and a separately gated retry",
     "B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE",
     "candidate Gateway activation=NOT REACHED",
     "old runtime restored=TRUE",
-    "B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING",
+    "B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED",
     "R6.5 live retry=NOT AUTHORIZED",
     "explicit retry approval=NOT RECEIVED",
     "fresh retry C0/R0/D0=NOT CREATED",
@@ -160,7 +160,7 @@ test("ledger and devlog record the safe R6.5 rollback and pending retry repair",
     assert.match(text, /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5 live remediation execution(?:=|\s+)ROLLED BACK \/ SAFE/);
     assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
-    assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /R6\.5 live retry(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/);
     assert.match(text, /B8-B removal(?:=|\s+)NOT AUTHORIZED/);
