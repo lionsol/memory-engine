@@ -403,7 +403,7 @@ candidate install=not performed
 fresh retry artifacts=not created
 ```
 
-Full-suite and A5 smoke independent verification remain required before the packet may close.
+Independent EDI closeout passed the requested nine-test scope at 64/64, static check over 530 files, the full suite at 1789 passed / 0 failed / 8 skipped, A5 smoke 10/10, `git diff --check`, and repository status review. The packet is therefore passed and closed; retry execution remains separately unauthorized.
 
 ## Current Boundary
 
@@ -411,7 +411,7 @@ Full-suite and A5 smoke independent verification remain required before the pack
 B8-A7-R6.5 authorization packet=PASSED / CLOSED
 B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
-B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED
 R6.5.2 live retry execution=NOT AUTHORIZED
 explicit R6.5.2 retry approval=NOT RECEIVED
 fresh R6.5.2 C0/R0/H0/D0=NOT CREATED

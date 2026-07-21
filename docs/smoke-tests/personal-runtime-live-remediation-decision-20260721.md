@@ -377,7 +377,7 @@ Current source-level result:
 B8-A7-R6.5 live remediation attempt=ROLLED BACK / SAFE
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 memory-engine-config-semantic-equivalence-v1 real preserved-config check=PASS
-B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED
 R6.5.2 live retry execution=NOT AUTHORIZED
 explicit R6.5.2 retry approval=NOT RECEIVED
 current recovery transaction root=REQUIRED / MUST REMAIN
@@ -459,7 +459,7 @@ old runtime restored=true
 configuration restored to exact C0=true
 memory data restored from D0=false / NOT REQUIRED
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
-B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED
 R6.5.2 live retry execution=NOT AUTHORIZED
 explicit R6.5.2 retry approval=NOT RECEIVED
 fresh R6.5.2 C0/R0/H0/D0=NOT CREATED

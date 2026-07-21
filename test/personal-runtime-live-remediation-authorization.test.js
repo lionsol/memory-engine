@@ -161,7 +161,7 @@ test("ledger and devlog record the safe R6.5 rollback and pending R6.5.2 packet"
     assert.match(text, /B8-A7-R6\.5 live remediation execution(?:=|\s+)ROLLED BACK \/ SAFE/);
     assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
     assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /B8-A7-R6\.5\.2 live remediation retry authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /B8-A7-R6\.5\.2 live remediation retry authorization packet(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /R6\.5\.2 live retry execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/);
     assert.match(text, /B8-B removal(?:=|\s+)NOT AUTHORIZED/);

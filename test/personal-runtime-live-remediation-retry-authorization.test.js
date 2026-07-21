@@ -109,7 +109,7 @@ test("R6.5.2 exact approval is distinct and execution remains unauthorized", () 
     "fresh retry C0/R0/H0/D0 creation and Gateway stop/install/start are authorized",
     "conditional rollback to fresh retry R0, exact retry C0, and exact pre-start retry D0 is authorized on any defined stop condition",
     "The original R6.5 approval, a generic “continue,” or an approval missing any line above is insufficient",
-    "B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING",
+    "B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED",
     "R6.5.2 live retry execution=NOT AUTHORIZED",
     "explicit R6.5.2 retry approval=NOT RECEIVED",
     "fresh R6.5.2 C0/R0/H0/D0=NOT CREATED",
@@ -119,7 +119,7 @@ test("R6.5.2 exact approval is distinct and execution remains unauthorized", () 
 test("current documents record R6.5.2 packet without authorizing execution", () => {
   for (const text of [read(LEDGER), read(RUNTIME_SYNC), read(DECISION), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /B8-A7-R6\.5\.2 live remediation retry authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /B8-A7-R6\.5\.2 live remediation retry authorization packet(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /R6\.5\.2 live retry execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /explicit R6\.5\.2 retry approval(?:=|\s+)NOT RECEIVED/);
     assert.match(text, /current recovery transaction root(?:=|\s+)REQUIRED \/ MUST REMAIN/);
