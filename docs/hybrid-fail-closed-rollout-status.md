@@ -30,6 +30,7 @@ The strict-profile B8-A7-R5 host publisher integration design is [openclaw-host-
 The current B8-A7-R6 personal deployment decision is [personal-deployment-safety-profile.md](adr/personal-deployment-safety-profile.md).
 The B8-A7-R6.1 read-only baseline audit is [personal-deployment-read-only-baseline.md](smoke-tests/personal-deployment-read-only-baseline.md), with the real-environment decision at [personal-deployment-read-only-baseline-decision-20260721.md](smoke-tests/personal-deployment-read-only-baseline-decision-20260721.md).
 The B8-A7-R6.2 host activation boundary compatibility contract is [host-activation-boundary-compatibility.md](smoke-tests/host-activation-boundary-compatibility.md).
+The B8-A7-R6.3 personal runtime remediation authorization design is [personal-runtime-remediation-authorization.md](smoke-tests/personal-runtime-remediation-authorization.md).
 
 Current remediation boundary:
 
@@ -39,8 +40,10 @@ Current remediation boundary:
     B8-A7-R6 personal deployment safety profile=PASSED / CLOSED
     B8-A7-R6 personal deployment remediation=VERIFIED / CURRENT
     B8-A7-R6.1 read-only baseline execution=PASSED / BASELINE BLOCKED
-    B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING
-    B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED
+    B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
+    B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+    B8-A7-R6.5 live remediation execution authorization=NOT STARTED
     OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
     B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
@@ -73,8 +76,10 @@ Current remediation boundary:
 | B8-A7-R5 strict OpenClaw host publisher integration design | PASSED / CLOSED / REFERENCE ONLY | Retains the durable publication and startup-barrier design for a future platform deployment. Upstream implementation, PR, private fork, real publisher, and production consumer are not planned for the current personal route. |
 | B8-A7-R6 personal deployment safety profile | PASSED / CLOSED | Accepts operator-controlled plugin inspection and already-running Gateway evidence, while preserving core-DB read-only, exact runtime parity, explicit effective host-policy disablement of active-memory, ABI checks, tests, backups, rollback, and feature-level fail-closed behavior. Repository verification closed at commit `555d131` with 1727 passed, 0 failed, and 8 skipped. |
 | B8-A7-R6.1 personal deployment read-only baseline | PASSED / BASELINE BLOCKED | Clean window `2026-07-21T07:54:43.635Z`–`07:55:54.668Z` preserved Gateway and memory-store identities. Gateway health, host allowlist disablement, safe Hybrid config, repository tests, and A5 smoke passed. Runtime parity remained false with 28 differences, A7.4 methods were absent, and the boundary resolver produced a false conflict because it ignores `plugins.allow`. |
-| B8-A7-R6.2 host activation boundary compatibility | IMPLEMENTED / EDI VERIFICATION PENDING | The resolver now models global disable, denylist, entry/config disable, non-empty allowlist exclusion, and bundled default enablement. Focused dependent tests passed 37/37, and the live config read-only cross-check returned `clean / disabled_by_plugins_allowlist`; the installed extension remains unchanged. |
-| B8-A7-R6.3 runtime-remediation authorization design | NOT STARTED | May design exact backups, reviewed install/synchronization, Gateway Node 24 execution, reload/restart, parity-zero verification, loaded methods/tools, and rollback only after R6.2 closes. No mutation is authorized. |
+| B8-A7-R6.2 host activation boundary compatibility | PASSED / CLOSED | Commit `9e60531` closed the resolver change after 67/67 focused/downstream tests, static check over 519 files, the full suite with 1737 passed and 8 skipped, and A5 smoke 10/10. Live config read-only verification returned `clean / disabled_by_plugins_allowlist`; the installed extension was not changed. |
+| B8-A7-R6.3 runtime-remediation authorization design | IMPLEMENTED / EDI VERIFICATION PENDING | Rejects direct workspace copy, direct archive native install, linked source, and CLI-local runtime inspection. Selects npm-pack source plus exact lockfile, Node 24 dependency-complete candidate, C0/R0/D0 recovery artifacts, stopped-Gateway installation, post-install parity/native/Gateway RPC verification, and explicit rollback branches. No build or mutation is authorized. |
+| B8-A7-R6.4 offline candidate and rollback rehearsal | NOT STARTED | May create the isolated dependency-complete candidate and verify rollback artifacts outside production paths only after R6.3 closes. It may not install, stop, start, reload, or restart OpenClaw. |
+| B8-A7-R6.5 live remediation execution authorization | NOT STARTED | May authorize one exact candidate and transaction only after R6.4 passes. Execution still requires explicit operator approval and remains separate from sustained-runtime authorization. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -582,7 +587,7 @@ no pre-discovery authority barrier
 
 Operator-controlled cold plugin inspection, exact installed-runtime identity, and post-load Gateway evidence must agree. Uncertainty disables AutoRecall, automatic reinforcement, full modes, evidence collection, and any sustained epoch; it does not require blocking all plugin management or diagnostic loading.
 
-Current R6 state: `B8-A7-R6 personal deployment safety profile PASSED / CLOSED`; `personal deployment remediation runbook VERIFIED / CURRENT`; `B8-A7-R6.1 read-only baseline execution PASSED / BASELINE BLOCKED`; `B8-A7-R6.2 host activation boundary compatibility IMPLEMENTED / EDI VERIFICATION PENDING`; `B8-A7-R6.3 runtime-remediation authorization design NOT STARTED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
+Current R6 state: `B8-A7-R6 personal deployment safety profile PASSED / CLOSED`; `personal deployment remediation runbook VERIFIED / CURRENT`; `B8-A7-R6.1 read-only baseline execution PASSED / BASELINE BLOCKED`; `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design IMPLEMENTED / EDI VERIFICATION PENDING`; `B8-A7-R6.4 offline candidate and rollback rehearsal NOT STARTED`; `B8-A7-R6.5 live remediation execution authorization NOT STARTED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
 
 ## B8-A7-R6.1 Personal Deployment Read-Only Baseline
 
@@ -606,7 +611,38 @@ tests and A5 fail-closed smoke
 
 The allowed decision is only `BASELINE READY FOR SEPARATE MUTATION AUTHORIZATION` or `BASELINE BLOCKED`. Readiness does not authorize a config patch, backup, install/synchronization, native rebuild, plugin reload, Gateway restart, AutoRecall activation, production evidence, or an evidence epoch.
 
-Current R6.1 state: `B8-A7-R6.1 read-only baseline execution PASSED`; `B8-A7-R6.1 baseline decision BASELINE BLOCKED`; `B8-A7-R6.2 host activation boundary compatibility IMPLEMENTED / EDI VERIFICATION PENDING`; `B8-A7-R6.3 runtime-remediation authorization design NOT STARTED`; `configuration mutation NOT AUTHORIZED`; `plugin install/reload NOT AUTHORIZED`; `Gateway restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+Current R6.1 state: `B8-A7-R6.1 read-only baseline execution PASSED`; `B8-A7-R6.1 baseline decision BASELINE BLOCKED`; `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design IMPLEMENTED / EDI VERIFICATION PENDING`; `B8-A7-R6.4 offline candidate and rollback rehearsal NOT STARTED`; `B8-A7-R6.5 live remediation execution authorization NOT STARTED`; `configuration mutation NOT AUTHORIZED`; `plugin install/reload NOT AUTHORIZED`; `Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+
+## B8-A7-R6.3 Personal Runtime Remediation Authorization Design
+
+The active R6.3 contract is [`smoke-tests/personal-runtime-remediation-authorization.md`](smoke-tests/personal-runtime-remediation-authorization.md), with the current synchronization boundary summarized in [`runtime-sync.md`](runtime-sync.md).
+
+R6.3 rejects four unsafe shortcuts:
+
+```text
+direct openclaw plugins install . --force from the 938 MB development tree
+direct npm archive install under OpenClaw --ignore-scripts dependency handling
+linked source runtime
+CLI-local plugins inspect --runtime
+```
+
+The selected deployment model is:
+
+```text
+npm-pack source archive
++ exact reviewed package-lock.json
++ isolated Node 24 npm ci --omit=dev with reviewed lifecycle scripts
++ native :memory:/disposable smoke
++ source/candidate parity=0
++ dependency-complete local candidate
++ separately authorized stopped-Gateway install
+```
+
+The later transaction must bind C0 exact config, R0 exact current runtime, H0 host state, and D0 quiesced memory-engine/LanceDB snapshots. Post-start acceptance requires installed parity zero, Gateway Node 24 / ABI 137, clean runtime preflight, registered operator methods and three memory-engine tools, active-memory disabled by effective host policy, safe Hybrid configuration, full tests, and A5 smoke 10/10.
+
+R6.3 does not authorize building the candidate or creating production backups. R6.4 is an offline artifact stage only; R6.5 remains the separate live execution authorization.
+
+Current R6.3 state: `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design IMPLEMENTED / EDI VERIFICATION PENDING`; `B8-A7-R6.4 offline candidate and rollback rehearsal NOT STARTED`; `B8-A7-R6.5 live remediation execution authorization NOT STARTED`; `candidate build NOT AUTHORIZED`; `plugin install/reload NOT AUTHORIZED`; `Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
 
 Historical A7.2 review state: implementation checkpoint `59a4f3e` was `IMPLEMENTED / REVIEW CHANGES REQUIRED`; checkpoint `eec0f91` closed the four main origin/continuity findings but remained review-pending for TTL cleanup ordering and primitive thresholds JSON. Checkpoint `47389d3` closed those final findings.
 

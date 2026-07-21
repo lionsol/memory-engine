@@ -132,10 +132,16 @@ test("rollout ledger preserves runtime and mutation safety boundaries", () => {
   }
 });
 
-test("runtime sync documentation uses the inspected extension install path", () => {
+test("runtime sync documentation uses cold inspection and the Node 24 candidate boundary", () => {
   const doc = read(RUNTIME_SYNC);
-  assert.match(doc, /~\/\.openclaw\/extensions\/memory-engine/);
-  assert.match(doc, /plugins inspect memory-engine --runtime --json/);
+  assert.match(doc, /\/home\/lionsol\/\.openclaw\/extensions\/memory-engine/);
+  assert.match(doc, /openclaw plugins inspect memory-engine --json/);
+  assert.match(doc, /personal-runtime-remediation-authorization\.md/);
+  assert.match(doc, /npm ci --omit=dev/);
+  assert.match(doc, /\$HOME\/\.local\/node24\/bin\/node/);
+  assert.match(doc, /candidate build=NOT AUTHORIZED/);
+  assert.match(doc, /不要使用：?[\s\S]*plugins inspect memory-engine --runtime --json/);
+  assert.doesNotMatch(doc, /应以以下命令返回的 `install\.installPath` 为权威值/);
   assert.doesNotMatch(doc, /\.\.\/\.\.\/extensions\/memory-engine/);
 });
 

@@ -1,52 +1,191 @@
 # Runtime Sync
 
-当前目录就是 memory-engine 插件根目录。
+## 当前运行边界
 
-OpenClaw 当前实际运行的是：
+memory-engine 的开发源码目录是：
 
 ```text
-~/.openclaw/extensions/memory-engine
+/home/lionsol/.openclaw/workspace/plugins/memory-engine
 ```
 
-应以以下命令返回的 `install.installPath` 为权威值：
+OpenClaw 当前安装并由 Gateway 加载的运行副本是：
+
+```text
+/home/lionsol/.openclaw/extensions/memory-engine
+```
+
+必须通过 cold operator inspection 读取当前安装路径：
+
+```bash
+openclaw plugins inspect memory-engine --json
+```
+
+读取返回值中的：
+
+```text
+install.installPath
+plugin.rootDir
+plugin.source
+```
+
+不要使用：
 
 ```bash
 openclaw plugins inspect memory-engine --runtime --json
 ```
 
-因此修改插件源码后，需要重新安装插件，将源码同步到运行时目录。
+在 OpenClaw 2026.6.9 中，`--runtime` 会把插件导入当前 CLI 进程，而不是查询已经运行的 Gateway。默认 shell 中 CLI 使用 Node 22 / ABI 127，而 Gateway 使用 Node 24 / ABI 137；该命令可能产生错误的 ABI 结论并触发插件初始化。
 
-## 同步运行时副本
+## 为什么源码修改不会自动生效
+
+开发目录和运行副本是两个独立目录。
+
+因此：
+
+```text
+源码测试通过
+!= Gateway 已运行新代码
+```
+
+运行身份必须同时绑定：
+
+```text
+reviewed source commit
+source runtime-build identity
+installed runtime-build identity
+Gateway loaded runtime identity
+```
+
+当前统一 parity 工具是：
 
 ```bash
-cd ~/.openclaw/workspace/plugins/memory-engine
+$HOME/.local/node24/bin/node \
+  bin/build-runtime-source-parity-report.js \
+  --source-root /home/lionsol/.openclaw/workspace/plugins/memory-engine \
+  --runtime-root <cold-inspected-install.installPath> \
+  --checked-at <canonical-UTC-ISO> \
+  --pretty
+```
+
+健康结果必须是：
+
+```text
+source_runtime_equal=true
+difference_count=0
+```
+
+## 禁止直接从工作仓库覆盖
+
+不要把以下命令作为普通同步程序执行：
+
+```bash
 openclaw plugins install . --force
 ```
 
-## 验证同步是否成功
-```bash
-cd ~/.openclaw/workspace/plugins/memory-engine
-diff -qr . "$HOME/.openclaw/extensions/memory-engine" \
-  -x node_modules -x .git
+OpenClaw 2026.6.9 对本地目录执行递归复制，不排除：
+
+```text
+.git
+node_modules
+test
+docs
+reports
+开发工具和临时目录
 ```
-## 正常情况下不应存在源码差异。
 
-# 注意
+本地目录安装也不会重新安装 runtime dependencies，而是复制来源目录中现有的 `node_modules`。这会把开发目录大小、临时文件和最后一次 native build ABI 一起带入运行副本。
 
-以下目录职责不同：
+当前开发目录约 938 MB；直接复制不是可审计的生产同步策略。
 
-* 当前目录（memory-engine 插件根）
-   * 源码 / 开发目录
-   * Git 管理
-   * CodeGraph 索引目标
-* `~/.openclaw/extensions/memory-engine`
-   * OpenClaw 当前运行时副本
-   * gateway 实际加载目录
-   * 如 `plugins inspect --runtime --json` 返回其他路径，以 inspect 结果为准
+## 禁止直接安装普通 npm archive
 
-修改源码后如果未执行 plugins install --force，
-可能出现：
+`npm pack` 可以排除 `.git` 和来源 `node_modules`，但不能直接把普通 archive 交给 OpenClaw 作为最终 native candidate。
 
-测试通过但运行时未更新
-Codex 修改源码但实际行为未变化
-runtime / workspace 副本漂移
+OpenClaw 2026.6.9 的 archive dependency 安装使用：
+
+```text
+npm install --omit=dev --ignore-scripts
+```
+
+`better-sqlite3` 需要安装生命周期取得或构建 native binary。忽略 scripts 的 archive 安装不能证明 ABI 137 可用。
+
+## 当前选定的同步模型
+
+当前同步设计见：
+
+```text
+docs/smoke-tests/personal-runtime-remediation-authorization.md
+```
+
+选定流程是：
+
+```text
+clean reviewed source
+  -> npm pack
+  -> 在独立目录解包
+  -> 补入 exact package-lock.json
+  -> Node 24 下 npm ci --omit=dev，允许受控 lifecycle scripts
+  -> better-sqlite3 :memory: smoke
+  -> disposable LanceDB smoke
+  -> source/candidate parity=0
+  -> 创建 candidate manifest
+  -> 单独授权后由 OpenClaw 从 dependency-complete candidate 目录安装
+```
+
+OpenClaw 命令必须由 Gateway 同一 Node 明确执行：
+
+```bash
+$HOME/.local/node24/bin/node \
+  $HOME/.local/lib/node_modules/openclaw/openclaw.mjs \
+  <command>
+```
+
+不要依赖 shell 当前的 `node` 或 `openclaw` shebang 解析结果。
+
+## 当前阶段
+
+```text
+B8-A7-R6.1 read-only baseline execution=PASSED
+B8-A7-R6.1 baseline decision=BASELINE BLOCKED
+B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
+B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+```
+
+当前仍然禁止：
+
+```text
+candidate build=NOT AUTHORIZED
+configuration mutation=NOT AUTHORIZED
+plugin install/reload=NOT AUTHORIZED
+Gateway stop/start/restart=NOT AUTHORIZED
+native dependency build=NOT AUTHORIZED
+AutoRecall activation=NOT AUTHORIZED
+production evidence activation=NOT AUTHORIZED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
+## 运行同步后的必要验证
+
+未来只有在 R6.5 明确授权并执行后，才能验证：
+
+```text
+installed source/runtime parity=0
+Gateway Node=v24.8.0
+Gateway ABI=137
+memoryEngine.sustainedRuntimePreflight registered and clean
+memoryEngine.productionEvidenceHealthcheck registered
+memory_engine registered
+memory_engine_search registered
+memory_engine_get registered
+active-memory disabled by effective host policy
+AutoRecall=false
+KG=legacy_fallback
+Recent=legacy_fallback
+production evidence=false
+A5 smoke=10/10
+```
+
+在这些证据完成前，不得声称 Gateway 已同步到 reviewed source。

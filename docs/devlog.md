@@ -1,5 +1,32 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.3: design the personal runtime remediation transaction
+
+Closed R6.2 after commit `9e60531` and EDI verification: 67/67 focused and downstream tests passed, static check covered 519 files, the full suite completed with 1737 passed, 0 failed, and 8 skipped, A5 smoke passed 10/10, and the live config remained `clean / disabled_by_plugins_allowlist` without changing the installed extension.
+
+R6.3 audited the current OpenClaw `2026.6.9` install paths and rejected three superficially simple deployment routes. Local directory installation recursively copies the approximately 938 MB development tree, including `.git`, tests, docs, reports, and the existing `node_modules`, while not installing runtime dependencies. Direct archive installation requests dependencies but OpenClaw runs `npm install --omit=dev --ignore-scripts`, which cannot be trusted to produce the required `better-sqlite3` native binary. A linked source removes the reviewed-copy and rollback boundary.
+
+The selected route builds an isolated dependency-complete candidate: `npm pack` source, exact reviewed `package-lock.json`, Node 24 `npm ci --omit=dev --ignore-scripts=false`, native `:memory:`/disposable smoke, parity zero, and an immutable candidate manifest. A later live transaction must bind C0 config, R0 runtime, H0 host state, and D0 quiesced engine/LanceDB snapshots; stop the Gateway; install the completed candidate through the explicit Node 24 OpenClaw entrypoint; verify disk parity and native ABI before start; then verify Gateway preflight, method/tool registration, safe config, tests, and A5 smoke.
+
+R6.3 is design-only. It does not authorize candidate build, backup creation, plugin installation, Gateway stop/start/restart, native dependency build, config mutation, or sustained runtime activation.
+
+Current boundary:
+
+```text
+B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
+B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+candidate build=NOT AUTHORIZED
+configuration mutation=NOT AUTHORIZED
+plugin install/reload=NOT AUTHORIZED
+Gateway stop/start/restart=NOT AUTHORIZED
+native dependency build=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6.2: align the active-memory boundary with host activation policy
 
 Implemented the source-only R6.2 repair after the real R6.1 baseline proved that OpenClaw `2026.6.9` disables bundled `active-memory` when it is excluded from a non-empty `plugins.allow`, while the memory-engine boundary resolver incorrectly treated the missing plugin entry as default-enabled.
@@ -13,11 +40,15 @@ Current boundary:
 ```text
 B8-A7-R6.1 read-only baseline execution=PASSED
 B8-A7-R6.1 baseline decision=BASELINE BLOCKED
-B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING
-B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED
+B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
+B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+candidate build=NOT AUTHORIZED
 configuration mutation=NOT AUTHORIZED
 plugin install/reload=NOT AUTHORIZED
-Gateway restart=NOT AUTHORIZED
+Gateway stop/start/restart=NOT AUTHORIZED
+native dependency build=NOT AUTHORIZED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED

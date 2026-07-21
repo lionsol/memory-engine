@@ -92,7 +92,7 @@ test("R6.1 baseline is evidence-only and preserves mutation boundaries", () => {
       "does not authorize the mutation",
       "configuration mutation=NOT AUTHORIZED",
       "plugin install/reload=NOT AUTHORIZED",
-      "Gateway restart=NOT AUTHORIZED",
+      "Gateway stop/start/restart=NOT AUTHORIZED",
       "B8-A7 sustained runtime window=NOT AUTHORIZED",
     ],
     "R6.1 boundary",
@@ -138,15 +138,17 @@ test("R6.2 contract records host activation ordering and live read-only closeout
       "active_memory_denylisted",
       "37 tests passed",
       "status=clean",
-      "B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING",
-      "B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED",
+      "B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED",
+      "B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING",
+      "B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED",
+      "B8-A7-R6.5 live remediation execution authorization=NOT STARTED",
       "plugin install/reload=NOT AUTHORIZED",
     ],
     "R6.2 contract",
   );
 });
 
-test("R6 closure, R6.1 blocked state, and R6.2 implementation are recorded", () => {
+test("R6 closure, R6.1 blocked state, R6.2 closeout, and R6.3 design are recorded", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(
       text,
@@ -162,11 +164,19 @@ test("R6 closure, R6.1 blocked state, and R6.2 implementation are recorded", () 
     );
     assert.match(
       text,
-      /B8-A7-R6\.2 host activation boundary compatibility(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.2 host activation boundary compatibility(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(
       text,
-      /B8-A7-R6\.3 runtime-remediation authorization design(?:=|\s+)NOT STARTED/,
+      /B8-A7-R6\.3 runtime-remediation authorization design(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+    );
+    assert.match(
+      text,
+      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)NOT STARTED/,
+    );
+    assert.match(
+      text,
+      /B8-A7-R6\.5 live remediation execution authorization(?:=|\s+)NOT STARTED/,
     );
     assert.match(
       text,

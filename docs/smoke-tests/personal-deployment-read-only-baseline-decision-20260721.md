@@ -447,11 +447,17 @@ blockers=[]
 Current follow-up state:
 
 ```text
-B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING
-B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED
+B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
+B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+candidate build=NOT AUTHORIZED
 configuration mutation=NOT AUTHORIZED
 plugin install/reload=NOT AUTHORIZED
-Gateway restart=NOT AUTHORIZED
+Gateway stop/start/restart=NOT AUTHORIZED
+native dependency build=NOT AUTHORIZED
 ```
+
+The R6.3 design is [`personal-runtime-remediation-authorization.md`](personal-runtime-remediation-authorization.md). It selects a dependency-complete Node 24 candidate and separates offline artifact preparation from live execution authorization.
 
 R6.1 remains `BASELINE BLOCKED` because installed runtime parity and loaded A7.4 method blockers remain unresolved.

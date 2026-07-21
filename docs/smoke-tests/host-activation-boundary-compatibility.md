@@ -237,12 +237,15 @@ R6.3 design does not itself authorize execution.
 ```text
 B8-A7-R6.1 read-only baseline execution=PASSED
 B8-A7-R6.1 baseline decision=BASELINE BLOCKED
-B8-A7-R6.2 host activation boundary compatibility=IMPLEMENTED / EDI VERIFICATION PENDING
-B8-A7-R6.3 runtime-remediation authorization design=NOT STARTED
+B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
+B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+candidate build=NOT AUTHORIZED
 configuration mutation=NOT AUTHORIZED
 plugin install/reload=NOT AUTHORIZED
-Gateway restart=NOT AUTHORIZED
-native dependency rebuild=NOT AUTHORIZED
+Gateway stop/start/restart=NOT AUTHORIZED
+native dependency build=NOT AUTHORIZED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
