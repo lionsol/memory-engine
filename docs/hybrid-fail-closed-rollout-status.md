@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-21, after the B8-A7-R4 metadata ownership decision and the OpenClaw 2026.7.1-2 static package re-audit.
+> Last updated: 2026-07-21, after B8-A7-R4 closure and the B8-A7-R5 OpenClaw host publisher integration design.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -24,12 +24,14 @@ The B8-A7-R1 remediation runbook is [sustained-runtime-remediation.md](smoke-tes
 The B8-A7-R2A metadata-source audit is [openclaw-no-load-plugin-metadata-audit.md](smoke-tests/openclaw-no-load-plugin-metadata-audit.md).
 The B8-A7-R3B host publisher source audit is [openclaw-host-metadata-publisher-source-audit.md](smoke-tests/openclaw-host-metadata-publisher-source-audit.md).
 The B8-A7-R4 metadata ownership decision is [host-plugin-metadata-ownership.md](adr/host-plugin-metadata-ownership.md).
+The B8-A7-R5 host publisher integration design is [openclaw-host-plugin-metadata-publisher-integration-design.md](openclaw-host-plugin-metadata-publisher-integration-design.md).
 
 Current remediation boundary:
 
     B8-A7-R1 remediation procedure=NO-LOAD BASELINE FIX IMPLEMENTED / EDI VERIFICATION PENDING
-    B8-A7-R4 metadata ownership decision=ACCEPTED / OPTION A REQUIRED
-    B8-A7-R4 repository closure=IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R4 metadata ownership decision=PASSED / CLOSED
+    B8-A7-R5 host publisher integration design=ACCEPTED
+    B8-A7-R5 repository closure=IMPLEMENTED / EDI VERIFICATION PENDING
     B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
     B8-B removal=NOT AUTHORIZED
@@ -57,7 +59,8 @@ Current remediation boundary:
 | B8-A7-R2B synthetic read-only state-DB feasibility harness | PASSED / CLOSED | Synthetic verification is complete. The live state-DB reader remains blocked because WAL/SHM filesystem changes violate zero-write evidence and immutable reading retained the checkpointed revision. No syscall trace is required for the feasibility decision. |
 | B8-A7-R3A host-published metadata manifest synthetic contract | PASSED / CLOSED | Synthetic canonical JSON, duplicate-key rejection, BOM/NUL rejection, permission rejection, atomic old/new generation assertions, tombstone handling, symlink/hardlink rejection, and zero-consumer-write evidence passed focused tests and the 16-scenario synthetic smoke. This does not authorize host integration or production consumption. |
 | B8-A7-R3B host metadata publisher integration-point source audit | NOT FOUND / BLOCKED | Install/update/uninstall lifecycle owners and the shared SQLite index writer exist, but no no-load R3A manifest publisher, startup reconciliation hook, or atomic ordinary-file publication boundary was found. |
-| B8-A7-R4 metadata ownership decision | ACCEPTED / OPTION A REQUIRED | OpenClaw host core is the single authority and must own ordinary-file publication. The `2026.7.1-2` npm package re-audit found no upstream publisher or startup barrier. memory-engine shadow publication and direct SQLite consumption are rejected; installation state and host policy state must remain separate. |
+| B8-A7-R4 metadata ownership decision | PASSED / CLOSED | OpenClaw host core is the single authority and must own ordinary-file publication. The `2026.7.1-2` npm package re-audit found no upstream publisher or startup barrier. memory-engine shadow publication and direct SQLite consumption are rejected; installation state and host policy state must remain separate. |
+| B8-A7-R5 OpenClaw host publisher integration design | ACCEPTED / UPSTREAM IMPLEMENTATION NOT STARTED | Defines host-configured required plugin ids, a SQLite durable publication outbox, canonical v2 ordinary-file snapshots, semantic prepare/commit/publish phases, and mandatory reconciliation before plugin metadata discovery or runtime loading. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -507,7 +510,31 @@ startup reconciliation=before plugin lookup, discovery-driven activation, and ru
 read-only validation and fail-closed reporting=memory-engine consumer only
 ```
 
-Current R4 state: `B8-A7-R4 metadata ownership decision ACCEPTED / OPTION A REQUIRED`; `OpenClaw upstream host publisher REQUIRED`; `host integration implementation NOT STARTED`; `real host publisher NOT AUTHORIZED`; `production manifest consumer NOT AUTHORIZED`. R3A remains closed for the synthetic file algorithm only, and R3B remains complete with `host publisher source NOT FOUND / BLOCKED`.
+Current R4 state: `B8-A7-R4 metadata ownership decision PASSED / CLOSED`; `OpenClaw upstream host publisher REQUIRED`; `host integration implementation NOT STARTED`; `real host publisher NOT AUTHORIZED`; `production manifest consumer NOT AUTHORIZED`. R3A remains closed for the synthetic file algorithm only, and R3B remains complete with `host publisher source NOT FOUND / BLOCKED`.
+
+## B8-A7-R5 OpenClaw Host Publisher Integration Design
+
+The accepted R5 design is [`openclaw-host-plugin-metadata-publisher-integration-design.md`](openclaw-host-plugin-metadata-publisher-integration-design.md). It converts the R4 ownership decision into an upstream implementation contract without modifying OpenClaw.
+
+The design selects:
+
+```text
+publication targets=host-configured required plugin ids
+install authority=durable installed-plugin records
+policy authority=committed host-owned plugin policy
+cross-storage recovery=SQLite durable publication outbox
+manifest contract=canonical openclaw.host-plugin-install-metadata/v2
+publication path=<stateDir>/plugins/host-metadata/v2/<plugin-id-sha256>.json
+startup barrier=before resolvePluginMetadataSnapshot, derived discovery, lookup, or runtime loading
+```
+
+The current Gateway config path may resolve plugin metadata and fall back to discovery during `readConfigFileSnapshotWithPluginMetadata`, before `prepareGatewayPluginBootstrap`. R5 therefore requires a no-plugin-metadata host-policy snapshot phase using the same captured config bytes and hash, followed by publication reconciliation, then plugin-metadata-dependent config completion.
+
+The durable protocol uses a semantic commit journal plus immutable per-plugin generation rows with `prepared`, `committed`, `published`, and `aborted` phases. A prepared generation never overwrites the previous published generation. Startup compares the actual captured config hash with the journal's previous and expected hashes to finalize, restore, or fail closed; exact committed canonical bytes remain stable across retries and post-rename recovery.
+
+Production v2 keeps `installation_state`, `policy_state`, and `publication.state` independent. A disabled plugin remains installed; required absence uses `uninstalled` or `install-record-missing`; removing a required id produces a terminal `publication.state=retired` generation rather than deleting the final file.
+
+Current R5 state: `B8-A7-R5 host publisher integration design ACCEPTED`; `B8-A7-R5 repository closure IMPLEMENTED / EDI VERIFICATION PENDING`; `OpenClaw fork/worktree NOT CREATED`; `OpenClaw source modification NOT AUTHORIZED`; `real host publisher NOT AUTHORIZED`; `production manifest consumer NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD`; `B8-B removal NOT AUTHORIZED`.
 
 Historical A7.2 review state: implementation checkpoint `59a4f3e` was `IMPLEMENTED / REVIEW CHANGES REQUIRED`; checkpoint `eec0f91` closed the four main origin/continuity findings but remained review-pending for TTL cleanup ordering and primitive thresholds JSON. Checkpoint `47389d3` closed those final findings.
 

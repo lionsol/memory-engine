@@ -1,5 +1,29 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R5: OpenClaw host publisher integration design
+
+Closed R4 after EDI verification and commit `7d5c895`, then converted the accepted ownership decision into an upstream OpenClaw integration design. R5 selects host-configured required plugin ids, a host SQLite durable publication outbox, canonical `openclaw.host-plugin-install-metadata/v2` ordinary files, and a mandatory startup reconciliation barrier before plugin metadata resolution, derived discovery, lookup, or runtime loading.
+
+The source review found that `loadGatewayStartupConfigSnapshot` currently calls `readConfigFileSnapshotWithPluginMetadata`, which may resolve plugin metadata and fall back to discovery before `prepareGatewayPluginBootstrap`. The design therefore requires a no-plugin-metadata host-policy snapshot phase that reuses the same captured config bytes and hash, followed by publication reconciliation and only then plugin-metadata-dependent config completion.
+
+The semantic protocol uses a durable commit journal plus immutable per-plugin generation rows. `prepared`, `committed`, `published`, and `aborted` generations remain auditable; a prepared next generation never overwrites the previous published generation. Startup compares actual config hash with the journal's previous and expected hashes to finalize, restore, or fail closed. Exact committed canonical bytes remain stable across retry and recovery. Production v2 separates installation, policy, and publication requirement state; disabled remains installed, absence uses explicit tombstones, and removing a required id produces a terminal retired generation rather than deleting the file.
+
+Current boundary:
+
+    B8-A7-R4 metadata ownership decision=PASSED / CLOSED
+    B8-A7-R5 host publisher integration design=ACCEPTED
+    B8-A7-R5 repository closure=IMPLEMENTED / EDI VERIFICATION PENDING
+    OpenClaw fork/worktree=NOT CREATED
+    OpenClaw source modification=NOT AUTHORIZED
+    upstream pull request=NOT CREATED
+    real host publisher=NOT AUTHORIZED
+    production manifest consumer=NOT AUTHORIZED
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
+Design record: `docs/openclaw-host-plugin-metadata-publisher-integration-design.md`.
+
 ### F1-D-B8-A7-R4: metadata ownership decision
 
 Accepted the B8-A7-R4 architecture decision that OpenClaw host core must be the single authoritative owner of plugin-install metadata and any derived ordinary-file publication. Option A, an upstream host publisher, is required. A memory-engine shadow publisher is rejected because it duplicates authority and cannot safely cover absent, disabled, migration, repair, and startup states. Direct SQLite/index consumption remains rejected by R2B.

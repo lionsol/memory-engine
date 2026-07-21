@@ -100,7 +100,7 @@ test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage
     "B8-A7-R3B host metadata publisher integration-point source audit",
     "NOT FOUND / BLOCKED",
     "B8-A7-R4 metadata ownership decision",
-    "ACCEPTED / OPTION A REQUIRED",
+    "PASSED / CLOSED",
     "OpenClaw upstream host publisher REQUIRED",
     "openclaw@2026.7.1-2",
     "installation_state",

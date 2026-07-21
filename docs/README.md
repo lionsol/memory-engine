@@ -36,6 +36,7 @@
 | 运行入口与 action/service 边界 | [`memory-entry-boundary-audit.md`](memory-entry-boundary-audit.md) | Audit + governance baseline | 盘点 canonical、shim、legacy 和 unsafe entrypoints，约束业务逻辑不得绕过 canonical action/service layer |
 | 事件时间归属 | [`adr/event-time-ownership.md`](adr/event-time-ownership.md) | Accepted ADR | 确定 event-time 元数据由 engine-side sidecar 持有，禁止伪造或回写 core schema |
 | 插件元数据发布归属 | [`adr/host-plugin-metadata-ownership.md`](adr/host-plugin-metadata-ownership.md) | Accepted ADR | 确定权威安装元数据及普通文件发布由 OpenClaw host core 单一持有，拒绝 memory-engine shadow publisher 与直接 SQLite 消费 |
+| OpenClaw host publisher 集成设计 | [`openclaw-host-plugin-metadata-publisher-integration-design.md`](openclaw-host-plugin-metadata-publisher-integration-design.md) | Accepted R5 design | 定义 required plugin ids、durable outbox、v2 manifest、语义提交协议、启动前 reconciliation barrier 与上游 patch 拆分 |
 | 发布与版本身份 | [`release-version-policy.md`](release-version-policy.md) | Current release policy | 区分可达发布标签、manifest version、unreleased commits 和精确 build identity |
 | 检索结果到回答的证据规则 | [`retrieval-answering-policy.md`](retrieval-answering-policy.md) | Current policy | 规定按日期回顾等场景的证据优先级，防止把派生摘要当成原始事实 |
 | Hybrid fail-closed rollout 当前状态 | [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md) | Current rollout ledger | 记录 F1-D-B8-A5/A6/A7 阶段、真实 observation 证据、持续窗口治理与 B8-B 禁止边界 |
@@ -65,6 +66,7 @@
 - **Core DB 只读不变量**：见 [`AGENTS.md`](../AGENTS.md) 的 Database safety。memory-engine 可以读取显式 attach 的 `core.*`，不得写入。
 - **事件时间治理**：见 [`adr/event-time-ownership.md`](adr/event-time-ownership.md)。不允许用 `updated_at`、文件 mtime、批量写入时间或路径日期推断精确事件时间。
 - **插件元数据发布治理**：见 [`adr/host-plugin-metadata-ownership.md`](adr/host-plugin-metadata-ownership.md)。权威安装事实和策略状态由 OpenClaw host core 持有；memory-engine 不得 shadow publish、直接消费共享 SQLite 或把禁用误判为卸载。
+- **OpenClaw host publisher 集成设计**：见 [`openclaw-host-plugin-metadata-publisher-integration-design.md`](openclaw-host-plugin-metadata-publisher-integration-design.md)。上游实现必须使用宿主配置的 required ids、SQLite durable outbox、普通文件原子发布和早于 plugin metadata discovery 的启动屏障。
 - **运行时副本同步**：见 [`runtime-sync.md`](runtime-sync.md)。源码修改只有重新安装或 reload 后才会影响 OpenClaw 实际运行插件。
 - **版本与发布身份**：见 [`release-version-policy.md`](release-version-policy.md)。只使用当前提交可达的最近发布标签；非祖先历史上的更大版本号不得覆盖当前 release line。
 - [`hybrid-observation-provenance.md`](hybrid-observation-provenance.md)：Hybrid production observation 的 canonical envelope、surface-specific provenance、无效记录隔离和 removal-gate 阻塞契约。
