@@ -1,5 +1,40 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.4: offline candidate and rollback rehearsal
+
+Closed R6.3 after commit `9b6b734` and EDI verification: 39/39 focused tests passed, static check covered 520 files, the full suite completed with 1746 passed, 0 failed, and 8 skipped, A5 smoke passed 10/10, and `git diff --check` was clean.
+
+Built an isolated Node 24 dependency-complete candidate under `/tmp/memory-engine-r6.4-9b6b734`. The `npm pack` archive contained 614 entries, excluded source `.git` and inherited `node_modules`, and had SHA-256 `acbc27b55d0863fbff5dada85eec40993186012802eaba1a1291e132d194697b`. The exact reviewed lockfile was restored before Node `v24.8.0` / ABI `137` ran `npm ci --omit=dev --ignore-scripts=false`.
+
+The candidate installed `better-sqlite3 11.10.0` and `@lancedb/lancedb 0.29.0`, completed actual SQLite `:memory:` and disposable LanceDB create/read smokes, and reached source/runtime parity zero with build identity `dc459f5e9c2d55a03ca8af9f7e8b417839f88062069cba1dc354a48dc489d718`. After validation it was frozen with zero writable files/directories and full-tree SHA-256 `5692d954c92b3dc3f10c0c645b14e71632abfe4346120461c409ad6c70bdb224`.
+
+Created independent rehearsal recovery artifacts outside production paths. C0 was byte-identical to the live config, mode `0600`, a separate inode, and SHA-256 `da9e443c416979ed71763ccc7cd00106597bed7a7dfdb064a3b507627b2c6f2a`. R0 contained 5522 files and 882079435 bytes, shared no regular-file inode with the active extension, had no full-tree diff, matched deterministic tree SHA-256 `6da85f45dc433fe2874a8eaf0299643886d5825ff64910af9367195da3d1cdc9`, preserved runtime identity `86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e535b0a5a8152f1f1`, and passed a Node 24 native SQLite smoke.
+
+An isolated OpenClaw home/state/config completed candidate install, R0 rollback install, and frozen-candidate reinstall with parity zero after each transition. The rehearsal exposed two new live constraints: `plugins install` imports memory-engine and may initialize the selected state directory's engine SQLite/LanceDB, so D0 and a pre/post-install data identity gate are mandatory; and installation/verification must run from a stable cwd outside the replaced runtime, because a replaced cwd reproduced `uv_cwd ENOENT` after a successful install.
+
+The real OpenClaw config SHA-256 remained `da9e443…6f2a`, Gateway PID remained `676`, the Gateway start timestamp remained unchanged, and no live plugin install, config mutation, Gateway stop/start/restart, D0 snapshot, data restoration, or activation occurred.
+
+Repository closeout preflight passed 47/47 focused R6.1-R6.4 and authorization-chain tests, static check over 521 files, the full suite with 1754 passed, 0 failed, and 8 skipped, A5 smoke 10/10, and `git diff --check`.
+
+Current boundary:
+
+```text
+B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
+B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
+B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING
+offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
+C0/R0 rehearsal copies=PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION
+D0 quiesced production data snapshot=NOT CREATED
+B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+live configuration mutation=NOT AUTHORIZED
+live plugin install/reload=NOT AUTHORIZED
+live Gateway stop/start/restart=NOT AUTHORIZED
+live memory-data restoration=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6.3: design the personal runtime remediation transaction
 
 Closed R6.2 after commit `9e60531` and EDI verification: 67/67 focused and downstream tests passed, static check covered 519 files, the full suite completed with 1737 passed, 0 failed, and 8 skipped, A5 smoke passed 10/10, and the live config remained `clean / disabled_by_plugins_allowlist` without changing the installed extension.

@@ -139,16 +139,16 @@ test("R6.2 contract records host activation ordering and live read-only closeout
       "37 tests passed",
       "status=clean",
       "B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED",
-      "B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING",
-      "B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED",
+      "B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED",
+      "B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING",
       "B8-A7-R6.5 live remediation execution authorization=NOT STARTED",
-      "plugin install/reload=NOT AUTHORIZED",
+      "live plugin install/reload=NOT AUTHORIZED",
     ],
     "R6.2 contract",
   );
 });
 
-test("R6 closure, R6.1 blocked state, R6.2 closeout, and R6.3 design are recorded", () => {
+test("R6 closure, R6.1 blocked state, and R6.4 offline closeout are recorded", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(
       text,
@@ -168,11 +168,11 @@ test("R6 closure, R6.1 blocked state, R6.2 closeout, and R6.3 design are recorde
     );
     assert.match(
       text,
-      /B8-A7-R6\.3 runtime-remediation authorization design(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.3 runtime-remediation authorization design(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(
       text,
-      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)NOT STARTED/,
+      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)EXECUTED \/ EDI VERIFICATION PENDING/,
     );
     assert.match(
       text,

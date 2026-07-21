@@ -111,10 +111,11 @@ npm install --omit=dev --ignore-scripts
 
 ## 当前选定的同步模型
 
-当前同步设计见：
+当前同步设计与已完成的离线 rehearsal 见：
 
 ```text
 docs/smoke-tests/personal-runtime-remediation-authorization.md
+docs/smoke-tests/personal-runtime-candidate-rehearsal-decision-20260721.md
 ```
 
 选定流程是：
@@ -142,25 +143,53 @@ $HOME/.local/node24/bin/node \
 
 不要依赖 shell 当前的 `node` 或 `openclaw` shebang 解析结果。
 
+## 安装命令不是纯文件复制
+
+R6.4 隔离 rehearsal 证明，`openclaw plugins install` 会在 CLI 进程中导入 memory-engine，并可能初始化所选 OpenClaw state 下的 engine SQLite 与 LanceDB。
+
+因此真实同步必须：
+
+```text
+先停止并 quiesce Gateway
+先创建 D0
+记录 install 前的 engine SQLite 与 LanceDB 身份
+执行 install
+在 Gateway 启动前重新记录并比较数据身份
+任何未评审的语义数据变化都阻止启动
+```
+
+WAL/SHM housekeeping 必须单独记录，不能直接等同于逻辑数据变化。
+
+## 安装时必须使用稳定 cwd
+
+不能从将被替换的 runtime 目录执行安装或后续验证。R6.4 在 sandbox 中复现：安装成功替换 runtime 后，位于旧 runtime inode 内的 cwd 导致后续 CLI 报错：
+
+```text
+ENOENT: no such file or directory, uv_cwd
+```
+
+安装、rollback、inspect、parity 和 smoke 应从源码仓库根目录或 artifact root 等稳定目录执行。
+
 ## 当前阶段
 
 ```text
 B8-A7-R6.1 read-only baseline execution=PASSED
 B8-A7-R6.1 baseline decision=BASELINE BLOCKED
 B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
-B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
-B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
+B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING
 B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
 ```
 
 当前仍然禁止：
 
 ```text
-candidate build=NOT AUTHORIZED
-configuration mutation=NOT AUTHORIZED
-plugin install/reload=NOT AUTHORIZED
-Gateway stop/start/restart=NOT AUTHORIZED
-native dependency build=NOT AUTHORIZED
+live candidate install/reload=NOT AUTHORIZED
+live configuration mutation=NOT AUTHORIZED
+live Gateway stop/start/restart=NOT AUTHORIZED
+production D0 snapshot=NOT CREATED
+live memory-data restoration=NOT AUTHORIZED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED
 B8-A7 sustained runtime window=NOT AUTHORIZED

@@ -188,7 +188,7 @@ The artifact root must be mode `0700`. Config and manifest files containing loca
 
 ## R6.4 Offline Candidate Preparation
 
-R6.4 is the next stage after this design closes. It may build and validate the candidate but may not change the active OpenClaw environment.
+R6.4 is the next stage after this design closes. It may build and validate the candidate and rehearse supported installation only against a fully isolated OpenClaw home/state/config. It may not change the active OpenClaw environment.
 
 ### Source gate
 
@@ -448,17 +448,25 @@ no memory-engine process holds engine SQLite or LanceDB files
 
 Then create and verify D0.
 
+The install command is not assumed data-neutral. R6.4 later proved that OpenClaw imports memory-engine during install validation and may initialize memory-engine SQLite and LanceDB state in the selected OpenClaw state directory. Therefore D0 and pre-install store identities must exist before the live install command.
+
 ### 3. Install the validated candidate
 
-Use Node 24 explicitly:
+Use Node 24 explicitly from a stable working directory outside the active runtime, candidate, rollback tree, and OpenClaw stage/backup directories:
 
 ```bash
+cd /home/lionsol/.openclaw/workspace/plugins/memory-engine
+
 $HOME/.local/node24/bin/node \
   $HOME/.local/lib/node_modules/openclaw/openclaw.mjs \
   plugins install "$ARTIFACT_ROOT/candidate" --force
 ```
 
+Do not run the install or subsequent verification while the shell current working directory is inside the runtime being replaced. R6.4 reproduced `ENOENT: no such file or directory, uv_cwd` after a successful replacement invalidated such a cwd.
+
 The candidate already contains production dependencies. OpenClaw should treat this as a local directory update, stage the complete tree, scan it, move the old target to its internal temporary backup, publish the staged candidate, update the installed-plugin record, and remove its internal backup after success.
+
+OpenClaw may import memory-engine during installation validation. Before Gateway start, capture and compare engine SQLite and LanceDB identities against the post-D0 pre-install baseline. An unreviewed semantic data change blocks startup and requires the applicable rollback branch.
 
 The OpenClaw internal backup is not a substitute for R0 because it is removed after a successful install.
 
@@ -477,6 +485,9 @@ Node 24 native :memory: smoke passes against installed runtime
 config SHA-256 equals C0 unless a separately reviewed host mutation was expected
 active-memory boundary remains clean
 AutoRecall/full/evidence remain disabled
+engine SQLite semantic identity is unchanged unless separately reviewed
+LanceDB logical identity is unchanged unless separately reviewed
+WAL/SHM housekeeping is recorded separately from semantic data changes
 ```
 
 Any failure rolls back before Gateway start.
@@ -669,7 +680,8 @@ R6.3 design review
 
 R6.4 offline candidate and rollback rehearsal
   -> may create artifacts outside production paths
-  -> may not install, stop, reload, or restart
+  -> may rehearse install/rollback only with isolated HOME, OPENCLAW_STATE_DIR, and OPENCLAW_CONFIG_PATH
+  -> may not install into the active extension, stop, reload, or restart the real Gateway
 
 R6.5 live remediation execution authorization
   -> may approve one exact candidate, one exact artifact root, one exact command sequence, and one rollback branch
@@ -683,17 +695,16 @@ B8-A7 sustained runtime authorization
 
 ```text
 B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
-B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
-B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
+B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING
 B8-A7-R6.5 live remediation execution authorization=NOT STARTED
-candidate build=NOT AUTHORIZED
-config backup=NOT AUTHORIZED
-runtime backup=NOT AUTHORIZED
-memory-data backup=NOT AUTHORIZED
-configuration mutation=NOT AUTHORIZED
-plugin install/reload=NOT AUTHORIZED
-Gateway stop/start/restart=NOT AUTHORIZED
-native dependency build=NOT AUTHORIZED
+offline candidate build=PASSED / FROZEN EPHEMERAL ARTIFACT
+offline C0/R0 rehearsal copies=PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION
+D0 production memory-data backup=NOT CREATED
+live configuration mutation=NOT AUTHORIZED
+live plugin install/reload=NOT AUTHORIZED
+live Gateway stop/start/restart=NOT AUTHORIZED
+live native dependency build=NOT AUTHORIZED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED

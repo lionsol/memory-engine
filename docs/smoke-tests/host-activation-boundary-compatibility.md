@@ -214,23 +214,28 @@ The live installed extension does not contain the R6.2 fix until a separately au
 
 ## Next Gate
 
-R6.3 may design an exact personal runtime-remediation authorization only after EDI verifies R6.2.
+R6.3 and the R6.4 offline rehearsal are closed. The next gate is R6.5, which may authorize one exact live transaction only after independently verifying the ephemeral candidate and refreshing live recovery artifacts.
 
-R6.3 must bind:
+R6.5 must bind:
 
 ```text
 reviewed source commit
-runtime and config recovery artifacts
+frozen candidate path, tree hash, and build identity
+fresh C0/R0/H0 evidence
+quiesced D0 created after an authorized Gateway stop
+stable working directory outside replaced paths
+install-time pre/post data identity gate
 Gateway Node 24 installation environment
 exact install/synchronization action
-reload or restart action
+exact stop/start action
 post-install source/runtime parity=zero
 loaded preflight and healthcheck methods
 loaded tool registration evidence
 rollback procedure
+explicit operator approval
 ```
 
-R6.3 design does not itself authorize execution.
+R6.5 remains separate from sustained-runtime activation.
 
 ## Current Boundary
 
@@ -238,14 +243,14 @@ R6.3 design does not itself authorize execution.
 B8-A7-R6.1 read-only baseline execution=PASSED
 B8-A7-R6.1 baseline decision=BASELINE BLOCKED
 B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
-B8-A7-R6.3 runtime-remediation authorization design=IMPLEMENTED / EDI VERIFICATION PENDING
-B8-A7-R6.4 offline candidate and rollback rehearsal=NOT STARTED
+B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
+B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING
 B8-A7-R6.5 live remediation execution authorization=NOT STARTED
-candidate build=NOT AUTHORIZED
-configuration mutation=NOT AUTHORIZED
-plugin install/reload=NOT AUTHORIZED
-Gateway stop/start/restart=NOT AUTHORIZED
-native dependency build=NOT AUTHORIZED
+offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
+live configuration mutation=NOT AUTHORIZED
+live plugin install/reload=NOT AUTHORIZED
+live Gateway stop/start/restart=NOT AUTHORIZED
+live native dependency build=NOT AUTHORIZED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED

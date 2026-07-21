@@ -139,7 +139,10 @@ test("runtime sync documentation uses cold inspection and the Node 24 candidate 
   assert.match(doc, /personal-runtime-remediation-authorization\.md/);
   assert.match(doc, /npm ci --omit=dev/);
   assert.match(doc, /\$HOME\/\.local\/node24\/bin\/node/);
-  assert.match(doc, /candidate build=NOT AUTHORIZED/);
+  assert.match(doc, /offline candidate artifact=VALIDATED \/ FROZEN \/ EPHEMERAL/);
+  assert.match(doc, /personal-runtime-candidate-rehearsal-decision-20260721\.md/);
+  assert.match(doc, /uv_cwd/);
+  assert.match(doc, /安装命令不是纯文件复制/);
   assert.match(doc, /不要使用：?[\s\S]*plugins inspect memory-engine --runtime --json/);
   assert.doesNotMatch(doc, /应以以下命令返回的 `install\.installPath` 为权威值/);
   assert.doesNotMatch(doc, /\.\.\/\.\.\/extensions\/memory-engine/);

@@ -154,13 +154,12 @@ test("R6.3 separates offline preparation, live execution, and sustained authoriz
       "R6.5 live remediation execution authorization",
       "still requires explicit operator approval",
       "B8-A7 sustained runtime authorization",
-      "candidate build=NOT AUTHORIZED",
-      "config backup=NOT AUTHORIZED",
-      "runtime backup=NOT AUTHORIZED",
-      "memory-data backup=NOT AUTHORIZED",
-      "plugin install/reload=NOT AUTHORIZED",
-      "Gateway stop/start/restart=NOT AUTHORIZED",
-      "native dependency build=NOT AUTHORIZED",
+      "offline candidate build=PASSED / FROZEN EPHEMERAL ARTIFACT",
+      "offline C0/R0 rehearsal copies=PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION",
+      "D0 production memory-data backup=NOT CREATED",
+      "live plugin install/reload=NOT AUTHORIZED",
+      "live Gateway stop/start/restart=NOT AUTHORIZED",
+      "live native dependency build=NOT AUTHORIZED",
       "B8-A7 sustained runtime window=NOT AUTHORIZED",
       "B8-B removal=NOT AUTHORIZED",
     ],
@@ -181,14 +180,14 @@ test("runtime-sync routes operators to cold inspection and the R6.3 candidate mo
       "personal-runtime-remediation-authorization.md",
       "npm ci --omit=dev",
       "$HOME/.local/node24/bin/node",
-      "candidate build=NOT AUTHORIZED",
-      "plugin install/reload=NOT AUTHORIZED",
+      "offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL",
+      "live candidate install/reload=NOT AUTHORIZED",
     ],
     "runtime sync",
   );
 });
 
-test("ledger and devlog close R6.2 and register R6.3 without authorizing execution", () => {
+test("ledger and devlog close R6.3/R6.4 without authorizing live execution", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(
       text,
@@ -196,18 +195,18 @@ test("ledger and devlog close R6.2 and register R6.3 without authorizing executi
     );
     assert.match(
       text,
-      /B8-A7-R6\.3 runtime-remediation authorization design(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.3 runtime-remediation authorization design(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(
       text,
-      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)NOT STARTED/,
+      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)EXECUTED \/ EDI VERIFICATION PENDING/,
     );
     assert.match(
       text,
       /B8-A7-R6\.5 live remediation execution authorization(?:=|\s+)NOT STARTED/,
     );
-    assert.match(text, /plugin install\/reload(?:=|\s+)NOT AUTHORIZED/);
-    assert.match(text, /Gateway stop\/start\/restart(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /live plugin install\/reload(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /live Gateway stop\/start\/restart(?:=|\s+)NOT AUTHORIZED/);
     assert.match(
       text,
       /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/,
