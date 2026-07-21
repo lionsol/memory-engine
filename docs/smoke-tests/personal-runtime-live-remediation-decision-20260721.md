@@ -377,8 +377,10 @@ Current source-level result:
 B8-A7-R6.5 live remediation attempt=ROLLED BACK / SAFE
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 memory-engine-config-semantic-equivalence-v1 real preserved-config check=PASS
-R6.5 live retry=NOT AUTHORIZED
-explicit retry approval=NOT RECEIVED
+B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.2 live retry execution=NOT AUTHORIZED
+explicit R6.5.2 retry approval=NOT RECEIVED
+current recovery transaction root=REQUIRED / MUST REMAIN
 ```
 
 Repository closeout preflight after the safe rollback and R6.5.1 implementation:
@@ -410,6 +412,8 @@ new exact operator retry authorization
 ```
 
 The C0/R0/D0 artifacts from this completed rollback transaction are evidence and emergency recovery artifacts only. They are not fresh authorization inputs for a later retry.
+
+The independent retry contract is [`personal-runtime-live-remediation-retry-authorization-20260721.md`](personal-runtime-live-remediation-retry-authorization-20260721.md). It binds the unchanged candidate identities, preserves the current recovery transaction root, requires a new transaction root with fresh C0/R0/H0/D0, applies `memory-engine-config-semantic-equivalence-v1`, and requires a new exact R6.5.2 operator approval. It does not authorize retry execution.
 
 ## Repository and Final Runtime Verification
 
@@ -455,8 +459,11 @@ old runtime restored=true
 configuration restored to exact C0=true
 memory data restored from D0=false / NOT REQUIRED
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
-R6.5 live retry=NOT AUTHORIZED
-explicit retry approval=NOT RECEIVED
+B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.2 live retry execution=NOT AUTHORIZED
+explicit R6.5.2 retry approval=NOT RECEIVED
+fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
+current recovery transaction root=REQUIRED / MUST REMAIN
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED

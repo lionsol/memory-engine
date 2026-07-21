@@ -154,14 +154,15 @@ test("R6.5 records exact approval, safe rollback, and a separately gated retry",
   ], "R6.5 approval boundary");
 });
 
-test("ledger and devlog record the safe R6.5 rollback and pending retry repair", () => {
+test("ledger and devlog record the safe R6.5 rollback and pending R6.5.2 packet", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5 live remediation execution(?:=|\s+)ROLLED BACK \/ SAFE/);
     assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
     assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /R6\.5 live retry(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /B8-A7-R6\.5\.2 live remediation retry authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /R6\.5\.2 live retry execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/);
     assert.match(text, /B8-B removal(?:=|\s+)NOT AUTHORIZED/);
   }

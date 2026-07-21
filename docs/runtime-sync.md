@@ -230,8 +230,11 @@ old runtime restored=TRUE
 configuration restored to exact C0=TRUE
 memory data restored from D0=FALSE / NOT REQUIRED
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
-R6.5 live retry=NOT AUTHORIZED
-explicit retry approval=NOT RECEIVED
+B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.2 live retry execution=NOT AUTHORIZED
+explicit R6.5.2 retry approval=NOT RECEIVED
+fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
+current recovery transaction root=REQUIRED / MUST REMAIN
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
 candidate artifact identity=0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42
 final active runtime identity=86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e535b0a5a8152f1f1
@@ -240,10 +243,11 @@ final active runtime identity=86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e53
 当前仍然禁止：
 
 ```text
-live retry candidate install/reload=NOT AUTHORIZED
-live retry configuration mutation=NOT AUTHORIZED
-live retry Gateway stop/start/restart=NOT AUTHORIZED
-fresh retry C0/R0/D0=NOT CREATED
+R6.5.2 retry candidate install/reload=NOT AUTHORIZED
+R6.5.2 retry configuration mutation=NOT AUTHORIZED
+R6.5.2 retry Gateway stop/start/restart=NOT AUTHORIZED
+fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
+current recovery transaction root cleanup=NOT AUTHORIZED
 live memory-data restoration=NOT AUTHORIZED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED
@@ -251,9 +255,32 @@ B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED
 ```
 
+## R6.5.2 retry 授权边界
+
+当前 retry packet 见：
+
+```text
+docs/smoke-tests/personal-runtime-live-remediation-retry-authorization-20260721.md
+```
+
+它绑定相同 candidate identity，但要求全新的 transaction root、fresh C0/R0/H0/D0 和独立精确授权。旧 R6.5 approval 或普通“继续”均不能复用。
+
+执行授权文本必须包含：
+
+```text
+AUTHORIZE B8-A7-R6.5.2 LIVE REMEDIATION RETRY
+candidate artifact identity=0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42
+candidate runtime identity=dc459f5e9c2d55a03ca8af9f7e8b417839f88062069cba1dc354a48dc489d718
+config semantic policy=memory-engine-config-semantic-equivalence-v1
+fresh retry C0/R0/H0/D0 creation and Gateway stop/install/start are authorized
+conditional rollback to fresh retry R0, exact retry C0, and exact pre-start retry D0 is authorized on any defined stop condition
+```
+
+在该文本被完整收到前，不得创建 fresh retry artifacts 或停止 Gateway。
+
 ## 运行同步后的必要验证
 
-未来只有在已关闭的 R6.5.1 基础上获得新的精确 retry 授权，并重新创建 fresh C0/R0/H0/D0 后，才能再次验证：
+未来只有在 R6.5.2 packet 独立验证、提交并获得新的精确 retry 授权后，才能再次验证：
 
 ```text
 installed source/runtime parity=0

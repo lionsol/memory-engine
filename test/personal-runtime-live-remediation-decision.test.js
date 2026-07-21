@@ -96,12 +96,13 @@ test("R6.5 rollback restores old runtime exact C0 Gateway health and A5", () => 
   ], "R6.5 rollback closeout");
 });
 
-test("R6.5.1 is closed and a retry still requires new approval", () => {
+test("R6.5.1 is closed and R6.5.2 still requires new approval", () => {
   const decision = read(DECISION);
   requireTokens(decision, [
     "B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED",
-    "R6.5 live retry=NOT AUTHORIZED",
-    "explicit retry approval=NOT RECEIVED",
+    "B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING",
+    "R6.5.2 live retry execution=NOT AUTHORIZED",
+    "explicit R6.5.2 retry approval=NOT RECEIVED",
     "closed R6.5.1 implementation and independent verification",
     "fresh C0 and R0",
     "fresh D0",
@@ -111,7 +112,7 @@ test("R6.5.1 is closed and a retry still requires new approval", () => {
   ], "R6.5.1 boundary");
 });
 
-test("ledger and devlog record safe rollback and pending semantic repair", () => {
+test("ledger and devlog record safe rollback and pending R6.5.2 packet", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.5 live remediation execution(?:=|\s+)ROLLED BACK \/ SAFE/);
     assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
@@ -120,7 +121,8 @@ test("ledger and devlog record safe rollback and pending semantic repair", () =>
       text,
       /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/,
     );
-    assert.match(text, /R6\.5 live retry(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /B8-A7-R6\.5\.2 live remediation retry authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /R6\.5\.2 live retry execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(
       text,
       /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/,

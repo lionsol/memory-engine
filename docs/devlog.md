@@ -1,5 +1,29 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.5.2: bounded live remediation retry authorization
+
+Closed R6.5.1 after commit `6310673` and independent EDI verification: the requested 7-test scope passed 52/52, static check covered 529 files, the full suite completed with 1781 passed, 0 failed, and 8 skipped, A5 smoke passed 10/10, `git diff --check` was clean, and the worktree was clean.
+
+Read-only retry preflight confirmed the current Gateway remains healthy as PID `275493` under Node 24, the installed runtime still equals the rollback recovery R0 at identity `86d04dd7…f1f1`, the installed-plugin record still points to `/tmp/memory-engine-r6.5-live-2415dfe/runtime/r0`, the candidate artifact identity remains `0490e607…44f42`, and current source/candidate runtime identity remains `dc459f5…d718` with parity zero.
+
+Added an independent R6.5.2 retry authorization packet. It does not reuse the original R6.5 approval or prior C0/R0/H0/D0. A later retry must preserve the existing recovery transaction root, create a new mode-0700 transaction root with fresh C0/R0/H0/D0, use `memory-engine-config-semantic-equivalence-v1`, allow a bounded Gateway readiness interval, validate the two A7.4 methods and three memory-engine tools, and roll back only to the retry-specific fresh recovery artifacts.
+
+Repository preflight passed 64/64 focused R6.3-R6.5.2, semantic-config, artifact, ledger, and authorization tests; static check covered 530 files; and `git diff --check` passed. Source/candidate parity and active-runtime/current-R0 parity remained zero. No fresh retry artifact, Gateway stop/start/restart, candidate install, config mutation, or data restoration occurred.
+
+Current boundary:
+
+```text
+B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
+B8-A7-R6.5.2 live remediation retry authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.2 live retry execution=NOT AUTHORIZED
+explicit R6.5.2 retry approval=NOT RECEIVED
+fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
+current recovery transaction root=REQUIRED / MUST REMAIN
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6.5 execution: exact-byte stop and safe rollback
 
 Received the exact operator authorization for candidate artifact identity `0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42` and runtime identity `dc459f5e9c2d55a03ca8af9f7e8b417839f88062069cba1dc354a48dc489d718`, including conditional rollback authorization.
