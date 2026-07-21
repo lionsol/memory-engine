@@ -160,7 +160,7 @@ test("R6.4 preserves the real environment and keeps R6.5 separate", () => {
       "real_Gateway_stop/start/restart=not performed",
       "production_D0=not created",
       "offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL",
-      "B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING",
+      "B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED",
       "R6.5 live execution=NOT AUTHORIZED",
       "explicit operator approval=NOT RECEIVED",
       "live candidate install/reload=NOT AUTHORIZED",
@@ -184,7 +184,7 @@ test("ledger and devlog close R6.4 and register R6.5 without authorizing live re
     );
     assert.match(
       text,
-      /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(
       text,

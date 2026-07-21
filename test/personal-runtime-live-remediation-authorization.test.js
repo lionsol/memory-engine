@@ -155,7 +155,7 @@ test("R6.5 requires exact operator approval and remains non-executable", () => {
 test("ledger and devlog close R6.4 and register R6.5 without live authorization", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /R6\.5 live execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /explicit operator approval(?:=|\s+)NOT RECEIVED/);
     assert.match(text, /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/);

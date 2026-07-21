@@ -141,7 +141,7 @@ test("R6.2 contract records host activation ordering and live read-only closeout
       "B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED",
       "B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED",
       "B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED",
-      "B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING",
+      "B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED",
       "R6.5 live execution=NOT AUTHORIZED",
       "explicit operator approval=NOT RECEIVED",
       "live plugin install/reload=NOT AUTHORIZED",
@@ -178,7 +178,7 @@ test("R6 closure, R6.1 blocked state, and R6.4 offline closeout are recorded", (
     );
     assert.match(
       text,
-      /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(text, /R6\.5 live execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /explicit operator approval(?:=|\s+)NOT RECEIVED/);

@@ -203,7 +203,7 @@ test("ledger and devlog close R6.3/R6.4 and register R6.5 without authorizing li
     );
     assert.match(
       text,
-      /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(text, /R6\.5 live execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /explicit operator approval(?:=|\s+)NOT RECEIVED/);

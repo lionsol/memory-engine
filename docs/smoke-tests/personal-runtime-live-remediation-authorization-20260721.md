@@ -1,6 +1,6 @@
 # B8-A7-R6.5 Personal Runtime Live Remediation Authorization Packet
 
-> **Status: IMPLEMENTED / EDI VERIFICATION PENDING**
+> **Status: PASSED / CLOSED**
 >
 > **Live execution: NOT AUTHORIZED**
 >
@@ -672,7 +672,7 @@ These are repository and read-only artifact prechecks. Independent EDI verificat
 ```text
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
 B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
-B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED
 R6.5 live execution=NOT AUTHORIZED
 explicit operator approval=NOT RECEIVED
 candidate artifact=VALIDATED / FROZEN / EPHEMERAL

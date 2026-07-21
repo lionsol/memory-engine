@@ -697,7 +697,7 @@ B8-A7 sustained runtime authorization
 B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
 B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
-B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED
 R6.5 live execution=NOT AUTHORIZED
 explicit operator approval=NOT RECEIVED
 offline candidate build=PASSED / FROZEN EPHEMERAL ARTIFACT

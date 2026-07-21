@@ -45,7 +45,7 @@ Current remediation boundary:
     B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
     B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
     B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
-    B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+    B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED
     R6.5 live execution=NOT AUTHORIZED
     explicit operator approval=NOT RECEIVED
     offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
@@ -84,7 +84,7 @@ Current remediation boundary:
 | B8-A7-R6.2 host activation boundary compatibility | PASSED / CLOSED | Commit `9e60531` closed the resolver change after 67/67 focused/downstream tests, static check over 519 files, the full suite with 1737 passed and 8 skipped, and A5 smoke 10/10. Live config read-only verification returned `clean / disabled_by_plugins_allowlist`; the installed extension was not changed. |
 | B8-A7-R6.3 runtime-remediation authorization design | PASSED / CLOSED | Commit `9b6b734` closed the design after 39/39 focused tests, static check over 520 files, the full suite with 1746 passed and 8 skipped, and A5 smoke 10/10. It rejects direct workspace copy, direct archive native install, linked source, and CLI-local runtime inspection; selects a Node 24 dependency-complete candidate plus C0/R0/H0/D0 and explicit rollback. |
 | B8-A7-R6.4 offline candidate and rollback rehearsal | PASSED / CLOSED | Commit `59278a6` closed the independently verified rehearsal. Candidate runtime identity `dc459f5…d718`, native smokes, parity zero, independent C0/R0, and isolated candidate → R0 → candidate installation all passed; real config and Gateway remained unchanged. |
-| B8-A7-R6.5 live remediation execution authorization packet | IMPLEMENTED / EDI VERIFICATION PENDING | Binds candidate artifact identity `0490e607…44f42`, canonical artifact manifests, fresh C0/R0/D0, stable cwd, explicit Node 24 stop/install/start, install-time data identity gates, Gateway method/tool verification, and bounded rollback. Live execution remains unauthorized until explicit operator approval. |
+| B8-A7-R6.5 live remediation execution authorization packet | PASSED / CLOSED | Binds candidate artifact identity `0490e607…44f42`, canonical artifact manifests, fresh C0/R0/D0, stable cwd, explicit Node 24 stop/install/start, install-time data identity gates, Gateway method/tool verification, and bounded rollback. Live execution remains unauthorized until explicit operator approval. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -592,7 +592,7 @@ no pre-discovery authority barrier
 
 Operator-controlled cold plugin inspection, exact installed-runtime identity, and post-load Gateway evidence must agree. Uncertainty disables AutoRecall, automatic reinforcement, full modes, evidence collection, and any sustained epoch; it does not require blocking all plugin management or diagnostic loading.
 
-Current R6 state: `B8-A7-R6 personal deployment safety profile PASSED / CLOSED`; `personal deployment remediation runbook VERIFIED / CURRENT`; `B8-A7-R6.1 read-only baseline execution PASSED / BASELINE BLOCKED`; `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design PASSED / CLOSED`; `B8-A7-R6.4 offline candidate and rollback rehearsal PASSED / CLOSED`; `offline candidate artifact VALIDATED / FROZEN / EPHEMERAL`; `B8-A7-R6.5 live remediation execution authorization packet IMPLEMENTED / EDI VERIFICATION PENDING`; `R6.5 live execution NOT AUTHORIZED`; `explicit operator approval NOT RECEIVED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
+Current R6 state: `B8-A7-R6 personal deployment safety profile PASSED / CLOSED`; `personal deployment remediation runbook VERIFIED / CURRENT`; `B8-A7-R6.1 read-only baseline execution PASSED / BASELINE BLOCKED`; `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design PASSED / CLOSED`; `B8-A7-R6.4 offline candidate and rollback rehearsal PASSED / CLOSED`; `offline candidate artifact VALIDATED / FROZEN / EPHEMERAL`; `B8-A7-R6.5 live remediation execution authorization packet PASSED / CLOSED`; `R6.5 live execution NOT AUTHORIZED`; `explicit operator approval NOT RECEIVED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
 
 ## B8-A7-R6.1 Personal Deployment Read-Only Baseline
 
@@ -616,7 +616,7 @@ tests and A5 fail-closed smoke
 
 The allowed decision is only `BASELINE READY FOR SEPARATE MUTATION AUTHORIZATION` or `BASELINE BLOCKED`. Readiness does not authorize a config patch, backup, install/synchronization, native rebuild, plugin reload, Gateway restart, AutoRecall activation, production evidence, or an evidence epoch.
 
-Current R6.1 state: `B8-A7-R6.1 read-only baseline execution PASSED`; `B8-A7-R6.1 baseline decision BASELINE BLOCKED`; `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design PASSED / CLOSED`; `B8-A7-R6.4 offline candidate and rollback rehearsal PASSED / CLOSED`; `B8-A7-R6.5 live remediation execution authorization packet IMPLEMENTED / EDI VERIFICATION PENDING`; `R6.5 live execution NOT AUTHORIZED`; `live configuration mutation NOT AUTHORIZED`; `live plugin install/reload NOT AUTHORIZED`; `live Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+Current R6.1 state: `B8-A7-R6.1 read-only baseline execution PASSED`; `B8-A7-R6.1 baseline decision BASELINE BLOCKED`; `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design PASSED / CLOSED`; `B8-A7-R6.4 offline candidate and rollback rehearsal PASSED / CLOSED`; `B8-A7-R6.5 live remediation execution authorization packet PASSED / CLOSED`; `R6.5 live execution NOT AUTHORIZED`; `live configuration mutation NOT AUTHORIZED`; `live plugin install/reload NOT AUTHORIZED`; `live Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
 
 ## B8-A7-R6.3 Personal Runtime Remediation Authorization Design
 
@@ -647,7 +647,7 @@ The later transaction must bind C0 exact config, R0 exact current runtime, H0 ho
 
 R6.3 did not authorize live mutation. R6.4 subsequently exercised the build and rollback contract only under `/tmp` and an isolated OpenClaw state. R6.5 remains the separate live execution authorization.
 
-Current R6.3 state: `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design PASSED / CLOSED`; `B8-A7-R6.4 offline candidate and rollback rehearsal PASSED / CLOSED`; `B8-A7-R6.5 live remediation execution authorization packet IMPLEMENTED / EDI VERIFICATION PENDING`; `R6.5 live execution NOT AUTHORIZED`; `offline candidate artifact VALIDATED / FROZEN / EPHEMERAL`; `live plugin install/reload NOT AUTHORIZED`; `live Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+Current R6.3 state: `B8-A7-R6.2 host activation boundary compatibility PASSED / CLOSED`; `B8-A7-R6.3 runtime-remediation authorization design PASSED / CLOSED`; `B8-A7-R6.4 offline candidate and rollback rehearsal PASSED / CLOSED`; `B8-A7-R6.5 live remediation execution authorization packet PASSED / CLOSED`; `R6.5 live execution NOT AUTHORIZED`; `offline candidate artifact VALIDATED / FROZEN / EPHEMERAL`; `live plugin install/reload NOT AUTHORIZED`; `live Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
 
 ## B8-A7-R6.4 Offline Candidate and Rollback Rehearsal
 
@@ -693,7 +693,7 @@ R6.4 added two live-execution constraints. First, `plugins install` imports memo
 
 The `/tmp` candidate is ephemeral. Its path or filename alone is never sufficient evidence. R6.5 must reverify every hash and identity or rebuild the artifact under the same contract.
 
-Current R6.4 state: `B8-A7-R6.4 offline candidate and rollback rehearsal PASSED / CLOSED`; `offline candidate artifact VALIDATED / FROZEN / EPHEMERAL`; `C0/R0 rehearsal PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION`; `D0 quiesced production data snapshot NOT CREATED`; `B8-A7-R6.5 live remediation execution authorization packet IMPLEMENTED / EDI VERIFICATION PENDING`; `R6.5 live execution NOT AUTHORIZED`; `explicit operator approval NOT RECEIVED`; `live plugin install/reload NOT AUTHORIZED`; `live Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+Current R6.4 state: `B8-A7-R6.4 offline candidate and rollback rehearsal PASSED / CLOSED`; `offline candidate artifact VALIDATED / FROZEN / EPHEMERAL`; `C0/R0 rehearsal PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION`; `D0 quiesced production data snapshot NOT CREATED`; `B8-A7-R6.5 live remediation execution authorization packet PASSED / CLOSED`; `R6.5 live execution NOT AUTHORIZED`; `explicit operator approval NOT RECEIVED`; `live plugin install/reload NOT AUTHORIZED`; `live Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
 
 ## B8-A7-R6.5 Live Runtime Remediation Authorization Packet
 
@@ -712,7 +712,7 @@ The packet requires fresh C0 and R0 before stop, a quiesced D0 after stop, stabl
 
 Execution remains separate. It requires the exact operator approval text naming candidate artifact identity `0490e607…44f42`; a generic continuation instruction is insufficient. Until then, no configuration mutation, plugin install, Gateway stop/start/restart, D0 creation, or data restoration is authorized.
 
-Current R6.5 state: `B8-A7-R6.5 live remediation execution authorization packet IMPLEMENTED / EDI VERIFICATION PENDING`; `R6.5 live execution NOT AUTHORIZED`; `explicit operator approval NOT RECEIVED`; `fresh C0 NOT CREATED`; `fresh R0 NOT CREATED`; `production D0 NOT CREATED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+Current R6.5 state: `B8-A7-R6.5 live remediation execution authorization packet PASSED / CLOSED`; `R6.5 live execution NOT AUTHORIZED`; `explicit operator approval NOT RECEIVED`; `fresh C0 NOT CREATED`; `fresh R0 NOT CREATED`; `production D0 NOT CREATED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
 
 Historical A7.2 review state: implementation checkpoint `59a4f3e` was `IMPLEMENTED / REVIEW CHANGES REQUIRED`; checkpoint `eec0f91` closed the four main origin/continuity findings but remained review-pending for TTL cleanup ordering and primitive thresholds JSON. Checkpoint `47389d3` closed those final findings.
 

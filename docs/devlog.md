@@ -16,7 +16,7 @@ Current boundary:
 
 ```text
 B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
-B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED
 R6.5 live execution=NOT AUTHORIZED
 explicit operator approval=NOT RECEIVED
 candidate artifact=VALIDATED / FROZEN / EPHEMERAL
@@ -55,7 +55,7 @@ B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
 C0/R0 rehearsal copies=PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION
 D0 quiesced production data snapshot=NOT CREATED
-B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED
 R6.5 live execution=NOT AUTHORIZED
 explicit operator approval=NOT RECEIVED
 live configuration mutation=NOT AUTHORIZED
