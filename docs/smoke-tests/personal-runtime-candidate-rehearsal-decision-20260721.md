@@ -1,6 +1,6 @@
 # B8-A7-R6.4 Offline Candidate and Rollback Rehearsal Decision
 
-> **Execution result: PASS / EDI VERIFICATION PENDING**
+> **Decision: PASSED / CLOSED**
 >
 > Date: 2026-07-21
 >
@@ -12,7 +12,7 @@
 
 ## Decision Summary
 
-R6.4 execution passed. Repository closeout remains pending independent EDI verification.
+R6.4 execution passed and independent EDI verification closed the stage at commit `59278a6`.
 
 A dependency-complete memory-engine candidate was built from the reviewed clean source under Node `v24.8.0` / `NODE_MODULE_VERSION 137`, validated against the exact lockfile, exercised through real `better-sqlite3` and disposable LanceDB operations, proven source/runtime-identical, frozen against accidental writes, installed through an isolated OpenClaw `2026.6.9` state, rolled back through the same supported plugin-install surface, and installed forward again.
 
@@ -423,13 +423,15 @@ These results are repository preflight evidence. Independent EDI verification is
 ```text
 B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
-B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING
+B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
 C0 rehearsal copy=PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION
 R0 rehearsal copy=PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION
 sandbox forward rollback forward rehearsal=PASS
 D0 quiesced production data snapshot=NOT CREATED
-B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live execution=NOT AUTHORIZED
+explicit operator approval=NOT RECEIVED
 live candidate install/reload=NOT AUTHORIZED
 live Gateway stop/start/restart=NOT AUTHORIZED
 live configuration mutation=NOT AUTHORIZED

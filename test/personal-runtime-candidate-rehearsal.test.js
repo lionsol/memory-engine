@@ -36,7 +36,7 @@ test("R6.4 binds reviewed source, archive, candidate, and native identities", ()
   requireTokens(
     decision,
     [
-      "Execution result: PASS / EDI VERIFICATION PENDING",
+      "Decision: PASSED / CLOSED",
       "9b6b734f321b5708e621cdd7a6dba92a5dd0e036",
       "full_suite=1746 pass / 0 fail / 8 skip",
       "sha256=acbc27b55d0863fbff5dada85eec40993186012802eaba1a1291e132d194697b",
@@ -160,7 +160,9 @@ test("R6.4 preserves the real environment and keeps R6.5 separate", () => {
       "real_Gateway_stop/start/restart=not performed",
       "production_D0=not created",
       "offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL",
-      "B8-A7-R6.5 live remediation execution authorization=NOT STARTED",
+      "B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING",
+      "R6.5 live execution=NOT AUTHORIZED",
+      "explicit operator approval=NOT RECEIVED",
       "live candidate install/reload=NOT AUTHORIZED",
       "live Gateway stop/start/restart=NOT AUTHORIZED",
       "B8-A7 sustained runtime window=NOT AUTHORIZED",
@@ -170,7 +172,7 @@ test("R6.4 preserves the real environment and keeps R6.5 separate", () => {
   );
 });
 
-test("ledger and devlog record executed R6.4 without authorizing live remediation", () => {
+test("ledger and devlog close R6.4 and register R6.5 without authorizing live remediation", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(
       text,
@@ -178,16 +180,18 @@ test("ledger and devlog record executed R6.4 without authorizing live remediatio
     );
     assert.match(
       text,
-      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)EXECUTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(
       text,
-      /B8-A7-R6\.5 live remediation execution authorization(?:=|\s+)NOT STARTED/,
+      /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
     );
     assert.match(
       text,
       /offline candidate artifact(?:=|\s+)VALIDATED \/ FROZEN \/ EPHEMERAL/,
     );
+    assert.match(text, /R6\.5 live execution(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /explicit operator approval(?:=|\s+)NOT RECEIVED/);
     assert.match(text, /live plugin install\/reload(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /live Gateway stop\/start\/restart(?:=|\s+)NOT AUTHORIZED/);
   }

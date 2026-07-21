@@ -187,7 +187,7 @@ test("runtime-sync routes operators to cold inspection and the R6.3 candidate mo
   );
 });
 
-test("ledger and devlog close R6.3/R6.4 without authorizing live execution", () => {
+test("ledger and devlog close R6.3/R6.4 and register R6.5 without authorizing live execution", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(
       text,
@@ -199,12 +199,14 @@ test("ledger and devlog close R6.3/R6.4 without authorizing live execution", () 
     );
     assert.match(
       text,
-      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)EXECUTED \/ EDI VERIFICATION PENDING/,
+      /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)PASSED \/ CLOSED/,
     );
     assert.match(
       text,
-      /B8-A7-R6\.5 live remediation execution authorization(?:=|\s+)NOT STARTED/,
+      /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/,
     );
+    assert.match(text, /R6\.5 live execution(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /explicit operator approval(?:=|\s+)NOT RECEIVED/);
     assert.match(text, /live plugin install\/reload(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /live Gateway stop\/start\/restart(?:=|\s+)NOT AUTHORIZED/);
     assert.match(

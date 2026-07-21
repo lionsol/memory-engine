@@ -449,8 +449,10 @@ Current follow-up state:
 ```text
 B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
-B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING
-B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
+B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live execution=NOT AUTHORIZED
+explicit operator approval=NOT RECEIVED
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
 live configuration mutation=NOT AUTHORIZED
 live plugin install/reload=NOT AUTHORIZED

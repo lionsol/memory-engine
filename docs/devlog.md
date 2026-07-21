@@ -1,5 +1,35 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.5: live runtime remediation authorization packet
+
+Closed R6.4 after commit `59278a6` and independent EDI verification. The frozen candidate remains runtime-closure identical to the current source at `dc459f5e9c2d55a03ca8af9f7e8b417839f88062069cba1dc354a48dc489d718`; the active extension remains at `86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e535b0a5a8152f1f1` with 28 differences, and the rehearsal R0 still matches that active runtime.
+
+Added a deterministic report-only artifact manifest that covers path, type, permission mode, file size/content hash, symlink target, and internal hardlink membership while rejecting external symlinks, external hardlink references, special files, and unreadable entries. Fresh manifests bound the frozen candidate to `0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42` and the rehearsal R0 to `bf0e9b53ce7e712d2a34f2ffc3584aa86c55f8c8a9e6a90e5160e9d5f3cde78e`.
+
+The R6.5 authorization packet now requires fresh C0/R0 before stop, D0 after quiesce, stable-cwd Node 24 commands, candidate install while the Gateway is stopped, exact pre/post-install memory-data identity equality, installed parity and native validation before start, Gateway preflight and tool/method registration after start, and bounded rollback to the transaction-specific recovery artifacts.
+
+Live execution remains separate and requires explicit operator approval naming candidate artifact identity `0490e607…44f42`; a generic continuation instruction is not sufficient. No config mutation, live install, Gateway stop/start/restart, D0 snapshot, data restoration, AutoRecall activation, production evidence activation, push, tag, or release was performed.
+
+Repository preflight passed 55/55 focused R6.3-R6.5 and authorization-chain tests, 4/4 artifact-manifest unit/CLI tests, static check over 525 files, the full suite with 1767 passed, 0 failed, and 8 skipped, A5 smoke 10/10, and `git diff --check`. Current source/candidate runtime parity remained zero and the candidate artifact identity remained `0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42`.
+
+Current boundary:
+
+```text
+B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
+B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live execution=NOT AUTHORIZED
+explicit operator approval=NOT RECEIVED
+candidate artifact=VALIDATED / FROZEN / EPHEMERAL
+fresh C0=NOT CREATED
+fresh R0=NOT CREATED
+production D0=NOT CREATED
+live plugin install/reload=NOT AUTHORIZED
+live Gateway stop/start/restart=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6.4: offline candidate and rollback rehearsal
 
 Closed R6.3 after commit `9b6b734` and EDI verification: 39/39 focused tests passed, static check covered 520 files, the full suite completed with 1746 passed, 0 failed, and 8 skipped, A5 smoke passed 10/10, and `git diff --check` was clean.
@@ -21,11 +51,13 @@ Current boundary:
 ```text
 B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
-B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING
+B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
 C0/R0 rehearsal copies=PASS / REFRESH REQUIRED BEFORE LIVE EXECUTION
 D0 quiesced production data snapshot=NOT CREATED
-B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live execution=NOT AUTHORIZED
+explicit operator approval=NOT RECEIVED
 live configuration mutation=NOT AUTHORIZED
 live plugin install/reload=NOT AUTHORIZED
 live Gateway stop/start/restart=NOT AUTHORIZED

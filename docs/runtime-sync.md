@@ -116,6 +116,7 @@ npm install --omit=dev --ignore-scripts
 ```text
 docs/smoke-tests/personal-runtime-remediation-authorization.md
 docs/smoke-tests/personal-runtime-candidate-rehearsal-decision-20260721.md
+docs/smoke-tests/personal-runtime-live-remediation-authorization-20260721.md
 ```
 
 选定流程是：
@@ -129,8 +130,9 @@ clean reviewed source
   -> better-sqlite3 :memory: smoke
   -> disposable LanceDB smoke
   -> source/candidate parity=0
-  -> 创建 candidate manifest
-  -> 单独授权后由 OpenClaw 从 dependency-complete candidate 目录安装
+  -> 用 memory-engine-runtime-artifact-manifest-v1 精确绑定 candidate
+  -> fresh C0/R0/D0 与安装前后数据身份门
+  -> 单独明确授权后由 OpenClaw 从 dependency-complete candidate 目录安装
 ```
 
 OpenClaw 命令必须由 Gateway 同一 Node 明确执行：
@@ -177,9 +179,12 @@ B8-A7-R6.1 read-only baseline execution=PASSED
 B8-A7-R6.1 baseline decision=BASELINE BLOCKED
 B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
-B8-A7-R6.4 offline candidate and rollback rehearsal=EXECUTED / EDI VERIFICATION PENDING
-B8-A7-R6.5 live remediation execution authorization=NOT STARTED
+B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
+B8-A7-R6.5 live remediation execution authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live execution=NOT AUTHORIZED
+explicit operator approval=NOT RECEIVED
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
+candidate artifact identity=0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42
 ```
 
 当前仍然禁止：
