@@ -117,6 +117,7 @@ npm install --omit=dev --ignore-scripts
 docs/smoke-tests/personal-runtime-remediation-authorization.md
 docs/smoke-tests/personal-runtime-candidate-rehearsal-decision-20260721.md
 docs/smoke-tests/personal-runtime-live-remediation-authorization-20260721.md
+docs/smoke-tests/personal-runtime-live-remediation-decision-20260721.md
 ```
 
 选定流程是：
@@ -172,6 +173,48 @@ ENOENT: no such file or directory, uv_cwd
 
 安装、rollback、inspect、parity 和 smoke 应从源码仓库根目录或 artifact root 等稳定目录执行。
 
+## 配置等价门
+
+首次 R6.5 live transaction 证明，OpenClaw `plugins install` 会更新 host bookkeeping 字段：
+
+```text
+meta.lastTouchedAt
+```
+
+该变化会破坏 exact-byte equality，但不改变 memory-engine、AutoRecall、Hybrid、active-memory、tool、channel、model 或 security 配置。首次事务仍按当时合同执行 stop/rollback，candidate 未由 Gateway 启动。
+
+重试只能使用：
+
+```bash
+$HOME/.local/node24/bin/node \
+  bin/build-config-semantic-equivalence-report.js \
+  --before <fresh-C0> \
+  --after <post-install-config> \
+  --pretty
+```
+
+允许结果必须是：
+
+```text
+policy=memory-engine-config-semantic-equivalence-v1
+status=exact_equal
+```
+
+或：
+
+```text
+policy=memory-engine-config-semantic-equivalence-v1
+status=approved_host_metadata_change
+changed_paths=[meta.lastTouchedAt]
+unexpected_changed_paths=[]
+canonical_semantic_equal=true
+last_touched_at.before_valid=true
+last_touched_at.after_valid=true
+last_touched_at.monotonic=true
+```
+
+任何其他路径、逆序/非法时间戳、symlink config 或 semantic hash 差异仍然 rollback。
+
 ## 当前阶段
 
 ```text
@@ -181,19 +224,26 @@ B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
 B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
 B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED
-R6.5 live execution=NOT AUTHORIZED
-explicit operator approval=NOT RECEIVED
+B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE
+candidate Gateway activation=NOT REACHED
+old runtime restored=TRUE
+configuration restored to exact C0=TRUE
+memory data restored from D0=FALSE / NOT REQUIRED
+B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live retry=NOT AUTHORIZED
+explicit retry approval=NOT RECEIVED
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
 candidate artifact identity=0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42
+final active runtime identity=86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e535b0a5a8152f1f1
 ```
 
 当前仍然禁止：
 
 ```text
-live candidate install/reload=NOT AUTHORIZED
-live configuration mutation=NOT AUTHORIZED
-live Gateway stop/start/restart=NOT AUTHORIZED
-production D0 snapshot=NOT CREATED
+live retry candidate install/reload=NOT AUTHORIZED
+live retry configuration mutation=NOT AUTHORIZED
+live retry Gateway stop/start/restart=NOT AUTHORIZED
+fresh retry C0/R0/D0=NOT CREATED
 live memory-data restoration=NOT AUTHORIZED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED
@@ -203,7 +253,7 @@ B8-B removal=NOT AUTHORIZED
 
 ## 运行同步后的必要验证
 
-未来只有在 R6.5 明确授权并执行后，才能验证：
+未来只有在 R6.5.1 独立验证、提交并获得新的精确 retry 授权后，才能再次验证：
 
 ```text
 installed source/runtime parity=0

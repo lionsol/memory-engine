@@ -26,7 +26,7 @@ test("R6.5 live remediation packet and artifact manifest tooling exist and are i
   for (const url of [PACKET, MANIFEST_CLI, MANIFEST_LIB]) assert.equal(existsSync(url), true);
   const index = read(INDEX);
   assert.match(index, /personal-runtime-live-remediation-authorization-20260721\.md/);
-  assert.match(index, /R6\.5 implemented \/ verification pending/);
+  assert.match(index, /R6\.5 passed \/ closed/);
 });
 
 test("R6.5 binds the exact runtime and reproducible artifact identities", () => {
@@ -136,28 +136,32 @@ test("R6.5 defines bounded rollback and keeps sustained authorization separate",
   ], "R6.5 rollback boundary");
 });
 
-test("R6.5 requires exact operator approval and remains non-executable", () => {
+test("R6.5 records exact approval, safe rollback, and a separately gated retry", () => {
   const packet = read(PACKET);
   requireTokens(packet, [
     "A generic “continue” is not sufficient for this phase",
     "AUTHORIZE B8-A7-R6.5 LIVE REMEDIATION",
     "candidate artifact identity=0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42",
-    "R6.5 live execution=NOT AUTHORIZED",
-    "explicit operator approval=NOT RECEIVED",
-    "fresh C0=NOT CREATED",
-    "fresh R0=NOT CREATED",
-    "production D0=NOT CREATED",
-    "live plugin install/reload=NOT AUTHORIZED",
-    "live Gateway stop/start/restart=NOT AUTHORIZED",
+    "B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE",
+    "candidate Gateway activation=NOT REACHED",
+    "old runtime restored=TRUE",
+    "B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING",
+    "R6.5 live retry=NOT AUTHORIZED",
+    "explicit retry approval=NOT RECEIVED",
+    "fresh retry C0/R0/D0=NOT CREATED",
+    "live retry plugin install/reload=NOT AUTHORIZED",
+    "live retry Gateway stop/start/restart=NOT AUTHORIZED",
   ], "R6.5 approval boundary");
 });
 
-test("ledger and devlog close R6.4 and register R6.5 without live authorization", () => {
+test("ledger and devlog record the safe R6.5 rollback and pending retry repair", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.4 offline candidate and rollback rehearsal(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /R6\.5 live execution(?:=|\s+)NOT AUTHORIZED/);
-    assert.match(text, /explicit operator approval(?:=|\s+)NOT RECEIVED/);
+    assert.match(text, /B8-A7-R6\.5 live remediation execution(?:=|\s+)ROLLED BACK \/ SAFE/);
+    assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
+    assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /R6\.5 live retry(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/);
     assert.match(text, /B8-B removal(?:=|\s+)NOT AUTHORIZED/);
   }

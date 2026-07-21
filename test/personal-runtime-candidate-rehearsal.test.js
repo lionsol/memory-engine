@@ -161,10 +161,14 @@ test("R6.4 preserves the real environment and keeps R6.5 separate", () => {
       "production_D0=not created",
       "offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL",
       "B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED",
-      "R6.5 live execution=NOT AUTHORIZED",
-      "explicit operator approval=NOT RECEIVED",
-      "live candidate install/reload=NOT AUTHORIZED",
-      "live Gateway stop/start/restart=NOT AUTHORIZED",
+      "B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE",
+      "candidate Gateway activation=NOT REACHED",
+      "old runtime restored=TRUE",
+      "B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING",
+      "R6.5 live retry=NOT AUTHORIZED",
+      "explicit retry approval=NOT RECEIVED",
+      "live retry candidate install/reload=NOT AUTHORIZED",
+      "live retry Gateway stop/start/restart=NOT AUTHORIZED",
       "B8-A7 sustained runtime window=NOT AUTHORIZED",
       "B8-B removal=NOT AUTHORIZED",
     ],
@@ -172,7 +176,7 @@ test("R6.4 preserves the real environment and keeps R6.5 separate", () => {
   );
 });
 
-test("ledger and devlog close R6.4 and register R6.5 without authorizing live remediation", () => {
+test("ledger and devlog retain R6.4 closeout and record the later safe R6.5 rollback", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(
       text,
@@ -190,9 +194,9 @@ test("ledger and devlog close R6.4 and register R6.5 without authorizing live re
       text,
       /offline candidate artifact(?:=|\s+)VALIDATED \/ FROZEN \/ EPHEMERAL/,
     );
-    assert.match(text, /R6\.5 live execution(?:=|\s+)NOT AUTHORIZED/);
-    assert.match(text, /explicit operator approval(?:=|\s+)NOT RECEIVED/);
-    assert.match(text, /live plugin install\/reload(?:=|\s+)NOT AUTHORIZED/);
-    assert.match(text, /live Gateway stop\/start\/restart(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /B8-A7-R6\.5 live remediation execution(?:=|\s+)ROLLED BACK \/ SAFE/);
+    assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
+    assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /R6\.5 live retry(?:=|\s+)NOT AUTHORIZED/);
   }
 });

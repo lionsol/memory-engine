@@ -665,7 +665,29 @@ candidate artifact manifest identity=0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd4
 live runtime/config/Gateway mutation=none
 ```
 
-These are repository and read-only artifact prechecks. Independent EDI verification remains required before this packet may close.
+These repository and read-only artifact prechecks were independently verified before the packet closed at commit `0665de6`; the status-only closeout was committed at `2415dfe`.
+
+## Post-Execution Decision
+
+The exact operator authorization was later received and the live transaction executed. The canonical decision is [`personal-runtime-live-remediation-decision-20260721.md`](personal-runtime-live-remediation-decision-20260721.md).
+
+```text
+candidate install=pass
+D_POST_INSTALL identities=D_PRE_INSTALL identities
+installed candidate parity=0
+installed native checks=pass
+candidate Gateway activation=not reached
+exact-byte config gate=failed
+changed JSON paths=[meta.lastTouchedAt]
+authorized rollback=pass
+old runtime restored=true
+exact C0 restored=true
+D0 restoration=false / not required
+final Gateway healthy=true
+A5 smoke=10/10 pass
+```
+
+R6.5.1 introduces `memory-engine-config-semantic-equivalence-v1`, which permits only a canonical monotonic `meta.lastTouchedAt` update as the sole changed JSON path. It remains source-only and pending independent EDI verification. A retry is not authorized by the original execution approval.
 
 ## Current Boundary
 
@@ -673,14 +695,19 @@ These are repository and read-only artifact prechecks. Independent EDI verificat
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
 B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
 B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED
-R6.5 live execution=NOT AUTHORIZED
-explicit operator approval=NOT RECEIVED
+B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE
+candidate Gateway activation=NOT REACHED
+candidate currently active=FALSE
+old runtime restored=TRUE
+configuration restored to exact C0=TRUE
+memory data restored from D0=FALSE / NOT REQUIRED
+B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live retry=NOT AUTHORIZED
+explicit retry approval=NOT RECEIVED
 candidate artifact=VALIDATED / FROZEN / EPHEMERAL
-fresh C0=NOT CREATED
-fresh R0=NOT CREATED
-production D0=NOT CREATED
-live plugin install/reload=NOT AUTHORIZED
-live Gateway stop/start/restart=NOT AUTHORIZED
+fresh retry C0/R0/D0=NOT CREATED
+live retry plugin install/reload=NOT AUTHORIZED
+live retry Gateway stop/start/restart=NOT AUTHORIZED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED

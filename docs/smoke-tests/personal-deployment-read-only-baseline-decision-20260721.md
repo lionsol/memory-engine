@@ -451,15 +451,21 @@ B8-A7-R6.2 host activation boundary compatibility=PASSED / CLOSED
 B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED
 B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED
 B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED
-R6.5 live execution=NOT AUTHORIZED
-explicit operator approval=NOT RECEIVED
+B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE
+candidate Gateway activation=NOT REACHED
+old runtime restored=TRUE
+configuration restored to exact C0=TRUE
+memory data restored from D0=FALSE / NOT REQUIRED
+B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live retry=NOT AUTHORIZED
+explicit retry approval=NOT RECEIVED
 offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
-live configuration mutation=NOT AUTHORIZED
-live plugin install/reload=NOT AUTHORIZED
-live Gateway stop/start/restart=NOT AUTHORIZED
-production D0 snapshot=NOT CREATED
+live retry configuration mutation=NOT AUTHORIZED
+live retry plugin install/reload=NOT AUTHORIZED
+live retry Gateway stop/start/restart=NOT AUTHORIZED
+fresh retry D0 snapshot=NOT CREATED
 ```
 
-The R6.3 design is [`personal-runtime-remediation-authorization.md`](personal-runtime-remediation-authorization.md). The completed R6.4 rehearsal is [`personal-runtime-candidate-rehearsal-decision-20260721.md`](personal-runtime-candidate-rehearsal-decision-20260721.md). It validated a dependency-complete Node 24 candidate and isolated forward/rollback/forward installation while preserving the separate R6.5 live execution authorization.
+The R6.3 design is [`personal-runtime-remediation-authorization.md`](personal-runtime-remediation-authorization.md). The completed R6.4 rehearsal is [`personal-runtime-candidate-rehearsal-decision-20260721.md`](personal-runtime-candidate-rehearsal-decision-20260721.md). The R6.5 execution and safe rollback are recorded in [`personal-runtime-live-remediation-decision-20260721.md`](personal-runtime-live-remediation-decision-20260721.md); candidate Gateway activation was not reached, so the installed-runtime blockers remain unresolved.
 
 R6.1 remains `BASELINE BLOCKED` because installed runtime parity and loaded A7.4 method blockers remain unresolved.

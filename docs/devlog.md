@@ -1,5 +1,38 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.5 execution: exact-byte stop and safe rollback
+
+Received the exact operator authorization for candidate artifact identity `0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42` and runtime identity `dc459f5e9c2d55a03ca8af9f7e8b417839f88062069cba1dc354a48dc489d718`, including conditional rollback authorization.
+
+Final preflight revalidated the frozen candidate, Node 24 native SQLite/LanceDB smokes, safe host configuration, Gateway health, and the old runtime identity. Fresh C0 and R0 were created under `/tmp/memory-engine-r6.5-live-2415dfe`; the Gateway stopped cleanly, port 18789 closed, old PID `676` exited, and no memory-store holder remained. Fresh D0 copies of engine SQLite and LanceDB matched their live canonical artifact identities with zero shared file inodes. The core DB was not copied or manipulated.
+
+Candidate installation while stopped succeeded. Engine identity `3de94ff5…edda3` and LanceDB identity `8b09acea…e8044` remained unchanged, source/installed parity reached zero, resolved dependencies were `better-sqlite3 11.10.0` and `@lancedb/lancedb 0.29.0`, and the installed Node 24 native smoke passed.
+
+The pre-start exact-byte config gate then failed: C0 SHA-256 was `da9e443c…6f2a`, while post-install SHA-256 was `e6fcbb6e…e2a9`. The Gateway was never started with the candidate. The authorized rollback reinstalled fresh R0, restored exact C0, preserved both memory-data identities without D0 restoration, and restarted the old runtime as Gateway PID `275493`. Gateway RPC became healthy after normal startup latency, safe feature state remained unchanged, and A5 smoke passed 10/10.
+
+Post-rollback repository closeout passed 56/56 focused execution/authorization/config tests, 7/7 semantic-equivalence unit/CLI tests, static check over 529 files, the full suite with 1781 passed, 0 failed, and 8 skipped, A5 smoke 10/10, and `git diff --check`. Final engine and LanceDB identities still matched `D_PRE_INSTALL`, exact C0 remained restored, and the installed runtime remained equal to fresh R0.
+
+A correct recursive JSON diff found one change only: `meta.lastTouchedAt`, from `2026-07-19T08:01:53.000Z` to `2026-07-21T11:55:54.599Z`. Added `memory-engine-config-semantic-equivalence-v1`, a report-only fail-closed comparator that permits only this canonical monotonic host timestamp path and rejects every other config change without emitting secret values. The preserved real transaction pair returns `approved_host_metadata_change`, canonical semantic equality, and no unexpected paths.
+
+Repository and closeout validation passed 70/70 focused R6.1-R6.5.1 and authorization-chain tests, 7/7 semantic-equivalence unit/CLI tests, static check over 529 files, the full suite with 1781 passed, 0 failed, and 8 skipped, A5 smoke 10/10, and `git diff --check`. Final read-only production verification confirmed Gateway PID `275493`, exact C0 bytes, old runtime/R0 parity zero, source/candidate parity zero, and unchanged final engine/LanceDB identities. The transaction root `/tmp/memory-engine-r6.5-live-2415dfe` must remain because the current install record points to its fresh R0 source path.
+
+Current boundary:
+
+```text
+B8-A7-R6.5 authorization packet=PASSED / CLOSED
+B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE
+candidate Gateway activation=NOT REACHED
+old runtime restored=TRUE
+configuration restored to exact C0=TRUE
+memory data restored from D0=FALSE / NOT REQUIRED
+B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5 live retry=NOT AUTHORIZED
+explicit retry approval=NOT RECEIVED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6.5: live runtime remediation authorization packet
 
 Closed R6.4 after commit `59278a6` and independent EDI verification. The frozen candidate remains runtime-closure identical to the current source at `dc459f5e9c2d55a03ca8af9f7e8b417839f88062069cba1dc354a48dc489d718`; the active extension remains at `86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e535b0a5a8152f1f1` with 28 differences, and the rehearsal R0 still matches that active runtime.

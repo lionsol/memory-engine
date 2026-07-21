@@ -142,15 +142,19 @@ test("R6.2 contract records host activation ordering and live read-only closeout
       "B8-A7-R6.3 runtime-remediation authorization design=PASSED / CLOSED",
       "B8-A7-R6.4 offline candidate and rollback rehearsal=PASSED / CLOSED",
       "B8-A7-R6.5 live remediation execution authorization packet=PASSED / CLOSED",
-      "R6.5 live execution=NOT AUTHORIZED",
-      "explicit operator approval=NOT RECEIVED",
-      "live plugin install/reload=NOT AUTHORIZED",
+      "B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE",
+      "candidate Gateway activation=NOT REACHED",
+      "old runtime restored=TRUE",
+      "B8-A7-R6.5.1 config semantic equivalence repair=IMPLEMENTED / EDI VERIFICATION PENDING",
+      "R6.5 live retry=NOT AUTHORIZED",
+      "explicit retry approval=NOT RECEIVED",
+      "live retry plugin install/reload=NOT AUTHORIZED",
     ],
     "R6.2 contract",
   );
 });
 
-test("R6 closure, R6.1 blocked state, and R6.4 offline closeout are recorded", () => {
+test("R6 closure, R6.1 blocked state, and the safe R6.5 rollback are recorded", () => {
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(
       text,
@@ -180,8 +184,10 @@ test("R6 closure, R6.1 blocked state, and R6.4 offline closeout are recorded", (
       text,
       /B8-A7-R6\.5 live remediation execution authorization packet(?:=|\s+)PASSED \/ CLOSED/,
     );
-    assert.match(text, /R6\.5 live execution(?:=|\s+)NOT AUTHORIZED/);
-    assert.match(text, /explicit operator approval(?:=|\s+)NOT RECEIVED/);
+    assert.match(text, /B8-A7-R6\.5 live remediation execution(?:=|\s+)ROLLED BACK \/ SAFE/);
+    assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
+    assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /R6\.5 live retry(?:=|\s+)NOT AUTHORIZED/);
     assert.match(
       text,
       /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/,
