@@ -2,7 +2,7 @@
 
 > **Status: Current rollout ledger**
 >
-> Last updated: 2026-07-21, after B8-A7-R4 closure and the B8-A7-R5 OpenClaw host publisher integration design.
+> Last updated: 2026-07-21, after B8-A7-R6 adopted the personal-deployment safety profile and retained R4/R5 as strict-profile references.
 >
 > This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
 
@@ -15,24 +15,29 @@ The authoritative operating procedures remain:
 - [`smoke-tests/full-fail-closed-safety-smoke.md`](smoke-tests/full-fail-closed-safety-smoke.md)
 - [`smoke-tests/full-fail-closed-runtime-rollout.md`](smoke-tests/full-fail-closed-runtime-rollout.md)
 - [`smoke-tests/full-fail-closed-production-evidence-window.md`](smoke-tests/full-fail-closed-production-evidence-window.md)
+- [`smoke-tests/personal-deployment-sustained-runtime-remediation.md`](smoke-tests/personal-deployment-sustained-runtime-remediation.md)
 - [`smoke-tests/tool-surface-runtime-access-audit.md`](smoke-tests/tool-surface-runtime-access-audit.md)
 - [`legacy-fallback-code-inventory.md`](legacy-fallback-code-inventory.md)
 
 ## Current Stage Ledger
 
-The B8-A7-R1 remediation runbook is [sustained-runtime-remediation.md](smoke-tests/sustained-runtime-remediation.md).
+The historical strict B8-A7-R1 remediation runbook is [sustained-runtime-remediation.md](smoke-tests/sustained-runtime-remediation.md).
+The active personal-deployment remediation runbook is [personal-deployment-sustained-runtime-remediation.md](smoke-tests/personal-deployment-sustained-runtime-remediation.md).
 The B8-A7-R2A metadata-source audit is [openclaw-no-load-plugin-metadata-audit.md](smoke-tests/openclaw-no-load-plugin-metadata-audit.md).
 The B8-A7-R3B host publisher source audit is [openclaw-host-metadata-publisher-source-audit.md](smoke-tests/openclaw-host-metadata-publisher-source-audit.md).
-The B8-A7-R4 metadata ownership decision is [host-plugin-metadata-ownership.md](adr/host-plugin-metadata-ownership.md).
-The B8-A7-R5 host publisher integration design is [openclaw-host-plugin-metadata-publisher-integration-design.md](openclaw-host-plugin-metadata-publisher-integration-design.md).
+The strict-profile B8-A7-R4 metadata ownership decision is [host-plugin-metadata-ownership.md](adr/host-plugin-metadata-ownership.md).
+The strict-profile B8-A7-R5 host publisher integration design is [openclaw-host-plugin-metadata-publisher-integration-design.md](openclaw-host-plugin-metadata-publisher-integration-design.md).
+The current B8-A7-R6 personal deployment decision is [personal-deployment-safety-profile.md](adr/personal-deployment-safety-profile.md).
 
 Current remediation boundary:
 
-    B8-A7-R1 remediation procedure=NO-LOAD BASELINE FIX IMPLEMENTED / EDI VERIFICATION PENDING
-    B8-A7-R4 metadata ownership decision=PASSED / CLOSED
-    B8-A7-R5 host publisher integration design=ACCEPTED
-    B8-A7-R5 repository closure=IMPLEMENTED / EDI VERIFICATION PENDING
-    B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED
+    B8-A7-R1 strict no-load remediation=HISTORICAL / SUPERSEDED FOR PERSONAL DEPLOYMENT
+    B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY
+    B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY
+    B8-A7-R6 personal deployment safety profile=ACCEPTED
+    B8-A7-R6 personal deployment remediation=IMPLEMENTED / EDI VERIFICATION PENDING
+    OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
+    B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
     B8-B removal=NOT AUTHORIZED
 
@@ -54,13 +59,14 @@ Current remediation boundary:
 | B8-A7.1 evidence epoch and deployment identity | CLOSED / READY FOR A7.2 | Final review accepted implementation checkpoint `caf4373`. Runtime identity covers the reviewed local dependency closure and fails closed on missing, symlinked, duplicated, or undeclared runtime paths. The rollout fingerprint uses one normalized effective AutoRecall/KG/Recent/retrieval configuration, includes non-secret effective environment thresholds, preserves supported compatibility aliases, and invalidates malformed inputs. |
 | B8-A7.2 continuity and traffic-origin evidence | CLOSED / READY FOR A7.3 | Final review accepted implementation checkpoint `47389d3`. Origin classification follows the typed host hook contract; registration-owned origin contexts are TTL/collision/capacity guarded; origin evidence and three-surface structural readiness are fail closed; per-surface leading, trailing, and internal gaps are enforced; and CLI/evaluator threshold validation shares one contract that rejects primitive, unknown, and malformed inputs. |
 | B8-A7.3 read-only health monitor and stop contract | CLOSED / READY FOR A7 RUNTIME AUTHORIZATION REVIEW | Final review accepted implementation checkpoint `cc88825`. Scheduled healthchecks are restricted to tool production surfaces, canonical UTC timestamps are exact, authorized time bounds feed every child evaluator, and parity/product-health states are separated from freshness with internally consistent removal-readiness invariants. |
-| B8-A7 sustained production evidence window | WITHHELD / REMEDIATION REQUIRED | The evidence-window contract remains `DESIGN AUTHORIZED / RUNTIME NOT AUTHORIZED`. The later 2026-07-20 authorization review found source/runtime drift, ABI mismatch, active-memory enabled, missing installed A7.4 methods, and natural-traffic/product-health blockers. The B8-A7-R1 remediation procedure is implemented pending EDI verification; no runtime activation is authorized. |
+| B8-A7 sustained production evidence window | WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED | The evidence-window contract remains `DESIGN AUTHORIZED / RUNTIME NOT AUTHORIZED`. The 2026-07-20 authorization review found source/runtime drift, ABI mismatch, active-memory enabled, missing installed A7.4 methods, and natural-traffic/product-health blockers. The active remediation path now uses operator-controlled cold inspection, exact installed-runtime identity, post-load Gateway verification, tests, backups, and feature-level fail-closed behavior; no runtime activation is authorized. |
 | B8-A7-R2A existing OpenClaw metadata API audit | VERIFIED / CLOSED | The current OpenClaw 2026.6.9 installed-plugin index is persisted in shared state SQLite; its helper opens the database without a read-only contract and the snapshot loader falls back to discovery. Existing API remains blocked for Phase 0. |
 | B8-A7-R2B synthetic read-only state-DB feasibility harness | PASSED / CLOSED | Synthetic verification is complete. The live state-DB reader remains blocked because WAL/SHM filesystem changes violate zero-write evidence and immutable reading retained the checkpointed revision. No syscall trace is required for the feasibility decision. |
 | B8-A7-R3A host-published metadata manifest synthetic contract | PASSED / CLOSED | Synthetic canonical JSON, duplicate-key rejection, BOM/NUL rejection, permission rejection, atomic old/new generation assertions, tombstone handling, symlink/hardlink rejection, and zero-consumer-write evidence passed focused tests and the 16-scenario synthetic smoke. This does not authorize host integration or production consumption. |
 | B8-A7-R3B host metadata publisher integration-point source audit | NOT FOUND / BLOCKED | Install/update/uninstall lifecycle owners and the shared SQLite index writer exist, but no no-load R3A manifest publisher, startup reconciliation hook, or atomic ordinary-file publication boundary was found. |
-| B8-A7-R4 metadata ownership decision | PASSED / CLOSED | OpenClaw host core is the single authority and must own ordinary-file publication. The `2026.7.1-2` npm package re-audit found no upstream publisher or startup barrier. memory-engine shadow publication and direct SQLite consumption are rejected; installation state and host policy state must remain separate. |
-| B8-A7-R5 OpenClaw host publisher integration design | ACCEPTED / UPSTREAM IMPLEMENTATION NOT STARTED | Defines host-configured required plugin ids, a SQLite durable publication outbox, canonical v2 ordinary-file snapshots, semantic prepare/commit/publish phases, and mandatory reconciliation before plugin metadata discovery or runtime loading. |
+| B8-A7-R4 strict metadata ownership decision | PASSED / CLOSED / REFERENCE ONLY | For a strict no-load authority profile, OpenClaw host core is the single valid publisher owner. The package audit, shadow-publisher rejection, and direct-SQLite rejection remain valid, but absence of a publisher is not a blocker for the current personal deployment. |
+| B8-A7-R5 strict OpenClaw host publisher integration design | PASSED / CLOSED / REFERENCE ONLY | Retains the durable publication and startup-barrier design for a future platform deployment. Upstream implementation, PR, private fork, real publisher, and production consumer are not planned for the current personal route. |
+| B8-A7-R6 personal deployment safety profile | ACCEPTED / REMEDIATION DESIGN IMPLEMENTED | Accepts operator-controlled plugin inspection and post-load runtime evidence, while preserving core-DB read-only, exact runtime parity, explicit active-memory disablement, ABI checks, tests, backups, rollback, and feature-level fail-closed behavior. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -490,11 +496,13 @@ Current state: `B8-A7.4 CLOSED / READY FOR SEPARATE SUSTAINED RUNTIME AUTHORIZAT
 
 The first real-environment sustained-runtime authorization decision was completed on 2026-07-20 and authorization was withheld. The installed runtime differs from reviewed source by 25 files and lacks the A7.4 preflight/healthcheck gateway methods; OpenClaw inspection also exposed a `better-sqlite3` Node ABI mismatch. Active-memory resolves enabled by default because no explicit disable entry exists. The preceding 30-day export contained 35 Hybrid Search observations but zero qualifying natural observations, with 34 invalid origin-evidence rows and one invalid-provenance row. AutoRecall product health returned `not_evaluated`, with p95 latency 4094 ms, maximum latency 7300 ms, zero injections, and no quality review. No config backup, authorization plan, install/reload, config mutation, scheduler, evidence epoch, activation baseline, rollback, push, tag, or release was performed. See [`smoke-tests/sustained-runtime-authorization-decision-20260720.md`](smoke-tests/sustained-runtime-authorization-decision-20260720.md).
 
-Current authorization state: `B8-A7 sustained runtime authorization WITHHELD / REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
+Current authorization state: `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
 
 ## B8-A7-R4 Metadata Ownership Decision
 
-The accepted R4 ADR is [`adr/host-plugin-metadata-ownership.md`](adr/host-plugin-metadata-ownership.md). OpenClaw host core is the only acceptable owner of authoritative plugin-install metadata and the derived ordinary-file publication. A memory-engine shadow publisher is rejected because it duplicates authority, cannot cover plugin-absent or disabled states reliably, and reintroduces freshness and startup-order risks. Direct SQLite/index consumption remains rejected by R2B.
+The accepted R4 ADR is [`adr/host-plugin-metadata-ownership.md`](adr/host-plugin-metadata-ownership.md). It remains the correct ownership model for the strict platform-grade no-load authority profile: OpenClaw host core is the only acceptable owner of authoritative plugin-install metadata and any derived ordinary-file publication. A memory-engine shadow publisher and direct SQLite/index consumption remain rejected.
+
+R6 changed applicability, not the technical finding. The current single-operator personal deployment no longer requires a host-published authority proof before plugin loading, so absence of the publisher is not a current authorization blocker.
 
 The R4 package re-audit inspected the official `openclaw@2026.7.1-2` npm tarball statically without installing it or starting OpenClaw. The package still uses the shared SQLite `installed_plugin_index` as its canonical install ledger. Its install-record commit path writes the index before the matching config commit and rolls back on commit failure, so the low-level SQLite writer is not a complete semantic publication boundary. Registry refresh remains warning-only and can enter discovery or dynamically import the plugin loader. Gateway startup still reaches plugin lookup and `loadGatewayStartupPluginRuntime` without an R3A reconciliation barrier. No ordinary-file publisher, durable publication revision, or pre-runtime publication gate was found.
 
@@ -510,11 +518,11 @@ startup reconciliation=before plugin lookup, discovery-driven activation, and ru
 read-only validation and fail-closed reporting=memory-engine consumer only
 ```
 
-Current R4 state: `B8-A7-R4 metadata ownership decision PASSED / CLOSED`; `OpenClaw upstream host publisher REQUIRED`; `host integration implementation NOT STARTED`; `real host publisher NOT AUTHORIZED`; `production manifest consumer NOT AUTHORIZED`. R3A remains closed for the synthetic file algorithm only, and R3B remains complete with `host publisher source NOT FOUND / BLOCKED`.
+Current R4 state: `B8-A7-R4 strict host ownership architecture PASSED / CLOSED / REFERENCE ONLY`; `OpenClaw upstream host publisher REQUIRED ONLY FOR STRICT PLATFORM PROFILE`; `real host publisher NOT REQUIRED FOR PERSONAL PROFILE`; `production manifest consumer NOT REQUIRED FOR PERSONAL PROFILE`. R3A remains closed for the synthetic file algorithm only, and R3B remains complete with `host publisher source NOT FOUND / BLOCKED`.
 
 ## B8-A7-R5 OpenClaw Host Publisher Integration Design
 
-The accepted R5 design is [`openclaw-host-plugin-metadata-publisher-integration-design.md`](openclaw-host-plugin-metadata-publisher-integration-design.md). It converts the R4 ownership decision into an upstream implementation contract without modifying OpenClaw.
+The accepted R5 design is [`openclaw-host-plugin-metadata-publisher-integration-design.md`](openclaw-host-plugin-metadata-publisher-integration-design.md). It converts the strict R4 ownership decision into an upstream implementation reference without modifying OpenClaw. It is dormant under the current personal-deployment profile.
 
 The design selects:
 
@@ -534,7 +542,39 @@ The durable protocol uses a semantic commit journal plus immutable per-plugin ge
 
 Production v2 keeps `installation_state`, `policy_state`, and `publication.state` independent. A disabled plugin remains installed; required absence uses `uninstalled` or `install-record-missing`; removing a required id produces a terminal `publication.state=retired` generation rather than deleting the final file.
 
-Current R5 state: `B8-A7-R5 host publisher integration design ACCEPTED`; `B8-A7-R5 repository closure IMPLEMENTED / EDI VERIFICATION PENDING`; `OpenClaw fork/worktree NOT CREATED`; `OpenClaw source modification NOT AUTHORIZED`; `real host publisher NOT AUTHORIZED`; `production manifest consumer NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD`; `B8-B removal NOT AUTHORIZED`.
+Current R5 state: `B8-A7-R5 strict host publisher integration design PASSED / CLOSED / REFERENCE ONLY`; `OpenClaw fork/worktree NOT REQUIRED / NOT PLANNED`; `OpenClaw source modification NOT AUTHORIZED`; `upstream pull request NOT REQUIRED / NOT PLANNED`; `real host publisher NOT REQUIRED FOR PERSONAL PROFILE`; `production manifest consumer NOT REQUIRED FOR PERSONAL PROFILE`.
+
+## B8-A7-R6 Personal Deployment Safety Profile
+
+The accepted current profile is [`adr/personal-deployment-safety-profile.md`](adr/personal-deployment-safety-profile.md), with the active operator runbook at [`smoke-tests/personal-deployment-sustained-runtime-remediation.md`](smoke-tests/personal-deployment-sustained-runtime-remediation.md).
+
+The personal profile preserves the high-value hard boundaries:
+
+```text
+core DB read-only
+separate memory-engine DB
+reviewed source and installed runtime parity
+Gateway Node/native ABI compatibility
+active-memory explicitly disabled
+required tools and Gateway methods registered
+safe initial config with AutoRecall/full/evidence inactive
+tests and A5 safety smoke green
+independently verified config and runtime rollback sources
+```
+
+It relaxes the disproportionate platform requirements:
+
+```text
+no OpenClaw upstream PR
+no private OpenClaw fork
+no host metadata publisher
+no cross-storage publication journal
+no pre-discovery authority barrier
+```
+
+Operator-controlled cold plugin inspection, exact installed-runtime identity, and post-load Gateway evidence must agree. Uncertainty disables AutoRecall, automatic reinforcement, full modes, evidence collection, and any sustained epoch; it does not require blocking all plugin management or diagnostic loading.
+
+Current R6 state: `B8-A7-R6 personal deployment safety profile ACCEPTED`; `personal deployment remediation runbook IMPLEMENTED / EDI VERIFICATION PENDING`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-A7 sustained runtime window NOT AUTHORIZED`; `B8-B removal NOT AUTHORIZED`.
 
 Historical A7.2 review state: implementation checkpoint `59a4f3e` was `IMPLEMENTED / REVIEW CHANGES REQUIRED`; checkpoint `eec0f91` closed the four main origin/continuity findings but remained review-pending for TTL cleanup ordering and primitive thresholds JSON. Checkpoint `47389d3` closed those final findings.
 

@@ -21,10 +21,10 @@ test("Hybrid fail-closed rollout ledger and R4 ADR exist and are indexed", () =>
   assert.match(index, /tool-surface-runtime-access-audit\.md/);
 });
 
-test("R4 ADR assigns publication authority to OpenClaw and preserves fail-closed boundaries", () => {
+test("R4 ADR preserves strict-profile publication ownership without blocking the personal route", () => {
   const adr = read(R4_ADR);
   for (const token of [
-    "Status: Accepted",
+    "Status: Accepted / strict platform profile reference",
     "B8-A7-R4 Metadata Ownership Decision Review",
     "Option A: OpenClaw upstream host publisher",
     "Option B: memory-engine shadow publisher",
@@ -36,10 +36,11 @@ test("R4 ADR assigns publication authority to OpenClaw and preserves fail-closed
     "disabled-by-host-policy",
     "The low-level SQLite writer is not the publication boundary",
     "startup reconciliation",
-    "OpenClaw upstream host publisher=REQUIRED",
-    "real host publisher=NOT AUTHORIZED",
-    "production manifest consumer=NOT AUTHORIZED",
-    "B8-A7 sustained runtime authorization=WITHHELD",
+    "OpenClaw upstream host publisher=REQUIRED ONLY FOR STRICT PLATFORM PROFILE",
+    "real host publisher=NOT REQUIRED FOR PERSONAL PROFILE",
+    "production manifest consumer=NOT REQUIRED FOR PERSONAL PROFILE",
+    "B8-A7-R6 personal deployment safety profile=ACCEPTED",
+    "B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED",
   ]) {
     assert.equal(adr.includes(token), true, `missing R4 ADR token: ${token}`);
   }
@@ -99,9 +100,11 @@ test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage
     "zero-consumer-write evidence",
     "B8-A7-R3B host metadata publisher integration-point source audit",
     "NOT FOUND / BLOCKED",
-    "B8-A7-R4 metadata ownership decision",
-    "PASSED / CLOSED",
-    "OpenClaw upstream host publisher REQUIRED",
+    "B8-A7-R4 strict metadata ownership decision",
+    "PASSED / CLOSED / REFERENCE ONLY",
+    "OpenClaw upstream host publisher REQUIRED ONLY FOR STRICT PLATFORM PROFILE",
+    "B8-A7-R6 personal deployment safety profile",
+    "PERSONAL PROFILE REMEDIATION REQUIRED",
     "openclaw@2026.7.1-2",
     "installation_state",
     "policy_state",

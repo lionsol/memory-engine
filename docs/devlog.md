@@ -1,5 +1,37 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6: adopt the personal-deployment safety profile
+
+Reclassified the R4/R5 host-publisher work as a strict platform-grade reference rather than a current implementation prerequisite. memory-engine is a single-operator local plugin, so an OpenClaw upstream PR, private fork, durable host publication journal, ordinary-file authority projection, and pre-discovery reconciliation barrier are disproportionate to the current risk and maintenance model.
+
+The accepted personal profile keeps the core safety invariants: OpenClaw core DB remains read-only, the memory-engine DB stays separate, installed runtime must match reviewed source, Gateway Node/native ABI must be compatible, active-memory must be explicitly disabled, required runtime registrations must exist, tests and A5 smoke must pass, and config/runtime rollback artifacts must be independently verified.
+
+The active remediation route now accepts operator-controlled cold plugin inspection plus exact installed-runtime identity and post-load Gateway verification. Uncertainty blocks AutoRecall, automatic reinforcement, KG/Recent full modes, production evidence, and any sustained epoch, but does not require blocking all management, diagnostics, or safe manual search.
+
+Added:
+
+```text
+docs/adr/personal-deployment-safety-profile.md
+docs/smoke-tests/personal-deployment-sustained-runtime-remediation.md
+```
+
+Updated R4, R5, the rollout ledger, README, and the old R1 runbook without rewriting historical audit findings. The original no-load runbook is retained as a strict-profile historical artifact and is no longer the active operator procedure.
+
+Current boundary:
+
+```text
+B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY
+B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY
+B8-A7-R6 personal deployment safety profile=ACCEPTED
+personal deployment remediation runbook=IMPLEMENTED / EDI VERIFICATION PENDING
+OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
+OpenClaw private fork=NOT REQUIRED / NOT PLANNED
+OpenClaw source modification=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-A7 sustained runtime window=NOT AUTHORIZED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R5: OpenClaw host publisher integration design
 
 Closed R4 after EDI verification and commit `7d5c895`, then converted the accepted ownership decision into an upstream OpenClaw integration design. R5 selects host-configured required plugin ids, a host SQLite durable publication outbox, canonical `openclaw.host-plugin-install-metadata/v2` ordinary files, and a mandatory startup reconciliation barrier before plugin metadata resolution, derived discovery, lookup, or runtime loading.

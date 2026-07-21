@@ -1,14 +1,16 @@
 # B8-A7-R5 OpenClaw Host Plugin Metadata Publisher Integration Design
 
-> **Status: Accepted design / upstream implementation not authorized**
+> **Status: Accepted strict-profile reference / upstream implementation not planned for the personal deployment**
 >
 > Date: 2026-07-21
 >
 > Source baseline: installed OpenClaw `2026.6.9` dist and official `openclaw@2026.7.1-2` npm package
+>
+> Applicability update: the active single-operator route is [`adr/personal-deployment-safety-profile.md`](adr/personal-deployment-safety-profile.md). This design is retained for a future multi-user, unattended, or externally controlled deployment.
 
 ## Scope
 
-This document defines the upstream OpenClaw host-core integration required by the accepted R4 ownership ADR. It specifies the publication target model, durable state, semantic commit boundary, ordinary-file contract, lifecycle integration, startup reconciliation barrier, failure semantics, test matrix, and upstream patch decomposition.
+This document defines the upstream OpenClaw host-core integration required by the strict R4 ownership profile. It specifies the publication target model, durable state, semantic commit boundary, ordinary-file contract, lifecycle integration, startup reconciliation barrier, failure semantics, test matrix, and upstream patch decomposition.
 
 It does not modify OpenClaw, create a fork or worktree, publish a real manifest, implement a production memory-engine consumer, change runtime configuration, install or reload a plugin, start a sustained runtime window, or authorize B8-B removal.
 
@@ -32,13 +34,14 @@ The existing registry refresh path, plugin loader, plugin runtime, memory-engine
 Current stage state:
 
 ```text
-B8-A7-R4 metadata ownership decision=PASSED / CLOSED
-B8-A7-R5 host publisher integration design=ACCEPTED
-OpenClaw upstream implementation=NOT STARTED
+B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY
+B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY
+B8-A7-R6 personal deployment safety profile=ACCEPTED
+OpenClaw upstream implementation=NOT REQUIRED / NOT PLANNED FOR PERSONAL PROFILE
 OpenClaw source modification=NOT AUTHORIZED
-real host publisher=NOT AUTHORIZED
-production manifest consumer=NOT AUTHORIZED
-B8-A7 sustained runtime authorization=WITHHELD
+real host publisher=NOT REQUIRED FOR PERSONAL PROFILE
+production manifest consumer=NOT REQUIRED FOR PERSONAL PROFILE
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED
 ```
@@ -751,9 +754,9 @@ explicit statement that registry refresh is not the authority publisher
 
 The upstream pull request description must state that the feature is default-off, host-owned, independent of memory-engine runtime loading, and intended as a generic no-load metadata publication contract.
 
-## Acceptance Gate for R6
+## Dormant Strict-Profile Implementation Gate
 
-R6 may authorize an isolated upstream implementation worktree only after review confirms:
+This gate is inactive for the current personal deployment. If a future decision reactivates the strict platform profile, an isolated upstream implementation worktree may be authorized only after review confirms:
 
 ```text
 exact upstream repository and base commit
@@ -766,21 +769,21 @@ fault-injection plan
 no memory-engine production consumer work in the same change
 ```
 
-R6 must not authorize installation into the active OpenClaw environment, Gateway reload, real manifest publication, sustained runtime activation, or B8-B removal merely because an upstream patch is implemented or locally tested.
+A future strict-profile implementation review must not authorize installation into the active OpenClaw environment, Gateway reload, real manifest publication, sustained runtime activation, or B8-B removal merely because an upstream patch is implemented or locally tested.
 
 ## Authorization Boundary
 
 ```text
-B8-A7-R5 host publisher integration design=ACCEPTED
-B8-A7-R5 repository closure=IMPLEMENTED / EDI VERIFICATION PENDING
-OpenClaw fork/worktree=NOT CREATED
+B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY
+B8-A7-R6 personal deployment safety profile=ACCEPTED
+OpenClaw fork/worktree=NOT REQUIRED / NOT PLANNED
 OpenClaw source modification=NOT AUTHORIZED
-upstream pull request=NOT CREATED
-real host publisher=NOT AUTHORIZED
-production manifest consumer=NOT AUTHORIZED
+upstream pull request=NOT REQUIRED / NOT PLANNED
+real host publisher=NOT REQUIRED FOR PERSONAL PROFILE
+production manifest consumer=NOT REQUIRED FOR PERSONAL PROFILE
 runtime configuration change=NOT AUTHORIZED
 plugin install/reload=NOT AUTHORIZED
-B8-A7 sustained runtime authorization=WITHHELD
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED
 ```

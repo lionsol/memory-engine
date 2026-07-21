@@ -1,12 +1,15 @@
 # ADR: OpenClaw owns authoritative plugin metadata publication
 
-- Status: Accepted
+- Status: Accepted / strict platform profile reference
 - Date: 2026-07-21
 - Decision scope: B8-A7-R4 Metadata Ownership Decision Review
+- Applicability update: superseded as the active personal-deployment prerequisite by [`personal-deployment-safety-profile.md`](personal-deployment-safety-profile.md)
 
 ## Context
 
-B8-A7 needs a no-load, read-only source for the installed memory-engine runtime identity before any sustained runtime evidence window can be authorized. The source must remain usable without importing plugin entrypoints, entering plugin discovery, accessing plugin runtime state, or causing observable writes from the consumer.
+The strict platform-grade B8-A7 profile evaluated a no-load, read-only source for the installed memory-engine runtime identity before any sustained runtime evidence window could be authorized. The source had to remain usable without importing plugin entrypoints, entering plugin discovery, accessing plugin runtime state, or causing observable writes from the consumer.
+
+The ownership conclusion remains valid if that strict profile is reactivated. The current single-operator personal deployment accepts operator-controlled cold inspection plus post-load runtime verification, so absence of this publisher is no longer a current B8-A7 blocker.
 
 The evaluated routes produced the following results:
 
@@ -258,21 +261,22 @@ A best-effort warning is insufficient. Failure to reconcile authoritative and pu
 
 ## Upstream Requirement and Blocking Effect
 
-An upstream OpenClaw change is required for the selected architecture.
+An upstream OpenClaw change is required only for the strict host-authority architecture selected in this ADR.
 
-The lack of an upstream publisher is not a permanent theoretical impossibility, but it is a current hard blocker for B8-A7. memory-engine must not bypass it with a shadow publisher, direct SQLite reader, runtime callback, or guessed path.
+The lack of an upstream publisher blocks that strict platform profile. It does not block the accepted single-operator personal deployment profile. memory-engine must still not bypass host ownership with a shadow publisher or direct SQLite reader.
 
 Current decision state:
 
 ```text
-B8-A7-R4 metadata ownership decision=ACCEPTED / OPTION A REQUIRED
-OpenClaw upstream host publisher=REQUIRED
+B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY
+OpenClaw upstream host publisher=REQUIRED ONLY FOR STRICT PLATFORM PROFILE
 memory-engine shadow publisher=REJECTED
 direct SQLite/index consumer=REJECTED
-real host publisher=NOT AUTHORIZED
-production manifest consumer=NOT AUTHORIZED
-host integration implementation=NOT STARTED
-B8-A7 sustained runtime authorization=WITHHELD
+real host publisher=NOT REQUIRED FOR PERSONAL PROFILE
+production manifest consumer=NOT REQUIRED FOR PERSONAL PROFILE
+host integration implementation=NOT PLANNED FOR PERSONAL PROFILE
+B8-A7-R6 personal deployment safety profile=ACCEPTED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED
 ```
@@ -281,6 +285,7 @@ B8-B removal=NOT AUTHORIZED
 
 - R3A remains `PASSED / CLOSED` for the synthetic file contract and atomic algorithm only.
 - R3B remains `COMPLETE` with `host publisher source=NOT FOUND / BLOCKED`; it must not be described as not started.
-- The next implementation stage, if separately authorized, belongs upstream in OpenClaw host core.
+- Any future implementation of the strict publisher architecture, if separately authorized, belongs upstream in OpenClaw host core.
 - A production schema review must supersede the synthetic v1 state model before a real publisher or consumer is implemented.
-- No OpenClaw host changes, manifest publication, production consumer, runtime configuration, plugin install/reload, sustained runtime window, or B8-B removal is authorized by this ADR.
+- The current personal deployment route is governed by [`personal-deployment-safety-profile.md`](personal-deployment-safety-profile.md).
+- No OpenClaw host changes, manifest publication, runtime configuration, plugin install/reload, sustained runtime window, or B8-B removal is authorized by this ADR.

@@ -135,7 +135,10 @@ test("the first real-environment authorization decision is fail-closed and audit
   assert.match(decision, /natural_observation_count=0/);
   assert.match(decision, /status=not_evaluated/);
   assert.match(decision, /No authorization plan, active baseline, evidence epoch, or runtime mutation may be produced/i);
-  assert.match(ledger, /B8-A7 sustained runtime authorization WITHHELD\s*\/\s*REMEDIATION REQUIRED/i);
+  assert.match(
+    ledger,
+    /B8-A7 sustained runtime authorization WITHHELD\s*\/\s*(?:PERSONAL PROFILE\s+)?REMEDIATION REQUIRED/i,
+  );
   assert.match(decision, /B8-A7 sustained runtime window=NOT AUTHORIZED/i);
   assert.match(decision, /B8-B removal=NOT AUTHORIZED/i);
 });

@@ -1,8 +1,12 @@
 # B8-A7-R1 Sustained Runtime Remediation
 
-> **B8-A7-R1 remediation procedure=NO-LOAD BASELINE FIX IMPLEMENTED / EDI VERIFICATION PENDING**
+> **Status: Historical strict no-load runbook / superseded for the current personal deployment**
 >
-> **B8-A7 sustained runtime authorization=WITHHELD / REMEDIATION REQUIRED**
+> Historical state: **B8-A7-R1 remediation procedure=NO-LOAD BASELINE FIX IMPLEMENTED / EDI VERIFICATION PENDING**
+>
+> Current route: [`personal-deployment-sustained-runtime-remediation.md`](personal-deployment-sustained-runtime-remediation.md)
+>
+> **B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED**
 >
 > **B8-A7 sustained runtime window=NOT AUTHORIZED**
 >
@@ -10,7 +14,9 @@
 
 ## Purpose and Boundary
 
-This is the operator-owned remediation plan for the 2026-07-20 sustained-runtime authorization findings. It defines read-only checks, separately approved host actions, and fail-closed verification gates. It is not an authorization to activate A7.
+This document preserves the strict no-load remediation plan created for the 2026-07-20 sustained-runtime authorization findings. It is not the active operator runbook for the current single-user deployment and must not be executed as the current plan. The active route is the personal-deployment runbook linked above.
+
+The historical plan defines read-only checks, separately approved host actions, and host-authority fail-closed verification gates. It never authorized A7 activation.
 
 This phase does not change OpenClaw configuration, install or reload the plugin, rebuild native dependencies, create a scheduler, enable an evidence epoch, generate production traffic, or remove legacy fallback code. No runbook command deliberately queries or mutates either database. Any command capable of importing or starting the plugin is outside the no-load baseline and requires a separate gate because plugin initialization may access runtime storage. No step is complete until EDI verifies the resulting evidence.
 

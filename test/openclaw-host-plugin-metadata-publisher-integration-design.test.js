@@ -27,7 +27,7 @@ test("R5 host publisher integration design exists and is indexed", () => {
 test("R5 design defines the host-owned target, outbox, manifest, and startup contracts", () => {
   const design = read(DESIGN);
   for (const token of [
-    "Status: Accepted design / upstream implementation not authorized",
+    "Status: Accepted strict-profile reference / upstream implementation not planned for the personal deployment",
     "B8-A7-R5 OpenClaw Host Plugin Metadata Publisher Integration Design",
     "openclaw@2026.7.1-2",
     "requiredPluginIds",
@@ -60,14 +60,14 @@ test("R5 design defines the host-owned target, outbox, manifest, and startup con
 test("R5 design preserves the upstream and runtime authorization boundary", () => {
   const design = read(DESIGN);
   for (const token of [
-    "OpenClaw fork/worktree=NOT CREATED",
+    "OpenClaw fork/worktree=NOT REQUIRED / NOT PLANNED",
     "OpenClaw source modification=NOT AUTHORIZED",
-    "upstream pull request=NOT CREATED",
-    "real host publisher=NOT AUTHORIZED",
-    "production manifest consumer=NOT AUTHORIZED",
+    "upstream pull request=NOT REQUIRED / NOT PLANNED",
+    "real host publisher=NOT REQUIRED FOR PERSONAL PROFILE",
+    "production manifest consumer=NOT REQUIRED FOR PERSONAL PROFILE",
     "runtime configuration change=NOT AUTHORIZED",
     "plugin install/reload=NOT AUTHORIZED",
-    "B8-A7 sustained runtime authorization=WITHHELD",
+    "B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED",
     "B8-A7 sustained runtime window=NOT AUTHORIZED",
     "B8-B removal=NOT AUTHORIZED",
   ]) {
@@ -75,18 +75,17 @@ test("R5 design preserves the upstream and runtime authorization boundary", () =
   }
 });
 
-test("rollout ledger closes R4 and registers R5 without authorizing implementation", () => {
+test("rollout ledger retains R4 and R5 as strict-profile references", () => {
   const ledger = read(LEDGER);
   for (const token of [
-    "B8-A7-R4 metadata ownership decision=PASSED / CLOSED",
-    "B8-A7-R5 host publisher integration design=ACCEPTED",
-    "B8-A7-R5 repository closure=IMPLEMENTED / EDI VERIFICATION PENDING",
-    "B8-A7-R5 OpenClaw host publisher integration design",
-    "ACCEPTED / UPSTREAM IMPLEMENTATION NOT STARTED",
+    "B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY",
+    "B8-A7-R5 strict host publisher integration design=PASSED / CLOSED / REFERENCE ONLY",
+    "B8-A7-R5 OpenClaw Host Publisher Integration Design",
+    "PASSED / CLOSED / REFERENCE ONLY",
     "SQLite durable publication outbox",
     "before resolvePluginMetadataSnapshot",
     "OpenClaw source modification NOT AUTHORIZED",
-    "real host publisher NOT AUTHORIZED",
+    "real host publisher NOT REQUIRED FOR PERSONAL PROFILE",
   ]) {
     assert.equal(ledger.includes(token), true, `missing R5 ledger token: ${token}`);
   }
