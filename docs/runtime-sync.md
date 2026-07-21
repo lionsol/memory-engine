@@ -231,11 +231,13 @@ configuration restored to exact C0=TRUE
 memory data restored from D0=FALSE / NOT REQUIRED
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED
-R6.5.2 live retry execution=NOT AUTHORIZED
-explicit R6.5.2 retry approval=NOT RECEIVED
+B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
+R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
 fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
-current recovery transaction root=REQUIRED / MUST REMAIN
-offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
+current recovery transaction root=ABSENT / REBASE REQUIRED
+offline candidate artifact=ABSENT / REBUILD REQUIRED
+installed-plugin recovery sourcePath=DANGLING
+B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
 candidate artifact identity=0490e60741c8ef12c0a6a8e70a169c43bd6d81c8cd465f781b7d01c8b3244f42
 final active runtime identity=86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e535b0a5a8152f1f1
 ```
@@ -243,11 +245,11 @@ final active runtime identity=86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e53
 当前仍然禁止：
 
 ```text
-R6.5.2 retry candidate install/reload=NOT AUTHORIZED
-R6.5.2 retry configuration mutation=NOT AUTHORIZED
-R6.5.2 retry Gateway stop/start/restart=NOT AUTHORIZED
+R6.5.2 retry candidate install/reload=NOT PERFORMED
+R6.5.2 retry configuration mutation=NOT PERFORMED
+R6.5.2 retry Gateway stop/start/restart=NOT PERFORMED
 fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
-current recovery transaction root cleanup=NOT AUTHORIZED
+R6.5.3 artifact rebuild/recovery rebase=NOT AUTHORIZED
 live memory-data restoration=NOT AUTHORIZED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED

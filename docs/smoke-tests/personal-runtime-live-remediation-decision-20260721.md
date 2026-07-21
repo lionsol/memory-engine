@@ -378,9 +378,11 @@ B8-A7-R6.5 live remediation attempt=ROLLED BACK / SAFE
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 memory-engine-config-semantic-equivalence-v1 real preserved-config check=PASS
 B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED
-R6.5.2 live retry execution=NOT AUTHORIZED
-explicit R6.5.2 retry approval=NOT RECEIVED
-current recovery transaction root=REQUIRED / MUST REMAIN
+B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
+R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
+current recovery transaction root=ABSENT / REBASE REQUIRED
+candidate artifact=ABSENT / REBUILD REQUIRED
+B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
 ```
 
 Repository closeout preflight after the safe rollback and R6.5.1 implementation:
@@ -460,10 +462,13 @@ configuration restored to exact C0=true
 memory data restored from D0=false / NOT REQUIRED
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED
-R6.5.2 live retry execution=NOT AUTHORIZED
-explicit R6.5.2 retry approval=NOT RECEIVED
+B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
+R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
 fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
-current recovery transaction root=REQUIRED / MUST REMAIN
+current recovery transaction root=ABSENT / REBASE REQUIRED
+candidate artifact=ABSENT / REBUILD REQUIRED
+installed-plugin recovery sourcePath=DANGLING
+B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED

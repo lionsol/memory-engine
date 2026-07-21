@@ -403,7 +403,9 @@ candidate install=not performed
 fresh retry artifacts=not created
 ```
 
-Independent EDI closeout passed the requested nine-test scope at 64/64, static check over 530 files, the full suite at 1789 passed / 0 failed / 8 skipped, A5 smoke 10/10, `git diff --check`, and repository status review. The packet is therefore passed and closed; retry execution remains separately unauthorized.
+Independent EDI closeout passed the requested nine-test scope at 64/64, static check over 530 files, the full suite at 1789 passed / 0 failed / 8 skipped, A5 smoke 10/10, `git diff --check`, and repository status review. The packet is therefore passed and closed.
+
+The later exact retry authorization reached final preflight, where both the candidate and current recovery transaction root were absent. The canonical execution outcome is recorded in [`personal-runtime-live-remediation-retry-decision-20260721.md`](personal-runtime-live-remediation-retry-decision-20260721.md).
 
 ## Current Boundary
 
@@ -412,10 +414,13 @@ B8-A7-R6.5 authorization packet=PASSED / CLOSED
 B8-A7-R6.5 live remediation execution=ROLLED BACK / SAFE
 B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
 B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED
-R6.5.2 live retry execution=NOT AUTHORIZED
-explicit R6.5.2 retry approval=NOT RECEIVED
+B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
+R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
 fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
-current recovery transaction root=REQUIRED / MUST REMAIN
+current recovery transaction root=ABSENT / REBASE REQUIRED
+candidate artifact=ABSENT / REBUILD REQUIRED
+installed-plugin recovery sourcePath=DANGLING
+B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
 AutoRecall activation=NOT AUTHORIZED
 production evidence activation=NOT AUTHORIZED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED

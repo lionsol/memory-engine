@@ -13,6 +13,10 @@ const DECISION = new URL(
   "../docs/smoke-tests/personal-runtime-live-remediation-decision-20260721.md",
   import.meta.url,
 );
+const RETRY_DECISION = new URL(
+  "../docs/smoke-tests/personal-runtime-live-remediation-retry-decision-20260721.md",
+  import.meta.url,
+);
 const DEVLOG = new URL("../docs/devlog.md", import.meta.url);
 
 function read(url) {
@@ -25,9 +29,12 @@ function requireTokens(text, tokens, label) {
   }
 }
 
-test("R6.5.2 retry authorization packet exists and is indexed", () => {
+test("R6.5.2 retry authorization packet and blocked execution decision exist and are indexed", () => {
   assert.equal(existsSync(PACKET), true);
-  assert.match(read(README), /personal-runtime-live-remediation-retry-authorization-20260721\.md/);
+  assert.equal(existsSync(RETRY_DECISION), true);
+  const index = read(README);
+  assert.match(index, /personal-runtime-live-remediation-retry-authorization-20260721\.md/);
+  assert.match(index, /personal-runtime-live-remediation-retry-decision-20260721\.md/);
 });
 
 test("R6.5.2 binds the unchanged candidate and current recovery runtime", () => {
@@ -70,7 +77,8 @@ test("R6.5.2 requires new fresh recovery artifacts and preserves the old root", 
     "fresh H0 captured after R0 creation",
     "fresh D0 captured only after Gateway quiesce",
     "The previous `/tmp/memory-engine-r6.5-live-2415dfe` root remains read-only recovery evidence",
-    "current recovery transaction root=REQUIRED / MUST REMAIN",
+    "current recovery transaction root exists and remains protected",
+    "R6.5.2 RETRY AUTHORIZATION BLOCKED / REBUILD OR REBASE REQUIRED",
   ], "fresh retry artifacts");
 });
 
@@ -102,7 +110,7 @@ test("R6.5.2 requires Node 24 stopped install and loaded Gateway evidence", () =
   ], "retry runtime acceptance");
 });
 
-test("R6.5.2 exact approval is distinct and execution remains unauthorized", () => {
+test("R6.5.2 exact approval is distinct and the later attempt is recorded as blocked", () => {
   requireTokens(read(PACKET), [
     "AUTHORIZE B8-A7-R6.5.2 LIVE REMEDIATION RETRY",
     "config semantic policy=memory-engine-config-semantic-equivalence-v1",
@@ -110,18 +118,18 @@ test("R6.5.2 exact approval is distinct and execution remains unauthorized", () 
     "conditional rollback to fresh retry R0, exact retry C0, and exact pre-start retry D0 is authorized on any defined stop condition",
     "The original R6.5 approval, a generic “continue,” or an approval missing any line above is insufficient",
     "B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED",
-    "R6.5.2 live retry execution=NOT AUTHORIZED",
-    "explicit R6.5.2 retry approval=NOT RECEIVED",
+    "B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION",
+    "R6.5.2 retry authorization=CONSUMED / NOT REUSABLE",
     "fresh R6.5.2 C0/R0/H0/D0=NOT CREATED",
   ], "retry approval boundary");
 });
 
-test("current documents record R6.5.2 packet without authorizing execution", () => {
-  for (const text of [read(LEDGER), read(RUNTIME_SYNC), read(DECISION), read(DEVLOG)]) {
+test("current documents record the blocked R6.5.2 attempt and require rebuild or rebase", () => {
+  for (const text of [read(LEDGER), read(RUNTIME_SYNC), read(DECISION), read(RETRY_DECISION), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5\.2 live remediation retry authorization packet(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /R6\.5\.2 live retry execution(?:=|\s+)NOT AUTHORIZED/);
-    assert.match(text, /explicit R6\.5\.2 retry approval(?:=|\s+)NOT RECEIVED/);
-    assert.match(text, /current recovery transaction root(?:=|\s+)REQUIRED \/ MUST REMAIN/);
+    assert.match(text, /B8-A7-R6\.5\.2 live retry execution(?:=|\s+)BLOCKED \/ NO MUTATION/);
+    assert.match(text, /R6\.5\.2 retry authorization(?:=|\s+)CONSUMED \/ NOT REUSABLE/);
+    assert.match(text, /B8-A7-R6\.5\.3 rebuild-or-rebase design(?:=|\s+)NOT STARTED/);
   }
 });

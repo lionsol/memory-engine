@@ -139,7 +139,7 @@ test("runtime sync documentation uses cold inspection and the Node 24 candidate 
   assert.match(doc, /personal-runtime-remediation-authorization\.md/);
   assert.match(doc, /npm ci --omit=dev/);
   assert.match(doc, /\$HOME\/\.local\/node24\/bin\/node/);
-  assert.match(doc, /offline candidate artifact=VALIDATED \/ FROZEN \/ EPHEMERAL/);
+  assert.match(doc, /offline candidate artifact=ABSENT \/ REBUILD REQUIRED/);
   assert.match(doc, /personal-runtime-candidate-rehearsal-decision-20260721\.md/);
   assert.match(doc, /uv_cwd/);
   assert.match(doc, /安装命令不是纯文件复制/);

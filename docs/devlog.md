@@ -1,5 +1,25 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.5.2 execution: preflight blocked without mutation
+
+Received the exact R6.5.2 retry authorization, then ran the mandatory no-mutation preflight before creating a transaction root or stopping the Gateway. Repository state was clean at commit `8c365c5`, but both required filesystem authorities were absent: `/tmp/memory-engine-r6.4-9b6b734/candidate` and `/tmp/memory-engine-r6.5-live-2415dfe`. The installed-plugin record still points to the missing `/tmp/memory-engine-r6.5-live-2415dfe/runtime/r0` recovery source.
+
+The contract therefore returned `R6.5.2 RETRY AUTHORIZATION BLOCKED / REBUILD OR REBASE REQUIRED`. The Gateway remained active as PID `344` under Node 24 with port 18789 listening. Config SHA-256 remained exact C0 at `da9e443c416979ed71763ccc7cd00106597bed7a7dfdb064a3b507627b2c6f2a`; the active runtime remained the restored old identity `86d04dd7…f1f1` with 28 differences from current source. No fresh C0/R0/H0/D0, Gateway stop/start/restart, candidate install, config mutation, runtime replacement, data restoration, AutoRecall activation, or evidence activation occurred.
+
+Current boundary:
+
+```text
+B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
+R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
+candidate artifact=ABSENT / REBUILD REQUIRED
+current recovery transaction root=ABSENT / REBASE REQUIRED
+installed-plugin recovery sourcePath=DANGLING
+fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
+B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6.5.2: bounded live remediation retry authorization
 
 Closed R6.5.1 after commit `6310673` and independent EDI verification: the requested 7-test scope passed 52/52, static check covered 529 files, the full suite completed with 1781 passed, 0 failed, and 8 skipped, A5 smoke passed 10/10, `git diff --check` was clean, and the worktree was clean.

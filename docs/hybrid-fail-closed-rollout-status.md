@@ -35,6 +35,7 @@ The B8-A7-R6.4 offline candidate and rollback rehearsal decision is [personal-ru
 The B8-A7-R6.5 live remediation authorization packet is [personal-runtime-live-remediation-authorization-20260721.md](smoke-tests/personal-runtime-live-remediation-authorization-20260721.md).
 The B8-A7-R6.5 live execution decision is [personal-runtime-live-remediation-decision-20260721.md](smoke-tests/personal-runtime-live-remediation-decision-20260721.md).
 The B8-A7-R6.5.2 live retry authorization packet is [personal-runtime-live-remediation-retry-authorization-20260721.md](smoke-tests/personal-runtime-live-remediation-retry-authorization-20260721.md).
+The B8-A7-R6.5.2 live retry execution decision is [personal-runtime-live-remediation-retry-decision-20260721.md](smoke-tests/personal-runtime-live-remediation-retry-decision-20260721.md).
 
 Current remediation boundary:
 
@@ -53,11 +54,13 @@ Current remediation boundary:
     old runtime restored=TRUE
     B8-A7-R6.5.1 config semantic equivalence repair=PASSED / CLOSED
     B8-A7-R6.5.2 live remediation retry authorization packet=PASSED / CLOSED
-    R6.5.2 live retry execution=NOT AUTHORIZED
-    explicit R6.5.2 retry approval=NOT RECEIVED
+    B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
+    R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
     fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
-    current recovery transaction root=REQUIRED / MUST REMAIN
-    offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL
+    current recovery transaction root=ABSENT / REBASE REQUIRED
+    offline candidate artifact=ABSENT / REBUILD REQUIRED
+    installed-plugin recovery sourcePath=DANGLING
+    B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
     OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
     B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
@@ -96,7 +99,8 @@ Current remediation boundary:
 | B8-A7-R6.5 live remediation execution authorization packet | PASSED / CLOSED | Binds candidate artifact identity `0490e607…44f42`, canonical artifact manifests, fresh C0/R0/D0, stable cwd, explicit Node 24 stop/install/start, install-time data identity gates, Gateway method/tool verification, and bounded rollback. |
 | B8-A7-R6.5 live remediation execution | ROLLED BACK / SAFE | Candidate install, source/installed parity, native dependency checks, and data identities passed. Exact config bytes differed only at host `meta.lastTouchedAt`; the defined stop condition prevented candidate Gateway start. Fresh R0 and exact C0 were restored, Gateway PID `275493` became healthy under Node 24, final data identities matched D_PRE_INSTALL, and A5 smoke passed 10/10. |
 | B8-A7-R6.5.1 config semantic equivalence repair | PASSED / CLOSED | Adds `memory-engine-config-semantic-equivalence-v1`, which allows only a canonical monotonic `meta.lastTouchedAt` update and fails closed on every other JSON path without exposing raw config values. Independent EDI verification passed. |
-| B8-A7-R6.5.2 live remediation retry authorization packet | PASSED / CLOSED | Binds the unchanged candidate and current recovery R0, requires a new transaction root with fresh C0/R0/H0/D0, uses the closed semantic-config policy, preserves the existing recovery root, and requires a new exact operator approval. Independent EDI verification passed; retry execution remains unauthorized. |
+| B8-A7-R6.5.2 live remediation retry authorization packet | PASSED / CLOSED | Binds the unchanged candidate and current recovery R0, requires a new transaction root with fresh C0/R0/H0/D0, uses the closed semantic-config policy, preserves the existing recovery root, and requires a new exact operator approval. Independent EDI verification passed. |
+| B8-A7-R6.5.2 live remediation retry execution | BLOCKED / NO MUTATION | Final preflight found the candidate and current recovery transaction root absent from `/tmp`; the installed sourcePath is dangling. Gateway, config, runtime, and data were not mutated. The supplied authorization is consumed and cannot be reused. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -740,7 +744,7 @@ Read-only revalidation after commit `6310673` confirmed source/candidate parity 
 
 The packet requires a new retry transaction root, fresh C0/R0/H0/D0, `memory-engine-config-semantic-equivalence-v1`, install-time data identity equality, bounded Gateway readiness, loaded A7.4 methods, all three memory-engine tools, full tests, A5 smoke 10/10, and retry-specific rollback. The original R6.5 approval and prior transaction artifacts cannot authorize the retry.
 
-Current R6.5.2 state: `B8-A7-R6.5.2 live remediation retry authorization packet PASSED / CLOSED`; `R6.5.2 live retry execution NOT AUTHORIZED`; `explicit R6.5.2 retry approval NOT RECEIVED`; `fresh R6.5.2 C0/R0/H0/D0 NOT CREATED`; `current recovery transaction root REQUIRED / MUST REMAIN`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+Current R6.5.2 state: `B8-A7-R6.5.2 live remediation retry authorization packet PASSED / CLOSED`; `B8-A7-R6.5.2 live retry execution BLOCKED / NO MUTATION`; `R6.5.2 retry authorization CONSUMED / NOT REUSABLE`; `fresh R6.5.2 C0/R0/H0/D0 NOT CREATED`; `current recovery transaction root ABSENT / REBASE REQUIRED`; `offline candidate artifact ABSENT / REBUILD REQUIRED`; `installed-plugin recovery sourcePath DANGLING`; `B8-A7-R6.5.3 rebuild-or-rebase design NOT STARTED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
 
 Historical A7.2 review state: implementation checkpoint `59a4f3e` was `IMPLEMENTED / REVIEW CHANGES REQUIRED`; checkpoint `eec0f91` closed the four main origin/continuity findings but remained review-pending for TTL cleanup ordering and primitive thresholds JSON. Checkpoint `47389d3` closed those final findings.
 

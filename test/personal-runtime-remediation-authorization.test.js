@@ -180,9 +180,10 @@ test("runtime-sync routes operators to cold inspection and the R6.3 candidate mo
       "personal-runtime-remediation-authorization.md",
       "npm ci --omit=dev",
       "$HOME/.local/node24/bin/node",
-      "offline candidate artifact=VALIDATED / FROZEN / EPHEMERAL",
+      "offline candidate artifact=ABSENT / REBUILD REQUIRED",
       "memory-engine-config-semantic-equivalence-v1",
-      "R6.5.2 retry candidate install/reload=NOT AUTHORIZED",
+      "R6.5.2 retry candidate install/reload=NOT PERFORMED",
+      "R6.5.3 artifact rebuild/recovery rebase=NOT AUTHORIZED",
     ],
     "runtime sync",
   );
@@ -210,7 +211,7 @@ test("ledger and devlog retain R6.3/R6.4 and record the safe R6.5 rollback", () 
     assert.match(text, /candidate Gateway activation(?:=|\s+)NOT REACHED/);
     assert.match(text, /B8-A7-R6\.5\.1 config semantic equivalence repair(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5\.2 live remediation retry authorization packet(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /R6\.5\.2 live retry execution(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /B8-A7-R6\.5\.2 live retry execution(?:=|\s+)BLOCKED \/ NO MUTATION/);
     assert.match(
       text,
       /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/,
