@@ -1,3 +1,29 @@
+## 2026-07-21
+
+### F1-D-B8-A7-R4: metadata ownership decision
+
+Accepted the B8-A7-R4 architecture decision that OpenClaw host core must be the single authoritative owner of plugin-install metadata and any derived ordinary-file publication. Option A, an upstream host publisher, is required. A memory-engine shadow publisher is rejected because it duplicates authority and cannot safely cover absent, disabled, migration, repair, and startup states. Direct SQLite/index consumption remains rejected by R2B.
+
+The decision separates `authority_state`, `installation_state`, and `policy_state`; `disabled-by-host-policy` is installed plus disabled, not authoritative absence. The host must own the manifest path, schema, authority revision, generation, publication identity, atomic replacement, permissions, rollback, recovery, and a startup reconciliation barrier before plugin lookup, discovery-driven activation, or runtime loading.
+
+A static package re-audit inspected `openclaw@2026.7.1-2` without installing it or starting OpenClaw. The package still uses the shared SQLite `installed_plugin_index`, writes that index before the matching config commit with rollback on failure, retains warning-only registry refresh that can enter discovery or plugin-loader import, and reaches `loadGatewayStartupPluginRuntime` without an R3A publication barrier. No ordinary-file publisher or durable publication revision was found.
+
+Current boundary:
+
+    B8-A7-R4 metadata ownership decision=ACCEPTED / OPTION A REQUIRED
+    B8-A7-R4 repository closure=IMPLEMENTED / EDI VERIFICATION PENDING
+    OpenClaw upstream host publisher=REQUIRED
+    memory-engine shadow publisher=REJECTED
+    direct SQLite/index consumer=REJECTED
+    real host publisher=NOT AUTHORIZED
+    production manifest consumer=NOT AUTHORIZED
+    host integration implementation=NOT STARTED
+    B8-A7 sustained runtime authorization=WITHHELD
+    B8-A7 sustained runtime window=NOT AUTHORIZED
+    B8-B removal=NOT AUTHORIZED
+
+Decision record: `docs/adr/host-plugin-metadata-ownership.md`.
+
 ## 2026-07-20
 
 ### F1-D-B8-A7-R3A: final documentation closeout

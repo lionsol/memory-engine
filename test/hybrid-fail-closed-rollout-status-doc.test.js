@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 
 const STATUS_DOC = new URL("../docs/hybrid-fail-closed-rollout-status.md", import.meta.url);
+const R4_ADR = new URL("../docs/adr/host-plugin-metadata-ownership.md", import.meta.url);
 const DOCS_INDEX = new URL("../docs/README.md", import.meta.url);
 const DEVLOG = new URL("../docs/devlog.md", import.meta.url);
 const RUNTIME_SYNC = new URL("../docs/runtime-sync.md", import.meta.url);
@@ -11,11 +12,37 @@ function read(url) {
   return readFileSync(url, "utf8");
 }
 
-test("Hybrid fail-closed rollout ledger exists and is indexed", () => {
+test("Hybrid fail-closed rollout ledger and R4 ADR exist and are indexed", () => {
   assert.equal(existsSync(STATUS_DOC), true);
+  assert.equal(existsSync(R4_ADR), true);
   const index = read(DOCS_INDEX);
   assert.match(index, /hybrid-fail-closed-rollout-status\.md/);
+  assert.match(index, /adr\/host-plugin-metadata-ownership\.md/);
   assert.match(index, /tool-surface-runtime-access-audit\.md/);
+});
+
+test("R4 ADR assigns publication authority to OpenClaw and preserves fail-closed boundaries", () => {
+  const adr = read(R4_ADR);
+  for (const token of [
+    "Status: Accepted",
+    "B8-A7-R4 Metadata Ownership Decision Review",
+    "Option A: OpenClaw upstream host publisher",
+    "Option B: memory-engine shadow publisher",
+    "Option C: direct SQLite/index consumption",
+    "openclaw@2026.7.1-2",
+    "authority_state",
+    "installation_state",
+    "policy_state",
+    "disabled-by-host-policy",
+    "The low-level SQLite writer is not the publication boundary",
+    "startup reconciliation",
+    "OpenClaw upstream host publisher=REQUIRED",
+    "real host publisher=NOT AUTHORIZED",
+    "production manifest consumer=NOT AUTHORIZED",
+    "B8-A7 sustained runtime authorization=WITHHELD",
+  ]) {
+    assert.equal(adr.includes(token), true, `missing R4 ADR token: ${token}`);
+  }
 });
 
 test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage 4 rerun status", () => {
@@ -72,6 +99,12 @@ test("rollout ledger records Stage 2/3 closeout, provenance hardening, and Stage
     "zero-consumer-write evidence",
     "B8-A7-R3B host metadata publisher integration-point source audit",
     "NOT FOUND / BLOCKED",
+    "B8-A7-R4 metadata ownership decision",
+    "ACCEPTED / OPTION A REQUIRED",
+    "OpenClaw upstream host publisher REQUIRED",
+    "openclaw@2026.7.1-2",
+    "installation_state",
+    "policy_state",
   ]) {
     assert.equal(doc.includes(token), true, `missing rollout ledger token: ${token}`);
   }
@@ -106,6 +139,10 @@ test("runtime sync documentation uses the inspected extension install path", () 
 test("devlog records Stage 1, corrected Stage 2/3 closeout, B8-A6.3, and Stage 4 rerun review", () => {
   const devlog = read(DEVLOG);
   for (const token of [
+    "## 2026-07-21",
+    "F1-D-B8-A7-R4: metadata ownership decision",
+    "openclaw@2026.7.1-2",
+    "OpenClaw upstream host publisher=REQUIRED",
     "## 2026-07-19",
     "Stage 2 KG full rollout and Stage 3 rollback closeout",
     "opencode/deepseek-v4-flash",
