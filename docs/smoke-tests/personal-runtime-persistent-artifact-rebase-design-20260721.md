@@ -1,6 +1,6 @@
 # B8-A7-R6.5.3 Persistent Artifact Rebuild and Recovery-Source Rebase Design
 
-> **Status: IMPLEMENTED / EDI VERIFICATION PENDING**
+> **Status: PASSED / CLOSED**
 >
 > Date: 2026-07-21
 >
@@ -371,7 +371,7 @@ configuration mutation=not performed
 memory-data restoration=not performed
 ```
 
-Full-suite and A5 smoke independent verification remain required before the design may close.
+Independent verification completed successfully after commit `048ab0d`; the design is passed and closed. R6.5.3A execution remains separately unauthorized.
 
 ## Current Boundary
 
@@ -381,8 +381,9 @@ R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
 candidate artifact=ABSENT / REBUILD REQUIRED
 current recovery transaction root=ABSENT / REBASE REQUIRED
 installed-plugin recovery sourcePath=DANGLING
-B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=IMPLEMENTED / EDI VERIFICATION PENDING
-R6.5.3A persistent artifact preparation=NOT AUTHORIZED
+B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
+B8-A7-R6.5.3A persistent artifact preparation authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
 R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
 R6.5.3 candidate activation=NOT AUTHORIZED
 persistent authority root=NOT CREATED

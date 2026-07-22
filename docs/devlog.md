@@ -1,5 +1,29 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.5.3A: offline persistent artifact preparation authorization
+
+Closed the R6.5.3 persistent authority design after commit `048ab0d` and independent verification. The design restores a durable owner-only authority under `$HOME/.openclaw/backups`, separates offline preparation from live recovery-source rebase, and keeps candidate activation independently authorized.
+
+Added a design-only R6.5.3A authorization packet. It binds the execution-time clean committed HEAD, current active runtime identity, Gateway PID/Node, and the fixed persistent parent. It permits only offline candidate and exact active-runtime R0 staging, validation, freeze, and same-filesystem atomic publication after a new exact approval. Gateway stop/start/restart, OpenClaw install/reload, sourcePath mutation, configuration mutation, memory-data mutation, and candidate activation remain unauthorized.
+
+No persistent parent or staging root was created. Gateway remained active as PID `344`.
+
+Current boundary:
+
+```text
+B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
+B8-A7-R6.5.3A persistent artifact preparation authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
+explicit R6.5.3A preparation approval=NOT RECEIVED
+persistent authority root=NOT CREATED
+persistent candidate=NOT CREATED
+persistent R0=NOT CREATED
+R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
+R6.5.3 candidate activation=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6.5.3: persistent artifact rebuild and recovery-source rebase design
 
 Closed the R6.5.2 blocked-decision record at commit `7d0b4a0`. The active extension remains operational, but the historical candidate and rollback transaction roots were removed from `/tmp`, while the installed-plugin record still names the missing R0 source path.
@@ -14,8 +38,10 @@ Current boundary:
 B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
 R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
 installed-plugin recovery sourcePath=DANGLING
-B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=IMPLEMENTED / EDI VERIFICATION PENDING
-R6.5.3A persistent artifact preparation=NOT AUTHORIZED
+B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
+B8-A7-R6.5.3A persistent artifact preparation authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
+explicit R6.5.3A preparation approval=NOT RECEIVED
 R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
 R6.5.3 candidate activation=NOT AUTHORIZED
 persistent authority root=NOT CREATED
