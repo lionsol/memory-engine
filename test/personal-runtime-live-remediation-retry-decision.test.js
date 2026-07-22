@@ -25,7 +25,9 @@ test("R6.5.2 blocked retry decision records missing authorities and no mutation"
     "active runtime identity=86d04dd7b07bbd62948381f26dadd6b4e444b993ae7bdf6e535b0a5a8152f1f1",
     "R6.5.2 retry authorization=CONSUMED / NOT REUSABLE",
     "installed-plugin recovery sourcePath=DANGLING",
-    "B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED",
+    "B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=IMPLEMENTED / EDI VERIFICATION PENDING",
+    "R6.5.3A persistent artifact preparation=NOT AUTHORIZED",
+    "R6.5.3B recovery-source rebase execution=NOT AUTHORIZED",
   ], "R6.5.2 blocked decision");
 });
 
@@ -33,7 +35,9 @@ test("current ledger and devlog record blocked retry without authorizing rebuild
   for (const text of [read(LEDGER), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.5\.2 live retry execution(?:=|\s+)BLOCKED \/ NO MUTATION/);
     assert.match(text, /R6\.5\.2 retry authorization(?:=|\s+)CONSUMED \/ NOT REUSABLE/);
-    assert.match(text, /B8-A7-R6\.5\.3 rebuild-or-rebase design(?:=|\s+)NOT STARTED/);
+    assert.match(text, /B8-A7-R6\.5\.3 persistent artifact rebuild\/recovery-source rebase design(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /R6\.5\.3A persistent artifact preparation(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /R6\.5\.3B recovery-source rebase execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/);
   }
 });

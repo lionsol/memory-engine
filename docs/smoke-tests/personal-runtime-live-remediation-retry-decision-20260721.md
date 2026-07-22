@@ -62,7 +62,13 @@ candidate artifact=ABSENT / REBUILD REQUIRED
 current recovery transaction root=ABSENT / REBASE REQUIRED
 installed-plugin recovery sourcePath=DANGLING
 fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
-B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
+B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.3A persistent artifact preparation=NOT AUTHORIZED
+R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
+R6.5.3 candidate activation=NOT AUTHORIZED
+persistent authority root=NOT CREATED
+persistent candidate=NOT CREATED
+persistent R0=NOT CREATED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-B removal=NOT AUTHORIZED
 ```

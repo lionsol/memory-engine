@@ -36,6 +36,7 @@ The B8-A7-R6.5 live remediation authorization packet is [personal-runtime-live-r
 The B8-A7-R6.5 live execution decision is [personal-runtime-live-remediation-decision-20260721.md](smoke-tests/personal-runtime-live-remediation-decision-20260721.md).
 The B8-A7-R6.5.2 live retry authorization packet is [personal-runtime-live-remediation-retry-authorization-20260721.md](smoke-tests/personal-runtime-live-remediation-retry-authorization-20260721.md).
 The B8-A7-R6.5.2 live retry execution decision is [personal-runtime-live-remediation-retry-decision-20260721.md](smoke-tests/personal-runtime-live-remediation-retry-decision-20260721.md).
+The B8-A7-R6.5.3 persistent artifact rebuild and recovery-source rebase design is [personal-runtime-persistent-artifact-rebase-design-20260721.md](smoke-tests/personal-runtime-persistent-artifact-rebase-design-20260721.md).
 
 Current remediation boundary:
 
@@ -60,7 +61,13 @@ Current remediation boundary:
     current recovery transaction root=ABSENT / REBASE REQUIRED
     offline candidate artifact=ABSENT / REBUILD REQUIRED
     installed-plugin recovery sourcePath=DANGLING
-    B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
+    B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=IMPLEMENTED / EDI VERIFICATION PENDING
+    R6.5.3A persistent artifact preparation=NOT AUTHORIZED
+    R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
+    R6.5.3 candidate activation=NOT AUTHORIZED
+    persistent authority root=NOT CREATED
+    persistent candidate=NOT CREATED
+    persistent R0=NOT CREATED
     OpenClaw upstream pull request=NOT REQUIRED / NOT PLANNED
     B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
     B8-A7 sustained runtime window=NOT AUTHORIZED
@@ -101,6 +108,7 @@ Current remediation boundary:
 | B8-A7-R6.5.1 config semantic equivalence repair | PASSED / CLOSED | Adds `memory-engine-config-semantic-equivalence-v1`, which allows only a canonical monotonic `meta.lastTouchedAt` update and fails closed on every other JSON path without exposing raw config values. Independent EDI verification passed. |
 | B8-A7-R6.5.2 live remediation retry authorization packet | PASSED / CLOSED | Binds the unchanged candidate and current recovery R0, requires a new transaction root with fresh C0/R0/H0/D0, uses the closed semantic-config policy, preserves the existing recovery root, and requires a new exact operator approval. Independent EDI verification passed. |
 | B8-A7-R6.5.2 live remediation retry execution | BLOCKED / NO MUTATION | Final preflight found the candidate and current recovery transaction root absent from `/tmp`; the installed sourcePath is dangling. Gateway, config, runtime, and data were not mutated. The supplied authorization is consumed and cannot be reused. |
+| B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design | IMPLEMENTED / EDI VERIFICATION PENDING | Restores a durable owner-only authority under `$HOME/.openclaw/backups`; separates offline candidate/R0 preparation, live same-runtime sourcePath rebase, and later candidate activation. No preparation or live mutation is authorized. |
 | B8-B legacy fallback removal | NOT AUTHORIZED | Requires completed A7 production evidence window, zero fallback events, tested replacement rollback, complete inventory, and removal-gate approval. |
 
 ## Stage 1 Canonical Evidence
@@ -744,7 +752,15 @@ Read-only revalidation after commit `6310673` confirmed source/candidate parity 
 
 The packet requires a new retry transaction root, fresh C0/R0/H0/D0, `memory-engine-config-semantic-equivalence-v1`, install-time data identity equality, bounded Gateway readiness, loaded A7.4 methods, all three memory-engine tools, full tests, A5 smoke 10/10, and retry-specific rollback. The original R6.5 approval and prior transaction artifacts cannot authorize the retry.
 
-Current R6.5.2 state: `B8-A7-R6.5.2 live remediation retry authorization packet PASSED / CLOSED`; `B8-A7-R6.5.2 live retry execution BLOCKED / NO MUTATION`; `R6.5.2 retry authorization CONSUMED / NOT REUSABLE`; `fresh R6.5.2 C0/R0/H0/D0 NOT CREATED`; `current recovery transaction root ABSENT / REBASE REQUIRED`; `offline candidate artifact ABSENT / REBUILD REQUIRED`; `installed-plugin recovery sourcePath DANGLING`; `B8-A7-R6.5.3 rebuild-or-rebase design NOT STARTED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+Current R6.5.2 state: `B8-A7-R6.5.2 live remediation retry authorization packet PASSED / CLOSED`; `B8-A7-R6.5.2 live retry execution BLOCKED / NO MUTATION`; `R6.5.2 retry authorization CONSUMED / NOT REUSABLE`; `fresh R6.5.2 C0/R0/H0/D0 NOT CREATED`; `current recovery transaction root ABSENT / REBASE REQUIRED`; `offline candidate artifact ABSENT / REBUILD REQUIRED`; `installed-plugin recovery sourcePath DANGLING`; `B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design IMPLEMENTED / EDI VERIFICATION PENDING`; `R6.5.3A persistent artifact preparation NOT AUTHORIZED`; `R6.5.3B recovery-source rebase execution NOT AUTHORIZED`; `R6.5.3 candidate activation NOT AUTHORIZED`; `persistent authority root NOT CREATED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
+
+## B8-A7-R6.5.3 Persistent Artifact Rebuild and Recovery-Source Rebase Design
+
+The design is [`smoke-tests/personal-runtime-persistent-artifact-rebase-design-20260721.md`](smoke-tests/personal-runtime-persistent-artifact-rebase-design-20260721.md).
+
+It restores the R6.3 durable-root principle under `$HOME/.openclaw/backups/memory-engine/r6.5.3/<UTC-run-id>`, rejects recreating or symlinking the vanished `/tmp` paths, and requires atomic publication with canonical candidate and R0 manifests. R6.5.3A may later build a persistent candidate and an exact active-runtime R0 without touching the Gateway. R6.5.3B is a separate live transaction that installs only the identical persistent R0 to repair the installed sourcePath. Candidate activation remains a later independently authorized stage.
+
+Current R6.5.3 state: `B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design IMPLEMENTED / EDI VERIFICATION PENDING`; `R6.5.3A persistent artifact preparation NOT AUTHORIZED`; `R6.5.3B recovery-source rebase execution NOT AUTHORIZED`; `R6.5.3 candidate activation NOT AUTHORIZED`; `persistent authority root NOT CREATED`; `persistent candidate NOT CREATED`; `persistent R0 NOT CREATED`; `Gateway stop/start/restart NOT AUTHORIZED`; `B8-A7 sustained runtime authorization WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED`; `B8-B removal NOT AUTHORIZED`.
 
 Historical A7.2 review state: implementation checkpoint `59a4f3e` was `IMPLEMENTED / REVIEW CHANGES REQUIRED`; checkpoint `eec0f91` closed the four main origin/continuity findings but remained review-pending for TTL cleanup ordering and primitive thresholds JSON. Checkpoint `47389d3` closed those final findings.
 

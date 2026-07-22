@@ -183,7 +183,9 @@ test("runtime-sync routes operators to cold inspection and the R6.3 candidate mo
       "offline candidate artifact=ABSENT / REBUILD REQUIRED",
       "memory-engine-config-semantic-equivalence-v1",
       "R6.5.2 retry candidate install/reload=NOT PERFORMED",
-      "R6.5.3 artifact rebuild/recovery rebase=NOT AUTHORIZED",
+      "R6.5.3A persistent artifact preparation=NOT AUTHORIZED",
+      "R6.5.3B recovery-source rebase execution=NOT AUTHORIZED",
+      "R6.5.3 candidate activation=NOT AUTHORIZED",
     ],
     "runtime sync",
   );

@@ -382,7 +382,11 @@ B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
 R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
 current recovery transaction root=ABSENT / REBASE REQUIRED
 candidate artifact=ABSENT / REBUILD REQUIRED
-B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
+B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.3A persistent artifact preparation=NOT AUTHORIZED
+R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
+R6.5.3 candidate activation=NOT AUTHORIZED
+persistent authority root=NOT CREATED
 ```
 
 Repository closeout preflight after the safe rollback and R6.5.1 implementation:
@@ -468,7 +472,11 @@ fresh R6.5.2 C0/R0/H0/D0=NOT CREATED
 current recovery transaction root=ABSENT / REBASE REQUIRED
 candidate artifact=ABSENT / REBUILD REQUIRED
 installed-plugin recovery sourcePath=DANGLING
-B8-A7-R6.5.3 rebuild-or-rebase design=NOT STARTED
+B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.3A persistent artifact preparation=NOT AUTHORIZED
+R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
+R6.5.3 candidate activation=NOT AUTHORIZED
+persistent authority root=NOT CREATED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED

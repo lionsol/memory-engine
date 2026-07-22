@@ -1,5 +1,30 @@
 ## 2026-07-21
 
+### F1-D-B8-A7-R6.5.3: persistent artifact rebuild and recovery-source rebase design
+
+Closed the R6.5.2 blocked-decision record at commit `7d0b4a0`. The active extension remains operational, but the historical candidate and rollback transaction roots were removed from `/tmp`, while the installed-plugin record still names the missing R0 source path.
+
+Added a design-only recovery plan that restores the original durable-root principle under `$HOME/.openclaw/backups/memory-engine/r6.5.3/<UTC-run-id>`. It rejects recreating or symlinking the old `/tmp` path, manual sourcePath edits, and combining rollback repair with candidate activation. R6.5.3A separately prepares a persistent candidate and an exact active-runtime R0 with atomic publication, canonical manifests, native smokes, parity zero, and no shared inodes. R6.5.3B is a later live transaction that installs only the identical persistent R0 to rebase the installed sourcePath. Candidate activation remains a later separate authorization.
+
+No persistent artifact root, candidate, R0, config backup, data backup, Gateway mutation, install, registry edit, or runtime activation was performed. Repository preflight passed 54/54 focused R6.3-R6.5.3, artifact, parity, config, ledger, and authorization tests; static check covered 532 files; `git diff --check` passed; Gateway remained active as PID `344`; and the persistent authority root remained uncreated.
+
+Current boundary:
+
+```text
+B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
+R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
+installed-plugin recovery sourcePath=DANGLING
+B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=IMPLEMENTED / EDI VERIFICATION PENDING
+R6.5.3A persistent artifact preparation=NOT AUTHORIZED
+R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
+R6.5.3 candidate activation=NOT AUTHORIZED
+persistent authority root=NOT CREATED
+persistent candidate=NOT CREATED
+persistent R0=NOT CREATED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-B removal=NOT AUTHORIZED
+```
+
 ### F1-D-B8-A7-R6.5.2 execution: preflight blocked without mutation
 
 Received the exact R6.5.2 retry authorization, then ran the mandatory no-mutation preflight before creating a transaction root or stopping the Gateway. Repository state was clean at commit `8c365c5`, but both required filesystem authorities were absent: `/tmp/memory-engine-r6.4-9b6b734/candidate` and `/tmp/memory-engine-r6.5-live-2415dfe`. The installed-plugin record still points to the missing `/tmp/memory-engine-r6.5-live-2415dfe/runtime/r0` recovery source.
