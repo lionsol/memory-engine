@@ -26,7 +26,7 @@ test("R6.5.2 blocked retry decision records missing authorities and no mutation"
     "R6.5.2 retry authorization=CONSUMED / NOT REUSABLE",
     "installed-plugin recovery sourcePath=DANGLING",
     "B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED",
-    "B8-A7-R6.5.3A persistent artifact preparation authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING",
+    "B8-A7-R6.5.3A persistent artifact preparation authorization packet=PASSED / CLOSED",
     "R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED",
     "R6.5.3B recovery-source rebase execution=NOT AUTHORIZED",
   ], "R6.5.2 blocked decision");
@@ -37,7 +37,7 @@ test("current ledger and devlog record blocked retry without authorizing rebuild
     assert.match(text, /B8-A7-R6\.5\.2 live retry execution(?:=|\s+)BLOCKED \/ NO MUTATION/);
     assert.match(text, /R6\.5\.2 retry authorization(?:=|\s+)CONSUMED \/ NOT REUSABLE/);
     assert.match(text, /B8-A7-R6\.5\.3 persistent artifact rebuild\/recovery-source rebase design(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /R6\.5\.3A persistent artifact preparation execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /R6\.5\.3B recovery-source rebase execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/);

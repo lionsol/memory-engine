@@ -6,13 +6,13 @@ Closed the R6.5.3 persistent authority design after commit `048ab0d` and indepen
 
 Added a design-only R6.5.3A authorization packet. It binds the execution-time clean committed HEAD, current active runtime identity, Gateway PID/Node, and the fixed persistent parent. It permits only offline candidate and exact active-runtime R0 staging, validation, freeze, and same-filesystem atomic publication after a new exact approval. Gateway stop/start/restart, OpenClaw install/reload, sourcePath mutation, configuration mutation, memory-data mutation, and candidate activation remain unauthorized.
 
-No persistent parent or staging root was created. Gateway remained active as PID `344`.
+No persistent parent or staging root was created. Gateway remained active as PID `344`. Independent verification completed successfully, so the R6.5.3A authorization packet is passed and closed; execution remains separately unauthorized.
 
 Current boundary:
 
 ```text
 B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
-B8-A7-R6.5.3A persistent artifact preparation authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.3A persistent artifact preparation authorization packet=PASSED / CLOSED
 R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
 explicit R6.5.3A preparation approval=NOT RECEIVED
 persistent authority root=NOT CREATED
@@ -39,7 +39,7 @@ B8-A7-R6.5.2 live retry execution=BLOCKED / NO MUTATION
 R6.5.2 retry authorization=CONSUMED / NOT REUSABLE
 installed-plugin recovery sourcePath=DANGLING
 B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
-B8-A7-R6.5.3A persistent artifact preparation authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.3A persistent artifact preparation authorization packet=PASSED / CLOSED
 R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
 explicit R6.5.3A preparation approval=NOT RECEIVED
 R6.5.3B recovery-source rebase execution=NOT AUTHORIZED

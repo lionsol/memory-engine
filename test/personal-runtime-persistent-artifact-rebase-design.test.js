@@ -108,7 +108,7 @@ test("R6.5.3 keeps core DB and candidate activation outside the rebase authoriza
 test("current documents close R6.5.3 design and keep R6.5.3A execution unauthorized", () => {
   for (const text of [read(DESIGN), read(LEDGER), read(RUNTIME_SYNC), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.5\.3 persistent artifact rebuild\/recovery-source rebase design(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /R6\.5\.3A persistent artifact preparation execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /R6\.5\.3B recovery-source rebase execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /R6\.5\.3 candidate activation(?:=|\s+)NOT AUTHORIZED/);

@@ -104,7 +104,7 @@ test("R6.5.3A exact approval is distinct and execution remains unauthorized", ()
 test("current documents close design and keep R6.5.3A execution unauthorized", () => {
   for (const text of [read(LEDGER), read(RUNTIME_SYNC), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.5\.3 persistent artifact rebuild\/recovery-source rebase design(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)IMPLEMENTED \/ EDI VERIFICATION PENDING/);
+    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /R6\.5\.3A persistent artifact preparation execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /persistent authority root(?:=|\s+)NOT CREATED/);
     assert.match(text, /R6\.5\.3B recovery-source rebase execution(?:=|\s+)NOT AUTHORIZED/);

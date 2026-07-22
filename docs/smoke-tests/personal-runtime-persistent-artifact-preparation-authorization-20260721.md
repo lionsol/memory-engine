@@ -1,6 +1,6 @@
 # B8-A7-R6.5.3A Offline Persistent Artifact Preparation Authorization
 
-> **Status: IMPLEMENTED / EDI VERIFICATION PENDING**
+> **Status: PASSED / CLOSED**
 >
 > Date: 2026-07-21
 >
@@ -283,7 +283,7 @@ A generic “continue,” the consumed R6.5.2 authorization, or an approval with
 
 ```text
 B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
-B8-A7-R6.5.3A persistent artifact preparation authorization packet=IMPLEMENTED / EDI VERIFICATION PENDING
+B8-A7-R6.5.3A persistent artifact preparation authorization packet=PASSED / CLOSED
 R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
 explicit R6.5.3A preparation approval=NOT RECEIVED
 persistent authority root=NOT CREATED
