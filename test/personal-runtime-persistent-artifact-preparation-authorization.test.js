@@ -87,7 +87,7 @@ test("R6.5.3A excludes secrets links production data and live mutation", () => {
   ], "non-mutation boundary");
 });
 
-test("R6.5.3A exact approval is distinct and execution remains unauthorized", () => {
+test("R6.5.3A exact approval is distinct and the later execution is recorded as blocked", () => {
   requireTokens(read(PACKET), [
     "AUTHORIZE B8-A7-R6.5.3A OFFLINE PERSISTENT ARTIFACT PREPARATION",
     "reviewed source HEAD=<exact clean committed HEAD>",
@@ -96,17 +96,20 @@ test("R6.5.3A exact approval is distinct and execution remains unauthorized", ()
     "offline candidate and exact active-runtime R0 staging, validation, freeze, and atomic publication are authorized",
     "Gateway stop/start/restart, OpenClaw install/reload, sourcePath mutation, candidate activation, configuration mutation, and memory-data mutation are not authorized",
     "A generic “continue,” the consumed R6.5.2 authorization, or an approval with missing or stale values is insufficient",
-    "R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED",
-    "explicit R6.5.3A preparation approval=NOT RECEIVED",
+    "B8-A7-R6.5.3A persistent artifact preparation execution=BLOCKED / NO PUBLICATION",
+    "R6.5.3A authorization=CONSUMED / NOT REUSABLE",
+    "B8-A7-R6.5.3A.1 freeze-model repair=NOT STARTED",
   ], "exact preparation approval");
 });
 
-test("current documents close design and keep R6.5.3A execution unauthorized", () => {
+test("current documents record blocked R6.5.3A publication and consumed authorization", () => {
   for (const text of [read(LEDGER), read(RUNTIME_SYNC), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.5\.3 persistent artifact rebuild\/recovery-source rebase design(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /R6\.5\.3A persistent artifact preparation execution(?:=|\s+)NOT AUTHORIZED/);
-    assert.match(text, /persistent authority root(?:=|\s+)NOT CREATED/);
+    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation execution(?:=|\s+)BLOCKED \/ NO PUBLICATION/);
+    assert.match(text, /R6\.5\.3A authorization(?:=|\s+)CONSUMED \/ NOT REUSABLE/);
+    assert.match(text, /persistent authority root(?:=|\s+)NOT PUBLISHED/);
+    assert.match(text, /B8-A7-R6\.5\.3A\.1 freeze-model repair(?:=|\s+)NOT STARTED/);
     assert.match(text, /R6\.5\.3B recovery-source rebase execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /R6\.5\.3 candidate activation(?:=|\s+)NOT AUTHORIZED/);
   }

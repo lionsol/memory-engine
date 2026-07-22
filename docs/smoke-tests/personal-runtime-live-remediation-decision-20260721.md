@@ -384,11 +384,12 @@ current recovery transaction root=ABSENT / REBASE REQUIRED
 candidate artifact=ABSENT / REBUILD REQUIRED
 B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
 B8-A7-R6.5.3A persistent artifact preparation authorization packet=PASSED / CLOSED
-R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
-explicit R6.5.3A preparation approval=NOT RECEIVED
+B8-A7-R6.5.3A persistent artifact preparation execution=BLOCKED / NO PUBLICATION
+R6.5.3A authorization=CONSUMED / NOT REUSABLE
+persistent authority root=NOT PUBLISHED
+B8-A7-R6.5.3A.1 freeze-model repair=NOT STARTED
 R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
 R6.5.3 candidate activation=NOT AUTHORIZED
-persistent authority root=NOT CREATED
 ```
 
 Repository closeout preflight after the safe rollback and R6.5.1 implementation:
@@ -476,11 +477,12 @@ candidate artifact=ABSENT / REBUILD REQUIRED
 installed-plugin recovery sourcePath=DANGLING
 B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
 B8-A7-R6.5.3A persistent artifact preparation authorization packet=PASSED / CLOSED
-R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
-explicit R6.5.3A preparation approval=NOT RECEIVED
+B8-A7-R6.5.3A persistent artifact preparation execution=BLOCKED / NO PUBLICATION
+R6.5.3A authorization=CONSUMED / NOT REUSABLE
+persistent authority root=NOT PUBLISHED
+B8-A7-R6.5.3A.1 freeze-model repair=NOT STARTED
 R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
 R6.5.3 candidate activation=NOT AUTHORIZED
-persistent authority root=NOT CREATED
 B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
 B8-A7 sustained runtime window=NOT AUTHORIZED
 B8-B removal=NOT AUTHORIZED

@@ -132,7 +132,9 @@ test("current documents record the blocked R6.5.2 attempt and require rebuild or
     assert.match(text, /R6\.5\.2 retry authorization(?:=|\s+)CONSUMED \/ NOT REUSABLE/);
     assert.match(text, /B8-A7-R6\.5\.3 persistent artifact rebuild\/recovery-source rebase design(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /R6\.5\.3A persistent artifact preparation execution(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation execution(?:=|\s+)BLOCKED \/ NO PUBLICATION/);
+    assert.match(text, /R6\.5\.3A authorization(?:=|\s+)CONSUMED \/ NOT REUSABLE/);
+    assert.match(text, /B8-A7-R6\.5\.3A\.1 freeze-model repair(?:=|\s+)NOT STARTED/);
     assert.match(text, /R6\.5\.3B recovery-source rebase execution(?:=|\s+)NOT AUTHORIZED/);
   }
 });

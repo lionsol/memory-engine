@@ -105,14 +105,16 @@ test("R6.5.3 keeps core DB and candidate activation outside the rebase authoriza
   ], "separation and retention");
 });
 
-test("current documents close R6.5.3 design and keep R6.5.3A execution unauthorized", () => {
+test("current documents record the blocked R6.5.3A publication and pending freeze-model repair", () => {
   for (const text of [read(DESIGN), read(LEDGER), read(RUNTIME_SYNC), read(DEVLOG)]) {
     assert.match(text, /B8-A7-R6\.5\.3 persistent artifact rebuild\/recovery-source rebase design(?:=|\s+)PASSED \/ CLOSED/);
     assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation authorization packet(?:=|\s+)PASSED \/ CLOSED/);
-    assert.match(text, /R6\.5\.3A persistent artifact preparation execution(?:=|\s+)NOT AUTHORIZED/);
+    assert.match(text, /B8-A7-R6\.5\.3A persistent artifact preparation execution(?:=|\s+)BLOCKED \/ NO PUBLICATION/);
+    assert.match(text, /R6\.5\.3A authorization(?:=|\s+)CONSUMED \/ NOT REUSABLE/);
+    assert.match(text, /persistent authority root(?:=|\s+)NOT PUBLISHED/);
+    assert.match(text, /B8-A7-R6\.5\.3A\.1 freeze-model repair(?:=|\s+)NOT STARTED/);
     assert.match(text, /R6\.5\.3B recovery-source rebase execution(?:=|\s+)NOT AUTHORIZED/);
     assert.match(text, /R6\.5\.3 candidate activation(?:=|\s+)NOT AUTHORIZED/);
-    assert.match(text, /persistent authority root(?:=|\s+)NOT CREATED/);
     assert.match(text, /B8-A7 sustained runtime authorization(?:=|\s+)WITHHELD \/ PERSONAL PROFILE REMEDIATION REQUIRED/);
   }
 });

@@ -284,11 +284,14 @@ A generic “continue,” the consumed R6.5.2 authorization, or an approval with
 ```text
 B8-A7-R6.5.3 persistent artifact rebuild/recovery-source rebase design=PASSED / CLOSED
 B8-A7-R6.5.3A persistent artifact preparation authorization packet=PASSED / CLOSED
-R6.5.3A persistent artifact preparation execution=NOT AUTHORIZED
-explicit R6.5.3A preparation approval=NOT RECEIVED
-persistent authority root=NOT CREATED
-persistent candidate=NOT CREATED
-persistent R0=NOT CREATED
+B8-A7-R6.5.3A persistent artifact preparation execution=BLOCKED / NO PUBLICATION
+R6.5.3A authorization=CONSUMED / NOT REUSABLE
+persistent parent=EXISTS / EMPTY / MODE 0700
+persistent authority root=NOT PUBLISHED
+persistent candidate=NOT PUBLISHED
+persistent R0=NOT PUBLISHED
+staging root=REMOVED
+B8-A7-R6.5.3A.1 freeze-model repair=NOT STARTED
 R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
 R6.5.3 candidate activation=NOT AUTHORIZED
 Gateway stop/start/restart=NOT AUTHORIZED

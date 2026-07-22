@@ -1,3 +1,32 @@
+## 2026-07-22
+
+### F1-D-B8-A7-R6.5.3A execution: freeze-model stop before publication
+
+Received the exact R6.5.3A authorization for short HEAD `b2bc851`, which uniquely resolved to full commit `b2bc851d6dd2111344b4328ecc41b0a3b866acad`, active runtime identity `86d04dd7…f1f1`, persistent parent `$HOME/.openclaw/backups/memory-engine/r6.5.3`, and Gateway PID `344`.
+
+Created owner-only staging `.staging-20260722T032300Z-33b09b9b`. Active-before, active-after, and copied R0 artifact identities all equaled `bf0e9b53…78e`; active/R0 runtime parity was zero. The candidate built under Node 24 / ABI 137 with `better-sqlite3 11.10.0` and `@lancedb/lancedb 0.29.0`; candidate runtime identity was `dc459f5…d718`, source/candidate parity was zero, archive SHA-256 was `8a62d85c…328f8`, and both candidate and R0 SQLite/LanceDB native smokes passed.
+
+Final publication was blocked because the packet requires R0 to retain exact mode-bearing full-tree identity with the active runtime and also become read-only. Removing owner-write bits changes the canonical artifact identity, while the current filesystem does not permit user `lionsol` to apply immutable attributes. The transaction therefore returned `R6.5.3A PREPARATION BLOCKED / FREEZE MODEL REPAIR REQUIRED` rather than weakening either gate.
+
+Deleted the complete staging root. The persistent parent remains empty at mode 0700; no FINAL_ROOT, candidate, R0, config copy, data copy, or authority manifest was published. Gateway remained active as PID `344`, config SHA-256 remained `da9e443c…f2a`, and no OpenClaw install/reload, sourcePath mutation, configuration mutation, or memory-data mutation occurred.
+
+Current boundary:
+
+```text
+B8-A7-R6.5.3A persistent artifact preparation execution=BLOCKED / NO PUBLICATION
+R6.5.3A authorization=CONSUMED / NOT REUSABLE
+persistent parent=EXISTS / EMPTY / MODE 0700
+persistent authority root=NOT PUBLISHED
+persistent candidate=NOT PUBLISHED
+persistent R0=NOT PUBLISHED
+staging root=REMOVED
+B8-A7-R6.5.3A.1 freeze-model repair=NOT STARTED
+R6.5.3B recovery-source rebase execution=NOT AUTHORIZED
+R6.5.3 candidate activation=NOT AUTHORIZED
+B8-A7 sustained runtime authorization=WITHHELD / PERSONAL PROFILE REMEDIATION REQUIRED
+B8-B removal=NOT AUTHORIZED
+```
+
 ## 2026-07-21
 
 ### F1-D-B8-A7-R6.5.3A: offline persistent artifact preparation authorization
