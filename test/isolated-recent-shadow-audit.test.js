@@ -230,7 +230,7 @@ test("shadow audit reports guarded_only when snapshot guard forces guarded fallb
   }
 });
 
-test("shadow audit reports no positive candidate evidence and missing-confidence semantics", async () => {
+test("shadow audit treats missing-confidence external candidates as positive evidence", async () => {
   const root = createFixtureRoot();
   try {
     const core = createCoreDb(root);
@@ -246,11 +246,13 @@ test("shadow audit reports no positive candidate evidence and missing-confidence
       includeNoHitControl: false,
       minConfidence: 0.9,
     }, async (report) => {
-      assert.equal(report.decision.class, "inconclusive");
-      assert.equal(report.decision.reason, "no_positive_candidate_evidence");
-      assert.equal(report.summary.no_positive_candidate_evidence_count > 0, true);
+      assert.equal(report.decision.class, "pass");
+      assert.equal(report.decision.reason, "all_recent_scenarios_isolated_equivalent");
+      assert.equal(report.summary.isolated_equivalent_count > 0, true);
+      assert.equal(report.summary.no_positive_candidate_evidence_count, 0);
       assert.equal(report.missing_confidence_evidence.real_snapshot_count, 1);
       assert.equal(report.missing_confidence_evidence.synthetic_contract_test_present, true);
+      assert.equal(report.decision.production_enablement_recommended, false);
     });
   } finally {
     rmSync(root, { recursive: true, force: true });

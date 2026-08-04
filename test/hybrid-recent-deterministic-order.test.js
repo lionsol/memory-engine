@@ -356,7 +356,7 @@ test("Recent semantic regressions stay unchanged for archived LIMIT, missing con
     const { ctx, records } = await collect(db, {
       recentTopK: 1,
       recentRerankTopK: 1,
-      minConfidence: 0,
+      minConfidence: 0.15,
     });
     const row = recentSqlRecords(records)[0].rows[0];
     assert.equal(row.id, "A");
@@ -364,8 +364,10 @@ test("Recent semantic regressions stay unchanged for archived LIMIT, missing con
     assert.equal(row.base_tau, 7);
     assert.equal(row.hit_count, 0);
     assert.equal(row.is_archived, 0);
-    assert.equal(ctx.channels.recent[0].confidence_mode, "managed");
-    assert.equal(ctx.channels.recent[0].confidence, 0);
+    assert.equal(ctx.channels.recent[0].confidence_mode, "external");
+    assert.equal(ctx.channels.recent[0].confidence, null);
+    assert.equal(ctx.channels.recent[0].source_type, "openclaw-core");
+    assert.equal(ctx.channels.recent[0].external_badge, true);
   });
 
   await withFixture(async (db) => {

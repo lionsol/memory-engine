@@ -305,13 +305,13 @@ test("isolated Recent matches legacy across like, recent, episode, and recent_fa
     insertChunk(core, { id: "A", updatedAt: 1000, path: "memory/smart-add/A.md", text: "alpha smart add A" });
     insertChunk(core, { id: "Z-archived", updatedAt: 5000, path: "memory/smart-add/Z-archived.md", text: "alpha archived" });
     insertConfidence(engine, { id: "A", category: "raw_log", kgData: "alpha archived-limit" });
-    insertConfidence(engine, { id: "B", category: "episodic", kgData: "alpha archived-limit" });
     insertConfidence(engine, { id: "C", category: "raw_log", kgData: "alpha archived-limit" });
     insertConfidence(engine, { id: "Z-archived", category: "raw_log", isArchived: 1, kgData: "alpha archived-limit" });
   }, async (paths) => {
     const legacy = await runRecent(paths, {
       ftsIsEmpty: true,
       recentAccessMode: "legacy",
+      minConfidence: 0.15,
       recentTopK: 3,
       recentRerankTopK: 3,
       recentFallbackTopK: 3,
@@ -321,6 +321,7 @@ test("isolated Recent matches legacy across like, recent, episode, and recent_fa
       ftsIsEmpty: true,
       recentAccessMode: "isolated",
       recentIsolationRequested: true,
+      minConfidence: 0.15,
       recentTopK: 3,
       recentRerankTopK: 3,
       recentFallbackTopK: 3,
@@ -343,6 +344,15 @@ test("isolated Recent matches legacy across like, recent, episode, and recent_fa
     assert.deepEqual(ids(isolated.ctx.channels.recent), ["A", "B", "C"]);
     assert.deepEqual(ids(isolated.ctx.channels.episode), ["B"]);
     assert.deepEqual(ids(isolated.ctx.channels.recent_fallback), ["A", "B", "C"]);
+    for (const ctx of [legacy.ctx, isolated.ctx]) {
+      for (const channel of ["recent", "episode", "recent_fallback"]) {
+        const candidate = ctx.channels[channel].find(row => row.id === "B");
+        assert.equal(candidate?.confidence_mode, "external", `${channel} confidence_mode`);
+        assert.equal(candidate?.confidence, null, `${channel} confidence`);
+        assert.equal(candidate?.source_type, "openclaw-core", `${channel} source_type`);
+        assert.equal(candidate?.external_badge, true, `${channel} external_badge`);
+      }
+    }
     assert.equal(isolated.records.some(record => record.db === "core" && record.sql.includes("json_each(?) AS archived")), true);
     assert.equal(isolated.records.some(record => record.db === "core" && record.sql.includes("NOT IN")), true);
     assert.equal(isolated.records.some(record => record.db === "core" && record.sql.includes("NOT EXISTS")), false);

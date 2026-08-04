@@ -43,6 +43,40 @@ test("normalizeExternalMemory keeps managed candidate semantics", () => {
   assert.equal(candidate.created_at, 1710000000);
 });
 
+test("normalizeExternalMemory treats missing, undefined, and null confidence as external", () => {
+  const candidates = [
+    normalizeExternalMemory({ id: "missing-confidence", path: "docs/missing.md" }),
+    normalizeExternalMemory({ id: "undefined-confidence", path: "docs/undefined.md", confidence: undefined }),
+    normalizeExternalMemory({ id: "null-confidence", path: "docs/null.md", confidence: null }),
+  ];
+
+  for (const candidate of candidates) {
+    assert.equal(candidate.confidence_mode, "external");
+    assert.equal(candidate.confidence, null);
+    assert.equal(candidate.source_type, "openclaw-core");
+    assert.equal(candidate.external_badge, true);
+    assert.equal(isCandidateAllowedForRerank(candidate, 0.95), true);
+  }
+});
+
+test("normalizeExternalMemory preserves numeric zero as managed confidence", () => {
+  const candidate = normalizeExternalMemory({
+    id: "zero-confidence",
+    path: "memory/smart-add/zero.md",
+    confidence: 0,
+  }, {
+    nowSec: 1710000000,
+    calcRealtimeConf: row => row.confidence,
+  });
+
+  assert.equal(candidate.confidence_mode, "managed");
+  assert.equal(candidate.confidence, 0);
+  assert.equal(candidate.source_type, "memory-engine-managed");
+  assert.equal(candidate.external_badge, false);
+  assert.equal(isCandidateAllowedForRerank(candidate, 0), true);
+  assert.equal(isCandidateAllowedForRerank(candidate, 0.15), false);
+});
+
 test("normalizeExternalMemory keeps external candidate semantics and rerank allowance", () => {
   const candidate = normalizeExternalMemory({
     id: "ext-1",

@@ -59,6 +59,7 @@ function createFixture() {
     ["null-coalesced-fields", "memory/smart-add/null-coalesced.md", "needle null coalesced fields"],
     ["generated", "memory/generated-smart-add/generated.md", "needle ".repeat(40)],
     [SPECIAL_ACTIVE_ID, "memory/smart-add/special.md", "needle special unicode"],
+    ["zero-confidence", "memory/smart-add/zero.md", "needle zero confidence"],
   ];
   const insertChunk = core.prepare("INSERT INTO chunks (id, path, text, updated_at) VALUES (?, ?, ?, ?)");
   const insertFts = core.prepare("INSERT INTO chunks_fts (text, id, path) VALUES (?, ?, ?)");
@@ -90,6 +91,7 @@ function createFixture() {
   insertConfidence.run("null-coalesced-fields", 0.8, 1, null, null, null, null, null, null);
   insertConfidence.run("generated", 0.8, 1, 7, 1, 0, 0, "raw_log", 0);
   insertConfidence.run(SPECIAL_ACTIVE_ID, 0.8, 1, 7, 1, 0, 0, "raw_log", 0);
+  insertConfidence.run("zero-confidence", 0, 1, 7, 1, 0, 0, "raw_log", 0);
   engine.close();
   return { root, corePath, enginePath };
 }
@@ -178,6 +180,7 @@ async function collectBoth(fixture, options = {}) {
     const legacyCtx = makeContext({
       confidenceMap,
       ftsTopK: options.ftsTopK || 3,
+      minConfidence: options.minConfidence ?? 0,
       query: options.query || "needle",
       fallback: options.fallback || "needle OR fallback",
       calls: legacyCalls,
@@ -186,10 +189,13 @@ async function collectBoth(fixture, options = {}) {
         return run(legacy);
       },
       withCoreDb: run => run(core),
+      normalizeCandidate: options.normalizeCandidate ?? (row => row),
+      filterForRerank: options.filterForRerank ?? (() => true),
     });
     const isolatedCtx = makeContext({
       confidenceMap,
       ftsTopK: options.ftsTopK || 3,
+      minConfidence: options.minConfidence ?? 0,
       query: options.query || "needle",
       fallback: options.fallback || "needle OR fallback",
       calls: isolatedCalls,
@@ -199,6 +205,8 @@ async function collectBoth(fixture, options = {}) {
         isolatedCalls.push("core");
         return run(core);
       },
+      normalizeCandidate: options.normalizeCandidate ?? (row => row),
+      filterForRerank: options.filterForRerank ?? (() => true),
     });
     await collectFtsCandidates(legacyCtx);
     await collectFtsCandidates(isolatedCtx);
@@ -261,7 +269,7 @@ test("isolated FTS merges missing and NULL confidence fields like legacy", async
   }
 });
 
-test("missing confidence stays managed in production normalization for both legacy and isolated modes", async () => {
+test("nullish confidence uses external semantics while numeric zero remains managed in production normalization", async () => {
   const fixture = createFixture();
   try {
     const confidenceMap = openConfidenceMap(fixture.enginePath);
@@ -283,10 +291,21 @@ test("missing confidence stays managed in production normalization for both lega
           filterForRerank: item => isCandidateAllowedForRerank(item, 0),
         });
         await collectFtsCandidates(keptCtx);
-        const kept = keptCtx.channels.fts.find(row => row.id === "missing-confidence");
-        assert.ok(kept, mode);
-        assert.equal(kept.confidence_mode, "managed", mode);
-        assert.equal(kept.confidence, 0, mode);
+        const missing = keptCtx.channels.fts.find(row => row.id === "missing-confidence");
+        const nulled = keptCtx.channels.fts.find(row => row.id === "null-confidence");
+        const zero = keptCtx.channels.fts.find(row => row.id === "zero-confidence");
+        for (const candidate of [missing, nulled]) {
+          assert.ok(candidate, mode);
+          assert.equal(candidate.confidence_mode, "external", mode);
+          assert.equal(candidate.confidence, null, mode);
+          assert.equal(candidate.source_type, "openclaw-core", mode);
+          assert.equal(candidate.external_badge, true, mode);
+        }
+        assert.ok(zero, mode);
+        assert.equal(zero.confidence_mode, "managed", mode);
+        assert.equal(zero.confidence, 0, mode);
+        assert.equal(zero.source_type, "memory-engine-managed", mode);
+        assert.equal(zero.external_badge, false, mode);
         assert.equal(keptCtx.debug.strict_count > 0, true, mode);
         assert.equal(keptCtx.debug.fallback_count, 0, mode);
 
@@ -303,7 +322,9 @@ test("missing confidence stays managed in production normalization for both lega
         await collectFtsCandidates(filteredCtx);
         assert.equal(filteredCtx.debug.strict_count > 0, true, mode);
         assert.equal(filteredCtx.debug.fallback_count, 0, mode);
-        assert.equal(filteredCtx.channels.fts.some(row => row.id === "missing-confidence"), false, mode);
+        assert.equal(filteredCtx.channels.fts.some(row => row.id === "missing-confidence"), true, mode);
+        assert.equal(filteredCtx.channels.fts.some(row => row.id === "null-confidence"), true, mode);
+        assert.equal(filteredCtx.channels.fts.some(row => row.id === "zero-confidence"), false, mode);
       }
     } finally {
       core.close();
@@ -326,7 +347,14 @@ test("strict success and fallback use the same selector semantics", async () => 
     assert.equal(strict.isolatedCtx.debug.fts_rerank_term_source, "primary_query");
     assert.deepEqual(strict.isolatedCtx.channels.fts.map(row => row.id), strict.legacyCtx.channels.fts.map(row => row.id));
 
-    const fallback = await collectBoth(fixture, { query: "absenttoken", fallback: "needle", ftsTopK: 3 });
+    const fallback = await collectBoth(fixture, {
+      query: "absenttoken",
+      fallback: "needle",
+      ftsTopK: 20,
+      minConfidence: 0.15,
+      normalizeCandidate: normalizeForProduction,
+      filterForRerank: item => isCandidateAllowedForRerank(item, 0.15),
+    });
     assert.equal(fallback.legacyCtx.debug.strict_count, 0);
     assert.equal(fallback.isolatedCtx.debug.strict_count, 0);
     assert.equal(fallback.legacyCtx.debug.fallback_count, fallback.isolatedCtx.debug.fallback_count);
@@ -338,6 +366,15 @@ test("strict success and fallback use the same selector semantics", async () => 
     assert.equal(fallback.isolatedCtx.debug.fts_rerank_term_count, 1);
     assert.deepEqual(fallback.isolatedCtx.channels.fts.map(row => row.id), fallback.legacyCtx.channels.fts.map(row => row.id));
     assert.deepEqual(fallback.isolatedCtx.debug.post_rerank_topK, fallback.legacyCtx.debug.post_rerank_topK);
+    for (const ctx of [fallback.legacyCtx, fallback.isolatedCtx]) {
+      const missing = ctx.channels.fts.find(row => row.id === "missing-confidence");
+      const nulled = ctx.channels.fts.find(row => row.id === "null-confidence");
+      assert.equal(missing?.confidence_mode, "external");
+      assert.equal(missing?.confidence, null);
+      assert.equal(nulled?.confidence_mode, "external");
+      assert.equal(nulled?.confidence, null);
+      assert.equal(ctx.channels.fts.some(row => row.id === "zero-confidence"), false);
+    }
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

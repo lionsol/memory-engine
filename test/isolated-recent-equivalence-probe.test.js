@@ -96,7 +96,8 @@ test("isolated Recent probe emits structured JSON evidence from synthetic SQLite
   assert.equal(result.metadata_equivalence.raw_strategy_b_equal, true);
   assert.equal(result.metadata_equivalence.normalized_strategy_b_equal, true);
   assert.equal(result.metadata_equivalence.raw_strategy_c_equal, false);
-  assert.equal(result.metadata_equivalence.normalized_strategy_c_equal, true);
+  // Engine-first cannot preserve external candidates without an Engine confidence row.
+  assert.equal(result.metadata_equivalence.normalized_strategy_c_equal, false);
 
   assert.equal(result.channel_level_case.candidate_counts.recent_raw >= 1, true);
   assert.equal(result.channel_level_case.candidate_counts.recent_fallback_raw >= 1, true);

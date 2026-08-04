@@ -262,25 +262,41 @@ test("legacy archived semantics match COALESCE(is_archived, 0) = 0 for SQLite va
   }
 });
 
-test("legacy default path preserves null-confidence normalization from 8334887", async () => {
+test("legacy and isolated FTS preserve nullish external semantics and numeric-zero filtering", async () => {
   const makeReader = () => ({
     prepare() {
       return {
         all() {
-          return [{
-            id: "missing-confidence",
-            text: "query memory",
-            path: "memory/smart-add/missing.md",
-            updated_at: 1710000000,
-            confidence: null,
-            last_confidence_update: null,
-            base_tau: 7,
-            hit_count: 0,
-            is_protected: 0,
-            conflict_flag: 0,
-            category: null,
-            is_archived: 0,
-          }];
+          return [
+            {
+              id: "missing-confidence",
+              text: "query memory",
+              path: "memory/smart-add/missing.md",
+              updated_at: 1710000000,
+              confidence: null,
+              last_confidence_update: null,
+              base_tau: 7,
+              hit_count: 0,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: null,
+              is_archived: 0,
+            },
+            {
+              id: "zero-confidence",
+              text: "query zero",
+              path: "memory/smart-add/zero.md",
+              updated_at: 1710000000,
+              confidence: 0,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 0,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "raw_log",
+              is_archived: 0,
+            },
+          ];
         },
       };
     },
@@ -290,30 +306,36 @@ test("legacy default path preserves null-confidence normalization from 8334887",
     const keptCtx = makeBaseCtx({
       ftsAccessMode: mode,
       minConfidence: 0,
-      confidenceMap: new Map(),
+          confidenceMap: new Map([["zero-confidence", { confidence: 0, category: "raw_log", is_archived: 0 }]]),
       withDb: fn => fn(makeReader()),
       withCoreDb: fn => fn(makeReader()),
     });
     await collectFtsCandidates(keptCtx);
-    assert.equal(keptCtx.debug.strict_count, 1, mode);
-    assert.equal(keptCtx.candidateCounts.fts_raw_primary, 1, mode);
+    assert.equal(keptCtx.debug.strict_count, 2, mode);
+    assert.equal(keptCtx.candidateCounts.fts_raw_primary, 2, mode);
     assert.equal(keptCtx.debug.fallback_count, 0, mode);
-    assert.equal(keptCtx.channels.fts.length, 1, mode);
-    assert.equal(keptCtx.channels.fts[0].confidence_mode, "managed", mode);
-    assert.equal(keptCtx.channels.fts[0].confidence, 0, mode);
+    const missing = keptCtx.channels.fts.find(row => row.id === "missing-confidence");
+    assert.equal(missing?.confidence_mode, "external", mode);
+    assert.equal(missing?.confidence, null, mode);
+    assert.equal(missing?.source_type, "openclaw-core", mode);
+    assert.equal(missing?.external_badge, true, mode);
+    assert.equal(keptCtx.channels.fts.some(row => row.id === "zero-confidence"), true, mode);
 
     const filteredCtx = makeBaseCtx({
       ftsAccessMode: mode,
       minConfidence: 0.15,
-      confidenceMap: new Map(),
+          confidenceMap: new Map([["zero-confidence", { confidence: 0, category: "raw_log", is_archived: 0 }]]),
       withDb: fn => fn(makeReader()),
       withCoreDb: fn => fn(makeReader()),
     });
     await collectFtsCandidates(filteredCtx);
-    assert.equal(filteredCtx.debug.strict_count, 1, mode);
-    assert.equal(filteredCtx.candidateCounts.fts_raw_primary, 1, mode);
+    assert.equal(filteredCtx.debug.strict_count, 2, mode);
+    assert.equal(filteredCtx.candidateCounts.fts_raw_primary, 2, mode);
     assert.equal(filteredCtx.debug.fallback_count, 0, mode);
-    assert.deepEqual(filteredCtx.channels.fts, [], mode);
+    const filteredMissing = filteredCtx.channels.fts.find(row => row.id === "missing-confidence");
+    assert.equal(filteredMissing?.confidence_mode, "external", mode);
+    assert.equal(filteredMissing?.confidence, null, mode);
+    assert.equal(filteredCtx.channels.fts.some(row => row.id === "zero-confidence"), false, mode);
   }
 });
 
