@@ -16,7 +16,14 @@ const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CLI_PATH = fileURLToPath(new URL("../bin/memory-engine-cli.js", import.meta.url));
 const DEFAULT_ENGINE_DB = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_CORE_DB = resolve(HOME, ".openclaw/memory/main.sqlite");
-const DB_ENV_KEYS = ["ENGINE_DB_PATH", "MEMORY_ENGINE_DB_PATH", "MEMORY_ENGINE_DB", "MEMORY_ENGINE_CORE_DB"];
+const DB_ENV_KEYS = [
+  "CORE_DB_PATH",
+  "ENGINE_DB_PATH",
+  "MEMORY_ENGINE_CORE_DB_PATH",
+  "MEMORY_ENGINE_CORE_DB",
+  "MEMORY_ENGINE_DB_PATH",
+  "MEMORY_ENGINE_DB",
+];
 const runRealDbTests = process.env.MEMORY_ENGINE_RUN_REAL_DB_TESTS === "1";
 const realDbTest = runRealDbTests ? test : test.skip;
 

@@ -8,11 +8,11 @@ This document defines a local-only canary procedure for the card-first autoRecal
 
 ## Purpose
 
-P4 added card projection, replay preview, Console preview, and a gated runtime branch. P5 verifies whether card-first prompt supplements are useful in a real `edi` interactive session before considering any broader default.
+P4 added card projection, replay preview, Console preview, and a gated runtime branch. P5 verifies whether card-first prompt supplements are useful in a real interactive session for an agent already admitted by the AutoRecall runtime gate before considering any broader default. The current local default agent ID is `main`; EDi is its identity name, not its runtime ID.
 
 The canary answers four questions:
 
-1. Does card-first preserve useful recall context for `edi`?
+1. Does card-first preserve useful recall context for the explicitly allowlisted runtime agent?
 2. Does it reduce raw log / tool output exposure compared with raw-text autoRecall?
 3. Does the assistant still cite memory ids only when it actually relies on a card?
 4. Do `auto_recall_debug` and `memory_injected` events clearly show `memory_card` disclosure mode?
@@ -37,8 +37,10 @@ The canary answers four questions:
 {
   "autoRecall": {
     "enabled": true,
-    "topK": 3,
+    "topK": 1,
     "timeoutMs": 8000,
+    "agentAllowlist": ["main"],
+    "sessionAllowlist": ["<dedicated-canary-session-id>"],
     "cardFirstRuntime": {
       "enabled": true
     }
@@ -61,7 +63,7 @@ Schema defaults remain safe:
 }
 ```
 
-Runtime behavior is still additionally gated by `agentId=edi`. If the runtime gate resolves `task-planner`, Codex CLI, missing agent id, non-user role, or non-interactive chat type, card-first must not run.
+Runtime behavior inherits the AutoRecall runtime gate. Card-first may run only when the actual runtime agent ID is present in `autoRecall.agentAllowlist` and all other agent/session/trigger constraints pass. For the current environment, the canary uses `agentAllowlist=["main"]`; `task-planner`, Codex CLI, missing agent ID, non-user role, non-interactive chat type, and non-allowlisted sessions must not enter card-first.
 
 ## Preflight checklist
 
@@ -84,7 +86,7 @@ Expected:
 ```text
 card runtime smoke status = pass
 card_first_runtime_enabled=false for default runtime
-card_first_runtime_enabled=true only for edi with explicit flag
+card_first_runtime_enabled=true only for an AutoRecall-allowlisted agent/session with the explicit flag
 raw log / tool output body is withheld in card-first context
 ```
 
@@ -95,7 +97,7 @@ raw log / tool output body is withheld in card-first context
 3. Confirm `autoRecall.enabled=true` is already intentional for this local canary.
 4. Add `cardFirstRuntime.enabled=true` only to the local `memory-engine` plugin config.
 5. Restart or reload the OpenClaw gateway/plugin runtime.
-6. Use only an `edi` interactive user chat.
+6. Use only the dedicated `main` agent canary session; do not use the EDi identity name as the agent ID.
 7. Run a short task set of 5-10 prompts:
    - continue a known memory-engine task;
    - ask about a recent P4 decision;
@@ -182,7 +184,7 @@ auto_recall_disclosure_mode = memory_card
 disclosure_mode = memory_card
 ```
 
-Expected for default or non-edi turns:
+Expected for default or non-allowlisted-agent turns:
 
 ```text
 card_first_runtime_enabled = false
@@ -194,8 +196,8 @@ disclosure_mode = raw_text
 
 The canary passes only if all of the following hold:
 
-- `card_first_runtime_enabled=true` appears only in `edi` interactive user turns with explicit flag enabled.
-- Plain-language guard: card_first_runtime_enabled=true appears only in `edi` interactive user turns.
+- `card_first_runtime_enabled=true` appears only in AutoRecall-allowlisted interactive user turns with the explicit flag enabled.
+- Plain-language guard: card_first_runtime_enabled=true appears only in AutoRecall-allowlisted interactive user turns.
 - generic long-input rewrite/summarize prompts still skip recall.
 - card-first context includes `## Auto Recall - memory cards`.
 - card-first context does not include full original memory body text.
@@ -258,10 +260,10 @@ Citation quality:
 Raw-log withholding:
 Unexpected memory_engine_get calls:
 Unexpected reinforcement:
-Decision: keep experiment disabled / repeat canary / expand edi canary / reject card-first default
+Decision: keep experiment disabled / repeat canary / expand allowlisted-agent canary / reject card-first default
 Notes:
 ```
 
 ## Recommendation
 
-Keep `cardFirstRuntime.enabled=false` after the first canary. Treat card-first as experiment-only until at least one successful `edi` canary shows stable disclosure mode, acceptable answer quality, and clean citation/reinforcement behavior.
+Keep `cardFirstRuntime.enabled=false` after the first canary. Treat card-first as experiment-only until at least one successful dedicated allowlisted-agent canary shows stable disclosure mode, acceptable answer quality, and clean citation/reinforcement behavior.

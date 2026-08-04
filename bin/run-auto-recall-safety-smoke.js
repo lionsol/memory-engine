@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-const { readFileSync, writeFileSync, mkdirSync } = require("node:fs");
+const { writeFileSync, mkdirSync } = require("node:fs");
 const { dirname, resolve } = require("node:path");
-const vm = require("node:vm");
 
 function timestampForFile(now = new Date()) {
   const iso = new Date(now).toISOString();
@@ -65,33 +64,12 @@ Notes:
   - Does not write DB, enable autoRecall by default, or mutate memory/quarantine/delete state.`);
 }
 
-function extractFunctionSource(code, functionName) {
-  const marker = `function ${functionName}(`;
-  const start = code.indexOf(marker);
-  if (start < 0) throw new Error(`function not found: ${functionName}`);
-  const braceStart = code.indexOf("{", start);
-  let depth = 0;
-  for (let i = braceStart; i < code.length; i += 1) {
-    const ch = code[i];
-    if (ch === "{") depth += 1;
-    if (ch === "}") depth -= 1;
-    if (depth === 0) return code.slice(start, i + 1);
-  }
-  throw new Error(`function parse failed: ${functionName}`);
-}
-
 async function runSmoke(options = {}) {
   const { analyzeAutoRecallIntent } = await import("../lib/recall/auto-recall-intent.js");
   const { evaluateAutoRecallEligibility } = await import("../lib/recall/auto-recall-eligibility.js");
   const { buildReinforcementAllowedIds, filterCitedIdsForReinforcement } = await import("../lib/recall/auto-recall-reinforcement.js");
   const autoRecall = await import("../auto-recall.js");
-  const { buildFtsFallbackQuery, normalizeFtsQuery, stripPromptMetadataPrefix } = await import("../query-utils.js");
-
-  const indexCode = readFileSync(resolve(process.cwd(), "index.js"), "utf8");
-  const source = extractFunctionSource(indexCode, "buildAutoRecallDebugMetadata");
-  const context = { buildFtsFallbackQuery, normalizeFtsQuery, stripPromptMetadataPrefix };
-  vm.runInNewContext(`${source}\nthis.__fn = buildAutoRecallDebugMetadata;`, context);
-  const buildAutoRecallDebugMetadata = context.__fn;
+  const { buildAutoRecallDebugMetadata } = await import("../lib/recall/auto-recall-debug-metadata.js");
 
   const longBody = (prefix) => `${prefix}\n${"LOG_LINE keep this body out of focused query\n".repeat(80)}`;
 

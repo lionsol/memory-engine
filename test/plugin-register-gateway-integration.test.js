@@ -46,7 +46,7 @@ function createCoreDb(path) {
   }
 }
 
-test("plugin register wires both operator-read evidence gateways through the loaded host SDK", async (t) => {
+test("plugin register keeps product tools and hooks without governance gateway methods", async (t) => {
   if (!existsSync(OPENCLAW_PLUGIN_ENTRY) || !existsSync(OPENCLAW_MEMORY_RUNTIME)) {
     t.skip(`OpenClaw plugin SDK unavailable under ${OPENCLAW_ROOT}`);
     return;
@@ -115,32 +115,9 @@ test("plugin register wires both operator-read evidence gateways through the loa
     plugin.register(api);
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    assert.deepEqual([...gatewayMethods.keys()].sort(), [
-      "memoryEngine.productionEvidenceHealthcheck",
-      "memoryEngine.sustainedRuntimePreflight",
-    ]);
-    assert.equal(
-      gatewayMethods.get("memoryEngine.sustainedRuntimePreflight").options.scope,
-      "operator.read",
-    );
-    assert.equal(
-      gatewayMethods.get("memoryEngine.productionEvidenceHealthcheck").options.scope,
-      "operator.read",
-    );
+    assert.deepEqual([...gatewayMethods.keys()], []);
     assert.deepEqual(tools.sort(), ["memory_engine", "memory_engine_get", "memory_engine_search"]);
     assert.deepEqual(hooks, ["before_tool_call"]);
-
-    let response = null;
-    await gatewayMethods.get("memoryEngine.sustainedRuntimePreflight").handler({
-      respond(ok, result, error) {
-        response = { ok, result, error };
-      },
-    });
-    assert.equal(response.ok, true);
-    assert.equal(response.error, undefined);
-    assert.equal(response.result.status, "clean");
-    assert.equal(response.result.openclaw_runtime_version, "test-openclaw-runtime");
-    assert.equal(response.result.runtime_boundary.active_memory_enabled, false);
   } finally {
     console.log = originalLog;
     if (previous.HOME === undefined) delete process.env.HOME;

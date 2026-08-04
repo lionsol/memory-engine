@@ -1,48 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import vm from "node:vm";
-import { readFileSync } from "node:fs";
-import { buildFtsFallbackQuery, normalizeFtsQuery, stripPromptMetadataPrefix } from "../query-utils.js";
 
-function extractFunctionSource(code, functionName) {
-  const marker = `function ${functionName}(`;
-  const start = code.indexOf(marker);
-  if (start < 0) throw new Error(`function not found: ${functionName}`);
-  const parenStart = code.indexOf("(", start);
-  let parenDepth = 0;
-  let parenEnd = -1;
-  for (let i = parenStart; i < code.length; i += 1) {
-    if (code[i] === "(") parenDepth += 1;
-    if (code[i] === ")") {
-      parenDepth -= 1;
-      if (parenDepth === 0) {
-        parenEnd = i;
-        break;
-      }
-    }
-  }
-  const braceStart = code.indexOf("{", parenEnd);
-  if (braceStart < 0) throw new Error(`function body not found: ${functionName}`);
-  let depth = 0;
-  for (let i = braceStart; i < code.length; i += 1) {
-    const ch = code[i];
-    if (ch === "{") depth += 1;
-    if (ch === "}") depth -= 1;
-    if (depth === 0) return code.slice(start, i + 1);
-  }
-  throw new Error(`function parse failed: ${functionName}`);
-}
+import { buildAutoRecallDebugMetadata } from "../lib/recall/auto-recall-debug-metadata.js";
 
 function loadMetadataBuilder() {
-  const indexCode = readFileSync(new URL("../index.js", import.meta.url), "utf8");
-  const source = extractFunctionSource(indexCode, "buildAutoRecallDebugMetadata");
-  const context = {
-    buildFtsFallbackQuery,
-    normalizeFtsQuery,
-    stripPromptMetadataPrefix,
-  };
-  vm.runInNewContext(`${source}\nthis.__fn = buildAutoRecallDebugMetadata;`, context);
-  return context.__fn;
+  return buildAutoRecallDebugMetadata;
 }
 
 test("autoRecall debug metadata snapshot stays stable", () => {
@@ -84,10 +46,10 @@ test("autoRecall debug metadata snapshot stays stable", () => {
   assert.equal(
     JSON.stringify(result, null, 2),
     `{
-  "query_original": "5.20+ 和 memory-engine 兼容性",
-  "query_stripped": "stripped",
-  "query_normalized": "norm",
-  "fts_query_final": "fts",
+  "original_input_chars": 25,
+  "query_stripped_chars": 8,
+  "query_normalized_chars": 4,
+  "fts_query_chars": 3,
   "vector_backend": "lancedb",
   "vector_ready_state": "ready",
   "vector_backend_attempted": "lancedb",
@@ -131,9 +93,7 @@ test("autoRecall debug metadata snapshot stays stable", () => {
   "recall_intent_reason": null,
   "long_input_detected": null,
   "generic_task_detected": null,
-  "focused_query": null,
-  "focused_query_chars": null,
-  "original_input_chars": null,
+  "focused_query_chars": 0,
   "skipped_by_recall_intent": false,
   "skipped": false,
   "skip_reason": null,
@@ -167,6 +127,55 @@ test("autoRecall debug metadata includes vector_init_error only when present", (
   assert.equal(Object.prototype.hasOwnProperty.call(readyResult, "vector_init_error"), false);
 });
 
+test("autoRecall debug metadata preserves bounded fallback rerank source and count", () => {
+  const metadata = buildAutoRecallDebugMetadata("query", {
+    results: [],
+    debug: {
+      fts_rerank_term_source: "bounded_fallback",
+      fts_rerank_term_count: 8,
+    },
+  });
+
+  assert.equal(metadata.fts_rerank_term_source, "bounded_fallback");
+  assert.equal(metadata.fts_rerank_term_count, 8);
+});
+
+test("autoRecall debug metadata preserves bounded preselection counters", () => {
+  const metadata = buildAutoRecallDebugMetadata("query", {
+    results: [],
+    debug: {
+      fts_preselection_strategy: "global_or_plus_term_probes_v1",
+      fts_preselection_global_count: 20,
+      fts_preselection_probe_query_count: 8,
+      fts_preselection_probe_raw_count: 15,
+      fts_preselection_union_count: 21,
+      fts_preselection_probe_per_term_limit: 2,
+      fts_preselection_post_rerank_count: 20,
+    },
+  });
+
+  assert.deepEqual(
+    {
+      strategy: metadata.fts_preselection_strategy,
+      global: metadata.fts_preselection_global_count,
+      probeQueries: metadata.fts_preselection_probe_query_count,
+      probeRaw: metadata.fts_preselection_probe_raw_count,
+      union: metadata.fts_preselection_union_count,
+      perTerm: metadata.fts_preselection_probe_per_term_limit,
+      postRerank: metadata.fts_preselection_post_rerank_count,
+    },
+    {
+      strategy: "global_or_plus_term_probes_v1",
+      global: 20,
+      probeQueries: 8,
+      probeRaw: 15,
+      union: 21,
+      perTerm: 2,
+      postRerank: 20,
+    },
+  );
+});
+
 test("autoRecall debug metadata includes recall intent telemetry fields", () => {
   const fn = loadMetadataBuilder();
 
@@ -188,9 +197,16 @@ test("autoRecall debug metadata includes recall intent telemetry fields", () => 
   assert.equal(result.recall_intent_should_recall, true);
   assert.equal(result.recall_intent_reason, "long_input_with_history_context_use_focused_query");
   assert.equal(result.long_input_detected, true);
-  assert.equal(result.focused_query, "memory-engine 当前基线 review");
   assert.equal(result.focused_query_chars, 27);
   assert.equal(result.original_input_chars, 3200);
+  assert.equal(Object.hasOwn(result, "query_original"), false);
+  assert.equal(Object.hasOwn(result, "query_stripped"), false);
+  assert.equal(Object.hasOwn(result, "query_normalized"), false);
+  assert.equal(Object.hasOwn(result, "fts_query_final"), false);
+  assert.equal(Object.hasOwn(result, "focused_query"), false);
+  assert.equal(result.query_stripped_chars > 0, true);
+  assert.equal(result.query_normalized_chars > 0, true);
+  assert.equal(result.fts_query_chars > 0, true);
   assert.equal(result.skipped_by_recall_intent, false);
 });
 

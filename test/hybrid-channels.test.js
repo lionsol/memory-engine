@@ -871,6 +871,42 @@ test("vector channel preserves success and fallback debug semantics", async () =
   assert.equal(fallbackCtx.warnings.some(w => w.message === "search_error"), true);
 });
 
+test("vector fallback accepts the official manager array result contract", async () => {
+  const ctx = makeBaseCtx({
+    confidenceMap: new Map([["manager-current-1", {
+      confidence: 0.8,
+      last_confidence_update: 0,
+      base_tau: 7,
+      hit_count: 1,
+      is_protected: 0,
+      conflict_flag: 0,
+      category: "raw_log",
+      is_archived: 0,
+    }]]),
+    chunkMetaMap: new Map([["manager-current-1", {
+      id: "manager-current-1",
+      path: "memory/smart-add/current.md",
+      updated_at: 1710000000,
+    }]]),
+    getLancedbRuntimeRuntime: async () => ({ table: null, readyState: "disabled" }),
+    getMemorySearchManagerFn: async () => ({
+      manager: {
+        search: async () => [{
+          id: "manager-current-1",
+          text: "official manager array result",
+          score: 0.91,
+        }],
+      },
+    }),
+  });
+
+  await collectVectorCandidates(ctx);
+  assert.equal(ctx.debug.vector_backend, "memory-core-sqlite");
+  assert.equal(ctx.candidateCounts.vector_raw, 1);
+  assert.deepEqual(ctx.channels.vector.map(row => row.id), ["manager-current-1"]);
+  assert.equal(ctx.warnings.some(warning => warning.message === "search_error"), false);
+});
+
 test("hybridSearch integration smoke keeps topK order and debug compatibility", async () => {
   const { hybridSearch } = await import(`../lib/recall/hybrid-search.js?ts=${Date.now()}_${Math.random()}`);
   const result = await hybridSearch("memory-engine compatibility", { topK: 3 }, {

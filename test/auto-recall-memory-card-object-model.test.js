@@ -100,5 +100,5 @@ test("P4 migration is phased before runtime card-first experiment", () => {
   assert.match(doc, /P4\.4 Console preview/i);
   assert.match(doc, /P4\.5 Runtime card-first experiment/i);
   assert.match(doc, /Behind explicit config flag/i);
-  assert.match(doc, /edi-only/i);
+  assert.match(doc, /AutoRecall runtime gate/i);
 });

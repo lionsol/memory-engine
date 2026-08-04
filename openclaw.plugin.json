@@ -63,7 +63,17 @@
               "type": "string",
               "minLength": 1
             },
-            "description": "Agent IDs allowed to pass the AutoRecall runtime gate; defaults remain edi-only and should be expanded only for controlled runtime verification"
+            "description": "Agent IDs allowed to pass the AutoRecall runtime gate; the legacy default is edi, so deployments must set actual runtime agent IDs explicitly for controlled runtime verification"
+          },
+          "sessionAllowlist": {
+            "type": "array",
+            "default": [],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Optional exact session IDs allowed to pass the AutoRecall runtime gate; an empty list preserves the existing agent-scoped behavior"
           },
           "triggerAllowlist": {
             "type": "array",
@@ -112,7 +122,7 @@
               "enabled": {
                 "type": "boolean",
                 "default": false,
-                "description": "Enable experimental edi-only card-first auto recall prompt supplement"
+                "description": "Enable experimental AutoRecall-agent-gated card-first prompt supplement"
               }
             }
           }
@@ -203,42 +213,6 @@
               "type": "string",
               "minLength": 1
             }
-          }
-        }
-      },
-      "productionEvidenceWindow": {
-        "type": "object",
-        "additionalProperties": false,
-        "default": {
-          "enabled": false
-        },
-        "allOf": [
-          {
-            "if": {
-              "properties": {
-                "enabled": {
-                  "const": true
-                }
-              },
-              "required": [
-                "enabled"
-              ]
-            },
-            "then": {
-              "required": [
-                "epochId"
-              ]
-            }
-          }
-        ],
-        "properties": {
-          "enabled": {
-            "type": "boolean",
-            "default": false
-          },
-          "epochId": {
-            "type": "string",
-            "minLength": 1
           }
         }
       }

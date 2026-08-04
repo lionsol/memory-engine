@@ -1,14 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fingerprintConfig } from "../lib/config/config-fingerprint.js";
 import {
   DEFAULT_AUTO_RECALL,
-  normalizeEvidenceWindow,
   resolveEffectiveHybridRuntimeConfig,
 } from "../lib/config/effective-hybrid-runtime-config.js";
-import {
-  createProductionEvidenceIdentityContext,
-  fingerprintRolloutConfig,
-} from "../lib/recall/hybrid/production-evidence-identity.js";
 
 function normalized(input) {
   const { valid, errors, ...config } = resolveEffectiveHybridRuntimeConfig(input);
@@ -17,7 +14,7 @@ function normalized(input) {
 }
 
 function fingerprint(input) {
-  return fingerprintRolloutConfig(normalized(input)).fingerprint;
+  return fingerprintConfig(normalized(input)).fingerprint;
 }
 
 test("official plugin config is the highest-priority runtime source", () => {
@@ -71,10 +68,23 @@ test("omitted values and explicit schema defaults have the same effective finger
       kgFailClosedCanary: { enabled: false, agentIds: [], sessionIds: [], tokens: [] },
       recentFailClosedMode: "legacy_fallback",
       recentFailClosedCanary: { enabled: false, agentIds: [], sessionIds: [], tokens: [] },
-      productionEvidenceWindow: { enabled: false, epochId: null },
     },
   });
   assert.equal(omitted, explicit);
+});
+
+test("retired productionEvidenceWindow is absent from the manifest and effective config", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"));
+  assert.equal(Object.hasOwn(manifest.configSchema.properties, "productionEvidenceWindow"), false);
+
+  const legacyInput = {
+    pluginConfig: {
+      productionEvidenceWindow: { enabled: true, epochId: "legacy-epoch" },
+    },
+  };
+  const config = normalized(legacyInput);
+  assert.equal(Object.hasOwn(config, "productionEvidenceWindow"), false);
+  assert.equal(fingerprint(legacyInput), fingerprint({}));
 });
 
 test("AutoRecall topK uses memory-engine recall when not explicitly configured", () => {
@@ -142,13 +152,14 @@ test("environment retrieval overrides are normalized into the effective config",
   }
 });
 
-test("effective AutoRecall, mode, canary, and epoch changes change the fingerprint", () => {
-  const base = { pluginConfig: { productionEvidenceWindow: { enabled: true, epochId: "epoch-1" } } };
+test("effective AutoRecall, mode, and canary changes change the fingerprint", () => {
+  const base = {};
   for (const change of [
     { autoRecall: { enabled: true } },
     { autoRecall: { topK: 9 } },
     { autoRecall: { timeoutMs: 1000 } },
     { autoRecall: { agentAllowlist: ["main"] } },
+    { autoRecall: { sessionAllowlist: ["h5-session"] } },
     { autoRecall: { triggerAllowlist: ["manual"] } },
     { autoRecall: { chatTypeAllowlist: ["other"] } },
     { autoRecall: { messageRoleAllowlist: ["assistant"] } },
@@ -156,11 +167,10 @@ test("effective AutoRecall, mode, canary, and epoch changes change the fingerpri
     { kgFailClosedCanary: { enabled: true, agentIds: ["edi"], sessionIds: [] } },
     { recentFailClosedMode: "full_fail_closed" },
     { recentFailClosedCanary: { enabled: true, agentIds: ["edi"], sessionIds: [] } },
-    { productionEvidenceWindow: { enabled: true, epochId: "epoch-2" } },
   ]) {
     assert.notEqual(
       fingerprint(base),
-      fingerprint({ pluginConfig: { ...base.pluginConfig, ...change } }),
+      fingerprint({ pluginConfig: change }),
       JSON.stringify(change),
     );
   }
@@ -168,10 +178,11 @@ test("effective AutoRecall, mode, canary, and epoch changes change the fingerpri
 
 test("invalid legacy values are marked invalid instead of silently fingerprinted", () => {
   const result = resolveEffectiveHybridRuntimeConfig({
-    pluginConfig: { autoRecall: { agentAllowlist: "edi" } },
+    pluginConfig: { autoRecall: { agentAllowlist: "edi", sessionAllowlist: "session-1" } },
   });
   assert.equal(result.valid, false);
   assert.ok(result.errors.includes("invalid_array:autoRecall.agentAllowlist"));
+  assert.ok(result.errors.includes("invalid_array:autoRecall.sessionAllowlist"));
 });
 
 test("canary compatibility aliases are preserved in normalized config", () => {
@@ -237,15 +248,10 @@ test("malformed high-priority AutoRecall does not fall through to a lower source
     assert.ok(result.errors.includes("invalid_object:autoRecall"), JSON.stringify(autoRecall));
     assert.equal(result.autoRecall.enabled, false, JSON.stringify(autoRecall));
     assert.notEqual(result.autoRecall.topK, 9, JSON.stringify(autoRecall));
-    const identity = createProductionEvidenceIdentityContext({
-      config: result,
-      configErrors: result.errors,
-    });
-    assert.equal(identity.rolloutConfigFingerprint, null, JSON.stringify(autoRecall));
   }
 });
 
-test("invalid fail-closed modes fail safe and invalidate evidence identity", () => {
+test("invalid fail-closed modes fail safe and invalidate runtime config", () => {
   const result = resolveEffectiveHybridRuntimeConfig({
     pluginConfig: { kgFailClosedMode: "unexpected_mode" },
   });
@@ -254,57 +260,11 @@ test("invalid fail-closed modes fail safe and invalidate evidence identity", () 
   assert.ok(result.errors.includes("invalid_mode:kgFailClosedMode"));
 });
 
-test("normalizeEvidenceWindow directly enforces explicit enabled and epoch semantics", () => {
-  const defaultErrors = [];
-  assert.deepEqual(normalizeEvidenceWindow(undefined, defaultErrors), {
-    enabled: false,
-    epochId: null,
-  });
-  assert.deepEqual(defaultErrors, []);
-
-  const enabledErrors = [];
-  assert.deepEqual(normalizeEvidenceWindow({ enabled: true }, enabledErrors), {
-    enabled: true,
-    epochId: null,
-  });
-  assert.deepEqual(enabledErrors, ["missing_string:productionEvidenceWindow.epochId"]);
-
-  const validErrors = [];
-  assert.deepEqual(normalizeEvidenceWindow({ enabled: true, epochId: "  epoch-1  " }, validErrors), {
-    enabled: true,
-    epochId: "epoch-1",
-  });
-  assert.deepEqual(validErrors, []);
-
-  const malformedErrors = [];
-  assert.deepEqual(normalizeEvidenceWindow("invalid", malformedErrors), {
-    enabled: false,
-    epochId: null,
-  });
-  assert.deepEqual(malformedErrors, ["invalid_object:productionEvidenceWindow"]);
-});
-
-test("enabled production evidence requires a non-empty epoch before runtime activation", () => {
-  const result = resolveEffectiveHybridRuntimeConfig({
-    pluginConfig: { productionEvidenceWindow: { enabled: true } },
-  });
-  assert.equal(result.valid, false);
-  assert.equal(result.productionEvidenceWindow.enabled, true);
-  assert.equal(result.productionEvidenceWindow.epochId, null);
-  assert.ok(result.errors.includes("missing_string:productionEvidenceWindow.epochId"));
-  const identity = createProductionEvidenceIdentityContext({
-    config: result,
-    configErrors: result.errors,
-  });
-  assert.equal(identity.rolloutConfigFingerprint, null);
-});
-
-test("malformed compatibility values use safe runtime values and invalidate identity", () => {
+test("malformed compatibility values use safe runtime values and invalidate the normalized config", () => {
   const result = resolveEffectiveHybridRuntimeConfig({
     pluginConfig: {
       autoRecall: { enabled: "false", topK: "bad", timeoutMs: {} },
       kgFailClosedCanary: { enabled: "true" },
-      productionEvidenceWindow: { enabled: 1, epochId: "epoch-1" },
     },
   });
   assert.equal(result.valid, false);
@@ -312,12 +272,4 @@ test("malformed compatibility values use safe runtime values and invalidate iden
   assert.equal(result.autoRecall.topK, 5);
   assert.equal(result.autoRecall.timeoutMs, 8000);
   assert.equal(result.kgFailClosedCanary.enabled, false);
-  assert.equal(result.productionEvidenceWindow.enabled, false);
-
-  const identity = createProductionEvidenceIdentityContext({
-    config: result,
-    configErrors: result.errors,
-  });
-  assert.equal(identity.rolloutConfigFingerprint, null);
-  assert.equal(identity.rolloutConfigFingerprintReport.valid, false);
 });

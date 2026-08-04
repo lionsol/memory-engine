@@ -123,7 +123,7 @@ test("search still initializes LanceDB", async () => {
   assert.equal(actionCalls, 1);
 });
 
-test("Engine DB resolver keeps explicit and legacy environment precedence", () => {
+test("Engine DB resolver prefers memory-engine aliases before the generic compatibility alias", () => {
   const keys = ["ENGINE_DB_PATH", "MEMORY_ENGINE_DB_PATH", "MEMORY_ENGINE_DB"];
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   try {
@@ -133,13 +133,40 @@ test("Engine DB resolver keeps explicit and legacy environment precedence", () =
     process.env.MEMORY_ENGINE_DB = "/tmp/legacy.sqlite";
 
     assert.equal(resolveEngineDbPath({ engineDbPath: "/tmp/explicit.sqlite" }), "/tmp/explicit.sqlite");
-    assert.equal(resolveEngineDbPath(), "/tmp/engine.sqlite");
-
-    delete process.env.ENGINE_DB_PATH;
     assert.equal(resolveEngineDbPath(), "/tmp/path.sqlite");
 
     delete process.env.MEMORY_ENGINE_DB_PATH;
     assert.equal(resolveEngineDbPath(), "/tmp/legacy.sqlite");
+
+    delete process.env.MEMORY_ENGINE_DB;
+    assert.equal(resolveEngineDbPath(), "/tmp/engine.sqlite");
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("default CLI runtime returns a structured missing-DB error instead of failing during assembly", async () => {
+  const missingPath = `/tmp/memory-engine-cli-missing-${process.pid}.sqlite`;
+  const result = await executeMemoryEngineCommand("status", { dbPath: missingPath });
+
+  assert.match(result.error || "", /Memory-engine DB not found/);
+  assert.doesNotMatch(result.error || "", /resolve is not defined/);
+});
+
+test("default CLI runtime uses the memory-engine DB alias before the generic compatibility alias", async () => {
+  const keys = ["ENGINE_DB_PATH", "MEMORY_ENGINE_DB_PATH", "MEMORY_ENGINE_DB"];
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const preferredPath = `/tmp/memory-engine-cli-preferred-${process.pid}.sqlite`;
+  try {
+    process.env.ENGINE_DB_PATH = `/tmp/memory-engine-cli-generic-${process.pid}.sqlite`;
+    process.env.MEMORY_ENGINE_DB_PATH = preferredPath;
+    delete process.env.MEMORY_ENGINE_DB;
+
+    const result = await executeMemoryEngineCommand("status", {});
+    assert.equal((result.error || "").includes(preferredPath), true);
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];

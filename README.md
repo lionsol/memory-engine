@@ -95,7 +95,7 @@ graph TD
 | **事件时间不可伪造** | 不得用 `updated_at`、文件 mtime、批量写入时间、导入时间或路径日期冒充精确事件时间 |
 | **源码不等于运行时** | 修改仓库源码后，必须重新安装或 reload 插件，才能声明 OpenClaw 运行时行为已变化 |
 
-数据库安全、运行时同步和开发纪律见 [`AGENTS.md`](AGENTS.md)。事件时间决策见 [`docs/adr/event-time-ownership.md`](docs/adr/event-time-ownership.md)。
+数据库安全与公开边界见 [`docs/current-state.md`](docs/current-state.md) 和 [`docs/adr/event-time-ownership.md`](docs/adr/event-time-ownership.md)；运行时同步与验证见 [`docs/runtime-sync.md`](docs/runtime-sync.md) 和 [`docs/stabilization-plan.md`](docs/stabilization-plan.md)。
 
 ## 当前检索与召回管线
 

@@ -2,6 +2,7 @@ import {
   buildFtsFallbackQuery,
   buildLikeFallbackPatterns,
   extractExactQueryFragments,
+  extractFtsFallbackTerms,
   extractQueryTokens,
   normalizeFtsQuery,
   rankFtsFallbackCandidates,
@@ -18,6 +19,7 @@ export {
   buildFtsFallbackQuery,
   buildLikeFallbackPatterns,
   extractExactQueryFragments,
+  extractFtsFallbackTerms,
   extractQueryTokens,
   normalizeFtsQuery,
   rankFtsFallbackCandidates,
@@ -371,10 +373,6 @@ export function parseCitedMemoryIds(text) {
     } catch {}
   }
 
-  for (const match of raw.matchAll(/\b[0-9a-f]{16,64}\b/gi)) {
-    found.add(match[0]);
-  }
-
   return [...found];
 }
 
@@ -411,14 +409,25 @@ function cardRuntimeConfig(config = {}) {
   return config?.cardFirstRuntime || config?.card_first_runtime || {};
 }
 
+function normalizeRuntimeAgentId(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function configuredAutoRecallAgents(config = {}) {
+  const configured = config?.agentAllowlist ?? config?.agent_allowlist;
+  const values = Array.isArray(configured) ? configured : ["edi"];
+  return values.map(normalizeRuntimeAgentId).filter(Boolean);
+}
+
 export function shouldUseAutoRecallCardRuntime(config = {}, runtimeGate = {}) {
   const cfg = cardRuntimeConfig(config);
   if (cfg.enabled !== true) return false;
   const mode = String(cfg.mode || "memory_card");
   if (mode !== "memory_card") return false;
-  const requiredAgentId = String(cfg.agentId || cfg.agent_id || "edi");
-  const actualAgentId = String(runtimeGate?.agentId || runtimeGate?.agent_id || "");
-  return actualAgentId === requiredAgentId;
+  if (runtimeGate?.allowed === false) return false;
+  const actualAgentId = normalizeRuntimeAgentId(runtimeGate?.agentId || runtimeGate?.agent_id);
+  if (!actualAgentId) return false;
+  return configuredAutoRecallAgents(config).includes(actualAgentId);
 }
 
 export function buildAutoRecallCardContext(results, options = {}) {

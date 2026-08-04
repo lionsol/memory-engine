@@ -23,7 +23,7 @@
 5. **Audit / Baseline**：某个时间点的盘点、风险清单或迁移基线。
 6. **Historical**：保留用于理解演进过程，不应直接作为当前实现依据。
 
-根目录 [`AGENTS.md`](../AGENTS.md) 规定仓库边界、数据库安全不变量、运行时同步要求、验证规则和 Git 工作纪律，属于所有开发工作的前置约束。
+当前公开边界、数据库安全不变量和 AutoRecall 默认策略见 [`current-state.md`](current-state.md)；运行时同步、验证和发布工作流见 [`runtime-sync.md`](runtime-sync.md) 与 [`stabilization-plan.md`](stabilization-plan.md)。
 
 ## 总体架构入口
 
@@ -77,7 +77,7 @@
 
 ### 数据与存储治理
 
-- **Core DB 只读不变量**：见 [`AGENTS.md`](../AGENTS.md) 的 Database safety。memory-engine 可以读取显式 attach 的 `core.*`，不得写入。
+- **Core DB 只读不变量**：见 [`current-state.md`](current-state.md) 与 [`adr/event-time-ownership.md`](adr/event-time-ownership.md)。memory-engine 可以读取显式 attach 的 `core.*`，不得写入。
 - **事件时间治理**：见 [`adr/event-time-ownership.md`](adr/event-time-ownership.md)。不允许用 `updated_at`、文件 mtime、批量写入时间或路径日期推断精确事件时间。
 - **当前个人部署安全配置**：见 [`adr/personal-deployment-safety-profile.md`](adr/personal-deployment-safety-profile.md)。当前路线不要求 OpenClaw PR、private fork、host publisher 或 no-load authority proof；状态不确定时关闭 AutoRecall、自动强化、full mode 和 evidence window，而不是阻止全部插件加载。
 - **个人部署 remediation**：见 [`smoke-tests/personal-deployment-sustained-runtime-remediation.md`](smoke-tests/personal-deployment-sustained-runtime-remediation.md)。通过 operator cold inspection、精确 installed-runtime identity、already-running Gateway RPC、有效 host activation policy、测试、备份和 rollback 形成当前授权证据。
@@ -127,9 +127,9 @@
 
 | 准备修改的区域 | 最少应先阅读 |
 | --- | --- |
-| 插件注册、工具命名或 OpenClaw 集成 | `AGENTS.md` → `agent-memory-tool-strategy.md` → `openclaw-memory-contract-compat.md` |
-| CLI、tool、checkpoint、maintenance 入口 | `AGENTS.md` → `memory-entry-boundary-audit.md` |
-| DB attach、schema、写路径或迁移 | `AGENTS.md` → `adr/event-time-ownership.md` → 相关代码与 DB safety tests |
+| 插件注册、工具命名或 OpenClaw 集成 | `agent-memory-tool-strategy.md` → `openclaw-memory-contract-compat.md` |
+| CLI、tool、checkpoint、maintenance 入口 | `memory-entry-boundary-audit.md` |
+| DB attach、schema、写路径或迁移 | `adr/event-time-ownership.md` → `current-state.md` → 相关代码与 DB safety tests |
 | hybrid search、autoRecall、注入或强化 | `agent-memory-tool-strategy.md` → `retrieval-answering-policy.md` → `hybrid-observation-provenance.md` → `hybrid-fail-closed-rollout-status.md` → AutoRecall object model / runbook |
 | 质量评分、污染审计或标注 | `memory-quality-eval-mvp-v4.md` → `human-annotation-gold-set.md` |
 | 数据清理或 apply 工具 | 对应 cleanup/apply design → 备份与 rollback 规则 → targeted tests |

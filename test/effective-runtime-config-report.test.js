@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import effectiveConfigCli from "../bin/build-effective-hybrid-runtime-config-report.js";
+import { fingerprintConfig } from "../lib/config/config-fingerprint.js";
 import { buildEffectiveRuntimeConfigReport } from "../lib/recall/hybrid/effective-runtime-config-report.js";
 
 const CHECKED_AT = "2026-07-20T03:00:00.000Z";
@@ -27,6 +28,17 @@ function config(overrides = {}) {
     },
   };
 }
+
+test("config fingerprint is stable across object key order and fails closed on unsupported values", () => {
+  const left = fingerprintConfig({ b: 2, a: { y: true, x: "value" } });
+  const right = fingerprintConfig({ a: { x: "value", y: true }, b: 2 });
+  assert.equal(left.valid, true);
+  assert.equal(left.fingerprint, right.fingerprint);
+
+  const invalid = fingerprintConfig({ value: Number.POSITIVE_INFINITY });
+  assert.equal(invalid.valid, false);
+  assert.equal(invalid.fingerprint, null);
+});
 
 test("effective config report matches runtime resolution and replaces canary tokens with counts", () => {
   const report = buildEffectiveRuntimeConfigReport({
@@ -56,14 +68,18 @@ test("missing, disabled, or malformed memory-engine plugin entries fail closed",
   }
 });
 
-test("invalid evidence-window config remains invalid in the report", () => {
-  const report = buildEffectiveRuntimeConfigReport({
-    openclawConfig: config({ productionEvidenceWindow: { enabled: true } }),
+test("retired productionEvidenceWindow input is excluded from the effective report", () => {
+  const baseline = buildEffectiveRuntimeConfigReport({
+    openclawConfig: config(),
     checkedAt: CHECKED_AT,
   });
-  assert.equal(report.valid, false);
-  assert.equal(report.rollout_config_fingerprint, null);
-  assert.ok(report.errors.includes("missing_string:productionEvidenceWindow.epochId"));
+  const report = buildEffectiveRuntimeConfigReport({
+    openclawConfig: config({ productionEvidenceWindow: { enabled: true, epochId: "legacy-epoch" } }),
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.valid, true);
+  assert.equal(report.rollout_config_fingerprint, baseline.rollout_config_fingerprint);
+  assert.equal(Object.hasOwn(report.effective_config, "productionEvidenceWindow"), false);
 });
 
 test("effective config CLI writes only the reduced report", async () => {

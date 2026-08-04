@@ -188,7 +188,7 @@ test("checkpoint skips checkpoint_generated smart-add entries in input pool", as
   assert.equal(stats.smartAddSkippedCheckpointGenerated, 1);
 });
 
-test("checkpoint includes manual and agent_smart_add smart-add entries", async () => {
+test("checkpoint includes manual, agent_smart_add, and session_flush entries", async () => {
   const fixture = createFixture();
   writeFileSync(resolve(fixture.smartAddDir, "2026-06-17.md"), [
     "# Smart Added Memory",
@@ -207,13 +207,21 @@ test("checkpoint includes manual and agent_smart_add smart-add entries", async (
     "",
     "agent trusted fact",
     "",
+    "## session_flush_entry",
+    "",
+    "Category: raw_log",
+    "Provenance: session_flush",
+    "",
+    "session flush trusted dialogue",
+    "",
   ].join("\n"));
 
   const logs = await getLogsForTargetDate(fixture, "2026-06-17");
   const stats = checkpointRawLog.getRawLogCollectionStats(logs);
   assert.equal(logs.some((log) => log.text.includes("manual trusted fact")), true);
   assert.equal(logs.some((log) => log.text.includes("agent trusted fact")), true);
-  assert.equal(stats.smartAddIncluded, 2);
+  assert.equal(logs.some((log) => log.text.includes("session flush trusted dialogue")), true);
+  assert.equal(stats.smartAddIncluded, 3);
   assert.equal(stats.smartAddSkippedUnknownProvenance, 0);
   assert.equal(stats.smartAddSkippedCheckpointGenerated, 0);
 });
@@ -919,12 +927,16 @@ test("DB raw_log returns stable output fields for conversation rows", async () =
   });
 });
 
-test("raw-log dual-handle path no longer references attached checkpoint schema", () => {
+test("raw-log dual-handle collector stays isolated from attached checkpoint schema", () => {
   const source = readFileSync(resolve("lib/checkpoint/raw-log.js"), "utf8");
-  assert.doesNotMatch(source, /chunks_db\./);
-  assert.doesNotMatch(source, /withMeDb\s*\(/);
-  assert.doesNotMatch(source, /ATTACH DATABASE/);
-  assert.match(source, /withCheckpointDbs\s*\(/);
+  const collectorSource = readFileSync(resolve("lib/checkpoint/raw-log-db-collector.js"), "utf8");
+  for (const currentSource of [source, collectorSource]) {
+    assert.doesNotMatch(currentSource, /chunks_db\./);
+    assert.doesNotMatch(currentSource, /withMeDb\s*\(/);
+    assert.doesNotMatch(currentSource, /ATTACH DATABASE/);
+  }
+  assert.match(source, /createDbRawLogCollector\(\{[\s\S]*?withCheckpointDbs/);
+  assert.match(collectorSource, /withCheckpointDbs\([\s\S]*?\{ readonlyEngine: true \}\)/);
 });
 
 test("DB read failure logs warning and loader still returns other sources", async () => {

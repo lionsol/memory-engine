@@ -26,11 +26,13 @@ function createFixture({
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-checkpoint-orphan-"));
   const workspaceDir = resolve(root, "workspace");
   const memoryDir = resolve(root, "memory");
+  const lancedbDir = resolve(root, "vector-index");
   const coreDbPath = resolve(root, "core.sqlite");
   const engineDbPath = resolve(root, "engine.sqlite");
   const configJsonPath = resolve(root, "openclaw.json");
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(memoryDir, { recursive: true });
+  mkdirSync(lancedbDir, { recursive: true });
 
   writeFileSync(configJsonPath, JSON.stringify({
     models: {
@@ -80,7 +82,7 @@ function createFixture({
     }
   }
 
-  return { root, workspaceDir, memoryDir, coreDbPath, engineDbPath, configJsonPath };
+  return { root, workspaceDir, memoryDir, lancedbDir, coreDbPath, engineDbPath, configJsonPath };
 }
 
 function withPatchedRequireCache(moduleId, fakeExports, fn) {
@@ -164,6 +166,7 @@ async function runRepairWithLanceDb(fixture, lancedbExports, run = null) {
   return checkpoint.withRuntime({
     workspaceDir: fixture.workspaceDir,
     memoryDir: fixture.memoryDir,
+    lancedbDir: fixture.lancedbDir,
     coreDbPath: fixture.coreDbPath,
     engineDbPath: fixture.engineDbPath,
     configJsonPath: fixture.configJsonPath,
@@ -200,6 +203,26 @@ test("LanceDB require/connect failure returns 0 and warns", async () => {
   }
 
   assert.equal(warnings.some(line => line.includes("[checkpoint] LanceDB scan failed: lancedb init failed")), true);
+});
+
+test("orphan repair uses the shared runtime LanceDB directory", async () => {
+  const fixture = createFixture();
+  const connectedPaths = [];
+
+  const repaired = await runRepairWithLanceDb(fixture, {
+    connect: async (dbPath) => {
+      connectedPaths.push(dbPath);
+      return {
+        openTable: async () => ({
+          countRows: async () => 1001,
+        }),
+      };
+    },
+  });
+
+  assert.equal(repaired, 0);
+  assert.deepEqual(connectedPaths, [fixture.lancedbDir]);
+  assert.notEqual(fixture.lancedbDir, resolve(fixture.memoryDir, "lancedb"));
 });
 
 test("count > 1000 returns 0", async () => {

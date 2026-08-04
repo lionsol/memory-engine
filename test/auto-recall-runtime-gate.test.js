@@ -93,6 +93,54 @@ test("runtime gate rejects non-allowlisted agents", () => {
   });
 });
 
+test("runtime gate restricts AutoRecall to an exact configured session", () => {
+  const allowed = evaluateAutoRecallRuntimeGate({
+    event: hostEvent(),
+    ctx: hostContext({ sessionId: "h5-session" }),
+    config: { sessionAllowlist: ["h5-session"] },
+  });
+  assert.deepEqual(allowed, {
+    allowed: true,
+    agentId: "edi",
+    sessionId: "h5-session",
+    trigger: "user",
+    chatType: null,
+    messageRole: null,
+  });
+
+  const denied = evaluateAutoRecallRuntimeGate({
+    event: hostEvent(),
+    ctx: hostContext({ sessionId: "ordinary-session" }),
+    config: { sessionAllowlist: ["h5-session"] },
+  });
+  assert.deepEqual(denied, {
+    allowed: false,
+    reason: "denied_by_session_allowlist",
+    agentId: "edi",
+    sessionId: "ordinary-session",
+  });
+
+  const caseMismatch = evaluateAutoRecallRuntimeGate({
+    event: hostEvent(),
+    ctx: hostContext({ sessionId: "H5-SESSION" }),
+    config: { sessionAllowlist: ["h5-session"] },
+  });
+  assert.equal(caseMismatch.reason, "denied_by_session_allowlist");
+});
+
+test("runtime gate fails closed when a configured session allowlist has no host session id", () => {
+  const result = evaluateAutoRecallRuntimeGate({
+    event: hostEvent(),
+    ctx: { agentId: "edi", trigger: "user" },
+    config: { sessionAllowlist: ["h5-session"] },
+  });
+  assert.deepEqual(result, {
+    allowed: false,
+    reason: "denied_missing_session_id",
+    agentId: "edi",
+  });
+});
+
 test("required allowlists fail closed when explicitly empty", () => {
   assert.equal(
     evaluateAutoRecallRuntimeGate({
@@ -162,6 +210,7 @@ test("manifest exposes strict agent and trigger defaults plus optional compatibi
   assert.equal(autoRecall.additionalProperties, false);
   const expected = {
     agentAllowlist: ["edi"],
+    sessionAllowlist: [],
     triggerAllowlist: ["user"],
     chatTypeAllowlist: ["interactive_user_chat"],
     messageRoleAllowlist: ["user"],
@@ -178,6 +227,7 @@ test("manifest exposes strict agent and trigger defaults plus optional compatibi
   }
 
   assert.match(autoRecall.properties.agentAllowlist.description, /controlled runtime verification/i);
+  assert.match(autoRecall.properties.sessionAllowlist.description, /exact session ids/i);
   assert.match(autoRecall.properties.triggerAllowlist.description, /user-only/i);
 });
 
@@ -190,6 +240,7 @@ test("runtime gate supports camel-case config overrides", () => {
     ctx: hostContext({ agentId: "task-planner", trigger: "manual" }),
     config: {
       agentAllowlist: ["task-planner"],
+      sessionAllowlist: ["session-1"],
       triggerAllowlist: ["manual"],
       chatTypeAllowlist: ["planner_chat"],
       messageRoleAllowlist: ["user"],
@@ -209,6 +260,7 @@ test("runtime gate preserves snake-case config aliases", () => {
     ctx: hostContext({ agentId: "task-planner", trigger: "manual" }),
     config: {
       agent_allowlist: ["task-planner"],
+      session_allowlist: ["session-1"],
       trigger_allowlist: ["manual"],
       chat_type_allowlist: ["planner_chat"],
       message_role_allowlist: ["user"],

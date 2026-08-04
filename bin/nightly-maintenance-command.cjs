@@ -2,9 +2,8 @@
 /**
  * Command-safe Memory Engine nightly maintenance.
  *
- * This replaces the cron agentTurn wrapper with a deterministic command path.
- * It reads OpenClaw core chunks through an attached read-only namespace and only
- * writes memory-engine owned tables.
+ * Reads OpenClaw Core through an attached read-only namespace and delegates
+ * Engine lifecycle mutation to the shared lifecycle service primitives.
  */
 
 const Database = require('better-sqlite3');
@@ -48,20 +47,7 @@ function withBothDbs(fn) {
   }
 }
 
-function tokenize(text) {
-  return String(text || '').toLowerCase().match(/[\p{L}\p{N}_-]{2,}/gu) || [];
-}
-
-function overlap(row) {
-  const left = new Set(tokenize(`${row.path1 || ''}\n${row.text1 || ''}`));
-  const right = new Set(tokenize(`${row.path2 || ''}\n${row.text2 || ''}`));
-  if (left.size === 0 || right.size === 0) return 0;
-  let shared = 0;
-  for (const token of left) if (right.has(token)) shared += 1;
-  return shared / Math.min(left.size, right.size);
-}
-
-function calcRealtimeConfidence(row, nowSec) {
+function calcNightlyRealtimeConfidence(row, nowSec) {
   if (Number(row.is_protected || 0) === 1) return Number(row.confidence || 0);
   if (!row.last_confidence_update) return Number(row.confidence || 0);
   const tau = Math.max(0.1, Number(row.base_tau || 7));
@@ -77,110 +63,13 @@ function recordMemoryEvent(db, eventType, memoryId, source, metadata = {}) {
   ].join(' ')).run(eventType, memoryId || null, source, JSON.stringify(metadata));
 }
 
-function detectConflicts(db) {
-  const rows = db.prepare([
-    'SELECT m1.chunk_id AS id1, m2.chunk_id AS id2,',
-    'm1.category, m1.confidence AS c1, m2.confidence AS c2,',
-    'm1.hit_count AS h1, m2.hit_count AS h2,',
-    'c1.text AS text1, c2.text AS text2,',
-    'c1.path AS path1, c2.path AS path2',
-    'FROM memory_confidence m1',
-    'JOIN memory_confidence m2 ON m1.category = m2.category',
-    'AND m1.chunk_id < m2.chunk_id',
-    'JOIN core.chunks c1 ON c1.id = m1.chunk_id',
-    'JOIN core.chunks c2 ON c2.id = m2.chunk_id',
-    'WHERE m1.is_archived = 0 AND m2.is_archived = 0',
-    'AND ABS(m1.confidence - m2.confidence) > 0.3',
-    'AND ABS(m1.hit_count - m2.hit_count) > 3',
-    'ORDER BY m1.category, MAX(m1.last_confidence_update, m2.last_confidence_update) DESC',
-    'LIMIT 500',
-  ].join(' ')).all();
-
-  const toFlag = [];
-  for (const row of rows) {
-    if (overlap(row) < 0.2) continue;
-    toFlag.push(row.c1 < row.c2 ? row.id1 : row.id2);
-  }
-  const unique = [...new Set(toFlag)];
-  if (!DRY_RUN && unique.length > 0) {
-    const flag = db.prepare('UPDATE memory_confidence SET conflict_flag = 1 WHERE chunk_id = ? AND is_archived = 0');
-    const tx = db.transaction(() => {
-      for (const id of unique) {
-        flag.run(id);
-        recordMemoryEvent(db, 'memory_conflict_flagged', id, 'nightly-maintenance.detect-conflicts', {
-          pairs_checked: rows.length,
-        });
-      }
-    });
-    tx();
-  }
-  return { pairs_checked: rows.length, flagged_as_conflict: unique.length, dry_run: DRY_RUN };
-}
-
-function archiveLowConfidence(db, nowSec) {
-  const rows = db.prepare([
-    'SELECT chunk_id, confidence, last_confidence_update, hit_count, base_tau,',
-    'is_protected, category',
-    'FROM memory_confidence',
-    'WHERE is_archived = 0 AND is_protected = 0 AND category != \'user_identity\'',
-  ].join(' ')).all();
-  const toArchive = [];
-  for (const row of rows) {
-    if (calcRealtimeConfidence(row, nowSec) < ARCHIVE_THRESHOLD) toArchive.push(row.chunk_id);
-  }
-  if (!DRY_RUN && toArchive.length > 0) {
-    const update = db.prepare('UPDATE memory_confidence SET is_archived = 1 WHERE chunk_id = ? AND is_archived = 0');
-    const tx = db.transaction(() => {
-      for (const id of toArchive) {
-        update.run(id);
-        recordMemoryEvent(db, 'memory_archived', id, 'nightly-maintenance.archive', { threshold: ARCHIVE_THRESHOLD });
-      }
-    });
-    tx();
-  }
-  return { scanned: rows.length, archived: toArchive.length, threshold: ARCHIVE_THRESHOLD, dry_run: DRY_RUN };
-}
-
-function kgBridge(db) {
-  if (!existsSync(KG_PATH)) return { skipped: true, reason: `knowledge graph not found: ${KG_PATH}` };
-  const kgRaw = JSON.parse(readFileSync(KG_PATH, 'utf-8'));
-  const nodes = kgRaw.nodes || kgRaw.concepts || [];
-  const edges = kgRaw.edges || kgRaw.relationships || [];
-  const subgraph = {
-    node_count: nodes.length,
-    edge_count: edges.length,
-    nodes: nodes.slice(0, 20).map((n) => ({
-      id: n.id || n.name,
-      name: n.name || n.id,
-      type: n.type || 'concept',
-      properties: n.properties || {},
-    })),
-    edges: edges.slice(0, 30).map((e) => ({
-      source: e.source || e.from,
-      target: e.target || e.to,
-      type: e.type || 'RELATED_TO',
-    })),
+function readKnowledgeGraph() {
+  if (!existsSync(KG_PATH)) return null;
+  const raw = JSON.parse(readFileSync(KG_PATH, 'utf-8'));
+  return {
+    nodes: raw.nodes || raw.concepts || [],
+    edges: raw.edges || raw.relationships || [],
   };
-  const matches = db.prepare([
-    'SELECT chunk_id FROM memory_confidence',
-    "WHERE category IN ('kg_node', 'raw_log')",
-    'ORDER BY last_confidence_update DESC',
-    'LIMIT 10',
-  ].join(' ')).all();
-  if (!DRY_RUN && matches.length > 0) {
-    const update = db.prepare('UPDATE memory_confidence SET kg_data = ? WHERE chunk_id = ?');
-    const kgJson = JSON.stringify(subgraph);
-    const tx = db.transaction(() => {
-      for (const row of matches) update.run(kgJson, row.chunk_id);
-      recordMemoryEvent(db, 'kg_bridge_synced', null, 'nightly-maintenance.kg-bridge', {
-        nodes: nodes.length,
-        edges: edges.length,
-        chunks_updated: matches.length,
-      });
-    });
-    tx();
-  }
-  return { success: true, nodes: nodes.length, edges: edges.length, chunks_updated: matches.length, dry_run: DRY_RUN };
 }
 
 function status(db) {
@@ -224,13 +113,49 @@ function status(db) {
 
 async function main() {
   try {
+    const {
+      applyKgBridge,
+      archiveLowConfidence,
+      detectRelatedConflicts,
+    } = await import('../lib/lifecycle/operations.js');
     const startedAt = new Date().toISOString();
     const nowSec = Math.floor(Date.now() / 1000);
+    const knowledgeGraph = readKnowledgeGraph();
+
     const result = withBothDbs((db) => {
+      const detectConflicts = detectRelatedConflicts(db, {
+        chunksTable: 'core.chunks',
+        dryRun: DRY_RUN,
+        onFlagged(id, pairsChecked) {
+          recordMemoryEvent(db, 'memory_conflict_flagged', id, 'nightly-maintenance.detect-conflicts', {
+            pairs_checked: pairsChecked,
+          });
+        },
+      });
+      const archive = archiveLowConfidence(db, {
+        threshold: ARCHIVE_THRESHOLD,
+        dryRun: DRY_RUN,
+        shouldArchive: row => calcNightlyRealtimeConfidence(row, nowSec) < ARCHIVE_THRESHOLD,
+        onArchived(id) {
+          recordMemoryEvent(db, 'memory_archived', id, 'nightly-maintenance.archive', {
+            threshold: ARCHIVE_THRESHOLD,
+          });
+        },
+      });
+      const kgBridge = knowledgeGraph
+        ? applyKgBridge(db, {
+          ...knowledgeGraph,
+          limit: 10,
+          dryRun: DRY_RUN,
+          onCompleted(metadata) {
+            recordMemoryEvent(db, 'kg_bridge_synced', null, 'nightly-maintenance.kg-bridge', metadata);
+          },
+        })
+        : { skipped: true, reason: `knowledge graph not found: ${KG_PATH}`, dry_run: DRY_RUN };
       const steps = {
-        detect_conflicts: detectConflicts(db),
-        archive: archiveLowConfidence(db, nowSec),
-        kg_bridge: kgBridge(db),
+        detect_conflicts: detectConflicts,
+        archive,
+        kg_bridge: kgBridge,
         status: status(db),
       };
       if (!DRY_RUN) {
@@ -238,6 +163,7 @@ async function main() {
       }
       return steps;
     });
+
     console.log(JSON.stringify({
       ok: true,
       dry_run: DRY_RUN,

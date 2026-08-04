@@ -1,0 +1,3 @@
+schema: spec-driven
+created: 2026-07-31
+goal: Align fallback FTS MATCH terms with fallback candidate reranking so late high-information identifiers survive the complete lexical retrieval path.

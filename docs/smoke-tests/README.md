@@ -61,6 +61,8 @@ Use the controlled runtime rollout runbook only after A5 passes and whenever cha
 
 ## Regression Guard
 
+Current smoke entrypoints and safety boundaries remain discoverable through behavior and link checks. Historical rollout/authorization wording is no longer an automated contract:
+
 The runbooks are also covered by static tests so that key links, workflow steps, and safety boundaries remain discoverable:
 
 ```text

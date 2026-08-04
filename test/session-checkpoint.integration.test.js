@@ -285,7 +285,7 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
     assert.match(episode, /category: episodic/);
     assert.match(episode, /source_type: checkpoint_llm/);
     assert.match(episode, /smartAddPath: memory\/smart-add\/2026-06-16\.md/);
-    assert.match(episode, /smartAddInputPolicy: trusted_only:manual,agent_smart_add/);
+    assert.match(episode, /smartAddInputPolicy: trusted_only:manual,agent_smart_add,session_flush/);
     assert.match(episode, /smartAddIncluded: 0/);
     assert.match(episode, /smartAddSkippedUnknownProvenance: 0/);
     assert.match(episode, /smartAddSkippedCheckpointGenerated: 0/);

@@ -84,6 +84,19 @@ test("inspectRecentIsolationTopology requires readonly main-only Core and Engine
   assert.equal(valid.valid, true);
   assert.equal(valid.reason, null);
 
+  const validWithTempCompatibilityView = inspectRecentIsolationTopology({
+    withCoreDb: run => run({
+      readonly: true,
+      prepare: () => ({ all: () => [{ name: "main" }, { name: "temp" }] }),
+    }),
+    withEngineDb: run => run({
+      readonly: true,
+      prepare: () => ({ all: () => [{ name: "main" }] }),
+    }),
+  });
+  assert.equal(validWithTempCompatibilityView.valid, true);
+  assert.deepEqual(validWithTempCompatibilityView.core.persistent_database_names, ["main"]);
+
   const invalid = inspectRecentIsolationTopology({
     withCoreDb: run => run({
       readonly: true,

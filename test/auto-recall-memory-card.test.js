@@ -105,6 +105,36 @@ test("raw-log-like candidates get safe withheld card text instead of raw body", 
   assert.equal(card.get_token, "memory_engine_get:rawlog1234567890");
 });
 
+test("explicit raw_log category remains conservative even with ordinary text", () => {
+  const { memory_object: object, memory_card: card } = projectCandidate({
+    id: "explicit-raw-log-1234",
+    path: "memory/smart-add/2026-07-30.md",
+    category: "raw_log",
+    text: "A routine project note with no obvious error marker.",
+  });
+
+  assert.equal(object.card.risk_flags.includes("raw_log_like"), true);
+  assert.match(card.summary, /withheld/i);
+  assert.doesNotMatch(card.summary, /routine project note/);
+  assert.equal(card.disclosure_level, "memory_card");
+  assert.equal(card.get_token, "memory_engine_get:explicit-raw-log-1234");
+});
+
+test("SmartAdd source path alone is not a raw-log risk signal", () => {
+  const { memory_object: object, memory_card: card } = projectCandidate({
+    id: "smart-add-ordinary-1234",
+    path: "memory/smart-add/2026-07-30.md",
+    text: "A routine project fact with no log or tool-output markers.",
+    category: undefined,
+  });
+
+  assert.equal(object.classification.category, "unknown");
+  assert.equal(object.card.risk_flags.includes("raw_log_like"), false);
+  assert.equal(object.card.risk_flags.includes("tool_output_like"), false);
+  assert.equal(card.disclosure_level, "memory_card");
+  assert.match(card.summary, /routine project fact/);
+});
+
 test("dreaming, archived, quarantined, and stale candidates are not injectable", () => {
   const cases = [
     {

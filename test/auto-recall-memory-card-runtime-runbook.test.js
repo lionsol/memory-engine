@@ -32,15 +32,15 @@ test("runbook records P4 phase map and key files", () => {
   }
 });
 
-test("runbook states card-first runtime is default disabled and edi-only", () => {
+test("runbook states card-first runtime is default disabled and AutoRecall-agent-gated", () => {
   const doc = readRunbook();
 
   assert.match(doc, /default disabled/i);
   assert.match(doc, /default runtime behavior remains raw-text/i);
   assert.match(doc, /cardFirstRuntime\.enabled is absent or false -> raw_text/i);
-  assert.match(doc, /edi-only/i);
-  assert.match(doc, /agentId=edi/i);
-  assert.match(doc, /task-planner.*raw-text/i);
+  assert.match(doc, /AutoRecall runtime gate/i);
+  assert.match(doc, /actual agent ID.*AutoRecall agent allowlist/i);
+  assert.match(doc, /outside the AutoRecall allowlist.*raw-text/i);
   assert.match(doc, /Do not enable card-first runtime for `task-planner`/i);
   assert.match(doc, /Do not enable card-first runtime for Codex CLI/i);
 });

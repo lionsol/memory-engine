@@ -59,6 +59,55 @@ function createFixture() {
   return { workspaceDir, smartAddDir, generatedSmartAddDir, coreDbPath, engineDbPath };
 }
 
+function createCurrentCoreFixture() {
+  const fixture = createFixture();
+  const db = new Database(fixture.coreDbPath);
+  try {
+    db.exec(`
+      DROP TABLE chunks;
+      DROP TABLE chunks_fts;
+      CREATE TABLE memory_index_chunks (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'memory',
+        start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        hash TEXT NOT NULL,
+        model TEXT NOT NULL,
+        text TEXT NOT NULL,
+        embedding TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE VIRTUAL TABLE memory_index_chunks_fts USING fts5(
+        id UNINDEXED,
+        text,
+        path UNINDEXED
+      );
+    `);
+  } finally {
+    db.close();
+  }
+  return fixture;
+}
+
+function insertCurrentCoreChunk(coreDbPath, { id, path, text = "", updatedAt = 1 }) {
+  const db = new Database(coreDbPath);
+  try {
+    db.prepare(`
+      INSERT INTO memory_index_chunks
+        (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at)
+      VALUES (?, ?, 'memory', 1, 1, 'hash', 'model', ?, '[]', ?)
+    `).run(id, path, text, updatedAt);
+    if (text) {
+      db.prepare(
+        "INSERT INTO memory_index_chunks_fts (id, text, path) VALUES (?, ?, ?)",
+      ).run(id, text, path);
+    }
+  } finally {
+    db.close();
+  }
+}
+
 function insertCoreChunk(coreDbPath, { id, path, text = "", updatedAt = 1 }) {
   const db = new Database(coreDbPath);
   try {
@@ -95,6 +144,30 @@ test("smartAddFingerprint is stable across CRLF and comments/title normalization
   const a = smartAddWriter.smartAddFingerprint({ raw: "## x\r\n<!-- c -->\r\nhello\r\n", category: "raw_log" });
   const b = smartAddWriter.smartAddFingerprint({ raw: "## y\nhello\n", category: "raw_log" });
   assert.equal(a, b);
+});
+
+test("current OpenClaw Core FTS prevents duplicate smart-add writes", async () => {
+  const fixture = createCurrentCoreFixture();
+  insertCurrentCoreChunk(fixture.coreDbPath, {
+    id: "current-fts-duplicate",
+    path: "memory/smart-add/current.md",
+    text: "alpha current duplicate memory",
+  });
+
+  await checkpoint.withRuntime({
+    workspaceDir: fixture.workspaceDir,
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.equal(
+      smartAddWriter.isDuplicate("alpha current duplicate memory", "raw_log"),
+      true,
+    );
+  });
 });
 
 test("readSmartAddFingerprints reads comment fingerprint", async () => {

@@ -13,7 +13,7 @@ P4 introduced a memory object and memory card projection boundary for autoRecall
 The card-first runtime is intentionally conservative:
 
 - default disabled;
-- edi-only;
+- restricted to agents already allowed by the AutoRecall runtime gate;
 - no DB migration;
 - no storage rewrite;
 - no retrieval ranking change;
@@ -126,7 +126,7 @@ Purpose:
 - keep default runtime behavior unchanged;
 - enable card-first supplement only when explicitly configured;
 - make the mode observable through debug metadata;
-- validate default raw-text, edi card-first, non-edi raw-text, and raw-log withholding paths.
+- validate default raw-text, allowlisted-agent card-first, non-allowlisted-agent raw-text, and raw-log withholding paths.
 
 ## Runtime switch
 
@@ -164,7 +164,7 @@ Equivalent snake-case key is accepted for compatibility:
 }
 ```
 
-Do not enable this globally for `task-planner`, Codex CLI, background tasks, system chats, tool-output routes, or non-interactive contexts. If `task-planner` appears in the runtime gate, the expected behavior is raw-text mode, not card-first mode.
+Do not add `task-planner` or Codex CLI to the AutoRecall agent allowlist for this canary, and do not enable card-first in background tasks, system chats, tool-output routes, or non-interactive contexts. An agent outside the AutoRecall allowlist must stay in raw-text mode even when the card-first flag is present.
 
 ## Expected runtime behavior
 
@@ -318,7 +318,7 @@ Do not revert P4.1-P4.4 unless the object/card/report contract itself is wrong. 
 Before enabling `cardFirstRuntime.enabled` in any real config:
 
 - confirm `autoRecall.enabled` is already intentionally enabled;
-- confirm runtime gate allows only `agentId=edi`;
+- confirm card-first is true only when the actual agent ID is present in the AutoRecall agent allowlist;
 - run `node bin/run-auto-recall-card-runtime-smoke.js --json`;
 - run P4 targeted tests;
 - generate and review a turn gold-set replay report in Console;

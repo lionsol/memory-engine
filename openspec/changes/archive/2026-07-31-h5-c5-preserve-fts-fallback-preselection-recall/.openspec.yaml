@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-07-31
+goal: Prevent bounded fallback FTS terms from losing all candidate
+  representation at the SQL BM25 preselection limit before aligned fallback
+  reranking.

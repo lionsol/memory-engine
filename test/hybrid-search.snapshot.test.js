@@ -81,6 +81,8 @@ const EXPECTED_SNAPSHOT = `{
     "vector_query_length": 1,
     "strict_count": 0,
     "fallback_count": 0,
+    "fts_rerank_term_source": "primary_query",
+    "fts_rerank_term_count": 0,
     "post_rerank_topK": [],
     "min_confidence": 0.15,
     "lexical_candidate_count": 0,
@@ -89,7 +91,7 @@ const EXPECTED_SNAPSHOT = `{
     "lexical_confidence_threshold": 0.7,
     "sync": {
       "synced": false,
-      "reason": "test"
+      "reason": "read_only_search"
     },
     "recent_canary_mode": "off",
     "recent_canary_reason": "provider_unavailable",

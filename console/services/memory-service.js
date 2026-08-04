@@ -1,4 +1,4 @@
-import { ensureMemoryConfidenceTable, recordEvent, safeJson, tableExists, withDb } from "./db.js";
+import { safeJson, tableExists, withDb } from "./db.js";
 import { inferCategoryFromPath } from "../../lib/category-inference.js";
 
 function normalizeMemory(row) {
@@ -86,75 +86,4 @@ export function getMemory(idPrefix) {
     `).get(idPrefix);
     return row ? normalizeMemory(row) : null;
   }, { readonly: true });
-}
-
-function findMemoryInOpenDb(db, idPrefix) {
-  if (!tableExists(db, "chunks")) return null;
-  const row = db.prepare(`
-    SELECT c.*, mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
-           mc.hit_count, mc.is_archived, mc.is_protected, mc.conflict_flag, mc.category, mc.kg_data
-    FROM chunks c
-    LEFT JOIN memory_confidence mc ON mc.chunk_id = c.id
-    WHERE c.id LIKE ? || '%'
-    ORDER BY LENGTH(c.id) ASC
-    LIMIT 1
-  `).get(idPrefix);
-  return row ? normalizeMemory(row) : null;
-}
-
-export function archiveMemory(idPrefix) {
-  return withDb(db => {
-    ensureMemoryConfidenceTable(db);
-    const memory = findMemoryInOpenDb(db, idPrefix);
-    if (!memory) return { ok: false, error: "memory not found" };
-    db.prepare(`
-      INSERT INTO memory_confidence
-        (chunk_id, initial_confidence, confidence, last_confidence_update, base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
-      VALUES (?, 0, 0, strftime('%s','now'), 7.0, 0, 1, 0, 0, ?)
-      ON CONFLICT(chunk_id) DO UPDATE SET
-        is_archived = 1,
-        confidence = MIN(COALESCE(memory_confidence.confidence, 0), 0.05),
-        last_confidence_update = excluded.last_confidence_update
-    `).run(memory.id, memory.category || "raw_log");
-    recordEvent(db, { event_type: "memory_archived", memory_id: memory.id, source: "console" });
-    return { ok: true, id: memory.id };
-  });
-}
-
-export function deleteMemory(idPrefix) {
-  return withDb(db => {
-    ensureMemoryConfidenceTable(db);
-    const memory = findMemoryInOpenDb(db, idPrefix);
-    if (!memory) return { ok: false, error: "memory not found" };
-    // Core chunks are owned by OpenClaw and must remain read-only from this plugin.
-    // "Delete" is implemented as a local archival tombstone inside memory_confidence.
-    db.prepare(`
-      INSERT INTO memory_confidence
-        (chunk_id, initial_confidence, confidence, last_confidence_update, base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
-      VALUES (?, 0, 0, strftime('%s','now'), 7.0, 0, 1, 0, 0, ?)
-      ON CONFLICT(chunk_id) DO UPDATE SET
-        is_archived = 1,
-        confidence = MIN(COALESCE(memory_confidence.confidence, 0), 0.01),
-        last_confidence_update = excluded.last_confidence_update
-    `).run(memory.id, memory.category || "raw_log");
-    recordEvent(db, { event_type: "memory_deleted", memory_id: memory.id, source: "console" });
-    return { ok: true, id: memory.id };
-  });
-}
-
-export function updateConfidence(idPrefix, value) {
-  return withDb(db => {
-    ensureMemoryConfidenceTable(db);
-    const memory = findMemoryInOpenDb(db, idPrefix);
-    if (!memory) return { ok: false, error: "memory not found" };
-    const confidence = Math.max(0, Math.min(1, Number(value)));
-    if (!Number.isFinite(confidence)) return { ok: false, error: "confidence must be a number from 0 to 1" };
-    db.prepare(`
-      INSERT INTO memory_confidence (chunk_id, initial_confidence, confidence, last_confidence_update)
-      VALUES (?, ?, ?, strftime('%s','now'))
-      ON CONFLICT(chunk_id) DO UPDATE SET confidence = excluded.confidence, last_confidence_update = excluded.last_confidence_update
-    `).run(memory.id, confidence, confidence);
-    recordEvent(db, { event_type: "memory_confidence_updated", memory_id: memory.id, source: "console", final_score: confidence });
-    return { ok: true, id: memory.id, confidence };
-  });
 }

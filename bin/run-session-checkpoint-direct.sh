@@ -9,9 +9,10 @@ set -uo pipefail
 
 TIME_ZONE="${MEMORY_ENGINE_TIME_ZONE:-Asia/Shanghai}"
 WORKSPACE="${MEMORY_ENGINE_WORKSPACE_DIR:-$HOME/.openclaw/workspace}"
+NODE_BIN="${MEMORY_ENGINE_NODE_BIN:-$HOME/.local/node24/bin/node}"
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MEMORY_DIR="${MEMORY_ENGINE_MEMORY_DIR:-$WORKSPACE/memory}"
-CORE_DB_PATH="${MEMORY_ENGINE_CORE_DB_PATH:-$HOME/.openclaw/memory/main.sqlite}"
+CORE_DB_PATH="${MEMORY_ENGINE_CORE_DB_PATH:-$HOME/.openclaw/agents/main/agent/openclaw-agent.sqlite}"
 EPISODES_DIR="$MEMORY_DIR/episodes"
 FLUSH_SCRIPT="$PLUGIN_DIR/bin/flush-session-rawlog.js"
 CHECKPOINT_SCRIPT="$PLUGIN_DIR/bin/session-checkpoint.js"
@@ -94,9 +95,16 @@ main() {
 
   log "Start targetDate=$target_date timeZone=$TIME_ZONE workspace=$WORKSPACE"
 
+  if [ ! -x "$NODE_BIN" ]; then
+    reason="configured Node binary is unavailable or not executable: $NODE_BIN"
+    warn "$reason"
+    write_fallback_episode "$target_date" "$reason"
+    exit 0
+  fi
+
   if [ -f "$FLUSH_SCRIPT" ]; then
     log "Running flush-session-rawlog checkpoint mode"
-    if ! node "$FLUSH_SCRIPT" --checkpoint; then
+    if ! "$NODE_BIN" "$FLUSH_SCRIPT" --checkpoint --target-date "$target_date"; then
       warn "flush-session-rawlog failed; continuing to session-checkpoint"
     fi
   else
@@ -104,7 +112,7 @@ main() {
   fi
 
   log "Running canonical session-checkpoint"
-  node "$CHECKPOINT_SCRIPT" --target-date "$target_date"
+  "$NODE_BIN" "$CHECKPOINT_SCRIPT" --target-date "$target_date"
   checkpoint_status=$?
 
   if [ "$checkpoint_status" -eq 0 ] && [ -s "$episode_file" ]; then

@@ -4,6 +4,10 @@ const BROAD_RELEVANCE_TOKENS = new Set(["memory", "engine", "model", "模型"]);
 const WEEKDAY_TIME_TOKENS = new Set(["mon", "tue", "wed", "thu", "fri", "sat", "sun", "gmt", "utc"]);
 const TIMESTAMP_PREFIX_RE = /^\[(?:mon|tue|wed|thu|fri|sat|sun)\s+\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:gmt|utc)(?:[+-]\d{1,2}(?::?\d{2})?)?\]\s*/iu;
 const VERSION_FRAGMENT_RE = /(?<!\d)\d+(?:[._]\d+)+(?:\+)?(?!\d)/gu;
+const DELIMITED_QUERY_TOKEN_RE = /[\p{L}\p{N}_]+(?:[-+./\\:@#=|][\p{L}\p{N}_]+)+/gu;
+const MAX_COMPOUND_COMPONENTS = 3;
+const MAX_HIGH_INFORMATION_COMPOUND_COMPONENTS = 2;
+const FTS_SAFE_TERM_RE = /^[\p{L}\p{N}_]+$/u;
 
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -34,6 +38,23 @@ function tokenizeNormalizedText(normalized) {
     .filter(Boolean);
 }
 
+function extractNormalizedQueryTokens(normalized) {
+  const rawTokens = String(normalized || "").match(QUERY_TOKEN_RE) || [];
+  const expanded = [];
+
+  for (const token of rawTokens) {
+    if (/^[\p{Script=Han}]+$/u.test(token) && token.length > 4) {
+      for (let index = 0; index <= token.length - 2; index += 1) {
+        expanded.push(token.slice(index, index + 2));
+      }
+      continue;
+    }
+    expanded.push(token.toLowerCase());
+  }
+
+  return [...new Set(expanded)];
+}
+
 function shouldDropTimeNoiseToken(token) {
   const t = String(token || "").toLowerCase();
   if (!t) return true;
@@ -51,6 +72,211 @@ function replaceVersionsWithStableTokens(text) {
     if (!canonical) return fragment;
     return ` version_${canonical} `;
   });
+}
+
+function isChineseQueryToken(token) {
+  return /^[\p{Script=Han}]+$/u.test(String(token || ""));
+}
+
+function highInformationStrength(token) {
+  const value = String(token || "").toLowerCase();
+  const hasLetters = /\p{L}/u.test(value);
+  const hasNumbers = /\p{N}/u.test(value);
+  const suffix = value.slice(value.lastIndexOf("_") + 1);
+  const hashLike = candidate => (
+    candidate.length >= 6 &&
+    /[a-z]/u.test(candidate) &&
+    /\d/u.test(candidate) &&
+    /^[0-9a-f]+$/u.test(candidate)
+  );
+
+  // A hex-shaped component is the most discriminative form after query
+  // normalization. This also covers UUID/hash components split on hyphens.
+  if (
+    (hashLike(value) || (value.includes("_") && hashLike(suffix)))
+  ) return 4;
+
+  if (!value.includes("_") && hasLetters && hasNumbers) return 3;
+  if (value.includes("_") && hasNumbers) return 2;
+  if (value.includes("_")) return 1;
+  return 0;
+}
+
+function selectHighInformationTokens(tokens, quota, termGroups) {
+  const source = Array.isArray(tokens) ? tokens : [];
+  const limit = Math.max(0, Math.trunc(Number(quota)));
+  if (limit === 0 || source.length === 0) return [];
+
+  const effectiveLimit = Math.min(limit, source.length);
+  const items = source.map((token, index) => ({
+    token,
+    index,
+    group: termGroups.get(token) || null,
+    strength: highInformationStrength(token),
+  }));
+
+  const groupCounts = new Map();
+  const compoundLimit = group => {
+    if (!group) return Number.POSITIVE_INFINITY;
+    const hasAlternativeGroup = items.some(item => item.group !== group);
+    return hasAlternativeGroup
+      ? Math.min(MAX_HIGH_INFORMATION_COMPOUND_COMPONENTS, Math.max(1, effectiveLimit - 1))
+      : MAX_HIGH_INFORMATION_COMPOUND_COMPONENTS;
+  };
+  const canSelect = item => {
+    if (!item.group) return true;
+    return (groupCounts.get(item.group) || 0) < compoundLimit(item.group);
+  };
+  const select = item => {
+    groupCounts.set(item.group, (groupCounts.get(item.group) || 0) + 1);
+  };
+
+  if (effectiveLimit === 1) {
+    const strongest = [...items]
+      .sort((left, right) => right.strength - left.strength || left.index - right.index)
+      .find(canSelect);
+    return strongest ? [strongest.token] : [];
+  }
+
+  const selectedIndexes = new Set();
+  const selectNearest = target => {
+    const nearest = items
+      .filter(item => !selectedIndexes.has(item.index) && canSelect(item))
+      .sort((left, right) => (
+        Math.abs(left.index - target) - Math.abs(right.index - target) ||
+        right.strength - left.strength ||
+        left.index - right.index
+      ))[0];
+    if (!nearest) return false;
+    selectedIndexes.add(nearest.index);
+    select(nearest);
+    return true;
+  };
+
+  const middleIndex = Math.floor((source.length - 1) / 2);
+  const anchors = effectiveLimit === 2
+    ? [0, source.length - 1]
+    : [0, middleIndex, source.length - 1];
+  for (const target of anchors) {
+    if (selectedIndexes.size >= effectiveLimit) break;
+    selectNearest(target);
+  }
+
+  // If an anchor selected a compound component, retain one nearby legal
+  // component before spending the remaining budget on unrelated tokens.
+  // This keeps compounds searchable without allowing one compound to fill the
+  // high-information quota.
+  const anchoredGroups = [...new Set(
+    items.filter(item => selectedIndexes.has(item.index) && item.group).map(item => item.group),
+  )];
+  for (const group of anchoredGroups) {
+    while (
+      selectedIndexes.size < effectiveLimit &&
+      (groupCounts.get(group) || 0) < compoundLimit(group)
+    ) {
+      const groupItems = items
+        .filter(item => item.group === group && !selectedIndexes.has(item.index))
+        .sort((left, right) => (
+          right.strength - left.strength || left.index - right.index
+        ));
+      if (groupItems.length === 0) break;
+      const next = groupItems[0];
+      selectedIndexes.add(next.index);
+      select(next);
+    }
+  }
+
+  // Fill remaining slots by maximum dispersion from the positions already
+  // selected. This avoids reusing anchor targets and prevents a tie from
+  // turning into a forward scan near the head of the query.
+  const distanceToSelected = index => Math.min(
+    ...[...selectedIndexes].map(selectedIndex => Math.abs(index - selectedIndex)),
+  );
+  const isUncoveredCompound = item => Boolean(item.group) && (groupCounts.get(item.group) || 0) === 0;
+  while (selectedIndexes.size < effectiveLimit) {
+    const next = items
+      .filter(item => !selectedIndexes.has(item.index) && canSelect(item))
+      .sort((left, right) => (
+        Number(isUncoveredCompound(right)) - Number(isUncoveredCompound(left)) ||
+        distanceToSelected(right.index) - distanceToSelected(left.index) ||
+        right.strength - left.strength ||
+        left.index - right.index
+      ))[0];
+    if (!next) break;
+    selectedIndexes.add(next.index);
+    select(next);
+  }
+
+  return source.filter((_, index) => selectedIndexes.has(index));
+}
+
+function collectDelimitedTermGroups(text) {
+  const termGroups = new Map();
+  let groupId = 0;
+  const stripped = stripPromptMetadataPrefix(text).normalize("NFKC");
+  for (const fragment of stripped.match(DELIMITED_QUERY_TOKEN_RE) || []) {
+    const terms = extractNormalizedQueryTokens(normalizeFtsQuery(fragment));
+    if (terms.length < 2) continue;
+    const group = `compound_${groupId}`;
+    groupId += 1;
+    for (const term of terms) {
+      if (!termGroups.has(term)) termGroups.set(term, group);
+    }
+  }
+  return termGroups;
+}
+
+function structuredTokenStrength(token) {
+  const value = String(token || "").toLowerCase();
+  if (isBroadToken(value)) return 0;
+  if (/^\d{3,}$/u.test(value)) return 3;
+  if (isChineseQueryToken(value)) return 1;
+  return 2;
+}
+
+function selectStructuredOrdinaryTokens(tokens, limit, termGroups) {
+  const source = Array.isArray(tokens) ? tokens : [];
+  const capacity = Math.max(0, Math.trunc(Number(limit)));
+  if (capacity === 0 || source.length === 0) return new Set();
+
+  const groups = new Map();
+  for (const token of source) {
+    const group = termGroups.get(token) || `term_${token}`;
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(token);
+  }
+
+  const orderedGroups = [...groups.entries()]
+    .map(([group, groupTokens], firstIndex) => ({
+      group,
+      groupTokens: [...groupTokens].sort((left, right) => (
+        structuredTokenStrength(right) - structuredTokenStrength(left)
+      )),
+      priority: Math.max(...groupTokens.map(structuredTokenStrength)),
+      firstIndex,
+    }))
+    .sort((left, right) => right.priority - left.priority || left.firstIndex - right.firstIndex);
+
+  // Round-robin compound components so one long delimited phrase cannot
+  // consume every ordinary slot. A three-part compound remains fully
+  // searchable when the bounded query has room for it.
+  const selected = new Set();
+  const selectedPerGroup = new Map();
+  while (selected.size < capacity) {
+    let madeProgress = false;
+    for (const { group, groupTokens } of orderedGroups) {
+      const count = selectedPerGroup.get(group) || 0;
+      if (count >= MAX_COMPOUND_COMPONENTS) continue;
+      const next = groupTokens.find(token => !selected.has(token));
+      if (!next) continue;
+      selected.add(next);
+      selectedPerGroup.set(group, count + 1);
+      madeProgress = true;
+      if (selected.size >= capacity) break;
+    }
+    if (!madeProgress) break;
+  }
+  return selected;
 }
 
 export function normalizeFtsQuery(text) {
@@ -71,27 +297,86 @@ export function sanitizeFtsQuery(text) {
   return normalizeFtsQuery(text);
 }
 
+export function extractFtsFallbackTerms(query, maxTerms = 8) {
+  const limit = Math.min(8, Math.max(0, Math.trunc(Number(maxTerms) || 0)));
+  if (limit === 0) return [];
+
+  const seen = new Set();
+  const terms = [];
+  for (const rawTerm of String(query || "").split(/\s+/u)) {
+    if (!rawTerm || rawTerm === "OR") continue;
+    const term = rawTerm.toLowerCase();
+    if (!FTS_SAFE_TERM_RE.test(term) || seen.has(term)) continue;
+    seen.add(term);
+    terms.push(term);
+    if (terms.length >= limit) break;
+  }
+  return terms;
+}
+
 export function extractQueryTokens(text, maxTerms = 16) {
   const normalized = normalizeFtsQuery(text);
-  const rawTokens = normalized.match(QUERY_TOKEN_RE) || [];
-  const expanded = [];
-
-  for (const token of rawTokens) {
-    if (/^[\p{Script=Han}]+$/u.test(token) && token.length > 4) {
-      for (let index = 0; index <= token.length - 2; index += 1) {
-        expanded.push(token.slice(index, index + 2));
-      }
-      continue;
-    }
-    expanded.push(token.toLowerCase());
-  }
-
-  return [...new Set(expanded)].slice(0, Math.max(1, Number(maxTerms) || 16));
+  return extractNormalizedQueryTokens(normalized)
+    .slice(0, Math.max(1, Number(maxTerms) || 16));
 }
 
 export function buildFtsFallbackQuery(text, maxTerms = 8) {
-  const tokens = extractQueryTokens(text, Math.max(8, maxTerms * 2));
-  return [...new Set(tokens)].slice(0, maxTerms).join(" OR ");
+  const limit = Math.max(0, Math.trunc(Number(maxTerms)));
+  if (limit === 0) return "";
+
+  const normalized = normalizeFtsQuery(text);
+  const tokens = extractNormalizedQueryTokens(normalized);
+  if (tokens.length === 0) return "";
+
+  const delimitedTermGroups = collectDelimitedTermGroups(text);
+  const delimitedTerms = new Set(delimitedTermGroups.keys());
+
+  const highInformation = tokens.filter(token => {
+    const hasLetters = /\p{L}/u.test(token);
+    const hasNumbers = /\p{N}/u.test(token);
+    return (hasLetters && hasNumbers) || token.includes("_");
+  });
+  const highInformationSet = new Set(highInformation);
+  const chineseTerms = tokens.filter(isChineseQueryToken);
+  const structuredOrdinary = tokens.filter(token => (
+    delimitedTerms.has(token) && !highInformationSet.has(token)
+  ));
+  const ordinary = tokens.filter(token => (
+    !highInformationSet.has(token) && !structuredOrdinary.includes(token)
+  ));
+
+  const highQuota = Math.min(
+    highInformation.length,
+    Math.max(0, limit - (limit >= 2 && chineseTerms.length > 0 ? 1 : 0)),
+  );
+  const selected = selectHighInformationTokens(highInformation, highQuota, delimitedTermGroups);
+  if (selected.length === 0 && structuredOrdinary.length === 0) {
+    return tokens.slice(0, limit).join(" OR ");
+  }
+
+  const selectedSet = new Set(selected);
+  const append = token => {
+    if (selected.length >= limit || selectedSet.has(token)) return;
+    selected.push(token);
+    selectedSet.add(token);
+  };
+
+  // Reserve a Chinese semantic representative, then give compound parts a
+  // chance before filling the remaining budget in normalized query order.
+  if (chineseTerms.length > 0) append(chineseTerms[0]);
+  const structuredCapacity = Math.max(0, limit - selected.length);
+  const selectedStructured = selectStructuredOrdinaryTokens(
+    structuredOrdinary,
+    structuredCapacity,
+    delimitedTermGroups,
+  );
+  for (const token of structuredOrdinary) {
+    if (selectedStructured.has(token)) append(token);
+  }
+  for (const token of ordinary.filter(token => !chineseTerms.includes(token))) append(token);
+  for (const token of ordinary) append(token);
+
+  return selected.slice(0, limit).join(" OR ");
 }
 
 export function buildLikeFallbackPatterns(text, maxTerms = 8) {

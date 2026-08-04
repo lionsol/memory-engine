@@ -75,7 +75,7 @@
 | memory `kind` | slot 插件需 `kind:"memory"` | 无 kind | 无法被选为 `slots.memory` |
 | `tools.deny` | 命中 `memory_search`/`memory_get`（当前配置） | 注册的是别的工具 | deny 命中了**错误的工具** —— 拦掉了 memory-core，却没拦 memory-engine |
 | `slots.contextEngine="legacy"` | `"legacy"` 是合法兜底值 | memory-engine 未注册为 contextEngine | slot 指向 legacy，与 memory-engine **完全无关**，配置意图落空 |
-| DB 写隔离 | core DB 写受保护 | `ATTACH AS core` + write guard | **符合**契约（AGENTS.md 已固化此不变量） |
+| DB 写隔离 | core DB 写受保护 | `ATTACH AS core` + write guard | **符合**契约（见 `current-state.md` 与 `adr/event-time-ownership.md`） |
 | 复用 memory-core | `getMemorySearchManager` 是公开 SDK | 已正确复用 | **符合** |
 | prompt supplement | `registerMemoryPromptSupplement` 公开 API | 已用 | **符合** |
 
@@ -133,7 +133,7 @@ memory-engine 的 `before_prompt_build`（autoRecall，现 disabled）与 active
 
 #### 6. DB 隔离（core 只读 + engine 独立库）
 
-符合 OpenClaw 对第三方记忆插件的隐含约束，AGENTS.md 已固化为不变量，保持现状。
+符合 OpenClaw 对第三方记忆插件的隐含约束，公开数据库安全不变量见 `current-state.md`，保持现状。
 
 #### 7. 复用 `getMemorySearchManager` 做 lexical 通道
 

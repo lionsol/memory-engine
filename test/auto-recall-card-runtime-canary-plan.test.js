@@ -31,7 +31,7 @@ test("plugin schema exposes cardFirstRuntime as disabled-by-default canary switc
   assert.deepEqual(cardFirstRuntime.default, { enabled: false });
   assert.equal(cardFirstRuntime.properties.enabled.type, "boolean");
   assert.equal(cardFirstRuntime.properties.enabled.default, false);
-  assert.match(cardFirstRuntime.properties.enabled.description, /experimental edi-only card-first/i);
+  assert.match(cardFirstRuntime.properties.enabled.description, /experimental AutoRecall-agent-gated card-first/i);
 });
 
 test("manifest defaults do not enable autoRecall or card-first runtime", () => {
@@ -45,11 +45,12 @@ test("manifest defaults do not enable autoRecall or card-first runtime", () => {
   assert.equal(autoRecall.properties.cardFirstRuntime.properties.enabled.default, false);
 });
 
-test("runtime switch remains edi-only even after schema exposes config", () => {
-  const config = { cardFirstRuntime: { enabled: true } };
-  assert.equal(shouldUseAutoRecallCardRuntime(config, { agentId: "edi" }), true);
-  assert.equal(shouldUseAutoRecallCardRuntime(config, { agentId: "task-planner" }), false);
-  assert.equal(shouldUseAutoRecallCardRuntime(config, { agentId: "codex" }), false);
+test("runtime switch inherits the AutoRecall agent allowlist after schema exposes config", () => {
+  const config = { agentAllowlist: ["main"], cardFirstRuntime: { enabled: true } };
+  assert.equal(shouldUseAutoRecallCardRuntime(config, { agentId: "main", allowed: true }), true);
+  assert.equal(shouldUseAutoRecallCardRuntime(config, { agentId: "task-planner", allowed: true }), false);
+  assert.equal(shouldUseAutoRecallCardRuntime(config, { agentId: "codex", allowed: true }), false);
+  assert.equal(shouldUseAutoRecallCardRuntime(config, { agentId: "main", allowed: false }), false);
   assert.equal(shouldUseAutoRecallCardRuntime({}, { agentId: "edi" }), false);
 });
 
@@ -115,7 +116,7 @@ test("canary plan defines pass and fail criteria", () => {
 
   assert.match(doc, /## Pass criteria/);
   assert.match(doc, /## Fail criteria/);
-  assert.match(doc, /card_first_runtime_enabled=true appears only in `edi` interactive user turns/i);
+  assert.match(doc, /card_first_runtime_enabled=true appears only in AutoRecall-allowlisted interactive user turns/i);
   assert.match(doc, /generic long-input rewrite\/summarize prompts still skip recall/i);
   assert.match(doc, /raw-log-like and tool-output-like card summaries are withheld/i);
   assert.match(doc, /card-first runs for `task-planner`, Codex CLI, missing agent id/i);
@@ -134,7 +135,7 @@ test("canary plan includes decision record template", () => {
     "Observed memory_card disclosure events:",
     "Citation quality:",
     "Unexpected reinforcement:",
-    "Decision: keep experiment disabled / repeat canary / expand edi canary / reject card-first default",
+    "Decision: keep experiment disabled / repeat canary / expand allowlisted-agent canary / reject card-first default",
   ]) {
     assert.match(doc, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }

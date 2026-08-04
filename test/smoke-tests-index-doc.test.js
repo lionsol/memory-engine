@@ -57,7 +57,6 @@ test("smoke tests index records regression guard command", () => {
   for (const token of [
     "npm run smoke:console-annotation-handoff",
     "npm run smoke:full-fail-closed",
-    "node --test test/full-fail-closed-runtime-rollout-contract.test.js",
     "node --test test/openclaw-no-load-plugin-metadata-audit-contract.test.js",
     "node --test test/openclaw-state-db-readonly-feasibility-contract.test.js",
     "node --test test/openclaw-state-db-readonly-feasibility.test.js",
@@ -67,7 +66,7 @@ test("smoke tests index records regression guard command", () => {
     "npm run smoke:openclaw-host-metadata-manifest",
     "node --test test/tool-surface-runtime-access-audit-doc.test.js",
     "node --test test/agent-memory-tool-strategy.test.js",
-    "key links, workflow steps, and safety boundaries remain discoverable",
+    "Current smoke entrypoints and safety boundaries remain discoverable",
   ]) {
     assert.equal(index.includes(token), true, `missing regression guard token: ${token}`);
   }

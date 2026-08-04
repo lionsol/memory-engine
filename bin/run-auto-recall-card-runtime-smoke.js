@@ -157,23 +157,23 @@ function contextContains(value, token) {
 
 async function runCardRuntimeSmoke() {
   const defaultRuntime = await formatSyntheticRuntimeContext({
-    config: {},
-    runtimeGate: { agentId: "edi" },
+    config: { agentAllowlist: ["main"] },
+    runtimeGate: { agentId: "main", allowed: true },
     candidates: [baseCandidate()],
   });
-  const enabledEdiRuntime = await formatSyntheticRuntimeContext({
-    config: { cardFirstRuntime: { enabled: true } },
-    runtimeGate: { agentId: "edi" },
+  const enabledAllowedRuntime = await formatSyntheticRuntimeContext({
+    config: { agentAllowlist: ["main"], cardFirstRuntime: { enabled: true } },
+    runtimeGate: { agentId: "main", allowed: true },
     candidates: [baseCandidate()],
   });
-  const enabledPlannerRuntime = await formatSyntheticRuntimeContext({
-    config: { cardFirstRuntime: { enabled: true } },
-    runtimeGate: { agentId: "task-planner" },
+  const enabledDisallowedRuntime = await formatSyntheticRuntimeContext({
+    config: { agentAllowlist: ["main"], cardFirstRuntime: { enabled: true } },
+    runtimeGate: { agentId: "task-planner", allowed: true },
     candidates: [baseCandidate()],
   });
   const rawLogRuntime = await formatSyntheticRuntimeContext({
-    config: { cardFirstRuntime: { enabled: true } },
-    runtimeGate: { agentId: "edi" },
+    config: { agentAllowlist: ["main"], cardFirstRuntime: { enabled: true } },
+    runtimeGate: { agentId: "main", allowed: true },
     candidates: [rawLogCandidate()],
   });
 
@@ -194,34 +194,34 @@ async function runCardRuntimeSmoke() {
       },
     }),
     buildCheck({
-      id: "enabled_edi_runtime_uses_memory_cards",
-      name: "edi with explicit cardFirstRuntime flag uses memory-card supplement",
-      pass: enabledEdiRuntime.card_first_runtime_enabled === true &&
-        enabledEdiRuntime.disclosure_mode === "memory_card" &&
-        enabledEdiRuntime.card_count === 1 &&
-        contextContains(enabledEdiRuntime.context, "## Auto Recall - memory cards") &&
-        contextContains(enabledEdiRuntime.context, "P4 card-first runtime decision") &&
-        contextContains(enabledEdiRuntime.context, "memory_engine_get:abc123def4567890") &&
-        !contextContains(enabledEdiRuntime.context, "FULL_BODY_SHOULD_NOT_LEAK"),
+      id: "enabled_allowlisted_runtime_uses_memory_cards",
+      name: "AutoRecall-allowlisted runtime uses memory-card supplement with explicit flag",
+      pass: enabledAllowedRuntime.card_first_runtime_enabled === true &&
+        enabledAllowedRuntime.disclosure_mode === "memory_card" &&
+        enabledAllowedRuntime.card_count === 1 &&
+        contextContains(enabledAllowedRuntime.context, "## Auto Recall - memory cards") &&
+        contextContains(enabledAllowedRuntime.context, "P4 card-first runtime decision") &&
+        contextContains(enabledAllowedRuntime.context, "memory_engine_get:abc123def4567890") &&
+        !contextContains(enabledAllowedRuntime.context, "FULL_BODY_SHOULD_NOT_LEAK"),
       details: {
-        card_first_runtime_enabled: enabledEdiRuntime.card_first_runtime_enabled,
-        disclosure_mode: enabledEdiRuntime.disclosure_mode,
-        card_count: enabledEdiRuntime.card_count,
-        context_has_get_token: contextContains(enabledEdiRuntime.context, "memory_engine_get:abc123def4567890"),
-        context_leaked_raw_body: contextContains(enabledEdiRuntime.context, "FULL_BODY_SHOULD_NOT_LEAK"),
+        card_first_runtime_enabled: enabledAllowedRuntime.card_first_runtime_enabled,
+        disclosure_mode: enabledAllowedRuntime.disclosure_mode,
+        card_count: enabledAllowedRuntime.card_count,
+        context_has_get_token: contextContains(enabledAllowedRuntime.context, "memory_engine_get:abc123def4567890"),
+        context_leaked_raw_body: contextContains(enabledAllowedRuntime.context, "FULL_BODY_SHOULD_NOT_LEAK"),
       },
     }),
     buildCheck({
-      id: "enabled_non_edi_runtime_stays_raw_text",
-      name: "non-edi runtime does not use card-first supplement even when flag is enabled",
-      pass: enabledPlannerRuntime.card_first_runtime_enabled === false &&
-        enabledPlannerRuntime.disclosure_mode === "raw_text" &&
-        contextContains(enabledPlannerRuntime.context, "## Auto Recall - relevant memory") &&
-        contextContains(enabledPlannerRuntime.context, "FULL_BODY_SHOULD_NOT_LEAK"),
+      id: "enabled_non_allowlisted_runtime_stays_raw_text",
+      name: "runtime outside AutoRecall agent allowlist does not use card-first supplement",
+      pass: enabledDisallowedRuntime.card_first_runtime_enabled === false &&
+        enabledDisallowedRuntime.disclosure_mode === "raw_text" &&
+        contextContains(enabledDisallowedRuntime.context, "## Auto Recall - relevant memory") &&
+        contextContains(enabledDisallowedRuntime.context, "FULL_BODY_SHOULD_NOT_LEAK"),
       details: {
-        card_first_runtime_enabled: enabledPlannerRuntime.card_first_runtime_enabled,
-        disclosure_mode: enabledPlannerRuntime.disclosure_mode,
-        context_has_raw_body: contextContains(enabledPlannerRuntime.context, "FULL_BODY_SHOULD_NOT_LEAK"),
+        card_first_runtime_enabled: enabledDisallowedRuntime.card_first_runtime_enabled,
+        disclosure_mode: enabledDisallowedRuntime.disclosure_mode,
+        context_has_raw_body: contextContains(enabledDisallowedRuntime.context, "FULL_BODY_SHOULD_NOT_LEAK"),
       },
     }),
     buildCheck({

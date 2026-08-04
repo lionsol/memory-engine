@@ -331,14 +331,20 @@ test("batch core reads handle more than one IN batch and keep only the newest en
   assert.equal(flaggedRows.length, 699);
 });
 
-test("conflict resolver source uses dual handles and no attached schema references", () => {
-  const source = readFileSync(resolve("lib/checkpoint/conflict-resolver.js"), "utf8");
-  assert.doesNotMatch(source, /chunks_db\./);
-  assert.doesNotMatch(source, /withMeDb\s*\(/);
-  assert.doesNotMatch(source, /ATTACH DATABASE/);
-  assert.doesNotMatch(source, /patchWriteGuards/);
-  assert.match(source, /withCheckpointDbs\s*\(/);
-  assert.match(source, /engineDb/);
-  assert.match(source, /coreDb/);
-  assert.match(source, /CONFLICT_CORE_BATCH_SIZE/);
+test("checkpoint conflict resolver delegates dual-handle mutation to the lifecycle owner", () => {
+  const wrapper = readFileSync(resolve("lib/checkpoint/conflict-resolver.js"), "utf8");
+  const lifecycle = readFileSync(resolve("lib/lifecycle/preference-conflicts.cjs"), "utf8");
+
+  for (const source of [wrapper, lifecycle]) {
+    assert.doesNotMatch(source, /chunks_db\./);
+    assert.doesNotMatch(source, /withMeDb\s*\(/);
+    assert.doesNotMatch(source, /ATTACH DATABASE/);
+    assert.doesNotMatch(source, /patchWriteGuards/);
+  }
+  assert.match(wrapper, /withCheckpointDbs\s*\(/);
+  assert.match(wrapper, /resolvePreferenceConflicts/);
+  assert.match(lifecycle, /engineDb/);
+  assert.match(lifecycle, /coreDb/);
+  assert.match(lifecycle, /CONFLICT_CORE_BATCH_SIZE/);
+  assert.match(lifecycle, /preference_latest_wins/);
 });

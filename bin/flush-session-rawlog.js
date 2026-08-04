@@ -5,30 +5,26 @@
  * 在模型切换 / session reset 前，将对话 flush 到 raw_log DB，
  * 避免切换后数据丢失导致摘要漏记。
  *
- * 两种写入模式：
- *   1. smart-add 文件（轻量，用于回溯查阅）
- *   2. 直接写入 SQLite（确保 session-checkpoint 能读到 raw_log）
+ * 写入 canonical smart-add 文件，供 checkpoint 按目标日期读取。
+ * memory-engine 不直接写 OpenClaw Core DB；Core 索引更新由显式 owner sync 负责。
  *
  * 用法:
  *   node scripts/flush-session-rawlog.js                         # flush 最新重置的 session
  *   node scripts/flush-session-rawlog.js --current               # flush 当前 session
  *   node scripts/flush-session-rawlog.js --key <sessionKey>      # flush 指定 session
- *   node scripts/flush-session-rawlog.js --checkpoint            # session-checkpoint 集成模式
+ *   node scripts/flush-session-rawlog.js --checkpoint --target-date YYYY-MM-DD
  *   node scripts/flush-session-rawlog.js --all                   # flush 所有旧 session
  */
 
 const { readFileSync, existsSync, mkdirSync, appendFileSync, statSync, readdirSync } = require("node:fs");
-const { resolve, basename, dirname } = require("node:path");
+const { resolve, basename } = require("node:path");
 const { createHash } = require("node:crypto");
 const { homedir } = require("node:os");
-const Database = require("better-sqlite3");
 
 const HOME = homedir();
 const WORKSPACE = resolve(HOME, ".openclaw/workspace");
 const SESSIONS_DIR = resolve(HOME, ".openclaw/agents/main/sessions");
 const SMART_ADD_DIR = resolve(WORKSPACE, "memory/smart-add");
-const MAIN_DB_PATH = resolve(HOME, ".openclaw/memory/main.sqlite");
-const ME_DB_PATH = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
 
 // ── Helpers ──
 
@@ -54,6 +50,24 @@ function dateStrFromTs(tsStr) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+function validateTargetDate(value) {
+  const targetDate = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+    throw new Error("--target-date must be a valid YYYY-MM-DD date");
+  }
+  const [year, month, day] = targetDate.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    !Number.isFinite(parsed.getTime())
+    || parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    throw new Error("--target-date must be a valid YYYY-MM-DD date");
+  }
+  return targetDate;
+}
+
 function tsId() {
   return new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
 }
@@ -68,49 +82,6 @@ const CRON_PREFIXES = ["cron:", "dreaming-"];
 
 function isCronSession(key) {
   return CRON_PREFIXES.some((p) => key.includes(p));
-}
-
-// ── DB helpers ──
-
-function getMainDb() {
-  if (!existsSync(MAIN_DB_PATH)) return null;
-  try {
-    const db = new Database(MAIN_DB_PATH, { readonly: false });
-    db.pragma("journal_mode = WAL");
-    return db;
-  } catch (e) {
-    log(`Cannot open main DB: ${e.message}`);
-    return null;
-  }
-}
-
-function getMeDb() {
-  mkdirSync(dirname(ME_DB_PATH), { recursive: true });
-  try {
-    const db = new Database(ME_DB_PATH, { readonly: false });
-    db.pragma("journal_mode = WAL");
-    // Ensure memory_confidence table exists
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS memory_confidence (
-        chunk_id TEXT PRIMARY KEY,
-        initial_confidence REAL NOT NULL DEFAULT 0.5,
-        confidence REAL NOT NULL DEFAULT 0.5,
-        last_confidence_update INTEGER,
-        base_tau REAL NOT NULL DEFAULT 7.0,
-        hit_count INTEGER NOT NULL DEFAULT 0,
-        is_archived INTEGER NOT NULL DEFAULT 0,
-        is_protected INTEGER NOT NULL DEFAULT 0,
-        conflict_flag INTEGER NOT NULL DEFAULT 0,
-        category TEXT NOT NULL DEFAULT 'raw_log',
-        kg_data TEXT
-      );
-      CREATE INDEX IF NOT EXISTS idx_mc_category ON memory_confidence(category);
-    `);
-    return db;
-  } catch (e) {
-    log(`Cannot open ME DB: ${e.message}`);
-    return null;
-  }
 }
 
 // ── Session file discovery ──
@@ -167,115 +138,7 @@ function parseSessionMessages(filePath) {
   return messages;
 }
 
-// ── Direct SQLite write ──
-
-/**
- * Write conversation messages directly as raw_log entries in the DB.
- * Creates chunks in main.sqlite + memory_confidence entries in memory-engine DB.
- */
-function toEventTimestampSec(value, fallbackSec) {
-  if (value === null || value === undefined || value === "") return fallbackSec;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.floor(value > 1e12 ? value / 1000 : value);
-  const raw = String(value).trim();
-  if (!raw) return fallbackSec;
-  if (/^\d+$/.test(raw)) {
-    const numeric = Number(raw);
-    if (Number.isFinite(numeric)) return Math.floor(numeric > 1e12 ? numeric / 1000 : numeric);
-  }
-  const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : fallbackSec;
-}
-
-function getChunkColumns(db) {
-  return new Set(
-    db.prepare("PRAGMA table_info(chunks)").all().map((row) => String(row.name || "")),
-  );
-}
-
-function buildChunkInsert(columns) {
-  const hasDedicatedEventTime = columns.has("event_at");
-  const insertColumns = [
-    "id",
-    "path",
-    "source",
-    "start_line",
-    "end_line",
-    "hash",
-    "model",
-    "text",
-    "embedding",
-  ];
-  if (hasDedicatedEventTime) insertColumns.push("event_at");
-  if (columns.has("created_at")) insertColumns.push("created_at");
-  insertColumns.push("updated_at");
-
-  const placeholders = insertColumns.map(() => "?").join(", ");
-  return {
-    hasDedicatedEventTime,
-    insertColumns,
-    sql: `INSERT OR IGNORE INTO chunks (${insertColumns.join(", ")}) VALUES (${placeholders})`,
-  };
-}
-
-function writeToDb(dateStr, messages, mainDb, meDb) {
-  if (!mainDb || !meDb) {
-    log("  DB not available, skipping SQLite write");
-    return { written: 0 };
-  }
-
-  const smartAddPath = `memory/smart-add/${dateStr}.md`;
-  const fallbackSec = Math.floor(Date.now() / 1000);
-  const chunkColumns = getChunkColumns(mainDb);
-  const chunkInsert = buildChunkInsert(chunkColumns);
-  const insertChunk = mainDb.prepare(chunkInsert.sql);
-  let written = 0;
-
-  for (const m of messages) {
-    const eventSec = toEventTimestampSec(m.ts, fallbackSec);
-    const nowSec = Math.floor(Date.now() / 1000);
-    const chunkId = hash(m.text + m.ts + dateStr);
-
-    // Only check memory_confidence (fastest dedup)
-    const existing = meDb.prepare("SELECT chunk_id FROM memory_confidence WHERE chunk_id = ?").get(chunkId);
-    if (existing) continue;
-
-    try {
-      // New core schema stores raw_log event time in event_at.
-      // Legacy core schema has no event_at, so updated_at must temporarily carry event time
-      // to keep checkpoint targetDate filtering correct until explicit core migration runs.
-      const chunkRow = {
-        id: chunkId,
-        path: smartAddPath,
-        source: "memory",
-        start_line: 0,
-        end_line: 0,
-        hash: hash(m.text),
-        model: "flush-script",
-        text: m.text,
-        embedding: "",
-        event_at: eventSec,
-        created_at: nowSec,
-        updated_at: chunkInsert.hasDedicatedEventTime ? nowSec : eventSec,
-      };
-      insertChunk.run(...chunkInsert.insertColumns.map((column) => chunkRow[column]));
-
-      // Insert into memory_confidence table (memory-engine.sqlite)
-      meDb.prepare(`
-        INSERT OR IGNORE INTO memory_confidence
-        (chunk_id, initial_confidence, confidence, last_confidence_update, base_tau, hit_count, is_archived, is_protected, conflict_flag, category)
-        VALUES (?, 0.5, 0.5, ?, 7.0, 0, 0, 0, 0, 'raw_log')
-      `).run(chunkId, eventSec);
-
-      written++;
-    } catch (e) {
-      log(`  DB write error: ${e.message.slice(0, 80)}`);
-    }
-  }
-
-  return { written };
-}
-
-// ── Smart-add file write (fallback, for human readability) ──
+// ── Canonical smart-add file write ──
 
 function writeSmartAddFile(dateStr, messages) {
   const filePath = resolve(SMART_ADD_DIR, `${dateStr}.md`);
@@ -299,7 +162,7 @@ function writeSmartAddFile(dateStr, messages) {
   }
 
   const header = existsSync(filePath) ? "" : "# Smart Added Memory\n\n";
-  const entry = `${header}## ${entryId}\n\nCategory: raw_log\n<!-- smart-add-fingerprint: ${fp} -->\n\n${combinedText}\n\n`;
+  const entry = `${header}## ${entryId}\n\nCategory: raw_log\nProvenance: session_flush\n<!-- smart-add-fingerprint: ${fp} -->\n\n${combinedText}\n\n`;
   appendFileSync(filePath, header ? entry : `\n${entry}`);
 
   return { written: true, entryId };
@@ -307,8 +170,9 @@ function writeSmartAddFile(dateStr, messages) {
 
 // ── Core flush function ──
 
-function flushSession(filePath, sessionKey) {
+function flushSession(filePath, sessionKey, options = {}) {
   const label = `${sessionKey || basename(filePath)}`;
+  const targetDate = options.targetDate || null;
   log(`Flushing: ${label}`);
 
   const messages = parseSessionMessages(filePath);
@@ -330,13 +194,21 @@ function flushSession(filePath, sessionKey) {
     }
   }
 
-  // Open DBs once
-  const mainDb = getMainDb();
-  const meDb = getMeDb();
-
   const dayResults = [];
 
   for (const [dateStr, dateMsgs] of Object.entries(byDate)) {
+    if (targetDate && dateStr !== targetDate) {
+      log(`  → ${dateStr}: skipped (out_of_target_date)`);
+      dayResults.push({
+        date: dateStr,
+        action: "skip",
+        reason: "out_of_target_date",
+        smartAdd: "out_of_target_date",
+        coreDbWrite: "disabled",
+      });
+      continue;
+    }
+
     // Skip today's data — it's still streaming, let session-checkpoint handle it
     if (dateStr === todayStr() && !process.argv.includes("--force-today")) {
       log(`  → ${dateStr}: skipped (today, still streaming)`);
@@ -344,40 +216,34 @@ function flushSession(filePath, sessionKey) {
       continue;
     }
 
-    // 1. Write to smart-add file (human readable)
     const fileResult = writeSmartAddFile(dateStr, dateMsgs);
     if (fileResult.written) {
-      log(`  → ${dateStr}: ${dateMsgs.length} msgs → smart-add`);
+      log(`  → ${dateStr}: ${dateMsgs.length} msgs → canonical smart-add`);
     } else {
       log(`  → ${dateStr}: smart-add skipped (${fileResult.reason})`);
-    }
-
-    // 2. Write directly to SQLite (ensures checkpoint can find raw_log)
-    const dbResult = writeToDb(dateStr, dateMsgs, mainDb, meDb);
-    if (dbResult.written > 0) {
-      log(`  → ${dateStr}: ${dbResult.written} entries → SQLite`);
     }
 
     dayResults.push({
       date: dateStr,
       smartAdd: fileResult.written || fileResult.reason,
-      dbEntries: dbResult.written,
+      coreDbWrite: "disabled",
     });
   }
 
-  if (mainDb) mainDb.close();
-  if (meDb) meDb.close();
-
-  const totalWritten = dayResults.reduce((s, r) => s + (r.dbEntries || 0), 0);
+  const smartAddEntriesWritten = dayResults.filter((result) => result.smartAdd === true).length;
 
   return {
     key: sessionKey,
-    flushed: totalWritten > 0 || dayResults.some((r) => r.smartAdd === true),
+    flushed: smartAddEntriesWritten > 0,
     userMessages: uc,
     assistantMessages: ac,
     totalMessages: messages.length,
     days: Object.keys(byDate).length,
-    dbEntriesWritten: totalWritten,
+    smartAddEntriesWritten,
+    targetDate: targetDate || null,
+    outOfTargetDateGroupsSkipped: dayResults.filter((result) => result.reason === "out_of_target_date").length,
+    dbEntriesWritten: 0,
+    coreDbWriteDisabled: true,
     dayResults,
   };
 }
@@ -401,6 +267,26 @@ function main() {
   const isAll = args.includes("--all");
   const isCheckpoint = args.includes("--checkpoint");
   const isCurrent = args.includes("--current");
+  const targetDateArg = args.includes("--target-date")
+    ? args[args.indexOf("--target-date") + 1]
+    : args.find((arg) => arg.startsWith("--target-date="))?.slice("--target-date=".length);
+
+  if (isCheckpoint && !targetDateArg) {
+    log("ERROR: --target-date required for --checkpoint");
+    process.exitCode = 1;
+    return;
+  }
+
+  let targetDate = null;
+  if (targetDateArg) {
+    try {
+      targetDate = validateTargetDate(targetDateArg);
+    } catch (error) {
+      log(`ERROR: ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
 
   const files = getSessionFiles();
   log(`Found ${files.length} session files`);
@@ -429,10 +315,17 @@ function main() {
 
     const results = [];
     for (const f of targets) {
-      const r = flushSession(f.path, f.key);
+      const r = flushSession(f.path, f.key, { targetDate });
       results.push(r);
     }
-    console.log(JSON.stringify({ mode: "checkpoint", results }, null, 2));
+    console.log(JSON.stringify({
+      mode: "checkpoint",
+      targetDate,
+      sessionsScanned: targets.length,
+      targetDateEntriesWritten: results.reduce((sum, result) => sum + Number(result.smartAddEntriesWritten || 0), 0),
+      outOfTargetDateGroupsSkipped: results.reduce((sum, result) => sum + Number(result.outOfTargetDateGroupsSkipped || 0), 0),
+      results,
+    }, null, 2));
     return;
   }
 

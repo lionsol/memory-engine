@@ -1,19 +1,28 @@
 import { existsSync, readFileSync } from "fs";
-import { homedir } from "os";
-import { resolve, dirname } from "path";
+import runtimePaths from "./lib/runtime/paths.cjs";
 
-export const HOME_DIR = homedir();
-export const CORE_DB_PATH = process.env.MEMORY_ENGINE_CORE_DB || resolve(HOME_DIR, ".openclaw/memory/main.sqlite");
-export const ENGINE_DB_PATH = process.env.MEMORY_ENGINE_DB || resolve(HOME_DIR, ".openclaw/memory/memory-engine/memory-engine.sqlite");
-export const ENGINE_DB_DIR = dirname(ENGINE_DB_PATH);
+const {
+  INDEX_SYNC_WATCH_DIRS: SHARED_INDEX_SYNC_WATCH_DIRS,
+  SMART_ADD_RELATIVE_DIR,
+  resolveMemoryEnginePaths,
+} = runtimePaths;
+const DEFAULT_PATHS = resolveMemoryEnginePaths();
+
+export const HOME_DIR = DEFAULT_PATHS.homeDir;
+export const CORE_DB_PATH = DEFAULT_PATHS.coreDbPath;
+export const ENGINE_DB_PATH = DEFAULT_PATHS.engineDbPath;
+export const ENGINE_DB_DIR = DEFAULT_PATHS.engineDbDir;
 // Backward compatibility for existing imports; prefer CORE_DB_PATH in new code.
 export const DB_PATH = CORE_DB_PATH;
-export const WORKSPACE = resolve(HOME_DIR, ".openclaw/workspace");
-export const SMART_ADD_DIR = "memory/smart-add";
-export const INDEX_SYNC_WATCH_DIRS = ["memory/smart-add", "memory/episodes"];
+export const WORKSPACE = DEFAULT_PATHS.workspaceDir;
+export const SMART_ADD_DIR = SMART_ADD_RELATIVE_DIR;
+export const SMART_ADD_PATH = DEFAULT_PATHS.smartAddDir;
+export const KG_PATH = DEFAULT_PATHS.kgPath;
+export const LANCEDB_DIR = DEFAULT_PATHS.lancedbDir;
+export const INDEX_SYNC_WATCH_DIRS = [...SHARED_INDEX_SYNC_WATCH_DIRS];
 
 export const DEFAULT_AGENT_ID = process.env.OPENCLAW_AGENT_ID || "main";
-export const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || resolve(HOME_DIR, ".openclaw/openclaw.json");
+export const OPENCLAW_CONFIG_PATH = DEFAULT_PATHS.configJsonPath;
 export const OPENCLAW_MEMORY_RUNTIME_SPECIFIER = "openclaw/plugin-sdk/memory-core-engine-runtime";
 
 function normalizeRuntimeImportError(error) {

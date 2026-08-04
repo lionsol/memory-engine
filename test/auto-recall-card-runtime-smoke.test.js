@@ -87,10 +87,10 @@ test("synthetic runtime keeps raw text by default", async () => {
   assert.equal(result.side_effects.injection, false);
 });
 
-test("synthetic runtime uses memory cards only for edi with explicit flag", async () => {
+test("synthetic runtime uses memory cards for the AutoRecall-allowlisted agent", async () => {
   const result = await formatSyntheticRuntimeContext({
-    config: { cardFirstRuntime: { enabled: true } },
-    runtimeGate: { agentId: "edi" },
+    config: { agentAllowlist: ["main"], cardFirstRuntime: { enabled: true } },
+    runtimeGate: { agentId: "main", allowed: true },
     candidates: [{
       id: "abc123def4567890",
       path: "memory/projects/memory-engine.md",
@@ -114,16 +114,16 @@ test("synthetic runtime uses memory cards only for edi with explicit flag", asyn
   assert.doesNotMatch(result.context, /FULL_BODY_SHOULD_NOT_LEAK/);
 });
 
-test("synthetic runtime stays raw text for non-edi even when flag is enabled", async () => {
+test("synthetic runtime stays raw text outside the AutoRecall agent allowlist", async () => {
   const result = await formatSyntheticRuntimeContext({
-    config: { cardFirstRuntime: { enabled: true } },
-    runtimeGate: { agentId: "task-planner" },
+    config: { agentAllowlist: ["main"], cardFirstRuntime: { enabled: true } },
+    runtimeGate: { agentId: "task-planner", allowed: true },
     candidates: [{
       id: "abc123def4567890",
       category: "project",
       confidence: 0.8,
       sources: ["fts"],
-      text: "FULL_BODY_SHOULD_NOT_LEAK in non-edi raw runtime",
+      text: "FULL_BODY_SHOULD_NOT_LEAK in non-allowlisted raw runtime",
     }],
   });
 
@@ -139,8 +139,8 @@ test("card runtime smoke covers expected runtime selection and raw-log withholdi
 
   assert.deepEqual(ids, [
     "default_runtime_uses_raw_text",
-    "enabled_edi_runtime_uses_memory_cards",
-    "enabled_non_edi_runtime_stays_raw_text",
+    "enabled_allowlisted_runtime_uses_memory_cards",
+    "enabled_non_allowlisted_runtime_stays_raw_text",
     "enabled_card_runtime_withholds_raw_log_body",
   ]);
   assert.equal(report.summary.mode, "read_only_card_runtime_smoke");
@@ -211,5 +211,5 @@ test("CLI executable supports markdown output", () => {
   assert.equal((result.stderr || "").trim(), "");
   assert.match(result.stdout, /# AutoRecall Card Runtime Smoke/);
   assert.match(result.stdout, /PASS: default_runtime_uses_raw_text/);
-  assert.match(result.stdout, /PASS: enabled_edi_runtime_uses_memory_cards/);
+  assert.match(result.stdout, /PASS: enabled_allowlisted_runtime_uses_memory_cards/);
 });

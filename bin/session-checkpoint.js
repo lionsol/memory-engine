@@ -119,8 +119,11 @@ function runFlushSessionRawlogCheckpoint({
   scriptPath = resolve(__dirname, "flush-session-rawlog.js"),
   cwd = resolve(__dirname, ".."),
   env = process.env,
+  targetDate,
 } = {}) {
-  const result = spawnSyncImpl(nodeExecPath, [scriptPath, "--checkpoint"], {
+  const args = [scriptPath, "--checkpoint"];
+  if (targetDate) args.push("--target-date", targetDate);
+  const result = spawnSyncImpl(nodeExecPath, args, {
     cwd,
     env,
     encoding: "utf8",
@@ -396,7 +399,7 @@ async function main(argv = process.argv.slice(2)) {
   console.log(`[checkpoint] === Session Checkpoint ${todayDateStr()} ===`);
 
   try {
-    getRuntime().flushCheckpointRawLog();
+    getRuntime().flushCheckpointRawLog({ targetDate });
 
     // Step 1: Gather raw logs
     const rawLogs = getRuntime().readCheckpointRawLogs({

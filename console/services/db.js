@@ -1,20 +1,23 @@
 import { insertMemoryEvent } from "../../lib/db/events.js";
-import { openEngineDb } from "../../lib/db/engine-db.js";
+import runtimePaths from "../../lib/runtime/paths.cjs";
+import { createMemoryEngineDbRuntime } from "../../lib/runtime/db-runtime.js";
 import {
   ensureMemoryConfidenceTable,
   ensureMemoryEventsTable,
   migrateLegacyMemoryEventsFromCore,
   tableExists,
 } from "../../lib/db/schema.js";
-import { CORE_DB_PATH, ENGINE_DB_PATH } from "../../memory-manager-runtime.js";
+const { resolveMemoryEnginePaths } = runtimePaths;
+const paths = resolveMemoryEnginePaths();
+const database = createMemoryEngineDbRuntime({ paths });
 
 export { ensureMemoryConfidenceTable, ensureMemoryEventsTable, tableExists };
 
-export const DB_PATH = ENGINE_DB_PATH;
-export const CORE_PATH = CORE_DB_PATH;
+export const DB_PATH = database.engineDbPath;
+export const CORE_PATH = database.coreDbPath;
 
 export function openDb(options = {}) {
-  return openEngineDb({ readonly: options.readonly ?? false });
+  return database.openDb({ readonly: options.readonly ?? false });
 }
 
 export function initConsoleStorage() {

@@ -345,7 +345,7 @@ P4 should be implemented in phases:
 ### P4.5 Runtime card-first experiment
 
 - Behind explicit config flag.
-- edi-only.
+- restricted to agents already allowed by the AutoRecall runtime gate; no separate identity-name hardcode.
 - Requires P1 runtime gate and P3 replay stability.
 - Must keep full content get-on-demand.
 

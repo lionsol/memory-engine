@@ -18,7 +18,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
 const viewsDir = path.join(__dirname, "views");
 const port = Number(process.env.MEMORY_CONSOLE_PORT || 8787);
-const host = process.env.MEMORY_CONSOLE_HOST || "0.0.0.0";
+export const DEFAULT_CONSOLE_HOST = "127.0.0.1";
+const host = process.env.MEMORY_CONSOLE_HOST || DEFAULT_CONSOLE_HOST;
+
+const BASE_SECURITY_HEADERS = Object.freeze({
+  "cache-control": "no-store",
+  "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  "referrer-policy": "no-referrer",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+});
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
@@ -44,8 +53,12 @@ function render(name, data = {}) {
     .replace("{{data}}", json);
 }
 
+export function buildResponseHeaders(headers = {}) {
+  return { ...BASE_SECURITY_HEADERS, ...headers };
+}
+
 function send(res, status, body, headers = {}) {
-  res.writeHead(status, headers);
+  res.writeHead(status, buildResponseHeaders(headers));
   res.end(body);
 }
 

@@ -87,10 +87,6 @@ test("hybrid observation preserves canonical fields and derives fallback from ac
     result_count: 1,
     channel_error_count: 0,
     completed_at: "2026-07-18T10:00:00.000Z",
-    evidence_epoch_id: null,
-    runtime_build_identity: null,
-    rollout_config_fingerprint: null,
-    production_evidence_enabled: false,
     traffic_origin: "unknown",
     traffic_origin_evidence: {
       source: "untrusted_context",
@@ -154,7 +150,14 @@ test("recordHybridSearchObservation writes one canonical event and preserves wri
   assert.equal(events[0].trace_id, "trace-1");
   assert.equal(Object.hasOwn(events[0].metadata_json, "kg_access_mode"), true);
   assert.equal(Object.hasOwn(events[0].metadata_json, "recent_access_mode"), false);
-  assert.equal(events[0].metadata_json.production_evidence_enabled, false);
+  for (const field of [
+    "production_evidence_enabled",
+    "evidence_epoch_id",
+    "runtime_build_identity",
+    "rollout_config_fingerprint",
+  ]) {
+    assert.equal(Object.hasOwn(events[0].metadata_json, field), false, field);
+  }
   assert.equal(recordHybridSearchObservation({
     recordMemoryEvent: () => {
       throw new Error("event store unavailable");
@@ -164,28 +167,23 @@ test("recordHybridSearchObservation writes one canonical event and preserves wri
   }), false);
 });
 
-test("identity metadata comes only from the registration context", async () => {
+test("runtime search observations omit retired evidence identity fields", async () => {
   const events = [];
-  const identityContext = {
-    productionEvidenceEnabled: true,
-    evidenceEpochId: "epoch-reviewed",
-    runtimeBuildIdentity: "a".repeat(64),
-    rolloutConfigFingerprint: "b".repeat(64),
-  };
-  const runtime = createRuntime(events, {
-    productionEvidenceIdentityContext: identityContext,
-  });
-  const executeAction = createMemoryEngineExecute(runtime);
+  const executeAction = createMemoryEngineExecute(createRuntime(events));
   await executeAction("tool-call", {
     action: "search",
     text: "query text",
     evidence_epoch_id: "forged-epoch",
     runtime_build_identity: "f".repeat(64),
   });
-  assert.equal(events[0].metadata_json.production_evidence_enabled, true);
-  assert.equal(events[0].metadata_json.evidence_epoch_id, "epoch-reviewed");
-  assert.equal(events[0].metadata_json.runtime_build_identity, "a".repeat(64));
-  assert.equal(events[0].metadata_json.rollout_config_fingerprint, "b".repeat(64));
+  for (const field of [
+    "production_evidence_enabled",
+    "evidence_epoch_id",
+    "runtime_build_identity",
+    "rollout_config_fingerprint",
+  ]) {
+    assert.equal(Object.hasOwn(events[0].metadata_json, field), false, field);
+  }
 });
 
 test("action search and memory_engine_search emit distinct observation surfaces", async () => {
@@ -228,8 +226,10 @@ test("action search and memory_engine_search emit distinct observation surfaces"
 
 test("production and CLI runtimes declare separate observation surfaces", () => {
   const indexSource = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+  const lifecycleSource = readFileSync(new URL("../lib/recall/auto-recall-hook-lifecycle.js", import.meta.url), "utf8");
   const cliSource = readFileSync(new URL("../lib/services/memory-engine-cli-service.js", import.meta.url), "utf8");
-  assert.match(indexSource, /surface: "auto_recall"/);
-  assert.match(indexSource, /createMemoryEngineSearchExecute\(\{[\s\S]*?recordMemoryEvent,/);
+  assert.match(indexSource, /createHybridRuntimeContext\(\{[\s\S]*?telemetry:\s*\{[\s\S]*?recordMemoryEvent,/);
+  assert.match(lifecycleSource, /recordHybridRuntimeObservation\(hybridRuntimeContext,[\s\S]*?surface: "auto_recall"/);
+  assert.match(indexSource, /createMemoryEngineSearchExecute\(\{\s*hybrid: hybridRuntimeContext/);
   assert.match(cliSource, /hybridObservationSurface: "cli_search"/);
 });

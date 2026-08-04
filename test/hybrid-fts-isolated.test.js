@@ -6,13 +6,23 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { collectFtsCandidates } from "../lib/recall/hybrid/channels/fts.js";
+import { buildAutoRecallCardContext, shouldInjectCandidate } from "../auto-recall.js";
 import { createCandidateCounts, createHybridDebug, createHybridWarnings } from "../lib/recall/hybrid/debug.js";
+import { analyzeAutoRecallIntent } from "../lib/recall/auto-recall-intent.js";
+import {
+  buildFtsFallbackQuery,
+  extractExactQueryFragments,
+  extractFtsFallbackTerms,
+  extractQueryTokens,
+  normalizeFtsQuery,
+} from "../query-utils.js";
 import {
   archivedIdsFromConfidenceMap,
   isArchivedLikeLegacySql,
   mergeFtsConfidenceRow,
 } from "../lib/recall/hybrid/channels/fts-query.js";
 import { isCandidateAllowedForRerank, normalizeExternalMemory } from "../lib/recall/hybrid/normalize-candidate.js";
+import { fuseChannels } from "../lib/recall/hybrid/fusion.js";
 
 const ARCHIVED_ID = "archived\"\\ 雪";
 const SPECIAL_ACTIVE_ID = "active'\\ 雪";
@@ -135,6 +145,7 @@ function makeContext({
     candidateCounts,
     normalizedQuery: query,
     fallbackFtsQuery: fallback,
+    fallbackRerankTerms: fallback.split(" OR ").filter(Boolean),
     strippedQuery: query,
     queryTerms: ["needle"],
     exactFragments: [],
@@ -309,6 +320,10 @@ test("strict success and fallback use the same selector semantics", async () => 
     const strict = await collectBoth(fixture, { query: "needle", fallback: "needle OR fallback", ftsTopK: 3 });
     assert.equal(strict.legacyCtx.debug.fallback_count, 0);
     assert.equal(strict.isolatedCtx.debug.fallback_count, 0);
+    assert.equal(strict.legacyCtx.debug.fts_preselection_strategy, undefined);
+    assert.equal(strict.isolatedCtx.debug.fts_preselection_strategy, undefined);
+    assert.equal(strict.legacyCtx.debug.fts_rerank_term_source, "primary_query");
+    assert.equal(strict.isolatedCtx.debug.fts_rerank_term_source, "primary_query");
     assert.deepEqual(strict.isolatedCtx.channels.fts.map(row => row.id), strict.legacyCtx.channels.fts.map(row => row.id));
 
     const fallback = await collectBoth(fixture, { query: "absenttoken", fallback: "needle", ftsTopK: 3 });
@@ -317,10 +332,395 @@ test("strict success and fallback use the same selector semantics", async () => 
     assert.equal(fallback.legacyCtx.debug.fallback_count, fallback.isolatedCtx.debug.fallback_count);
     assert.equal(fallback.legacyCtx.debug.fts_query_final, "needle");
     assert.equal(fallback.isolatedCtx.debug.fts_query_final, "needle");
+    assert.equal(fallback.legacyCtx.debug.fts_rerank_term_source, "bounded_fallback");
+    assert.equal(fallback.isolatedCtx.debug.fts_rerank_term_source, "bounded_fallback");
+    assert.equal(fallback.legacyCtx.debug.fts_rerank_term_count, 1);
+    assert.equal(fallback.isolatedCtx.debug.fts_rerank_term_count, 1);
     assert.deepEqual(fallback.isolatedCtx.channels.fts.map(row => row.id), fallback.legacyCtx.channels.fts.map(row => row.id));
     assert.deepEqual(fallback.isolatedCtx.debug.post_rerank_topK, fallback.legacyCtx.debug.post_rerank_topK);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("canary-shaped fallback MATCH and rerank use the same bounded terms", () => {
+  const prompt = [
+    "结合项目历史，请定位 hybrid_search release_2026 build_17 hash_a1b2c3 uuid_1234 api_v2 fts_8 vector_30 与 H5POST-7B9A3E1C。",
+    "需要检查 memory_search memory_engine_search memory_engine_get cited_memory_ids current_turn_memory_engine_get_ids，并保留中文语义。",
+    "请给出 citation 字段。",
+    ...Array.from({ length: 36 }, (_, index) => `历史上下文补充行 ${index}，只用于触发 focused-query 路径。`),
+  ].join("\n");
+  const intent = analyzeAutoRecallIntent(prompt);
+  const searchPrompt = intent.long_input_detected && intent.should_recall
+    ? intent.focused_query
+    : prompt;
+  const normalizedQuery = normalizeFtsQuery(searchPrompt);
+  const fallbackFtsQuery = buildFtsFallbackQuery(searchPrompt);
+  const fallbackRerankTerms = extractFtsFallbackTerms(fallbackFtsQuery);
+  const queryTerms = extractQueryTokens(normalizedQuery);
+  const exactFragments = extractExactQueryFragments(searchPrompt, 8);
+  const selectedTool = fallbackRerankTerms.find(term => [
+    "memory_search",
+    "memory_engine_search",
+    "memory_engine_get",
+    "cited_memory_ids",
+    "current_turn_memory_engine_get_ids",
+    "citation",
+  ].includes(term));
+  const omittedTerm = queryTerms.find(term => !fallbackRerankTerms.includes(term));
+  assert.equal(intent.long_input_detected, true);
+  assert.equal(searchPrompt, intent.focused_query);
+  assert.ok(selectedTool);
+  assert.ok(omittedTerm);
+
+  const db = new Database(":memory:");
+  try {
+    db.exec(`
+      CREATE TABLE chunks (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        text TEXT NOT NULL,
+        updated_at INTEGER
+      );
+      CREATE VIRTUAL TABLE chunks_fts USING fts5(text, id UNINDEXED, path UNINDEXED);
+      CREATE TABLE memory_confidence (
+        chunk_id TEXT PRIMARY KEY,
+        confidence REAL,
+        last_confidence_update INTEGER,
+        base_tau REAL,
+        hit_count INTEGER,
+        is_protected INTEGER,
+        conflict_flag INTEGER,
+        category TEXT,
+        is_archived INTEGER
+      );
+    `);
+    const insertChunk = db.prepare("INSERT INTO chunks (id, path, text, updated_at) VALUES (?, ?, ?, ?)");
+    const insertFts = db.prepare("INSERT INTO chunks_fts (text, id, path) VALUES (?, ?, ?)");
+    const rows = [
+      ["broad-old", "memory/archive/broad-old.md", `${selectedTool} ${omittedTerm}`],
+      ["late-target", "memory/archive/late-target.md", "H5POST-7B9A3E1C"],
+    ];
+    for (const [id, path, text] of rows) {
+      insertChunk.run(id, path, text, 0);
+      insertFts.run(text, id, path);
+      db.prepare("INSERT INTO memory_confidence (chunk_id, confidence, category, is_archived) VALUES (?, ?, ?, 0)")
+        .run(id, 0.8, "raw_log");
+    }
+
+    const candidateCounts = createCandidateCounts();
+    const debug = createHybridDebug({
+      rawQuery: prompt,
+      strippedQuery: searchPrompt,
+      normalizedQuery,
+      queryTerms,
+      candidateCounts,
+      minConfidence: 0,
+      lexicalConfidenceThreshold: 0.7,
+    });
+    const channels = {};
+    const { warnHybridSearchOnce } = createHybridWarnings();
+    const ctx = {
+      withDb: fn => fn(db),
+      withCoreDb: fn => fn(db),
+      ftsAccessMode: "legacy",
+      confidenceMap: new Map(),
+      channels,
+      debug,
+      candidateCounts,
+      normalizedQuery,
+      fallbackFtsQuery,
+      fallbackRerankTerms,
+      strippedQuery: searchPrompt,
+      queryTerms,
+      exactFragments,
+      nowSec: 1_710_000_000,
+      ftsTopK: 20,
+      normalizeCandidate: row => row,
+      filterForRerank: () => true,
+      enrichLexicalCandidate: row => row,
+      toDebugErrorMessage: error => error.message,
+      warnHybridSearchOnce,
+    };
+
+    return collectFtsCandidates(ctx).then(() => {
+      assert.equal(debug.strict_count, 0);
+      assert.equal(debug.fallback_count, 2);
+      assert.equal(debug.fts_rerank_term_source, "bounded_fallback");
+      assert.equal(debug.fts_rerank_term_count, fallbackRerankTerms.length);
+      assert.equal(debug.fts_query_final, fallbackFtsQuery);
+      assert.equal(debug.post_rerank_topK[0].id, "late-target");
+      assert.ok(debug.post_rerank_topK[0].token_coverage > 0);
+      assert.ok(debug.post_rerank_topK[0].exact_bonus > 0);
+      assert.equal(channels.fts.slice(0, 1)[0].id, "late-target");
+      assert.equal(channels.fts.slice(0, 1).length, 1);
+    }).finally(() => db.close());
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+});
+
+test("fallback preselection probes recover a late target excluded by global BM25 LIMIT", async () => {
+  const db = new Database(":memory:");
+  const boundedTerms = [
+    "common_a",
+    "common_b",
+    "common_c",
+    "common_d",
+    "common_e",
+    "common_f",
+    "common_g",
+    "h5postlive",
+  ];
+  const fallbackFtsQuery = boundedTerms.join(" OR ");
+  const strippedQuery = `${boundedTerms.slice(0, -1).join(" ")} H5POSTLIVE-65E49E54ABA7`;
+  const normalizedQuery = "strict_query_that_is_absent";
+  const exactFragments = extractExactQueryFragments(strippedQuery, 8);
+
+  try {
+    db.exec(`
+      CREATE TABLE chunks (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        text TEXT NOT NULL,
+        updated_at INTEGER
+      );
+      CREATE VIRTUAL TABLE chunks_fts USING fts5(text, id UNINDEXED, path UNINDEXED);
+      CREATE TABLE memory_confidence (
+        chunk_id TEXT PRIMARY KEY,
+        confidence REAL,
+        last_confidence_update INTEGER,
+        base_tau REAL,
+        hit_count INTEGER,
+        is_protected INTEGER,
+        conflict_flag INTEGER,
+        category TEXT,
+        is_archived INTEGER
+      );
+    `);
+    const insertChunk = db.prepare("INSERT INTO chunks (id, path, text, updated_at) VALUES (?, ?, ?, ?)");
+    const insertFts = db.prepare("INSERT INTO chunks_fts (text, id, path) VALUES (?, ?, ?)");
+    const insertConfidence = db.prepare("INSERT INTO memory_confidence (chunk_id, confidence, category, is_archived) VALUES (?, ?, ?, ?)");
+    for (let index = 0; index < 35; index += 1) {
+      const id = `distractor-${String(index).padStart(2, "0")}`;
+      const path = `memory/archive/${id}.md`;
+      const text = boundedTerms[index % 7];
+      insertChunk.run(id, path, text, 0);
+      insertFts.run(text, id, path);
+      insertConfidence.run(id, 0.8, "raw_log", 0);
+    }
+    const targetText = "H5POSTLIVE-65E49E54ABA7";
+    insertChunk.run("target", "memory/smart-add/target.md", targetText, 1_710_000_000);
+    insertFts.run(targetText, "target", "memory/smart-add/target.md");
+    insertConfidence.run("target", 0.8, "episodic", 0);
+
+    const globalRows = db.prepare(`
+      SELECT c.id
+      FROM chunks_fts f
+      JOIN chunks c ON c.id = f.id
+      WHERE chunks_fts MATCH ?
+      ORDER BY bm25(chunks_fts, 0), c.id ASC
+      LIMIT ?
+    `).all(fallbackFtsQuery, 20);
+    assert.equal(globalRows.length, 20);
+    assert.equal(globalRows.some(row => row.id === "target"), false);
+
+    const confidenceMap = new Map();
+    for (const row of db.prepare("SELECT * FROM memory_confidence").all()) {
+      confidenceMap.set(row.chunk_id, row);
+    }
+    const collect = async (mode) => {
+      const candidateCounts = createCandidateCounts();
+      const debug = createHybridDebug({
+        rawQuery: strippedQuery,
+        strippedQuery,
+        normalizedQuery,
+        queryTerms: [normalizedQuery],
+        candidateCounts,
+        minConfidence: 0,
+        lexicalConfidenceThreshold: 0.7,
+      });
+      const channels = {};
+      const { warnHybridSearchOnce } = createHybridWarnings();
+      const context = {
+        withDb: mode === "legacy" ? fn => fn(db) : () => { throw new Error("legacy FTS used in isolated mode"); },
+        withCoreDb: fn => fn(db),
+        ftsAccessMode: mode,
+        confidenceMap,
+        channels,
+        debug,
+        candidateCounts,
+        normalizedQuery,
+        fallbackFtsQuery,
+        fallbackRerankTerms: boundedTerms,
+        strippedQuery,
+        queryTerms: [normalizedQuery],
+        exactFragments,
+        nowSec: 1_710_000_000,
+        ftsTopK: 20,
+        normalizeCandidate: row => row,
+        filterForRerank: () => true,
+        enrichLexicalCandidate: row => row,
+        toDebugErrorMessage: error => error.message,
+        warnHybridSearchOnce,
+      };
+      await collectFtsCandidates(context);
+      return { channels, debug, candidateCounts };
+    };
+
+    const legacy = await collect("legacy");
+    const isolated = await collect("isolated");
+    for (const result of [legacy, isolated]) {
+      assert.equal(result.debug.strict_count, 0);
+      assert.equal(result.debug.fallback_count, 20);
+      assert.equal(result.debug.fts_preselection_strategy, "global_or_plus_term_probes_v1");
+      assert.equal(result.debug.fts_preselection_global_count, 20);
+      assert.equal(result.debug.fts_preselection_probe_query_count, 8);
+      assert.equal(result.debug.fts_preselection_probe_raw_count, 15);
+      assert.equal(result.debug.fts_preselection_union_count, 21);
+      assert.equal(result.debug.fts_preselection_probe_per_term_limit, 2);
+      assert.equal(result.debug.fts_preselection_post_rerank_count, 20);
+      assert.equal(result.debug.post_rerank_topK[0].id, "target");
+      assert.ok(result.debug.post_rerank_topK[0].token_coverage > 0);
+      assert.ok(result.debug.post_rerank_topK[0].exact_bonus > 0);
+      assert.equal(result.channels.fts[0].id, "target");
+      assert.equal(result.channels.fts.length, 20);
+    }
+    assert.deepEqual(
+      isolated.channels.fts.map(row => row.id),
+      legacy.channels.fts.map(row => row.id),
+    );
+    assert.deepEqual(isolated.debug.post_rerank_topK, legacy.debug.post_rerank_topK);
+  } finally {
+    db.close();
+  }
+});
+
+test("canary-shaped preselection target reaches the existing gate and clean memory card", async () => {
+  const prompt = [
+    "结合项目历史，请定位 hybrid_search release_2026 build_17 hash_a1b2c3 uuid_1234 api_v2 fts_8 vector_30 与 H5POSTLIVE-65E49E54ABA7。",
+    "需要检查 memory_search memory_engine_search memory_engine_get cited_memory_ids current_turn_memory_engine_get_ids，并保留中文语义。",
+    "请给出 citation 字段。",
+    ...Array.from({ length: 36 }, (_, index) => `历史上下文补充行 ${index}，只用于触发 focused-query 路径。`),
+  ].join("\n");
+  const intent = analyzeAutoRecallIntent(prompt);
+  const searchPrompt = intent.long_input_detected && intent.should_recall
+    ? intent.focused_query
+    : prompt;
+  const normalizedQuery = normalizeFtsQuery(searchPrompt);
+  const fallbackFtsQuery = buildFtsFallbackQuery(searchPrompt);
+  const fallbackRerankTerms = extractFtsFallbackTerms(fallbackFtsQuery);
+  const exactFragments = extractExactQueryFragments(searchPrompt, 8);
+  const sentinelTerms = fallbackRerankTerms.filter(term => ["h5postlive", "65e49e54aba7"].includes(term));
+  const distractorTerms = fallbackRerankTerms.filter(term => !sentinelTerms.includes(term));
+  assert.equal(intent.long_input_detected, true);
+  assert.equal(searchPrompt, intent.focused_query);
+  assert.ok(sentinelTerms.length >= 1);
+  assert.ok(distractorTerms.length >= 1);
+
+  const db = new Database(":memory:");
+  try {
+    db.exec(`
+      CREATE TABLE chunks (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        text TEXT NOT NULL,
+        updated_at INTEGER
+      );
+      CREATE VIRTUAL TABLE chunks_fts USING fts5(text, id UNINDEXED, path UNINDEXED);
+      CREATE TABLE memory_confidence (
+        chunk_id TEXT PRIMARY KEY,
+        confidence REAL,
+        last_confidence_update INTEGER,
+        base_tau REAL,
+        hit_count INTEGER,
+        is_protected INTEGER,
+        conflict_flag INTEGER,
+        category TEXT,
+        is_archived INTEGER
+      );
+    `);
+    const insertChunk = db.prepare("INSERT INTO chunks (id, path, text, updated_at) VALUES (?, ?, ?, ?)");
+    const insertFts = db.prepare("INSERT INTO chunks_fts (text, id, path) VALUES (?, ?, ?)");
+    const insertConfidence = db.prepare("INSERT INTO memory_confidence (chunk_id, confidence, category, is_archived) VALUES (?, ?, ?, 0)");
+    for (let index = 0; index < 35; index += 1) {
+      const id = `shape-distractor-${String(index).padStart(2, "0")}`;
+      const path = `memory/archive/${id}.md`;
+      const text = distractorTerms[index % distractorTerms.length];
+      insertChunk.run(id, path, text, 0);
+      insertFts.run(text, id, path);
+      insertConfidence.run(id, 0.8, "raw_log");
+    }
+    const targetText = "H5POSTLIVE-65E49E54ABA7 验证颜色琥珀色 验证编号42";
+    insertChunk.run("shape-target", "memory/smart-add/target.md", targetText, 1_710_000_000);
+    insertFts.run(targetText, "shape-target", "memory/smart-add/target.md");
+    insertConfidence.run("shape-target", 0.8, "episodic");
+
+    const candidateCounts = createCandidateCounts();
+    const debug = createHybridDebug({
+      rawQuery: prompt,
+      strippedQuery: searchPrompt,
+      normalizedQuery,
+      queryTerms: extractQueryTokens(normalizedQuery),
+      candidateCounts,
+      minConfidence: 0,
+      lexicalConfidenceThreshold: 0.7,
+    });
+    const channels = {};
+    const { warnHybridSearchOnce } = createHybridWarnings();
+    const context = {
+      withDb: fn => fn(db),
+      withCoreDb: fn => fn(db),
+      ftsAccessMode: "legacy",
+      confidenceMap: new Map(),
+      channels,
+      debug,
+      candidateCounts,
+      normalizedQuery,
+      fallbackFtsQuery,
+      fallbackRerankTerms,
+      strippedQuery: searchPrompt,
+      queryTerms: extractQueryTokens(normalizedQuery),
+      exactFragments,
+      nowSec: 1_710_000_000,
+      ftsTopK: 20,
+      normalizeCandidate: row => row,
+      filterForRerank: () => true,
+      enrichLexicalCandidate: row => row,
+      toDebugErrorMessage: error => error.message,
+      warnHybridSearchOnce,
+    };
+
+    await collectFtsCandidates(context);
+    const target = channels.fts[0];
+    assert.equal(target.id, "shape-target");
+    assert.equal(debug.fts_preselection_union_count > debug.fts_preselection_global_count, true);
+    assert.equal(debug.post_rerank_topK[0].id, "shape-target");
+    assert.equal(debug.post_rerank_topK[0].token_coverage > 0, true);
+    assert.equal(debug.post_rerank_topK[0].exact_bonus > 0, true);
+
+    const fused = fuseChannels({ fts: channels.fts }, {
+      rrfK: 60,
+      nowSec: 1_710_000_000,
+      rankingConfig: {},
+    });
+    assert.equal(fused.fused[0].id, "shape-target");
+    assert.equal(fused.fused.slice(0, 1)[0].id, "shape-target");
+
+    const gate = shouldInjectCandidate({ ...target, final_score: target.similarity }, searchPrompt, {});
+    assert.equal(gate.inject, true);
+    const cardContext = buildAutoRecallCardContext([{
+      ...target,
+      final_score: target.similarity,
+      confidence: 0.8,
+    }], { topK: 1, agentId: "main" });
+    assert.equal(cardContext.cards.length, 1);
+    assert.match(cardContext.cards[0].summary, /琥珀色/iu);
+    assert.match(cardContext.cards[0].summary, /42/u);
+    assert.equal(cardContext.cards[0].risk_flags.includes("raw_log_like"), false);
+  } finally {
+    db.close();
   }
 });
 
