@@ -1,0 +1,68 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SandboxRunner, buildSandboxArgv, NAMESPACE_FLAGS } from "../lib/runtime-authority/sandbox.js";
+
+test("sandbox command uses fixed namespace flags without host /sandbox mutation", () => {
+  const root = mkdtempSync(join(tmpdir(), "runtime-authority-sandbox-"));
+  try {
+    const plan = { unshare_executable: "/usr/bin/unshare", node_executable: "/home/lionsol/.local/node24/bin/node", mount_executable: "/usr/bin/mount", chroot_executable: "/usr/sbin/chroot", operator_home: join(root, "home") };
+    const command = buildSandboxArgv({ plan, operation: "node.candidate_targeted_tests", executable: plan.node_executable, args: ["-e", ""], cwd: root, env: {}, stagingRoot: root });
+    assert.deepEqual(command.args.slice(0, NAMESPACE_FLAGS.length), NAMESPACE_FLAGS);
+    assert.equal(command.args.includes("-c"), false);
+    assert.equal(command.args.includes("bash"), false);
+    assert.equal(existsSync("/sandbox"), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("real namespace canary masks operator, source, active, release and config roots", () => {
+  const root = mkdtempSync(join(tmpdir(), "runtime-authority-sandbox-real-"));
+  const stage = join(root, "stage");
+  const hidden = Object.fromEntries(["home", "source", "active", "release"].map(name => [name, join(root, name)]));
+  const config = join(root, "config");
+  try {
+    mkdirSync(stage); mkdirSync(join(hidden.home, "sessions"), { recursive: true }); mkdirSync(join(hidden.home, "memory"), { recursive: true }); mkdirSync(join(hidden.source, "node_modules"), { recursive: true });
+    writeFileSync(join(hidden.home, "sessions", "canary"), "secret\n"); writeFileSync(join(hidden.home, "memory", "canary"), "secret\n"); writeFileSync(join(hidden.source, "node_modules", "canary"), "secret\n");
+    for (const name of ["active", "release"]) { mkdirSync(hidden[name]); writeFileSync(join(hidden[name], "canary"), "secret\n"); }
+    writeFileSync(config, "secret\n");
+    const plan = { unshare_executable: "/usr/bin/unshare", node_executable: "/home/lionsol/.local/node24/bin/node", mount_executable: "/usr/bin/mount", chroot_executable: "/usr/sbin/chroot", python_executable: "/usr/bin/python3.12", cc_executable: "/usr/bin/x86_64-linux-gnu-gcc-13", cxx_executable: "/usr/bin/x86_64-linux-gnu-g++-13", make_executable: "/usr/bin/make", ar_executable: "/usr/bin/x86_64-linux-gnu-ar", operator_home: hidden.home, source_repo: hidden.source, active_root: hidden.active, active_release: hidden.release, config_path: config };
+    const sandbox = new SandboxRunner({ plan, stagingRoot: stage });
+    const result = sandbox.probe();
+    assert.equal(result.available, true);
+    assert.equal(result.canaries.device_access, true);
+    assert.equal(result.canaries.compiler, true);
+    assert.equal(result.canaries.python, true);
+    assert.equal(result.canaries.runtime_read_only, true);
+    assert.deepEqual(result.canaries.denied, [true, true, true, true, true, true, true]);
+    assert.equal(readFileSync(join(stage, ".sandbox-probe-marker"), "utf8"), "sandbox-write\n");
+    for (const operation of ["npm.pack_staged_source", "npm.ci_candidate", "node.candidate_sqlite_disposable_smoke", "node.candidate_targeted_tests", "node.r0_sqlite_disposable_smoke"]) {
+      const run = sandbox.run(operation, { executable: plan.node_executable, args: ["-e", "process.stdout.write('ok')"], cwd: stage, env: { HOME: "/host-overridden", PATH: "/host-overridden" } });
+      assert.equal(String(run.stdout), "ok");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("real namespace exposes only controlled devices and compiler toolchain", () => {
+  const root = mkdtempSync(join(tmpdir(), "runtime-authority-sandbox-toolchain-"));
+  const stage = join(root, "stage");
+  try {
+    mkdirSync(stage);
+    const plan = { unshare_executable: "/usr/bin/unshare", node_executable: "/home/lionsol/.local/node24/bin/node", mount_executable: "/usr/bin/mount", chroot_executable: "/usr/sbin/chroot", python_executable: "/usr/bin/python3.12", cc_executable: "/usr/bin/x86_64-linux-gnu-gcc-13", cxx_executable: "/usr/bin/x86_64-linux-gnu-g++-13", make_executable: "/usr/bin/make", ar_executable: "/usr/bin/x86_64-linux-gnu-ar" };
+    const sandbox = new SandboxRunner({ plan, stagingRoot: stage });
+    sandbox.probe();
+    const script = [
+      "const fs=require('node:fs'),cp=require('node:child_process');",
+      "fs.writeFileSync('/dev/null','x');",
+      "const fd=fs.openSync('/dev/urandom','r'),b=Buffer.alloc(4);fs.readSync(fd,b,0,4,null);fs.closeSync(fd);",
+      "fs.writeFileSync('/staging/tiny.c','#include <stddef.h>\\nint main(void){return (int)sizeof(size_t)==0;}\\n');",
+      "const r=cp.spawnSync('cc',['-std=c11','/staging/tiny.c','-o','/staging/tiny.out'],{stdio:'pipe'});",
+      "if(r.status!==0)throw new Error(String(r.stderr));",
+      "process.stdout.write(b.toString('hex'));",
+    ].join("");
+    const result = sandbox.run("node.candidate_targeted_tests", { executable: plan.node_executable, args: ["-e", script], cwd: stage, env: {} });
+    assert.match(String(result.stdout), /^[0-9a-f]{8}$/);
+    assert.equal(existsSync(join(stage, "tiny.out")), true);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

@@ -16,6 +16,8 @@ This directory keeps manual smoke-test runbooks for workflows that are important
 | [`openclaw-state-db-readonly-feasibility.md`](openclaw-state-db-readonly-feasibility.md) | B8-A7-R2B synthetic-only `node:sqlite` read-only state-DB feasibility matrix | Synthetic temporary databases only; no real OpenClaw state, plugin loading, discovery, configuration, or production reader authorization |
 | [`openclaw-host-published-plugin-metadata-manifest.md`](openclaw-host-published-plugin-metadata-manifest.md) | B8-A7-R3A synthetic host-published plugin metadata manifest contract | Synthetic ordinary-file publisher/consumer only; no host integration, real metadata path, OpenClaw state access, or production reader authorization |
 | [`tool-surface-runtime-access-audit.md`](tool-surface-runtime-access-audit.md) | F1-D-B8-A6.2 registry vs effective tool visibility audit plus controlled `tools.invoke` production-surface verification | Search-only gateway invocation; no persistent policy widening, memory mutation, Core DB access, Stage 2 auto-authorization, or legacy removal |
+| [`candidate-builder-harness-design-20260805.md`](candidate-builder-harness-design-20260805.md) | Accepted design for a future deterministic, single-entry, fail-closed offline authority builder | Design-only; synthetic fixtures and dry-run contract; no implementation, candidate construction, runtime install, service operation, or real data access |
+| [`candidate-builder-harness-execution-template.md`](candidate-builder-harness-execution-template.md) | Future one-shot offline candidate-builder authorization template | Dry-run and prepare authorizations remain separate; no automatic retry, live install, sourcePath repair, service operation, tag, or push |
 
 ## When to Use
 

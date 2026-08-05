@@ -111,6 +111,8 @@
 ### 运行验证与烟雾测试
 
 - [`smoke-tests/README.md`](smoke-tests/README.md)：所有人工 smoke runbook 的目录入口。
+- [`smoke-tests/candidate-builder-harness-design-20260805.md`](smoke-tests/candidate-builder-harness-design-20260805.md)：candidate-builder 的 accepted design；规定单入口、路径 broker、依赖 sandbox、manifest-v2 sentinel、一次性事务和 synthetic dry-run 契约；当前未实现、未做 runtime verification。
+- [`smoke-tests/candidate-builder-harness-execution-template.md`](smoke-tests/candidate-builder-harness-execution-template.md)：未来离线构造的单次授权模板；dry-run 与 prepare 分离，不授权 live install 或 service operation。
 - [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md)：F1-D-B8 当前阶段、证据和下一门禁台账。
 - [`smoke-tests/full-fail-closed-runtime-rollout.md`](smoke-tests/full-fail-closed-runtime-rollout.md)：F1-D-B8-A6 受控插件 reload、逐通道 full rollout、回滚和生产 evidence window 流程。
 - [`smoke-tests/tool-surface-runtime-access-audit.md`](smoke-tests/tool-surface-runtime-access-audit.md)：registry、effective tool policy 与真实 production tool wrapper 执行的分层审计。
