@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, linkSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { prepareRuntimeAuthority } from "../lib/runtime-authority/prepare.js";
+import { CommandExecutionError } from "../lib/runtime-authority/command-failure.js";
 import { claimPath, updateClaim } from "../lib/runtime-authority/evidence.js";
 import { fakeToolInspector, makeFixture, successfulHooks, writePlan } from "./runtime-authority-fixtures.test.js";
 
@@ -80,6 +81,40 @@ test("every injected prepare stage failure consumes claim and never publishes fi
       await assert.rejects(() => prepareRuntimeAuthority({ planPath: fixture.planPath, toolInspector: fakeToolInspector, hooks: successfulHooks(), sandbox: { probe: () => ({ available: true }) } }), /already exists/);
     } finally { fixture.cleanup(); }
   }
+});
+
+test("failed npm command preserves bounded evidence after staging cleanup", async () => {
+  const fixture = makeFixture();
+  try {
+    writePlan(fixture);
+    const hooks = successfulHooks();
+    hooks.DEPENDENCIES_INSTALLED = ({ stagingRoot }) => {
+      const logs = join(stagingRoot, "npm-cache", "_logs");
+      mkdirSync(logs, { recursive: true, mode: 0o700 });
+      const log = `npm log head\n${"x".repeat(70 * 1024)}\nnpm log tail\n`;
+      writeFileSync(join(logs, "2026-08-06T12_00_00_000Z-debug-0.log"), log, { mode: 0o600 });
+      throw new CommandExecutionError({ operationId: "npm.ci_candidate", exitCode: 2, stdout: "command stdout", stderr: "primary stderr TOKEN=secret", message: "sandbox operation failed:npm.ci_candidate:2:primary stderr TOKEN=secret" });
+    };
+    await assert.rejects(
+      () => prepareRuntimeAuthority({ planPath: fixture.planPath, toolInspector: fakeToolInspector, hooks, sandbox: { probe: () => ({ available: true }) } }),
+      /primary stderr TOKEN=secret/,
+    );
+    assert.equal(existsSync(join(fixture.plan.persistent_parent, `.staging-${fixture.plan.run_id}`)), false);
+    assert.equal(existsSync(join(fixture.plan.persistent_parent, fixture.plan.run_id)), false);
+    assert.equal(JSON.parse(readFileSync(claimPath(fixture.plan.persistent_parent, fixture.plan.run_id), "utf8")).outcome, "FAILED");
+    const evidencePath = join(fixture.plan.persistent_parent, ".run-claims", `${fixture.plan.run_id}.failure-evidence.json`);
+    const evidence = JSON.parse(readFileSync(evidencePath, "utf8"));
+    assert.equal(evidence.run_id, fixture.plan.run_id);
+    assert.equal(evidence.plan_sha256.length, 64);
+    assert.equal(evidence.journal_stage, "DEPENDENCIES_INSTALLED");
+    assert.equal(evidence.command_registry_operation_id, "npm.ci_candidate");
+    assert.equal(evidence.command_exit_code, 2);
+    assert.equal(evidence.stderr.text.includes("secret"), false);
+    assert.equal(evidence.npm_debug_logs.length, 1);
+    assert.equal(evidence.npm_debug_logs[0].truncated, true);
+    assert.match(evidence.npm_debug_logs[0].content, /npm log head/);
+    assert.match(evidence.npm_debug_logs[0].content, /npm log tail/);
+  } finally { fixture.cleanup(); }
 });
 
 test("incomplete injected authority with candidate-style links is rejected", async () => {

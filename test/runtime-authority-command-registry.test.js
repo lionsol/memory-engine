@@ -25,6 +25,25 @@ test("command registry uses closed operation descriptors and structured argv", (
   } finally { fixture.cleanup(); }
 });
 
+test("command registry retains structured failure identity and output", () => {
+  const fixture = makeFixture();
+  try {
+    const registry = new CommandRegistry({
+      plan: fixture.plan,
+      broker: new PathBroker({ allowedRoots: { source: fixture.plan.source_repo, tools: fixture.root } }),
+      spawn: () => ({ code: 17, stdout: "command stdout", stderr: "command stderr" }),
+      descriptors: {
+        "git.status": { class: "host", executable: () => fixture.tools.git, args: () => ["status"], cwd: () => fixture.plan.source_repo },
+      },
+    });
+    assert.throws(() => registry.run("git.status"), error => {
+      assert.equal(error.name, "CommandExecutionError");
+      assert.deepEqual(error.commandFailure, { operation_id: "git.status", exit_code: 17, stdout: "command stdout", stderr: "command stderr" });
+      return true;
+    });
+  } finally { fixture.cleanup(); }
+});
+
 test("systemd user status binding is explicit, minimal, and order-independent", () => {
   assert.deepEqual(systemdUserStatusArgs("memory-console.service"), [
     "--user",

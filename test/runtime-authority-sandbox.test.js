@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SandboxRunner, buildSandboxArgv, NAMESPACE_FLAGS } from "../lib/runtime-authority/sandbox.js";
@@ -14,6 +14,40 @@ test("sandbox command uses fixed namespace flags without host /sandbox mutation"
     assert.equal(command.args.includes("-c"), false);
     assert.equal(command.args.includes("bash"), false);
     assert.equal(existsSync("/sandbox"), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("sandbox command retains structured failure identity and output", () => {
+  const root = mkdtempSync(join(tmpdir(), "runtime-authority-sandbox-failure-"));
+  try {
+    const plan = { unshare_executable: "/usr/bin/unshare", node_executable: "/home/lionsol/.local/node24/bin/node", mount_executable: "/usr/bin/mount", chroot_executable: "/usr/sbin/chroot" };
+    const sandbox = new SandboxRunner({ plan, stagingRoot: root, spawn: () => ({ code: 23, stdout: "sandbox stdout", stderr: "sandbox stderr" }) });
+    assert.throws(() => sandbox.run("npm.ci_candidate", { executable: plan.node_executable, args: ["npm-cli.js"], cwd: root, env: {} }), error => {
+      assert.equal(error.name, "CommandExecutionError");
+      assert.deepEqual(error.commandFailure, { operation_id: "npm.ci_candidate", exit_code: 23, stdout: "sandbox stdout", stderr: "sandbox stderr" });
+      return true;
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("real namespace keeps resolver target readable for registry access", t => {
+  if (!lstatSync("/etc/resolv.conf").isSymbolicLink()) {
+    t.skip("host resolver configuration is a regular file");
+    return;
+  }
+  const root = mkdtempSync(join(tmpdir(), "runtime-authority-sandbox-resolver-"));
+  const stage = join(root, "stage");
+  try {
+    mkdirSync(stage);
+    const plan = { unshare_executable: "/usr/bin/unshare", node_executable: "/home/lionsol/.local/node24/bin/node", mount_executable: "/usr/bin/mount", chroot_executable: "/usr/sbin/chroot" };
+    const sandbox = new SandboxRunner({ plan, stagingRoot: stage });
+    const result = sandbox.run("node.candidate_targeted_tests", {
+      executable: plan.node_executable,
+      args: ["-e", "const fs=require('node:fs');const text=fs.readFileSync('/etc/resolv.conf','utf8');if(!/^nameserver\\s+/m.test(text))process.exit(61);process.stdout.write('resolver-readable');"],
+      cwd: stage,
+      env: {},
+    });
+    assert.equal(String(result.stdout), "resolver-readable");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
