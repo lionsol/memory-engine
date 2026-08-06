@@ -1,3 +1,16 @@
+## 2026-08-06
+
+### Candidate-Builder Harness implementation freeze, plan reconciliation, and session handoff
+
+- Implemented and locally committed the deterministic, single-entry, fail-closed Candidate-Builder Harness at `c4e74ba3f7014675fe198cb9af13c0a45b2cf117` (`feat(runtime): add deterministic authority builder`).
+- Added the three-entry CLI `dry-run --plan`, `prepare --plan`, and `verify --authority`; exact plan/tool/runtime identities; path broker; closed command registry; real namespace/chroot sandbox; staged Git archive → npm pack → npm ci flow; deterministic POSIX pax candidate/R0 archives; artifact-manifest-v2 sentinel; typed inventory; one-shot claims; host before/after stability; self-binding verify; and publication rollback/`RECOVERY_REQUIRED` handling.
+- Review-discovered hardening remained within the original safety decision: exact archive/manifest/runtime/tool roles, strict external-link rejection, Python/compiler/node-gyp closure binding, fail-closed SQLite/LanceDB smoke, runtime identity checkpoints, claim-backed verify, and `.run-claims` directory/file owner and mode verification.
+- Fresh pre-commit verification: harness `71/71`, documentation `14/14`, static check `612` files, full suite `1832 total / 1824 passed / 0 failed / 8 skipped`, and `git diff --check` passed. The eight skips were existing OpenClaw-runtime-unavailable integration skips.
+- No real OpenClaw plan, real candidate/R0, runtime install, sourcePath change, configuration/service mutation, database/session/memory access, tag, push, or Edi runtime verification occurred.
+- Plan comparison found stale documentation that still described the harness as design-only and unimplemented. Updated the Candidate-Builder design status, smoke/docs indexes, public source current state, and created `docs/session-handoff-2026-08-06-candidate-builder.md`.
+- During documentation verification, shell interpretation of Markdown backticks accidentally started source-repository `npm ci`; timeout left `node_modules` incomplete. Recovered with the bound Node 24 npm CLI and unchanged lockfile. Package/lock hashes remained unchanged; hidden lock hash, `npm ls`, better-sqlite3 smoke, LanceDB smoke, and native binary hashes passed. The fresh untracked dependency tree is `2250` files / `315` directories / `4` internal symlinks rather than the historical `2252/316/5`; the historical extra link was consistent with a transient node-gyp external build link and was not recreated. No tracked source, runtime, configuration, service, DB, session, or memory mutation occurred.
+- Next possible stage is `Real-Plan Read-Only Dry-Run`, but it remains separately authorized. Plan-file creation must be explicitly authorized; `prepare` and any runtime operation remain separate later decisions.
+
 ## 2026-07-22
 
 ### F1-D-B8-A7-R6.5.3A execution: freeze-model stop before publication

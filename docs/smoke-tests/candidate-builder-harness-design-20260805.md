@@ -4,8 +4,8 @@
 
 ## Decision
 
-The future offline authority builder must be deterministic, single-entry, and
-fail-closed. It must make the three previously observed procedural failures
+The offline authority builder is implemented as a deterministic, single-entry,
+fail-closed source tool. It must make the three previously observed procedural failures
 mechanically unrepresentable:
 
 1. authority path truncation or substitution;
@@ -21,11 +21,14 @@ installation.
 
 The design covers the plan schema, path broker, subprocess boundary, dependency
 sandbox, command registry, artifact sentinel envelope, transaction journal,
-dry-run behavior, failure injection, and future verification.
+dry-run behavior, failure injection, and verification.
 
-It does not authorize or implement `npm ci`, `npm pack`, candidate or R0
-construction, service operations, configuration changes, database or memory
-access, OpenSpec changes, package-script changes, commits, tags, or pushes.
+The committed source implementation includes controlled `npm pack`, `npm ci`,
+candidate/R0 construction, service-status inspection, and authority verification.
+Those paths have only been exercised with synthetic temporary fixtures. This
+document does not authorize using them against real OpenClaw bindings, runtime
+installation, configuration or service mutation, database or memory access,
+OpenSpec changes, package-script changes, tags, or pushes.
 
 ## Governing architecture
 
@@ -43,7 +46,7 @@ the current stage.
 | Resume | unsupported |
 | Exploration | free-form exploration is forbidden |
 
-Only these subcommands are part of the future CLI contract:
+Only these subcommands are part of the CLI contract:
 
 ~~~text
 node bin/prepare-runtime-authority.cjs dry-run --plan <plan.json>
@@ -434,7 +437,7 @@ default path with temporary Git, package, service, and authority fixtures.
 
 ## Sentinel contract
 
-No second full-tree hash algorithm is introduced. The future builder reuses the
+No second full-tree hash algorithm is introduced. The builder reuses the
 `memory-engine-runtime-artifact-manifest-v2` primitive for filesystem identity.
 That primitive covers relative path, type, mode, size, file SHA-256, symlink
 target and resolution, hardlink topology, external references, special or

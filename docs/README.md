@@ -111,8 +111,9 @@
 ### 运行验证与烟雾测试
 
 - [`smoke-tests/README.md`](smoke-tests/README.md)：所有人工 smoke runbook 的目录入口。
-- [`smoke-tests/candidate-builder-harness-design-20260805.md`](smoke-tests/candidate-builder-harness-design-20260805.md)：candidate-builder 的 accepted design；规定单入口、路径 broker、依赖 sandbox、manifest-v2 sentinel、一次性事务和 synthetic dry-run 契约；当前未实现、未做 runtime verification。
-- [`smoke-tests/candidate-builder-harness-execution-template.md`](smoke-tests/candidate-builder-harness-execution-template.md)：未来离线构造的单次授权模板；dry-run 与 prepare 分离，不授权 live install 或 service operation。
+- [`smoke-tests/candidate-builder-harness-design-20260805.md`](smoke-tests/candidate-builder-harness-design-20260805.md)：candidate-builder 的 accepted contract 与已提交源码实现；规定单入口、路径 broker、依赖 sandbox、manifest-v2 sentinel、一次性事务、synthetic production verification 和 self-binding verify；尚未执行真实 plan 或 runtime verification。
+- [`smoke-tests/candidate-builder-harness-execution-template.md`](smoke-tests/candidate-builder-harness-execution-template.md)：真实 plan 的单次 dry-run/prepare 授权模板；dry-run 与 prepare 分离，不授权 live install 或 service operation。
+- [`session-handoff-2026-08-06-candidate-builder.md`](session-handoff-2026-08-06-candidate-builder.md)：Candidate-Builder 实现提交后的计划对照、遗漏/新增项、当前边界与新 session 启动顺序。
 - [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md)：F1-D-B8 当前阶段、证据和下一门禁台账。
 - [`smoke-tests/full-fail-closed-runtime-rollout.md`](smoke-tests/full-fail-closed-runtime-rollout.md)：F1-D-B8-A6 受控插件 reload、逐通道 full rollout、回滚和生产 evidence window 流程。
 - [`smoke-tests/tool-surface-runtime-access-audit.md`](smoke-tests/tool-surface-runtime-access-audit.md)：registry、effective tool policy 与真实 production tool wrapper 执行的分层审计。
@@ -122,6 +123,7 @@
 ### 变更历史与背景材料
 
 - [`devlog.md`](devlog.md)：开发流水和阶段结果，适合追溯“为什么变成现在这样”，不应单独作为当前契约。
+- [`session-handoff-2026-08-06-candidate-builder.md`](session-handoff-2026-08-06-candidate-builder.md)：本轮 Candidate-Builder 开发的当前 source facts、accepted next-stage design 与 historical threat inputs；用于新 session 迁移，不替代 runtime revalidation。
 - [`openclaw_memory_v0.1.md`](openclaw_memory_v0.1.md)：早期总体设计与演进记录，属于 Historical 文档。
 - 根 [`README.md`](../README.md)：项目概览和快速介绍。README 中的版本号、公式或架构图可能滞后，具体实现应以当前 contract、ADR、代码和测试为准。
 
