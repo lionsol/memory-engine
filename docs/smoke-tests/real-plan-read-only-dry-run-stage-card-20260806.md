@@ -1,12 +1,15 @@
 # Real-Plan Read-Only Dry-Run Stage Card — 2026-08-06
 
-> Status: `READY_FOR_OWNER_EXECUTION`
+> Status: `READY_FOR_COMMIT`
 >
-> This card authorizes only a fresh real-plan read-only dry-run against source
-> commit `55b0874d19c090d293b86ca8a65dfe180f23efc4`. It does not authorize
-> `prepare`, claim creation, staging, candidate/R0 construction, publication,
-> runtime installation, configuration mutation, service operation, database,
-> session or memory access, tag, or push.
+> This card defines the protocol for a fresh real-plan read-only dry-run. It
+> requires the exact execution commit to be supplied later as `AUTHORIZED_HEAD`
+> after this Markdown is committed and the repository is clean. The execution
+> commit must contain implementation fix
+> `55b0874d19c090d293b86ca8a65dfe180f23efc4` as an ancestor. This card does
+> not authorize `prepare`, claim creation, staging, candidate/R0 construction,
+> publication, runtime installation, configuration mutation, service operation,
+> database, session or memory access, tag, or push.
 
 ## Stage decision
 
@@ -71,8 +74,10 @@ It must remain mode `0700` and empty throughout this stage.
 Stop immediately and do not retry under the same run ID if any of the following
 occurs:
 
-- repository HEAD differs from
-  `55b0874d19c090d293b86ca8a65dfe180f23efc4`;
+- `AUTHORIZED_HEAD` is absent or is not a full lowercase 40-hex commit;
+- repository HEAD differs from `AUTHORIZED_HEAD`;
+- implementation fix `55b0874d19c090d293b86ca8a65dfe180f23efc4`
+  is not an ancestor of `AUTHORIZED_HEAD`;
 - the source worktree is dirty;
 - the active plugin root, release source path, or configuration path cannot be
   resolved exactly;
@@ -93,14 +98,11 @@ retry. Report the evidence and await a new decision.
 Run the following only from the independent WSL terminal as user `lionsol`.
 Do not run it through DevSpace.
 
-Before execution, the repository must be clean. Because this Stage Card is
-initially an untracked Markdown file, first either:
-
-- obtain separate authorization for a documentation-only commit; or
-- copy this card outside the repository and remove the untracked repository
-  copy in the independent WSL terminal.
-
-Do not weaken the clean-worktree gate or add an ignore rule for this file.
+Before execution, this corrected Stage Card must be committed and the
+repository must be clean. GPT/Sol must then separately freeze the exact current
+commit as `AUTHORIZED_HEAD`. Do not derive authorization from a branch name,
+`origin/main`, a short hash, or `HEAD` at some later time. Do not weaken the
+clean-worktree gate or add an ignore rule for this file.
 
 ### 1. Freeze the shell and source checkout
 
@@ -109,7 +111,9 @@ set -euo pipefail
 umask 077
 
 export REPO="$HOME/.openclaw/workspace/plugins/memory-engine"
-export EXPECTED_HEAD="55b0874d19c090d293b86ca8a65dfe180f23efc4"
+export REQUIRED_IMPLEMENTATION_COMMIT="55b0874d19c090d293b86ca8a65dfe180f23efc4"
+: "${AUTHORIZED_HEAD:?set AUTHORIZED_HEAD to the exact GPT/Sol-authorized full commit}"
+export AUTHORIZED_HEAD
 export NODE24="$HOME/.local/node24/bin/node"
 export NODE24_BIN="$HOME/.local/node24/bin"
 export OPENCLAW_BIN="$(command -v openclaw)"
@@ -118,7 +122,9 @@ export AUTHORITY_PARENT="$HOME/.openclaw/backups/memory-engine/runtime-authoriti
 
 cd "$REPO"
 
-test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+[[ "$AUTHORIZED_HEAD" =~ ^[0-9a-f]{40}$ ]]
+test "$(git rev-parse HEAD)" = "$AUTHORIZED_HEAD"
+git merge-base --is-ancestor "$REQUIRED_IMPLEMENTATION_COMMIT" "$AUTHORIZED_HEAD"
 test -z "$(git status --porcelain=v1)"
 test "$($NODE24 --version)" = "v24.8.0"
 test "$($NODE24 -p 'process.versions.modules')" = "137"
@@ -162,13 +168,13 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const home = homedir();
 const repo = process.env.REPO;
-const expectedHead = process.env.EXPECTED_HEAD;
+const authorizedHead = process.env.AUTHORIZED_HEAD;
 const nodeExecutable = realpathSync(process.env.NODE24);
 const openclaw = process.env.OPENCLAW_BIN;
 const planParent = process.env.PLAN_PARENT;
 const authorityParent = process.env.AUTHORITY_PARENT;
 
-if (!repo || !expectedHead || !openclaw || !planParent || !authorityParent) {
+if (!repo || !authorizedHead || !openclaw || !planParent || !authorityParent) {
   throw new Error("required execution environment missing");
 }
 
@@ -257,7 +263,7 @@ function exactServiceStatus(unit) {
 }
 
 const head = run("/usr/bin/git", ["rev-parse", "HEAD"], { cwd: repo });
-if (head !== expectedHead) throw new Error(`HEAD mismatch:${head}`);
+if (head !== authorizedHead) throw new Error(`HEAD mismatch:${head}`);
 if (run("/usr/bin/git", ["status", "--porcelain=v1"], { cwd: repo })) {
   throw new Error("source worktree is dirty");
 }
@@ -317,7 +323,7 @@ const consoleService = exactServiceStatus("memory-console.service");
 const now = new Date();
 const expires = new Date(now.getTime() + 20 * 60 * 1000);
 const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-const runId = `real-plan-dry-run-${stamp}-55b0874`;
+const runId = `real-plan-dry-run-${stamp}-${head.slice(0, 7)}`;
 mkdirSync(planParent, { recursive: true, mode: 0o700 });
 chmodSync(planParent, 0o700);
 const planPath = join(planParent, `${runId}.json`);
@@ -450,7 +456,7 @@ export BEFORE_GATEWAY="$(systemctl --user show openclaw-gateway.service --proper
 export BEFORE_CONSOLE="$(systemctl --user show memory-console.service --property=ActiveState,SubState,MainPID,NRestarts --no-pager | sort)"
 export BEFORE_AUTHORITY_COUNT="$(find "$AUTHORITY_PARENT" -mindepth 1 -maxdepth 1 | wc -l)"
 
-test "$BEFORE_HEAD" = "$EXPECTED_HEAD"
+test "$BEFORE_HEAD" = "$AUTHORIZED_HEAD"
 test "$BEFORE_AUTHORITY_COUNT" = "0"
 test ! -e "$AUTHORITY_PARENT/.staging-$RUN_ID"
 test ! -e "$AUTHORITY_PARENT/$RUN_ID"
@@ -478,14 +484,15 @@ Do not run `prepare` after this command, even if the dry-run passes.
 ### 5. Enforce the dry-run result contract
 
 ```bash
-$NODE24 - "$DRY_RUN_EVIDENCE" <<'NODE'
+$NODE24 - "$DRY_RUN_EVIDENCE" "$AUTHORIZED_HEAD" <<'NODE'
 const fs = require("node:fs");
 const result = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const authorizedHead = process.argv[3];
 if (result.schema !== "memory-engine-runtime-authority-dry-run-v1") throw new Error("dry-run schema mismatch");
 if (result.decision !== "PASS") throw new Error(`dry-run rejected:${JSON.stringify(result.preflight_findings)}`);
 if (result.mutation_count !== 0) throw new Error(`unexpected mutation_count:${result.mutation_count}`);
 if (!Array.isArray(result.preflight_findings) || result.preflight_findings.length !== 0) throw new Error("preflight findings are not empty");
-if (result.validated_bindings?.source_commit !== "55b0874d19c090d293b86ca8a65dfe180f23efc4") throw new Error("validated source commit mismatch");
+if (result.validated_bindings?.source_commit !== authorizedHead) throw new Error("validated source commit mismatch");
 process.stdout.write(JSON.stringify({
   decision: result.decision,
   mutation_count: result.mutation_count,
@@ -536,6 +543,7 @@ Return only the following evidence to GPT for review:
 ```text
 stage=Real-Plan Read-Only Dry-Run
 result=PASS | REJECT | STOPPED
+authorized_head=<full authorized commit>
 HEAD=<full commit>
 source_tree_identity=<full tree>
 run_id=<run id>
@@ -566,8 +574,7 @@ only as a comparison aid. The owner execution must collect fresh values and may
 not copy these into the plan without recalculation.
 
 ```text
-HEAD=55b0874d19c090d293b86ca8a65dfe180f23efc4
-source_tree_identity=1a04529db54d1c69c926e841550466d375b0a057
+required_implementation_commit=55b0874d19c090d293b86ca8a65dfe180f23efc4
 Node=v24.8.0
 Node ABI=137
 Gateway=active/running PID 204419 NRestarts 0
