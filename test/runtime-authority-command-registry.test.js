@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { makeFixture } from "./runtime-authority-fixtures.test.js";
-import { CommandRegistry } from "../lib/runtime-authority/command-registry.js";
+import { CommandRegistry, systemdUserEnv, systemdUserStatusArgs } from "../lib/runtime-authority/command-registry.js";
 import { PathBroker } from "../lib/runtime-authority/path-policy.js";
+import { parseServiceOutput } from "../lib/runtime-authority/preflight.js";
 
 test("command registry uses closed operation descriptors and structured argv", () => {
   const fixture = makeFixture();
@@ -22,6 +23,33 @@ test("command registry uses closed operation descriptors and structured argv", (
     assert.equal(call.env.LC_ALL, "C");
     assert.throws(() => registry.run("free.shell", { argv: ["bash"] }), /unregistered|unknown/);
   } finally { fixture.cleanup(); }
+});
+
+test("systemd user status binding is explicit, minimal, and order-independent", () => {
+  assert.deepEqual(systemdUserStatusArgs("memory-console.service"), [
+    "--user",
+    "show",
+    "memory-console.service",
+    "--property=ActiveState,SubState,MainPID,NRestarts",
+    "--no-pager",
+  ]);
+  assert.deepEqual(systemdUserEnv({ uid: 1000 }), {
+    XDG_RUNTIME_DIR: "/run/user/1000",
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus",
+  });
+  assert.deepEqual(parseServiceOutput("MainPID=204419\nNRestarts=0\nActiveState=active\nSubState=running\n"), {
+    active: true,
+    running: true,
+    pid: 204419,
+    restart_count: 0,
+  });
+});
+
+test("systemd status parsing rejects positional, incomplete, duplicate, and invalid counter output", () => {
+  assert.throws(() => parseServiceOutput("204419\n0\nactive\nrunning\n"), /named systemd status/);
+  assert.throws(() => parseServiceOutput("ActiveState=active\nSubState=running\nMainPID=1\n"), /exact systemd status fields/);
+  assert.throws(() => parseServiceOutput("ActiveState=active\nActiveState=active\nSubState=running\nMainPID=1\nNRestarts=0\n"), /duplicate systemd status field/);
+  assert.throws(() => parseServiceOutput("ActiveState=active\nSubState=running\nMainPID=NaN\nNRestarts=0\n"), /invalid systemd status counters/);
 });
 
 test("sandbox-class operation cannot run without sandbox", () => {
