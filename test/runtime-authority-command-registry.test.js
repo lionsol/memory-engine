@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { makeFixture } from "./runtime-authority-fixtures.test.js";
-import { CommandRegistry, systemdUserEnv, systemdUserStatusArgs } from "../lib/runtime-authority/command-registry.js";
+import { CommandRegistry, createRegistry, systemdUserEnv, systemdUserStatusArgs } from "../lib/runtime-authority/command-registry.js";
 import { PathBroker } from "../lib/runtime-authority/path-policy.js";
 import { parseServiceOutput } from "../lib/runtime-authority/preflight.js";
 
@@ -82,6 +83,28 @@ test("sandbox-class operation cannot run without sandbox", () => {
       },
     });
     assert.throws(() => registry.run("npm.ci_candidate"), /sandbox required/);
+  } finally { fixture.cleanup(); }
+});
+
+test("npm.ci_candidate receives only the fixed bound runtime headers", () => {
+  const fixture = makeFixture();
+  try {
+    const candidate = join(fixture.plan.persistent_parent, "candidate");
+    const cache = join(fixture.plan.persistent_parent, "npm-cache");
+    mkdirSync(candidate);
+    const calls = [];
+    const registry = createRegistry({
+      plan: fixture.plan,
+      broker: new PathBroker({ allowedRoots: { persistent_parent: fixture.plan.persistent_parent, tools: fixture.root } }),
+      sandbox: { run: (operation, input) => { calls.push({ operation, input }); return { code: 0, stdout: "", stderr: "" }; } },
+    });
+    registry.run("npm.ci_candidate", { candidate, cache });
+    registry.run("npm.ls_candidate", { candidate });
+    assert.equal(calls[0].operation, "npm.ci_candidate");
+    assert.equal(calls[0].input.env.npm_config_nodedir, "/runtime");
+    assert.equal(calls[0].input.env.NPM_CONFIG_NODEDIR, undefined);
+    assert.equal(calls[1].operation, "npm.ls_candidate");
+    assert.equal(calls[1].input.env.npm_config_nodedir, undefined);
   } finally { fixture.cleanup(); }
 });
 
