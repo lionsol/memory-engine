@@ -98,11 +98,12 @@ test("npm.ci_candidate receives only the fixed bound runtime headers", () => {
       broker: new PathBroker({ allowedRoots: { persistent_parent: fixture.plan.persistent_parent, tools: fixture.root } }),
       sandbox: { run: (operation, input) => { calls.push({ operation, input }); return { code: 0, stdout: "", stderr: "" }; } },
     });
-    registry.run("npm.ci_candidate", { candidate, cache });
+    registry.run("npm.ci_candidate", { candidate, cache, timeout: 1 });
     registry.run("npm.ls_candidate", { candidate });
     assert.equal(calls[0].operation, "npm.ci_candidate");
     assert.equal(calls[0].input.env.npm_config_nodedir, "/runtime");
     assert.equal(calls[0].input.env.NPM_CONFIG_NODEDIR, undefined);
+    assert.equal(calls[0].input.timeout, undefined);
     assert.equal(calls[1].operation, "npm.ls_candidate");
     assert.equal(calls[1].input.env.npm_config_nodedir, undefined);
   } finally { fixture.cleanup(); }

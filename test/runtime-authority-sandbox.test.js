@@ -4,6 +4,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SandboxRunner, buildSandboxArgv, NAMESPACE_FLAGS } from "../lib/runtime-authority/sandbox.js";
+import { assertBoundedTimeout, getSandboxTimeoutPolicy } from "../lib/runtime-authority/timeout-policy.js";
 
 test("sandbox command uses fixed namespace flags without host /sandbox mutation", () => {
   const root = mkdtempSync(join(tmpdir(), "runtime-authority-sandbox-"));
@@ -27,6 +28,47 @@ test("sandbox command retains structured failure identity and output", () => {
       assert.deepEqual(error.commandFailure, { operation_id: "npm.ci_candidate", exit_code: 23, stdout: "sandbox stdout", stderr: "sandbox stderr" });
       return true;
     });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("sandbox timeout policy is operation-specific, inner-before-outer, and caller-closed", () => {
+  const root = mkdtempSync(join(tmpdir(), "runtime-authority-sandbox-timeout-policy-"));
+  const stage = join(root, "stage");
+  mkdirSync(stage);
+  const plan = { unshare_executable: "/usr/bin/unshare", node_executable: "/home/lionsol/.local/node24/bin/node", mount_executable: "/usr/bin/mount", chroot_executable: "/usr/sbin/chroot" };
+  const calls = [];
+  const operationOf = input => input.args[input.args.indexOf("--operation") + 1];
+  const childSource = readFileSync(new URL("../lib/runtime-authority/sandbox-child.js", import.meta.url), "utf8");
+  try {
+    const sandbox = new SandboxRunner({
+      plan,
+      stagingRoot: stage,
+      spawn: input => {
+        calls.push(input);
+        if (operationOf(input) === "capability-probe") return { code: 0, stdout: JSON.stringify({ staging_write: true, device_access: true, compiler: true, python: true }), stderr: "" };
+        return { code: 0, stdout: "ok", stderr: "" };
+      },
+    });
+    sandbox.run("npm.ci_candidate", { executable: plan.node_executable, args: ["-e", ""], cwd: stage, env: { inner_timeout_ms: "1", npm_config_timeout: "1" }, timeout: 1 });
+    sandbox.run("node.candidate_targeted_tests", { executable: plan.node_executable, args: ["-e", ""], cwd: stage, env: {} });
+    sandbox.probe();
+    assert.equal(operationOf(calls[0]), "npm.ci_candidate");
+    assert.equal(calls[0].timeout, 330_000);
+    assert.equal(calls[0].args.includes("--inner-timeout-ms"), false);
+    assert.equal(getSandboxTimeoutPolicy("npm.ci_candidate").inner_timeout_ms, 300_000);
+    assert.equal(calls[0].timeout, getSandboxTimeoutPolicy("npm.ci_candidate").inner_timeout_ms + 30_000);
+    assert.equal(operationOf(calls[1]), "node.candidate_targeted_tests");
+    assert.equal(calls[1].timeout, 120_000);
+    assert.equal(getSandboxTimeoutPolicy("node.candidate_targeted_tests").inner_timeout_ms, 120_000);
+    assert.equal(operationOf(calls[2]), "capability-probe");
+    assert.equal(calls[2].timeout, 30_000);
+    assert.equal(getSandboxTimeoutPolicy("capability-probe").inner_timeout_ms, 120_000);
+    assert.equal(childSource.includes("args.innerTimeoutMs"), false);
+    assert.equal(childSource.includes("--inner-timeout-ms"), false);
+    assert.equal(assertBoundedTimeout("300000"), 300_000);
+    assert.throws(() => assertBoundedTimeout(undefined), /bounded positive integer/);
+    assert.throws(() => assertBoundedTimeout(900_001), /bounded positive integer/);
+    assert.throws(() => sandbox.run("unknown.operation", { executable: plan.node_executable, args: [], cwd: stage, env: {} }), /unregistered sandbox operation/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
