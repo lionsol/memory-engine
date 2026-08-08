@@ -9651,6 +9651,14 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - The next product decision is limited to the seven proven selection-gap turns: locate the earliest preserved historical loss boundary among query formation, channel/index availability, and fusion/ranking/preselection. No tuning, live retrieval, new H6, index mutation, or repair is authorized.
 - `docs/smoke-tests/h6-retrieval-first-loss-boundary-attribution-stage-card-20260808.md` was created `FROZEN`; execution requires a separate Sol authorization bound to its committed identity and repository HEAD.
 
+### H6 retrieval first-loss audit closed; bounded provenance observability selected
+
+- The separately authorized seven-turn retrieval first-loss audit closed `PASS_WITH_FINDINGS` with aggregate `MIXED_OR_INSUFFICIENT_EVIDENCE`.
+- Preserved runtime evidence showed no common query-formation defect and showed that FTS did not preserve the established answer-bearing chunks. Vector/recent telemetry retained candidate counts but not per-channel candidate IDs, so historical evidence cannot distinguish channel/index absence from later fusion/preselection loss.
+- Sol accepted the smallest product response: add bounded, privacy-safe per-channel candidate ID provenance and sanitized fusion pre/post ID provenance. Retrieval policy, ranking, `topK`, query shaping, gate behavior, capture, indexing, and rollout remain frozen.
+- Source inspection found the change can remain additive in the `hybridSearch()` debug assembly and AutoRecall debug metadata projector; no channel collector, fusion algorithm, DB schema, config object, CLI, or OpenSpec change is required.
+- `docs/smoke-tests/auto-recall-bounded-candidate-provenance-observability-stage-card-20260808.md` was created `FROZEN`. It authorizes no implementation or deployment by itself.
+
 ### Documentation and authorization governance simplified
 
 - Sol accepted the anti-drift workflow correction: execution authorization now binds the exact frozen Stage Card commit, repository HEAD, scope, and finite execution count; commit authorization and execution authorization are separate.

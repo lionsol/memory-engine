@@ -8,24 +8,21 @@
 
 ### NOW
 
-First-loss-boundary attribution for the seven H6 turns already proven `RETRIEVAL_SELECTION_GAP`.
+Add bounded, privacy-safe AutoRecall candidate provenance sufficient to diagnose future first-loss boundaries without replaying historical turns.
 
-Determine, from preserved historical evidence only, whether those seven turns share an earliest loss boundary in query formation, channel/index candidate generation, or fusion/ranking/top-K preselection. First H6 T1 is excluded because retrieval already surfaced the correct `AutoRecall=false` fact and the loss occurred at the gate; retry T3 is excluded because the incident-specific answer remained unproven.
+The completed seven-turn first-loss audit closed `PASS_WITH_FINDINGS / MIXED_OR_INSUFFICIENT_EVIDENCE`: historical evidence shows FTS did not preserve the known answer-bearing chunks, but vector/recent debug retained only counts, so it cannot distinguish channel/index loss from fusion/preselection loss. Query shaping, channel policy, ranking, `topK`, gate policy, capture, and rollout remain frozen.
 
-The frozen Stage Card is `smoke-tests/h6-retrieval-first-loss-boundary-attribution-stage-card-20260808.md`. Committing or freezing that card does not authorize execution.
+The next frozen Stage Card is `smoke-tests/auto-recall-bounded-candidate-provenance-observability-stage-card-20260808.md`. Its intended implementation is source-only and additive; committing or freezing it does not authorize coding or deployment.
 
-### NEXT — choose exactly one branch from evidence
+### NEXT
 
-- `QUERY_FORMATION_GAP` → review query shaping/term preservation before changing candidate channels or ranking.
-- `CHANNEL_OR_INDEX_AVAILABILITY_GAP` → review channel candidate generation/index freshness before changing fusion or top-K.
-- `FUSION_OR_PRESELECTION_GAP` → review fusion/ranking/preselection before changing query shaping or capture.
-- `MIXED_OR_INSUFFICIENT_EVIDENCE` → stop tuning and decide the smallest additional evidence source; do not manufacture a repair stage.
+If the source-only observability stage passes, separately decide whether active-runtime installation/non-live verification is justified. Do not use a synthetic replay of the seven historical H6 turns as a substitute for the next natural sample.
 
-A completed attribution does not automatically authorize its corresponding NEXT branch. Each branch requires a separate product-level decision and explicit authorization.
+When a later natural AutoRecall sample exists with the new provenance, use it to distinguish channel/index availability from fusion/preselection loss before considering any retrieval tuning.
 
 ### LATER
 
-After one evidence-supported product branch is completed and reviewed, decide whether a new minimal natural-use validation is justified. AutoRecall broad rollout remains a separate later decision.
+Only after an evidence-supported first-loss boundary is observed should the project consider a bounded retrieval-policy repair and a new minimal natural-use validation. AutoRecall broad rollout remains a separate later decision.
 
 ### DEFERRED
 
