@@ -111,6 +111,24 @@ const EXPECTED_SNAPSHOT = `{
     "channel_sizes": {
       "vector": 1
     },
+    "channel_candidate_provenance": {
+      "vector": {
+        "count": 1,
+        "captured_count": 1,
+        "truncated": false,
+        "ids": [
+          "chunk-1234567890"
+        ]
+      }
+    },
+    "fusion_candidate_provenance": {
+      "pre_rerank_ids": [
+        "chunk-1234567890"
+      ],
+      "post_rerank_ids": [
+        "chunk-1234567890"
+      ]
+    },
     "source_breakdown": {
       "vector": 1,
       "smart-add": 1
@@ -321,4 +339,72 @@ test("hybridSearch minConfidence default and override come from unified config",
 
   assert.equal(defaultResult.debug.min_confidence, 0.15);
   assert.equal(overrideResult.debug.min_confidence, 0.22);
+});
+
+test("hybridSearch captures bounded channel provenance without changing result order or scores", async () => {
+  const ids = Array.from({ length: 33 }, (_, index) => `c${String(index).padStart(15, "0")}`);
+  const confidenceRows = ids.map(id => ({
+    chunk_id: id,
+    confidence: 0.8,
+    last_confidence_update: 0,
+    base_tau: 7,
+    hit_count: 2,
+    is_protected: 0,
+    conflict_flag: 0,
+    category: "raw_log",
+    is_archived: 0,
+  }));
+  const chunkRows = ids.map((id, index) => ({
+    id,
+    path: `memory/${index}.md`,
+    updated_at: 1710000000,
+  }));
+  const db = {
+    prepare(sql) {
+      const query = String(sql);
+      return {
+        all() {
+          if (query.includes("SELECT chunk_id") && query.includes("FROM memory_confidence")) {
+            return confidenceRows;
+          }
+          if (query.includes("SELECT id, path, updated_at FROM chunks")) return chunkRows;
+          return [];
+        },
+        get() {
+          return null;
+        },
+      };
+    },
+  };
+  const result = await hybridSearch("x", { topK: 5 }, {
+    withDb: fn => fn(db),
+    calcRealtimeConf: row => row.confidence,
+    cfg: {
+      memoryEngine: {
+        recall: { vectorTopK: 40 },
+      },
+    },
+    syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
+    categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async () => ({
+          entries: ids.map(id => ({ id, text: "compat memory text", similarity: 0.91 })),
+        }),
+      },
+    }),
+  });
+
+  assert.deepEqual(result.results.map(item => item.id), ids.slice(0, 5));
+  assert.deepEqual(result.results.map(item => item.final_score), [1.0064, 1.0061, 1.0059, 1.0056, 1.0054]);
+  assert.deepEqual(result.debug.channel_candidate_provenance.vector, {
+    count: 33,
+    captured_count: 32,
+    truncated: true,
+    ids: ids.slice(0, 32),
+  });
+  assert.deepEqual(result.debug.fusion_candidate_provenance, {
+    pre_rerank_ids: ids.slice(0, 8),
+    post_rerank_ids: ids.slice(0, 8),
+  });
 });

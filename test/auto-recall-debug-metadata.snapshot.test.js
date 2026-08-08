@@ -340,3 +340,106 @@ test("channel error without a fallback remains non-fallback", () => {
   assert.equal(metadata.legacy_db_fallback_used, false);
   assert.equal(JSON.stringify(metadata.legacy_db_fallback_channels), "[]");
 });
+
+test("AutoRecall persists bounded ID-only channel and fusion provenance", () => {
+  const channelIds = Array.from({ length: 2 }, (_, index) => `fts-${index}-long-id`);
+  const vectorIds = Array.from({ length: 33 }, (_, index) => `vector-${String(index).padStart(2, "0")}-long-id`);
+  const metadata = buildAutoRecallDebugMetadata("PRIVATE_PROMPT_SECRET", {
+    results: [],
+    debug: {
+      channel_candidate_provenance: {
+        fts: {
+          count: channelIds.length,
+          captured_count: channelIds.length,
+          truncated: false,
+          ids: channelIds,
+          text: "MEMORY_BODY_SECRET",
+          preview: "PREVIEW_SECRET",
+          path: "PATH_SECRET",
+        },
+        vector: {
+          count: vectorIds.length,
+          captured_count: 33,
+          truncated: true,
+          ids: vectorIds,
+          candidate_metadata: {
+            prompt: "QUERY_SECRET",
+            exact_fragment: "FRAGMENT_SECRET",
+          },
+        },
+      },
+      fusion_candidate_provenance: {
+        pre_rerank_ids: Array.from({ length: 10 }, (_, index) => ({
+          id: `pre-${index}-long-id`,
+          text: "PRE_RERANK_TEXT_SECRET",
+          path: "PRE_RERANK_PATH_SECRET",
+        })),
+        post_rerank_ids: Array.from({ length: 9 }, (_, index) => ({
+          id: `post-${index}-long-id`,
+          preview: "POST_RERANK_PREVIEW_SECRET",
+        })),
+      },
+    },
+  });
+
+  assert.deepEqual(metadata.channel_candidate_provenance.fts, {
+    count: 2,
+    captured_count: 2,
+    truncated: false,
+    ids: channelIds.map(id => id.slice(0, 16)),
+  });
+  assert.deepEqual(metadata.channel_candidate_provenance.vector, {
+    count: 33,
+    captured_count: 32,
+    truncated: true,
+    ids: vectorIds.slice(0, 32).map(id => id.slice(0, 16)),
+  });
+  assert.equal(metadata.channel_candidate_provenance.vector.ids.length, 32);
+  assert.deepEqual(metadata.fusion_candidate_provenance, {
+    pre_rerank_ids: Array.from({ length: 8 }, (_, index) => `pre-${index}-long-id`.slice(0, 16)),
+    post_rerank_ids: Array.from({ length: 8 }, (_, index) => `post-${index}-long-id`.slice(0, 16)),
+  });
+
+  const serialized = JSON.stringify(metadata);
+  for (const secret of [
+    "PRIVATE_PROMPT_SECRET",
+    "MEMORY_BODY_SECRET",
+    "PREVIEW_SECRET",
+    "PATH_SECRET",
+    "QUERY_SECRET",
+    "FRAGMENT_SECRET",
+    "PRE_RERANK_TEXT_SECRET",
+    "PRE_RERANK_PATH_SECRET",
+    "POST_RERANK_PREVIEW_SECRET",
+  ]) assert.equal(serialized.includes(secret), false, secret);
+  assert.deepEqual(Object.keys(metadata.channel_candidate_provenance.fts), [
+    "count",
+    "captured_count",
+    "truncated",
+    "ids",
+  ]);
+});
+
+test("AutoRecall provenance projection completes capture at or below 32 IDs", () => {
+  const ids = Array.from({ length: 32 }, (_, index) => `candidate-${String(index).padStart(2, "0")}`);
+  const metadata = buildAutoRecallDebugMetadata("query", {
+    results: [],
+    debug: {
+      channel_candidate_provenance: {
+        recent: {
+          count: ids.length,
+          captured_count: 0,
+          truncated: true,
+          ids,
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(metadata.channel_candidate_provenance.recent, {
+    count: 32,
+    captured_count: 32,
+    truncated: false,
+    ids,
+  });
+});
