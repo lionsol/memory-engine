@@ -8,17 +8,17 @@
 
 ### NOW
 
-Add bounded, privacy-safe AutoRecall candidate provenance sufficient to diagnose future first-loss boundaries without replaying historical turns.
+Publish/install the already-passed AutoRecall provenance instrumentation through a minimal runtime overlay, then verify active runtime identity and telemetry contract without live retrieval.
 
-The completed seven-turn first-loss audit closed `PASS_WITH_FINDINGS / MIXED_OR_INSUFFICIENT_EVIDENCE`: historical evidence shows FTS did not preserve the known answer-bearing chunks, but vector/recent debug retained only counts, so it cannot distinguish channel/index loss from fusion/preselection loss. Query shaping, channel policy, ranking, `topK`, gate policy, capture, and rollout remain frozen.
+Source implementation `1cd183ff12d055ba5c5ecd4bd0d9d1b98cdff23b` passed focused/privacy `19/19` and Node 24 full-suite `1835/0/8`. The active runtime still has the older bytes. Full-repository installation is excluded because it would also deploy a currently-uninstalled `normalize-candidate.js` semantic change; the runtime candidate must therefore be the current verified rollback release plus exactly the two provenance source files.
 
-The next frozen Stage Card is `smoke-tests/auto-recall-bounded-candidate-provenance-observability-stage-card-20260808.md`. Its intended implementation is source-only and additive; committing or freezing it does not authorize coding or deployment.
+The frozen Stage Card is `smoke-tests/auto-recall-provenance-runtime-install-nonlive-verification-stage-card-20260808.md`. Committing/freezing it does not authorize runtime mutation.
 
 ### NEXT
 
-If the source-only observability stage passes, separately decide whether active-runtime installation/non-live verification is justified. Do not use a synthetic replay of the seven historical H6 turns as a substitute for the next natural sample.
+If the non-live runtime installation stage passes, wait for a later natural AutoRecall sample with the new provenance. Do not replay the seven historical H6 turns or create a synthetic retrieval probe merely to populate telemetry.
 
-When a later natural AutoRecall sample exists with the new provenance, use it to distinguish channel/index availability from fusion/preselection loss before considering any retrieval tuning.
+Use the next natural failure/success sample to distinguish channel/index availability from fusion/preselection loss before considering any retrieval tuning.
 
 ### LATER
 

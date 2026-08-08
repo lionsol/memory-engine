@@ -9659,6 +9659,15 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - Source inspection found the change can remain additive in the `hybridSearch()` debug assembly and AutoRecall debug metadata projector; no channel collector, fusion algorithm, DB schema, config object, CLI, or OpenSpec change is required.
 - `docs/smoke-tests/auto-recall-bounded-candidate-provenance-observability-stage-card-20260808.md` was created `FROZEN`. It authorizes no implementation or deployment by itself.
 
+### AutoRecall provenance source passed; minimal runtime overlay stage frozen
+
+- The separately authorized bounded provenance implementation passed source review and was committed as `1cd183ff12d055ba5c5ecd4bd0d9d1b98cdff23b` (`feat(recall): add bounded candidate provenance telemetry`).
+- Independent verification confirmed focused/privacy tests `19/19`, Node 24 full suite `1835 passed / 0 failed / 8 skipped`, additive ID-only provenance, and unchanged retrieval results/order/scores.
+- Read-only runtime inspection found OpenClaw `2026.6.9`, memory-engine `0.8.22` loaded from `/home/lionsol/.openclaw/extensions/memory-engine`, with rollback/source release `/home/lionsol/.openclaw/backups/memory-engine/releases/post-h6-v2-f887e18-20260802T124938Z` present and byte-identical to active runtime for the two target files.
+- Active runtime still lacks the new provenance bytes. Full-repository installation is excluded because `normalize-candidate.js` also differs from active runtime and would deploy unrelated retrieval semantics.
+- The selected runtime strategy is one persistent overlay candidate: copy the verified rollback release and replace exactly `lib/recall/hybrid-search.js` and `lib/recall/auto-recall-debug-metadata.js` with the `1cd183ff...` versions; package/lock/native dependency closure remains inherited from rollback.
+- `docs/smoke-tests/auto-recall-provenance-runtime-install-nonlive-verification-stage-card-20260808.md` was created `FROZEN`. It requires separate post-commit Sol authorization before candidate creation, Gateway stop/install/start, non-live verification, or rollback.
+
 ### Documentation and authorization governance simplified
 
 - Sol accepted the anti-drift workflow correction: execution authorization now binds the exact frozen Stage Card commit, repository HEAD, scope, and finite execution count; commit authorization and execution authorization are separate.
