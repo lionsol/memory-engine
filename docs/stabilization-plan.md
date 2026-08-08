@@ -8,20 +8,20 @@
 
 ### NOW
 
-H6 answerability / memory-coverage attribution audit.
+First-loss-boundary attribution for the seven H6 turns already proven `RETRIEVAL_SELECTION_GAP`.
 
-Determine whether the nine historical H6 natural questions rejected by `relaxed_source_low_coverage_no_exact` were answerable from memory content that actually existed at the historical turn time, and if so, identify the first evidenced loss boundary.
+Determine, from preserved historical evidence only, whether those seven turns share an earliest loss boundary in query formation, channel/index candidate generation, or fusion/ranking/top-K preselection. First H6 T1 is excluded because retrieval already surfaced the correct `AutoRecall=false` fact and the loss occurred at the gate; retry T3 is excluded because the incident-specific answer remained unproven.
 
-The frozen Stage Card is `smoke-tests/h6-answerability-memory-coverage-attribution-audit-stage-card-20260808.md`. Committing or freezing that card does not authorize execution.
+The frozen Stage Card is `smoke-tests/h6-retrieval-first-loss-boundary-attribution-stage-card-20260808.md`. Committing or freezing that card does not authorize execution.
 
 ### NEXT — choose exactly one branch from evidence
 
-- `CORPUS_COVERAGE_GAP` → diagnose memory capture / extraction / checkpoint coverage before changing retrieval.
-- `RETRIEVAL_SELECTION_GAP` → diagnose retrieval recall/selection without pre-authorizing threshold, `topK`, weighting, or gate changes.
-- `PROJECTION_BOUNDARY_GAP` → review the runtime projection boundary before changing retrieval or capture.
+- `QUERY_FORMATION_GAP` → review query shaping/term preservation before changing candidate channels or ranking.
+- `CHANNEL_OR_INDEX_AVAILABILITY_GAP` → review channel candidate generation/index freshness before changing fusion or top-K.
+- `FUSION_OR_PRESELECTION_GAP` → review fusion/ranking/preselection before changing query shaping or capture.
 - `MIXED_OR_INSUFFICIENT_EVIDENCE` → stop tuning and decide the smallest additional evidence source; do not manufacture a repair stage.
 
-A completed audit does not automatically authorize its corresponding NEXT branch. Each branch requires a separate product-level decision and explicit authorization.
+A completed attribution does not automatically authorize its corresponding NEXT branch. Each branch requires a separate product-level decision and explicit authorization.
 
 ### LATER
 

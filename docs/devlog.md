@@ -9644,6 +9644,13 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - The previously authorized H6 low-coverage/path-authority audit report was located at `reports/low-coverage-path-authority-audit-20260804/final-report.md`. It closed with `AUDIT_OUTCOME=NATURAL_CONTENT_LOW_OVERLAP`, `confidence=high`, reproduced all ten historical gate decisions, rejected a reproducible gate defect, and confirmed diagnostic/path-authority debt as non-causal to the H6 rejections.
 - No active OpenSpec change exists. Retrieval thresholds, `topK`, Card/gate policy, and AutoRecall rollout remain frozen; the next product-level decision is a read-only H6 answerability/memory-coverage attribution audit to determine whether the nine rejected natural questions were answerable from memory content that actually existed at their historical turn times before any retrieval or capture change is designed.
 
+### H6 answerability audit closed; retrieval first-loss decision frozen
+
+- The separately authorized H6 answerability/memory-coverage audit closed `PASS_WITH_FINDINGS` with aggregate `MIXED_OR_INSUFFICIENT_EVIDENCE`. Seven rejected turns were directly proven `RETRIEVAL_SELECTION_GAP`; none was proven `CORPUS_COVERAGE_GAP` or `PROJECTION_BOUNDARY_GAP`.
+- First H6 T1 is a bounded gate-semantic finding: the historically selected first-240-character payload already contained the correct `AutoRecall=false` fact, so it is excluded from retrieval-selection follow-up. Retry T3 remains incident-causality `unproven` and is also excluded.
+- The next product decision is limited to the seven proven selection-gap turns: locate the earliest preserved historical loss boundary among query formation, channel/index availability, and fusion/ranking/preselection. No tuning, live retrieval, new H6, index mutation, or repair is authorized.
+- `docs/smoke-tests/h6-retrieval-first-loss-boundary-attribution-stage-card-20260808.md` was created `FROZEN`; execution requires a separate Sol authorization bound to its committed identity and repository HEAD.
+
 ### Documentation and authorization governance simplified
 
 - Sol accepted the anti-drift workflow correction: execution authorization now binds the exact frozen Stage Card commit, repository HEAD, scope, and finite execution count; commit authorization and execution authorization are separate.
