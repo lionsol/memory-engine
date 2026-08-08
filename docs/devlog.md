@@ -9634,3 +9634,28 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - A new diagnosis card was drafted at `docs/smoke-tests/npm-ci-post-fetch-native-build-timeout-diagnosis-stage-card-20260808.md`, status `READY_FOR_COMMIT`. It authorizes no execution by itself.
 - Closeout review corrected one important classification bug in that draft: reaching the 15-minute diagnostic ceiling is a mandatory stop boundary but is not proof of a hang. `STALL_OR_HANG` requires direct stall evidence; continued progress or ambiguity at the ceiling must end `INSUFFICIENT_EVIDENCE`.
 - Next intended decision: in a bounded disposable production-shaped reproduction only, determine whether work after the 300-second boundary is `LEGITIMATE_SLOW`, `STALL_OR_HANG`, or `INSUFFICIENT_EVIDENCE`. No source timeout change, real plan/dry-run/prepare, runtime mutation, or evidence rewrite belongs to that diagnosis stage.
+
+### Candidate-Builder timeout/harness deferred after anti-drift closeout
+
+- The first post-fetch timeout diagnosis closed `INSUFFICIENT_EVIDENCE`: a valid production-shaped disposable `npm ci` completed in about `149923ms`, so there was no direct post-300s interval, and the live process monitor did not cover that install window reliably enough to classify slow versus stall.
+- Subsequent diagnostic-harness work produced four frozen documentation-only Stage Cards in total (`408cb847`, `0634b8c`, `5b79d191`, `95d45d67`) and no product-source change. Review found that verification work had expanded into repeated harness-only micro-stages; later execution-authority evidence was not sufficiently preserved to treat every replacement reproduction as an authoritative stage result.
+- Mandatory anti-drift review therefore closed the harness branch `STOPPED` and deferred Candidate-Builder publication/timeout diagnosis. The committed `npm.ci_candidate` timeout remains `300000ms` inner / `330000ms` outer. No fifth harness stage, timeout change, real plan/dry-run/prepare/verify, runtime mutation, tag, or push is authorized by this closeout.
+- Historical diagnostic artifacts are retained as historical evidence and are not rewritten. The final reported `/usr/bin/ps` self-observation remains a non-product harness finding rather than a new repair stage.
+- The previously authorized H6 low-coverage/path-authority audit report was located at `reports/low-coverage-path-authority-audit-20260804/final-report.md`. It closed with `AUDIT_OUTCOME=NATURAL_CONTENT_LOW_OVERLAP`, `confidence=high`, reproduced all ten historical gate decisions, rejected a reproducible gate defect, and confirmed diagnostic/path-authority debt as non-causal to the H6 rejections.
+- No active OpenSpec change exists. Retrieval thresholds, `topK`, Card/gate policy, and AutoRecall rollout remain frozen; the next product-level decision is a read-only H6 answerability/memory-coverage attribution audit to determine whether the nine rejected natural questions were answerable from memory content that actually existed at their historical turn times before any retrieval or capture change is designed.
+
+### Documentation and authorization governance simplified
+
+- Sol accepted the anti-drift workflow correction: execution authorization now binds the exact frozen Stage Card commit, repository HEAD, scope, and finite execution count; commit authorization and execution authorization are separate.
+- Repository documents, handoffs, reports, and agent memory may describe authorization but cannot create or reconstruct it. Missing or conflicting original owner authorization is treated as unverified and stops execution.
+- Codex must report and stop after the authorized stage; it may not create, commit, or execute a successor Stage Card. A third verification substage for the same product question defaults to `STOPPED` drift review.
+- The local project instruction file now mirrors the permanent enforcement rules; the committed authority is `docs/decisions/project-authorization-policy.md`, which records the accepted governance decision and documentation ownership model.
+- Documentation creation is reduced going forward: `current-state.md` owns current product state, `devlog.md` owns concise history, Stage Cards own scope, reports own execution evidence, and new `session-handoff-*` documents are not created by default.
+- The pending H6 answerability Stage Card was shortened to the new bounded format instead of preserving the prior long-form verification template.
+
+### Product roadmap authority consolidated
+
+- `docs/current-state.md` remains the sole owner of the exact current product state and next bounded decision; `docs/stabilization-plan.md` now owns the accepted Now/Next/Later branching sequence without granting execution authority.
+- The current `NOW` decision is the read-only H6 answerability/memory-coverage attribution audit. Its outcome selects at most one later product branch: corpus coverage, retrieval selection, projection boundary, or an evidence stop.
+- Candidate-Builder publication/timeout diagnosis and diagnostic/path-authority debt are explicitly deferred. A new natural-use validation and AutoRecall rollout remain later decisions rather than automatic follow-ons.
+- `docs/hybrid-fail-closed-rollout-status.md` is downgraded to `Historical / reference-only rollout ledger`; old B8-A7 stage text no longer represents the current roadmap or next gate.

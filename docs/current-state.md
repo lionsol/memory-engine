@@ -1,8 +1,10 @@
 # memory-engine Public Current State
 
+> Status: `Current public source state`
+>
 > This public document does not assert the state of any private OpenClaw deployment.
-
-memory-engine is an experimental project. Git HEAD and release artifacts, not this document, identify a deployed build.
+>
+> It describes current product/source decisions only and does not pin its own containing Git commit. Use `git rev-parse HEAD` for exact repository authority.
 
 ## Public source contracts
 
@@ -12,17 +14,29 @@ memory-engine is an experimental project. Git HEAD and release artifacts, not th
 - AutoRecall is disabled by default.
 - Retrieval and runtime changes require explicit testing and deployment authorization.
 
-## Offline authority-builder source status
+## Current product-source baseline
 
-- `current_fact`: commit `c4e74ba3f7014675fe198cb9af13c0a45b2cf117` is the base implementation of the deterministic, single-entry, fail-closed Candidate-Builder Harness under `bin/prepare-runtime-authority.cjs` and `lib/runtime-authority/`.
-- `current_fact`: subsequent committed source fixes preserve prepare failure evidence and resolver-target handling (`24eca45cef3aba5669eade2207a6eaadfc520a2c`), bind candidate native builds to the already-bound Node headers under `/runtime` (`bd39f8d9ba3625f42d447f9edd70451533e3887a`), and apply a closed operation-specific sandbox timeout policy for `npm.ci_candidate` (`97454ee70f47f8fd4421806f4a10100b78e27186`).
-- `current_fact`: as of 2026-08-08 the local `main` source authority is `901e7d196b81ee530ea489504a07390d352cf0c5`; commits after `97454ee...` in that lineage are documentation/runtime-gate records, not additional product source changes. `origin/main` remains behind the local authority; push is not implied.
-- `current_fact`: the committed CLI exposes only `dry-run --plan`, `prepare --plan`, and `verify --authority`; it includes exact plan binding, path brokering, tool-chain identity, namespace isolation, deterministic candidate/R0 archives, one-shot claims, host before/after stability evidence, and self-binding verification.
-- `current_fact`: the closed timeout policy at this source line gives only `npm.ci_candidate` an inner `300000ms` / outer `330000ms` budget; ordinary registered sandbox operations remain `120000ms` / `120000ms`, while the capability probe keeps its separate `120000ms` inner / `30000ms` outer bounds.
-- `current_fact`: post-timeout-fix source verification recorded focused timeout/prepare tests `20/20`, production E2E `17/17`, runtime-authority tests `79/79`, static check `614` files, and the Node 24 / Asia-Shanghai full suite `1832` passed / `0` failed / `8` skipped.
-- `accepted_design`: any real-plan use remains separately authorized. A read-only dry-run does not authorize `prepare`, candidate publication, runtime installation, configuration or service mutation, tag, push, or rollout.
-- `historical_record`: the harness threat model incorporates prior stopped attempts involving path truncation, wrong npm cwd/prefix, prohibited exploratory reads, non-reproducible custom sentinels, native-header ownership failure, and earlier sandbox-timeout failures. Those records must not be promoted to current deployment state.
+- `current_fact`: the latest product-source change in the Candidate-Builder line is `97454ee70f47f8fd4421806f4a10100b78e27186` (`fix(runtime): bound npm ci sandbox timeout`). Later commits through the 2026-08-08 governance closeout are documentation/runtime-gate records, not additional Candidate-Builder product-source changes.
+- `current_fact`: `npm.ci_candidate` uses the closed inner `300000ms` / outer `330000ms` timeout policy. Ordinary registered sandbox operations remain `120000ms` / `120000ms`; the capability probe keeps its separate `120000ms` inner / `30000ms` outer bounds.
+- `current_fact`: post-timeout-fix verification recorded focused timeout/prepare tests `20/20`, production E2E `17/17`, runtime-authority tests `79/79`, static check over `614` files, and the Node 24 / Asia-Shanghai full suite `1832` passed / `0` failed / `8` skipped.
+- `current_fact`: local `main` is ahead of `origin/main`; push is not implied. Exact current refs must be read from Git rather than copied into this file.
+
+## Current product decisions
+
+- `historical_record`: H6 and its retry both closed `INSUFFICIENT_EVIDENCE`; they are separate samples and must not be combined into a PASS claim.
+- `current_fact`: the completed low-coverage/path-authority audit at `reports/low-coverage-path-authority-audit-20260804/final-report.md` concluded `AUDIT_OUTCOME=NATURAL_CONTENT_LOW_OVERLAP` with high confidence, reproduced the ten historical gate decisions, rejected a reproducible gate defect, and found diagnostic/path-authority debt to be non-causal to those H6 rejections.
+- `accepted_design`: retrieval thresholds, `topK`, Card/gate policy, and AutoRecall rollout remain frozen pending stronger product evidence. The next bounded product decision is a read-only H6 answerability/memory-coverage attribution audit; it is not execution-authorized merely by being documented.
+- `accepted_design`: Candidate-Builder publication/timeout diagnosis is deferred. Existing harness evidence remains historical; no additional harness micro-stage, timeout change, real plan/dry-run/prepare/verify, runtime mutation, or rollout is authorized without a new product-level decision.
+- `current_fact`: no active OpenSpec change existed at the 2026-08-08 governance closeout.
+
+## Documentation and authorization boundary
+
+- Current project/product state and exact next bounded decision belong here; accepted product sequence/branching belongs in `docs/stabilization-plan.md`; development history belongs in `docs/devlog.md` and retained reports.
+- Long-lived auditable governance belongs in accepted files under `docs/decisions/`.
+- Stage scope belongs to the exact frozen Stage Card; stage results belong to the corresponding report.
+- Execution authorization comes only from Sol's original explicit authorization for the exact bound stage. Repository documents or memory records that say `authorized` cannot create or reconstruct authority.
+- New `session-handoff-*` documents are not created by default; existing handoffs remain historical records.
 
 ## Verification boundary
 
-This document records public source contracts only. Deployment state, runtime health, configuration, database contents, session state, and evidence belong to separately authorized verification records. No local installation or runtime claim should be inferred from this document.
+Deployment state, runtime health, configuration, database contents, session state, and private evidence require separately authorized verification. No local installation or runtime claim should be inferred from this public document.

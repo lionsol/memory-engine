@@ -23,7 +23,21 @@
 5. **Audit / Baseline**：某个时间点的盘点、风险清单或迁移基线。
 6. **Historical**：保留用于理解演进过程，不应直接作为当前实现依据。
 
-当前公开边界、数据库安全不变量和 AutoRecall 默认策略见 [`current-state.md`](current-state.md)；运行时同步、验证和发布工作流见 [`runtime-sync.md`](runtime-sync.md) 与 [`stabilization-plan.md`](stabilization-plan.md)。
+当前公开边界、数据库安全不变量和 AutoRecall 默认策略见 [`current-state.md`](current-state.md)；运行时同步、验证和发布工作流见 [`runtime-sync.md`](runtime-sync.md) 与 [`stabilization-plan.md`](stabilization-plan.md)。项目执行授权与文档瘦身规则见 [`decisions/project-authorization-policy.md`](decisions/project-authorization-policy.md)。
+
+### 信息的唯一主权威
+
+| 信息 | 主权威 |
+| --- | --- |
+| 当前代码行为 | Git HEAD + tests/runtime evidence |
+| 当前项目/产品状态 | `current-state.md` |
+| 长期治理与稳定设计裁决 | `docs/decisions/*` |
+| 单阶段允许范围 | exact frozen Stage Card |
+| 单阶段执行结果 | final report / bounded execution report |
+| 执行授权 | Sol 的原始显式授权；repo 文档不得替代 |
+| 历史时间线 | `devlog.md` + retained historical reports/handoffs |
+
+后续文档应引用主权威，不复制大段状态或证据。`authorized` 出现在 Stage Card、handoff、devlog、report 或 memory 中只是一条描述，不能产生或补写执行授权。
 
 ## 总体架构入口
 
@@ -53,7 +67,7 @@
 | OpenClaw host publisher 集成设计 | [`openclaw-host-plugin-metadata-publisher-integration-design.md`](openclaw-host-plugin-metadata-publisher-integration-design.md) | Strict-profile R5 reference | 保留 required plugin ids、durable outbox、v2 manifest、语义提交和启动屏障设计；当前个人部署不实施、不提 PR、不维护 fork |
 | 发布与版本身份 | [`release-version-policy.md`](release-version-policy.md) | Current release policy | 区分可达发布标签、manifest version、unreleased commits 和精确 build identity |
 | 检索结果到回答的证据规则 | [`retrieval-answering-policy.md`](retrieval-answering-policy.md) | Current policy | 规定按日期回顾等场景的证据优先级，防止把派生摘要当成原始事实 |
-| Hybrid fail-closed rollout 当前状态 | [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md) | Current rollout ledger | 记录 F1-D-B8-A5/A6/A7 阶段、真实 observation 证据、持续窗口治理与 B8-B 禁止边界 |
+| Hybrid fail-closed rollout 历史台账 | [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md) | Historical / reference-only ledger | 保留 F1-D-B8-A5/A6/A7 阶段、真实 observation 证据、持续窗口治理与 B8-B 禁止边界；不代表当前路线图或下一阶段 |
 | Hybrid 持续生产证据窗口 | [`smoke-tests/full-fail-closed-production-evidence-window.md`](smoke-tests/full-fail-closed-production-evidence-window.md) | B8-A7 design contract | 定义 evidence epoch、runtime/config identity、窗口连续性、traffic origin、健康监控与停止条件；当前不授权长期 full mode |
 
 ### 架构速览图
@@ -114,7 +128,7 @@
 - [`smoke-tests/candidate-builder-harness-design-20260805.md`](smoke-tests/candidate-builder-harness-design-20260805.md)：candidate-builder 的 accepted contract 与已提交源码实现；规定单入口、路径 broker、依赖 sandbox、manifest-v2 sentinel、一次性事务、synthetic production verification 和 self-binding verify；尚未执行真实 plan 或 runtime verification。
 - [`smoke-tests/candidate-builder-harness-execution-template.md`](smoke-tests/candidate-builder-harness-execution-template.md)：真实 plan 的单次 dry-run/prepare 授权模板；dry-run 与 prepare 分离，不授权 live install 或 service operation。
 - [`session-handoff-2026-08-06-candidate-builder.md`](session-handoff-2026-08-06-candidate-builder.md)：Candidate-Builder 实现提交后的计划对照、遗漏/新增项、当前边界与新 session 启动顺序。
-- [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md)：F1-D-B8 当前阶段、证据和下一门禁台账。
+- [`hybrid-fail-closed-rollout-status.md`](hybrid-fail-closed-rollout-status.md)：F1-D-B8 历史 rollout/evidence 台账，仅供参考；当前状态见 `current-state.md`，当前产品路线见 `stabilization-plan.md`。
 - [`smoke-tests/full-fail-closed-runtime-rollout.md`](smoke-tests/full-fail-closed-runtime-rollout.md)：F1-D-B8-A6 受控插件 reload、逐通道 full rollout、回滚和生产 evidence window 流程。
 - [`smoke-tests/tool-surface-runtime-access-audit.md`](smoke-tests/tool-surface-runtime-access-audit.md)：registry、effective tool policy 与真实 production tool wrapper 执行的分层审计。
 - [`smoke-tests/openclaw-memory-tools.md`](smoke-tests/openclaw-memory-tools.md)：memory-core / memory-engine 工具暴露和路由边界。
@@ -134,7 +148,7 @@
 | 插件注册、工具命名或 OpenClaw 集成 | `agent-memory-tool-strategy.md` → `openclaw-memory-contract-compat.md` |
 | CLI、tool、checkpoint、maintenance 入口 | `memory-entry-boundary-audit.md` |
 | DB attach、schema、写路径或迁移 | `adr/event-time-ownership.md` → `current-state.md` → 相关代码与 DB safety tests |
-| hybrid search、autoRecall、注入或强化 | `agent-memory-tool-strategy.md` → `retrieval-answering-policy.md` → `hybrid-observation-provenance.md` → `hybrid-fail-closed-rollout-status.md` → AutoRecall object model / runbook |
+| hybrid search、autoRecall、注入或强化 | `current-state.md` → `stabilization-plan.md` → `agent-memory-tool-strategy.md` → `retrieval-answering-policy.md` → `hybrid-observation-provenance.md` → AutoRecall object model / runbook；仅在追溯旧 B8 证据时阅读 `hybrid-fail-closed-rollout-status.md` |
 | 质量评分、污染审计或标注 | `memory-quality-eval-mvp-v4.md` → `human-annotation-gold-set.md` |
 | 数据清理或 apply 工具 | 对应 cleanup/apply design → 备份与 rollback 规则 → targeted tests |
 | Console reports / annotations | `human-annotation-gold-set.md` → `smoke-tests/console-annotation-report-handoff.md` |
@@ -147,6 +161,11 @@
 
 1. 在文档开头声明状态，例如 `Accepted ADR`、`Current policy`、`Runbook`、`Design-only`、`Audit` 或 `Historical`。
 2. 涉及系统边界、数据所有权、安全不变量或默认行为的文档，必须加入本索引。
-3. 设计文档落地后，应更新其状态或新增 closeout/runbook，不能让“计划”长期冒充“现状”。
-4. README、架构速览与实际代码不一致时，不应只修图；应先确认 current contract 和测试，再更新导航材料。
-5. 删除或移动文档时，同步修复本索引和相关静态测试链接。
+3. `current-state.md` 只描述现在，不叙述完整过程，也不写死其自身所在 commit 的 HEAD；精确 HEAD 由 Git 提供。
+4. `devlog.md` 只记录简明时间线和阶段结果，不作为当前状态或执行授权来源。
+5. Stage Card 应优先控制在约 100–150 行，只保留 decision、scope、non-goals、minimum evidence、pass criteria、stop conditions、allowed mutations 和 authorization boundary；详细证据放 report/evidence root。
+6. 默认不再新增 `session-handoff-*`。新 session 的公开仓库上下文通常读取 `current-state.md`、相关 accepted decision、当前 Stage Card（若有）和相关 final report；现有 handoff 保留为 Historical。
+7. OpenSpec 只用于真实产品/契约/架构变化，不用于一次性 diagnosis、verification 或 runtime evidence collection。
+8. 设计文档落地后，应更新其状态或新增 closeout/runbook，不能让“计划”长期冒充“现状”。
+9. README、架构速览与实际代码不一致时，不应只修图；应先确认 current contract 和测试，再更新导航材料。
+10. 删除或移动文档时，同步修复本索引和相关静态测试链接。

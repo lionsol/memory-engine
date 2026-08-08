@@ -1,10 +1,10 @@
 # Hybrid Fail-Closed Rollout Status
 
-> **Status: Current rollout ledger**
+> **Status: Historical / reference-only rollout ledger**
 >
-> Last updated: 2026-07-21, after B8-A7-R6 adopted the personal-deployment safety profile and retained R4/R5 as strict-profile references.
+> Last substantive rollout update: 2026-07-21, after B8-A7-R6 adopted the personal-deployment safety profile and retained R4/R5 as strict-profile references.
 >
-> This document records current rollout state and evidence. It does not replace the runtime runbook, safety smoke, removal gate, code, or tests.
+> This document preserves the historical F1-D-B8 rollout ledger and evidence. It is not the current product roadmap, current-state authority, or execution authorization. Use `current-state.md` for the exact current product state and `stabilization-plan.md` for the accepted current roadmap.
 
 ## Scope
 
@@ -19,7 +19,7 @@ The authoritative operating procedures remain:
 - [`smoke-tests/tool-surface-runtime-access-audit.md`](smoke-tests/tool-surface-runtime-access-audit.md)
 - [`legacy-fallback-code-inventory.md`](legacy-fallback-code-inventory.md)
 
-## Current Stage Ledger
+## Historical Stage Ledger
 
 The historical strict B8-A7-R1 remediation runbook is [sustained-runtime-remediation.md](smoke-tests/sustained-runtime-remediation.md).
 The active personal-deployment remediation runbook is [personal-deployment-sustained-runtime-remediation.md](smoke-tests/personal-deployment-sustained-runtime-remediation.md).
@@ -27,7 +27,7 @@ The B8-A7-R2A metadata-source audit is [openclaw-no-load-plugin-metadata-audit.m
 The B8-A7-R3B host publisher source audit is [openclaw-host-metadata-publisher-source-audit.md](smoke-tests/openclaw-host-metadata-publisher-source-audit.md).
 The strict-profile B8-A7-R4 metadata ownership decision is [host-plugin-metadata-ownership.md](adr/host-plugin-metadata-ownership.md).
 The strict-profile B8-A7-R5 host publisher integration design is [openclaw-host-plugin-metadata-publisher-integration-design.md](openclaw-host-plugin-metadata-publisher-integration-design.md).
-The current B8-A7-R6 personal deployment decision is [personal-deployment-safety-profile.md](adr/personal-deployment-safety-profile.md).
+The then-current B8-A7-R6 personal deployment decision was [personal-deployment-safety-profile.md](adr/personal-deployment-safety-profile.md).
 The B8-A7-R6.1 read-only baseline audit is [personal-deployment-read-only-baseline.md](smoke-tests/personal-deployment-read-only-baseline.md), with the real-environment decision at [personal-deployment-read-only-baseline-decision-20260721.md](smoke-tests/personal-deployment-read-only-baseline-decision-20260721.md).
 The B8-A7-R6.2 host activation boundary compatibility contract is [host-activation-boundary-compatibility.md](smoke-tests/host-activation-boundary-compatibility.md).
 The B8-A7-R6.3 personal runtime remediation authorization design is [personal-runtime-remediation-authorization.md](smoke-tests/personal-runtime-remediation-authorization.md).
@@ -40,7 +40,7 @@ The B8-A7-R6.5.3 persistent artifact rebuild and recovery-source rebase design i
 The B8-A7-R6.5.3A offline persistent artifact preparation authorization packet is [personal-runtime-persistent-artifact-preparation-authorization-20260721.md](smoke-tests/personal-runtime-persistent-artifact-preparation-authorization-20260721.md).
 The B8-A7-R6.5.3A offline persistent artifact preparation execution decision is [personal-runtime-persistent-artifact-preparation-decision-20260722.md](smoke-tests/personal-runtime-persistent-artifact-preparation-decision-20260722.md).
 
-Current remediation boundary:
+Historical remediation boundary at the close of this ledger:
 
     B8-A7-R1 strict no-load remediation=HISTORICAL / SUPERSEDED FOR PERSONAL DEPLOYMENT
     B8-A7-R4 strict host ownership architecture=PASSED / CLOSED / REFERENCE ONLY
