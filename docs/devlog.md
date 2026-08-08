@@ -9609,3 +9609,28 @@ Implemented the final A7.3 review fixes: scheduled-healthcheck evidence is now l
 ### F1-D-B8-A7.3: temporal evidence fixes implemented
 
 Implemented the review fixes for authorized evidence boundaries and scheduled-healthcheck provenance. The monitor now uses one canonical UTC ISO timestamp contract, partitions active-epoch observations by `authorized_at` and explicit `asOf`, rejects future evidence as a stop condition, and feeds the same authorized set to identity, continuity, fallback-window, and full-rollout evaluators. Healthcheck freshness now requires the registration-owned wrapper identity fields. `B8-A7.3 REVIEW FIXES IMPLEMENTED / REVIEW PENDING`; the sustained runtime window and B8-B remain unauthorized.
+
+## 2026-08-08
+
+### Candidate-Builder post-fix real prepare stopped at npm-ci inner timeout
+
+- Local source authority remained `901e7d196b81ee530ea489504a07390d352cf0c5`; worktree was clean before the closeout documentation changes. `origin/main` remained `4c7ef07a52d5f8c86a522bd00f7f9d2a942fdca7`; no push or tag occurred.
+- Source lineage includes the fail-closed/resolver fix `24eca45`, bound Node-header fix `bd39f8d`, and closed `npm.ci_candidate` timeout policy fix `97454ee` (`300000ms` inner / `330000ms` outer; ordinary registered operations remain `120000/120000`).
+- A fresh real-plan dry-run under final HEAD passed with `decision=PASS`, `mutation_count=0`, empty preflight findings, no authority mutation, and stable source/config/runtime/service/history bindings. The first valid post-card plan later expired before prepare and was not reused.
+- A second fresh run was created and dry-run-passed:
+  - `run_id=real-plan-dry-run-20260807T141200Z-901e7d1-692f0934`
+  - `plan_sha256=343e3ac48a99cc48c0d6047ea7feaca304392ef8496e02bddb7c61b210f4b097`
+- Its separately authorized one-shot prepare passed the final pre-prepare gate, then exited `2` during `npm.ci_candidate` with `spawnSync /usr/sbin/chroot ETIMEDOUT`.
+- Fail-closed semantics held: the new claim is permanently `FAILED`; bounded failure evidence is present; unpublished staging was removed; no final authority, `authority.json`, or checksums were published; `recovery_required=false`.
+- Active extension/release bindings, OpenClaw config hash, Gateway and Console state/PID/restart counts, repository HEAD/tree/worktree, and the older historical FAILED claim remained stable. No `verify --authority`, runtime install, reload/restart, config mutation, DB/session/memory access, tag, or push was executed.
+- Timing/evidence confirms the committed `300000ms` inner timeout actually fired. Registry fetches completed, including `better-sqlite3@11.10.0`; retained npm evidence did not prove whether the remaining lifecycle/native-build path was legitimately slow or stalled.
+- The consumed run must never be retried or rewritten.
+
+### Drift review and next-stage correction
+
+- Product-goal drift: none. The planned one-shot prepare ended fail-closed, so continuation correctly moved to a new diagnostic decision instead of retrying or enlarging the timeout under the same run identity.
+- Procedural finding: one operator attempt accidentally re-ran the expired prior prepare precheck while intending to run a new Gate-B dry-run. The expiry gate stopped before prepare, claim creation, or authority mutation. Long copy/paste execution packets should therefore be treated as stage-bound artifacts and checked for fixed old `RUN_ID` values before execution; no new runtime mechanism is authorized by this finding.
+- Documentation drift found at closeout: `docs/current-state.md` still described only the original Candidate-Builder implementation and omitted the three later source fixes; the prior session handoff predated all real-plan/dry-run/prepare evidence; `docs/devlog.md` had no Candidate-Builder closeout record after July 20.
+- A new diagnosis card was drafted at `docs/smoke-tests/npm-ci-post-fetch-native-build-timeout-diagnosis-stage-card-20260808.md`, status `READY_FOR_COMMIT`. It authorizes no execution by itself.
+- Closeout review corrected one important classification bug in that draft: reaching the 15-minute diagnostic ceiling is a mandatory stop boundary but is not proof of a hang. `STALL_OR_HANG` requires direct stall evidence; continued progress or ambiguity at the ceiling must end `INSUFFICIENT_EVIDENCE`.
+- Next intended decision: in a bounded disposable production-shaped reproduction only, determine whether work after the 300-second boundary is `LEGITIMATE_SLOW`, `STALL_OR_HANG`, or `INSUFFICIENT_EVIDENCE`. No source timeout change, real plan/dry-run/prepare, runtime mutation, or evidence rewrite belongs to that diagnosis stage.
