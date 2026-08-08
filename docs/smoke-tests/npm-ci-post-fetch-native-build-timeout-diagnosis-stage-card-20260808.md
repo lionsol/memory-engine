@@ -1,6 +1,6 @@
 # npm-ci Post-Fetch / Native-Build Timeout Diagnosis Stage Card — 2026-08-08
 
-> Status: `READY_FOR_COMMIT`
+> Status: `FROZEN` — execution requires separate Sol authorization
 >
 > Product-source baseline: `97454ee70f47f8fd4421806f4a10100b78e27186`
 >
