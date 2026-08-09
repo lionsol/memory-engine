@@ -9668,6 +9668,13 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - The selected runtime strategy is one persistent overlay candidate: copy the verified rollback release and replace exactly `lib/recall/hybrid-search.js` and `lib/recall/auto-recall-debug-metadata.js` with the `1cd183ff...` versions; package/lock/native dependency closure remains inherited from rollback.
 - `docs/smoke-tests/auto-recall-provenance-runtime-install-nonlive-verification-stage-card-20260808.md` was created `FROZEN`. It requires separate post-commit Sol authorization before candidate creation, Gateway stop/install/start, non-live verification, or rollback.
 
+### Provenance runtime install stopped before Gateway mutation; R2 construction retry frozen
+
+- The first authorized runtime transaction closed `STOPPED` during candidate construction. `cp -a` preserved the rollback release's sealed target-file mode `0400`; the first `git show > .../hybrid-search.js` overlay write failed with `Permission denied`.
+- The failed candidate `/home/lionsol/.openclaw/backups/memory-engine/releases/provenance-overlay-1cd183ff-20260808` was verified byte-identical to rollback and is retained immutable. Gateway PID/state, plugin sourcePath, active target hashes, config, AutoRecall, and repository state remained unchanged; no plugin install or rollback ran.
+- Sol accepted one bounded R2 deployment-mechanics retry. The new candidate path is `provenance-overlay-1cd183ff-20260808-r2`; only its two copied target files may receive temporary owner-write permission, followed by overlay, restoration to `0400`, and exact two-file-delta qualification.
+- `docs/smoke-tests/auto-recall-provenance-runtime-install-retry-r2-stage-card-20260808.md` was created `FROZEN`; runtime execution still requires separate authorization bound to its committed identity and exact HEAD.
+
 ### Documentation and authorization governance simplified
 
 - Sol accepted the anti-drift workflow correction: execution authorization now binds the exact frozen Stage Card commit, repository HEAD, scope, and finite execution count; commit authorization and execution authorization are separate.

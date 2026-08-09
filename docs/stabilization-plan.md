@@ -8,11 +8,11 @@
 
 ### NOW
 
-Publish/install the already-passed AutoRecall provenance instrumentation through a minimal runtime overlay, then verify active runtime identity and telemetry contract without live retrieval.
+Retry the already-approved AutoRecall provenance runtime overlay once using corrected sealed-release construction mechanics, then perform the same non-live runtime identity and telemetry-contract verification.
 
-Source implementation `1cd183ff12d055ba5c5ecd4bd0d9d1b98cdff23b` passed focused/privacy `19/19` and Node 24 full-suite `1835/0/8`. The active runtime still has the older bytes. Full-repository installation is excluded because it would also deploy a currently-uninstalled `normalize-candidate.js` semantic change; the runtime candidate must therefore be the current verified rollback release plus exactly the two provenance source files.
+The first install transaction stopped before Gateway mutation: `cp -a` preserved sealed mode `0400`, so the first overlay write failed with `Permission denied`. The failed candidate remains an immutable byte-identical clone of rollback, active runtime remains on the older bytes, and full-repository installation is still excluded.
 
-The frozen Stage Card is `smoke-tests/auto-recall-provenance-runtime-install-nonlive-verification-stage-card-20260808.md`. Committing/freezing it does not authorize runtime mutation.
+The R2 retry uses a new fixed candidate path. Only the two copied target files may receive temporary owner-write permission; after overlay they must return to `0400`, and qualification must prove exactly two content differences from rollback. The frozen Stage Card is `smoke-tests/auto-recall-provenance-runtime-install-retry-r2-stage-card-20260808.md`; freezing it does not authorize runtime mutation.
 
 ### NEXT
 
