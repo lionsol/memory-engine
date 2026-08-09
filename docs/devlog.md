@@ -9709,3 +9709,12 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - Independent closeout verification confirmed `openclaw.json` remained byte-identical to the pre-canary baseline, AutoRecall remained disabled, Gateway/plugin stayed healthy on the R2 provenance runtime, and repository state remained clean.
 - Sol accepted one bounded execution-mechanics retry that reuses the existing dedicated session, captures a fresh event baseline before enablement, fixes only verifier/closeout mechanics, keeps the same six-turn natural-use/product boundaries, and restores the exact pre-canary config.
 - `docs/smoke-tests/auto-recall-provenance-natural-canary-retry-r2-stage-card-20260809.md` was created `FROZEN`; execution requires a separate post-commit authorization bound to its exact identity and `MAX_EXECUTIONS=1`.
+
+### Natural-canary retry R2 stopped on stdin harness defect; final R3 exception frozen
+
+- R2 passed exact preflight, captured fresh `BASE_EVENT_ID=185`, loaded the scoped `main`/session AutoRecall config with `topK=1`, and restored the exact pre-canary config at closeout.
+- No genuine Sol natural question was submitted. Because the harness itself ran through `bash -s <<'EOF'`, plain `read` consumed remaining heredoc script text; `STAGE_RESULT="INSUFFICIENT_EVIDENCE"` was accidentally sent as the first OpenClaw prompt.
+- The accidental prompt produced valid bounded provenance, a matching post-baseline trace, zero foreign `recall_started`, and clean config/runtime restoration. That is useful incidental technical evidence but is not natural-use canary evidence; R2 therefore remains `STOPPED`.
+- Sol explicitly authorized one final R3 anti-drift exception and continuation of testing. R3 changes only the execution harness: every natural question must be read from `/dev/tty`, the exact full harness must pass `bash -n`, and obvious execution-control text in the question variable is a fail-closed harness condition.
+- Product behavior remains frozen: same dedicated session, fresh pre-enable event baseline, temporary AutoRecall `topK=1` with exact allowlists, at most six genuine turns, no H6 replay/synthetic probe/retrieval tuning, and exact config restoration.
+- `docs/smoke-tests/auto-recall-provenance-natural-canary-retry-r3-stage-card-20260809.md` was created `FROZEN`. R3 is the final dedicated harness retry; another harness failure closes the canary chain rather than creating R4.
