@@ -9718,3 +9718,13 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - Sol explicitly authorized one final R3 anti-drift exception and continuation of testing. R3 changes only the execution harness: every natural question must be read from `/dev/tty`, the exact full harness must pass `bash -n`, and obvious execution-control text in the question variable is a fail-closed harness condition.
 - Product behavior remains frozen: same dedicated session, fresh pre-enable event baseline, temporary AutoRecall `topK=1` with exact allowlists, at most six genuine turns, no H6 replay/synthetic probe/retrieval tuning, and exact config restoration.
 - `docs/smoke-tests/auto-recall-provenance-natural-canary-retry-r3-stage-card-20260809.md` was created `FROZEN`. R3 is the final dedicated harness retry; another harness failure closes the canary chain rather than creating R4.
+
+### Natural-canary retry R3 passed; provenance observability closed
+
+- R3 execution used a temporary script file rather than `bash -s`, passed `bash -n`, and read the natural user question from `/dev/tty`. The dedicated `main` session received a genuine duty-schedule question rather than harness/control text.
+- Fresh R3 baseline was event `190`. The genuine natural turn produced one post-baseline AutoRecall trace: `191 recall_started`, `192 hybrid_search_observation`, `193 auto_recall_debug`, `194 memory_candidate_retrieved`, and `195 recall_completed`.
+- Event `193` was non-skipped with `candidate_count=1`, `injected_count=0`, vector provenance `count=4/captured_count=4/truncated=false`, and four-ID pre/post fusion provenance. Independent read-only verification confirmed the new provenance objects remained bounded/privacy-safe.
+- Scope isolation passed for `id > 190`: dedicated `recall_started=1`, foreign `recall_started=0`.
+- Closeout restored the exact pre-canary configuration, returned AutoRecall to disabled with its prior `topK=3`, left the R2 provenance runtime/hash identity unchanged, kept Gateway healthy, and left repository HEAD/worktree unchanged.
+- Two non-blocking findings were separated from the product result: the outer operator wrapper ended with `exit "$R3_RC"`, which closed the interactive WSL shell after successful closeout; and EDi's separate standard `memory_search` later timed out on its embedding/provider path after the AutoRecall provenance trace had already completed.
+- Final stage outcome: `PASS`. Evidence is recorded in `reports/auto-recall-provenance-natural-canary-retry-r3/final-report.md`. No R4, additional dedicated canary, retrieval tuning, or broad AutoRecall rollout is authorized by this result.

@@ -8,17 +8,15 @@
 
 ### NOW
 
-Run one final R3 natural-use AutoRecall provenance canary under Sol's explicit anti-drift exception, correcting only R2's interactive-stdin harness defect.
+Close the bounded candidate-provenance observability work item after the final R3 natural-use canary passed. R3 produced one genuine `/dev/tty` user turn, one post-baseline AutoRecall retrieval with bounded per-channel/fusion provenance, zero foreign post-baseline `recall_started`, and exact pre-canary config restoration. No R4 or additional dedicated provenance canary is planned.
 
-R2 successfully loaded the exact scoped AutoRecall config and produced technically valid bounded provenance/scope/closeout evidence, but it did not execute a genuine Sol question: plain `read` consumed remaining heredoc script input and sent an execution-control line as the first prompt. R2 therefore remains `STOPPED` and that accidental prompt is not natural-use evidence.
-
-R3 reuses the same dedicated `main` session, captures a fresh `BASE_EVENT_ID` before mutation, reads every genuine question explicitly from `/dev/tty`, uses `topK=1` plus exact `main`/session allowlists, runs at most six natural turns, and restores the exact pre-canary config. Retrieval/gate/Card behavior remains frozen. The frozen Stage Card is `smoke-tests/auto-recall-provenance-natural-canary-retry-r3-stage-card-20260809.md`; no R4 harness retry is planned or authorized.
+AutoRecall broad rollout remains unauthorized and the default remains disabled. Retrieval query shaping, channel collection, fusion/ranking, thresholds, Card/gate behavior, capture/index/checkpoint behavior, and provenance limits remain frozen. Provenance availability is an observability capability, not a tuning trigger.
 
 ### NEXT
 
-If valid natural provenance is persisted, inspect only a later naturally occurring failure/success that has enough independent answer-bearing evidence to support first-loss attribution. Do not tune retrieval merely because provenance exists.
+Wait for or select a naturally occurring AutoRecall success/failure that also has independent answer-bearing evidence. Only then create one bounded read-only first-loss attribution Stage Card to determine whether the answer-bearing candidate was lost at channel/index collection, fusion/preselection, later selection/gating, or not lost at all.
 
-If six natural turns yield no non-skipped AutoRecall execution, close `INSUFFICIENT_EVIDENCE` and return AutoRecall to disabled rather than manufacturing more traffic.
+If no such independently answerable natural sample exists, remain on hold rather than manufacturing traffic or reopening the dedicated canary chain.
 
 ### LATER
 
