@@ -8,17 +8,17 @@
 
 ### NOW
 
-Retry the already-approved AutoRecall provenance runtime overlay once using corrected sealed-release construction mechanics, then perform the same non-live runtime identity and telemetry-contract verification.
+Run one tightly scoped natural-use AutoRecall canary to confirm that the newly deployed provenance is persisted on real traffic without escaping a single dedicated session.
 
-The first install transaction stopped before Gateway mutation: `cp -a` preserved sealed mode `0400`, so the first overlay write failed with `Permission denied`. The failed candidate remains an immutable byte-identical clone of rollback, active runtime remains on the older bytes, and full-repository installation is still excluded.
+The R2 provenance overlay is active and healthy. AutoRecall remains disabled after non-live verification. The actual EDi runtime `agentId` is `main`, so the canary must explicitly bind `agentAllowlist=["main"]` plus one newly created exact session ID; `topK=1`, query/ranking/gate/Card behavior, and all provenance limits remain frozen.
 
-The R2 retry uses a new fixed candidate path. Only the two copied target files may receive temporary owner-write permission; after overlay they must return to `0400`, and qualification must prove exactly two content differences from rollback. The frozen Stage Card is `smoke-tests/auto-recall-provenance-runtime-install-retry-r2-stage-card-20260808.md`; freezing it does not authorize runtime mutation.
+The canary uses at most six genuine task-relevant turns, excludes its AutoRecall-disabled bootstrap turn, does not replay historical H6 prompts or use a synthetic retrieval probe, and restores the exact pre-canary config at close. The frozen Stage Card is `smoke-tests/auto-recall-provenance-natural-canary-stage-card-20260809.md`; freezing it does not authorize runtime activation.
 
 ### NEXT
 
-If the non-live runtime installation stage passes, wait for a later natural AutoRecall sample with the new provenance. Do not replay the seven historical H6 turns or create a synthetic retrieval probe merely to populate telemetry.
+If valid natural provenance is persisted, inspect only a later naturally occurring failure/success that has enough independent answer-bearing evidence to support first-loss attribution. Do not tune retrieval merely because provenance exists.
 
-Use the next natural failure/success sample to distinguish channel/index availability from fusion/preselection loss before considering any retrieval tuning.
+If six natural turns yield no non-skipped AutoRecall execution, close `INSUFFICIENT_EVIDENCE` and return AutoRecall to disabled rather than manufacturing more traffic.
 
 ### LATER
 

@@ -9690,3 +9690,13 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - The current `NOW` decision is the read-only H6 answerability/memory-coverage attribution audit. Its outcome selects at most one later product branch: corpus coverage, retrieval selection, projection boundary, or an evidence stop.
 - Candidate-Builder publication/timeout diagnosis and diagnostic/path-authority debt are explicitly deferred. A new natural-use validation and AutoRecall rollout remain later decisions rather than automatic follow-ons.
 - `docs/hybrid-fail-closed-rollout-status.md` is downgraded to `Historical / reference-only rollout ledger`; old B8-A7 stage text no longer represents the current roadmap or next gate.
+
+## 2026-08-09
+
+### Provenance R2 runtime install passed; natural canary decision frozen
+
+- The separately authorized R2 overlay transaction completed installation and non-live verification. Active memory-engine now loads from `/home/lionsol/.openclaw/backups/memory-engine/releases/provenance-overlay-1cd183ff-20260808-r2`; the two active provenance file hashes match `1cd183ff...`, the R2 artifact differs from rollback only in those two contents and is resealed `0400`, Gateway/plugin are healthy, projector-only bounded/privacy verification passed, and AutoRecall was restored/left disabled.
+- The first failed candidate `provenance-overlay-1cd183ff-20260808` remains untouched and byte-identical to rollback. No rollback was required in the successful R2 transaction.
+- Read-only runtime inspection established that OpenClaw identity `EDi (伊迪)` currently has actual `agentId=main`; the legacy/default AutoRecall allowlist value `edi` would not admit this runtime identity.
+- Sol accepted the next bounded product decision: one new explicit `main` session, temporary AutoRecall with `topK=1` and exact agent/session allowlists, at most six genuine natural turns, bounded provenance verification, then exact config restoration. Historical H6 replay, synthetic probes, retrieval tuning, and broad rollout remain excluded.
+- `docs/smoke-tests/auto-recall-provenance-natural-canary-stage-card-20260809.md` was created `FROZEN`; runtime activation requires a separate post-commit owner authorization bound to the exact new session identity and execution packet.
