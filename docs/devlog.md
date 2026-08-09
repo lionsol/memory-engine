@@ -9700,3 +9700,12 @@ Implemented the review fixes for authorized evidence boundaries and scheduled-he
 - Read-only runtime inspection established that OpenClaw identity `EDi (伊迪)` currently has actual `agentId=main`; the legacy/default AutoRecall allowlist value `edi` would not admit this runtime identity.
 - Sol accepted the next bounded product decision: one new explicit `main` session, temporary AutoRecall with `topK=1` and exact agent/session allowlists, at most six genuine natural turns, bounded provenance verification, then exact config restoration. Historical H6 replay, synthetic probes, retrieval tuning, and broad rollout remain excluded.
 - `docs/smoke-tests/auto-recall-provenance-natural-canary-stage-card-20260809.md` was created `FROZEN`; runtime activation requires a separate post-commit owner authorization bound to the exact new session identity and execution packet.
+
+### First provenance natural-canary execution stopped before enablement; retry R2 frozen
+
+- The first authorized natural-canary execution passed preflight and successfully created the exact dedicated `main` session while AutoRecall was still disabled. The bootstrap returned `CANARY_READY`; no natural canary turn or AutoRecall retrieval ran.
+- Execution then stopped because the session verifier expected an `id` field while `openclaw sessions --agent main --json` exposes the stored identity as `sessionId`. Independent read-only inspection confirmed the exact session ID/key/agent binding exists.
+- Two additional verifier defects were identified: closeout used invalid multiline POSIX `[` tests, and failure before event-baseline capture left `BASE_EVENT_ID=0`, causing historical `recall_started` rows to be miscounted as foreign canary traffic. The reported foreign count is therefore not scope-leak evidence.
+- Independent closeout verification confirmed `openclaw.json` remained byte-identical to the pre-canary baseline, AutoRecall remained disabled, Gateway/plugin stayed healthy on the R2 provenance runtime, and repository state remained clean.
+- Sol accepted one bounded execution-mechanics retry that reuses the existing dedicated session, captures a fresh event baseline before enablement, fixes only verifier/closeout mechanics, keeps the same six-turn natural-use/product boundaries, and restores the exact pre-canary config.
+- `docs/smoke-tests/auto-recall-provenance-natural-canary-retry-r2-stage-card-20260809.md` was created `FROZEN`; execution requires a separate post-commit authorization bound to its exact identity and `MAX_EXECUTIONS=1`.

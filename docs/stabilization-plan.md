@@ -8,11 +8,11 @@
 
 ### NOW
 
-Run one tightly scoped natural-use AutoRecall canary to confirm that the newly deployed provenance is persisted on real traffic without escaping a single dedicated session.
+Retry the tightly scoped natural-use AutoRecall provenance canary once, correcting only the execution/verifier mechanics that stopped the first attempt before AutoRecall enablement.
 
-The R2 provenance overlay is active and healthy. AutoRecall remains disabled after non-live verification. The actual EDi runtime `agentId` is `main`, so the canary must explicitly bind `agentAllowlist=["main"]` plus one newly created exact session ID; `topK=1`, query/ranking/gate/Card behavior, and all provenance limits remain frozen.
+The first attempt successfully created the dedicated `main` session while AutoRecall was disabled, then stopped because the session verifier checked `id` instead of `sessionId`; closeout also exposed invalid multiline shell-test syntax and a scope false-positive caused by a zero event baseline. Config/runtime stayed on the pre-canary baseline and no natural canary retrieval ran.
 
-The canary uses at most six genuine task-relevant turns, excludes its AutoRecall-disabled bootstrap turn, does not replay historical H6 prompts or use a synthetic retrieval probe, and restores the exact pre-canary config at close. The frozen Stage Card is `smoke-tests/auto-recall-provenance-natural-canary-stage-card-20260809.md`; freezing it does not authorize runtime activation.
+The retry reuses that exact session, captures `BASE_EVENT_ID` before any config mutation, uses only valid Bash closeout tests, and scopes isolation evidence to post-baseline events. Product behavior remains frozen: temporary AutoRecall uses `topK=1` plus exact `main`/session allowlists, at most six genuine turns, no H6 replay or synthetic probe, and exact config restoration. The frozen Stage Card is `smoke-tests/auto-recall-provenance-natural-canary-retry-r2-stage-card-20260809.md`; freezing it does not authorize runtime activation.
 
 ### NEXT
 
