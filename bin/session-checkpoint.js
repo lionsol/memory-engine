@@ -23,6 +23,7 @@ const { writeEpisodeFiles } = require("../lib/checkpoint/episode-writer");
 const checkpointLlm = require("../lib/checkpoint/llm");
 const { writeEmptyEpisode, writeIncompleteEpisode, writeLLMTimeoutEpisode } = require("../lib/checkpoint/markers");
 const { repairOrphanVectors } = require("../lib/checkpoint/orphan-repair");
+const { reconcileSessionFlushManagedState } = require("../lib/checkpoint/session-flush-reconciliation.js");
 const checkpointRawLog = require("../lib/checkpoint/raw-log");
 const {
   SMART_ADD_PROVENANCE,
@@ -453,8 +454,73 @@ async function main(argv = process.argv.slice(2)) {
     // Step 2: Unified nightly checkpoint (1 LLM call → 3 outputs)
     const result = await nightlyCheckpoint(rawLogs, { targetDate, rawLogStats });
 
-    // Step 2.5: Repair orphan vectors (SQLite has, LanceDB missing)
-    const repaired = await getRuntime().repairOrphanVectors();
+    // Step 2.5: Reconcile canonical session_flush Core chunks into Engine.
+    let engineReconciliation;
+    try {
+      engineReconciliation = await getRuntime().reconcileSessionFlushManagedState({
+        trigger: "nightly_checkpoint",
+      });
+      console.log(`[checkpoint] session_flush Engine reconciliation ${JSON.stringify({
+        eligible_core_examined: engineReconciliation?.eligible_core_examined || 0,
+        eligible_session_flush: engineReconciliation?.eligible_session_flush || 0,
+        excluded_non_session_flush: engineReconciliation?.excluded_non_session_flush || 0,
+        ambiguous_chunk_count: engineReconciliation?.ambiguous_chunk_count || 0,
+        engine_existing: engineReconciliation?.engine_existing || 0,
+        engine_inserted: engineReconciliation?.engine_inserted || 0,
+        engine_backlog_remaining: engineReconciliation?.engine_backlog_remaining || 0,
+        engine_converged: engineReconciliation?.engine_converged === true,
+        error: engineReconciliation?.error || null,
+      })}`);
+      if (engineReconciliation?.ok === false && engineReconciliation.error) {
+        console.warn(`[checkpoint] session_flush Engine reconciliation incomplete: ${engineReconciliation.error}`);
+      }
+    } catch (error) {
+      engineReconciliation = {
+        ok: false,
+        trigger: "nightly_checkpoint",
+        eligibleCoreRows: [],
+        engine_converged: false,
+        error: error?.message ? String(error.message) : String(error),
+      };
+      console.warn(`[checkpoint] session_flush Engine reconciliation incomplete: ${engineReconciliation.error}`);
+    }
+
+    // Step 2.6: Reconcile only active session_flush Engine IDs into LanceDB.
+    let lanceReconciliation;
+    try {
+      lanceReconciliation = await getRuntime().repairOrphanVectors({
+        scope: "session_flush",
+        trigger: "nightly_checkpoint",
+        eligibleCoreRows: engineReconciliation?.eligibleCoreRows || [],
+        engineReconciliation,
+      });
+      const lanceSummary = typeof lanceReconciliation === "number"
+        ? { lance_added: lanceReconciliation, lance_converged: true }
+        : lanceReconciliation || {};
+      console.log(`[checkpoint] session_flush Lance reconciliation ${JSON.stringify({
+        lance_eligible: lanceSummary.lance_eligible || 0,
+        lance_existing: lanceSummary.lance_existing || 0,
+        lance_added: lanceSummary.lance_added || 0,
+        lance_failed: lanceSummary.lance_failed || 0,
+        lance_backlog_remaining: lanceSummary.lance_backlog_remaining || 0,
+        lance_converged: lanceSummary.lance_converged === true,
+        error: lanceSummary.error || null,
+      })}`);
+      if (lanceSummary.ok === false && lanceSummary.error) {
+        console.warn(`[checkpoint] session_flush Lance reconciliation incomplete: ${lanceSummary.error}`);
+      }
+    } catch (error) {
+      lanceReconciliation = {
+        ok: false,
+        lance_converged: false,
+        error: error?.message ? String(error.message) : String(error),
+      };
+      console.warn(`[checkpoint] session_flush Lance reconciliation incomplete: ${lanceReconciliation.error}`);
+    }
+
+    const repaired = typeof lanceReconciliation === "number"
+      ? lanceReconciliation
+      : Number(lanceReconciliation?.lance_added || 0);
 
     // Step 3: Resolve config conflicts (existing logic, kept)
     const conflicts = getRuntime().resolveConfigConflicts();
@@ -478,6 +544,7 @@ runtimeRegistry.installRuntimeFallbacks({
   readCheckpointRawLogs: checkpointRawLog.readCheckpointRawLogs,
   readYesterdayRawLogs: checkpointRawLog.readYesterdayRawLogs,
   flushCheckpointRawLog: runFlushSessionRawlogCheckpoint,
+  reconcileSessionFlushManagedState,
   repairOrphanVectors,
   resolveConfigConflicts,
 });
