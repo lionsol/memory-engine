@@ -144,7 +144,7 @@ No second candidate install or second R2 reinstall is authorized.
 
 ## Target scheduled lifecycle
 
-The target run must advance checkpoint `lastRunAtMs` from the captured pre-activation value to the captured `nextRunAtMs` exactly once before transaction close.
+The captured pre-activation `nextRunAtMs` identifies the single target scheduler slot. The target run must advance checkpoint `lastRunAtMs` exactly once from the captured pre-activation value to an actual-start timestamp at or after that target slot and before the frozen observation horizon. `lastRunAtMs` is an actual scheduler start timestamp and is not required to equal the planned `nextRunAtMs` millisecond-for-millisecond. After that run, cron `nextRunAtMs` must advance beyond the captured target slot.
 
 Evidence must show the natural checkpoint reached the implemented sequence:
 
