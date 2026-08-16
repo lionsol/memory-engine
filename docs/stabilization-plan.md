@@ -22,6 +22,8 @@ If no such independently answerable natural sample exists, remain on hold rather
 
 Only after an evidence-supported first-loss boundary is observed should the project consider a bounded retrieval-policy repair and a new minimal natural-use validation. AutoRecall broad rollout remains a separate later decision.
 
+- **Resolve conflict-ownership overlap before enabling mutating Nightly Maintenance.** Keep preference/config conflict ownership in Session Checkpoint via `resolvePreferenceConflicts()` / `preference_latest_wins`. Change Nightly Maintenance generic `detectRelatedConflicts()` so it does not claim `category='preference'`; it should continue to own generic related-conflict detection for the remaining categories. This prevents the two pipelines from independently setting and clearing the same untyped `memory_confidence.conflict_flag`. Keep the current Nightly Maintenance cron in `--dry-run` until this ownership boundary is implemented and verified. Do not add conflict-source schema/state machinery unless later evidence shows that category separation is insufficient.
+
 ### DEFERRED
 
 - Candidate-Builder authority publication / `npm.ci_candidate` timeout diagnosis. The committed `300000ms` inner / `330000ms` outer policy remains unchanged; additional harness micro-stages are not planned.
@@ -40,3 +42,4 @@ The historical B8-A7 sustained-production-evidence and strict platform-profile r
 - Observability: expose bounded, privacy-safe diagnostics and stable debug metadata for verification.
 - Release verification: compare source, artifacts, configuration semantics, and test evidence before deployment.
 - Deployment rollback discipline: use explicit authorities, reversible steps, and verified rollback targets for any authorized runtime transaction.
+- Runtime authority drift checks: scope worktree cleanliness to files that can affect the authorized execution path; do not fail a runtime qualification solely because unrelated documentation, test, report, or roadmap files are modified. Keep exact Stage Card SHA and frozen runtime-source hashes as separate authority checks. For the current session-checkpoint/persistent-runtime path, the drift surface is `bin/`, `lib/`, repository-root `*.js`/`*.cjs`, `package.json`, `package-lock.json`, and `openclaw.plugin.json`.
