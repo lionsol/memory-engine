@@ -8,19 +8,25 @@
 
 ### NOW
 
-Close the bounded candidate-provenance observability work item after the final R3 natural-use canary passed. R3 produced one genuine `/dev/tty` user turn, one post-baseline AutoRecall retrieval with bounded per-channel/fusion provenance, zero foreign post-baseline `recall_started`, and exact pre-canary config restoration. No R4 or additional dedicated provenance canary is planned.
+The persistent-activation qualification line is closed. The separately authorized Session-Flush Reconciliation Persistent Rollout Successor recorded `PASS` on 2026-08-17, accepted the immutable `ac0e5f0` reconciliation candidate for persistent use, and explicitly requires no R5 or additional persistent-activation qualification. AutoRecall remains disabled by default and broad rollout remains a separate later decision.
 
-AutoRecall broad rollout remains unauthorized and the default remains disabled. Retrieval query shaping, channel collection, fusion/ranking, thresholds, Card/gate behavior, capture/index/checkpoint behavior, and provenance limits remain frozen. Provenance availability is an observability capability, not a tuning trigger.
+Proceed with **Phase 2.5 — Canonical Memory Architecture**, beginning with **2.5-A Canonical Object Contract**. This roadmap records sequence only; the detailed object model, field ownership, and implementation semantics belong to the later product-design session rather than this governance closeout.
 
 ### NEXT
 
-Wait for or select a naturally occurring AutoRecall success/failure that also has independent answer-bearing evidence. Only then create one bounded read-only first-loss attribution Stage Card to determine whether the answer-bearing candidate was lost at channel/index collection, fusion/preselection, later selection/gating, or not lost at all.
-
-If no such independently answerable natural sample exists, remain on hold rather than manufacturing traffic or reopening the dedicated canary chain.
+Then advance, in order, through **2.5-B Read-only Canonical Adapter**, **2.5-C Projection Unification**, and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
 
 ### LATER
 
-Only after an evidence-supported first-loss boundary is observed should the project consider a bounded retrieval-policy repair and a new minimal natural-use validation. AutoRecall broad rollout remains a separate later decision.
+After the canonical semantic contract is stable, advance Intelligent Recall in this order:
+
+1. **Intent-aware Recall v2**.
+2. **Recall Hint**.
+3. **Statistical LTR**.
+
+Multi-agent memory architecture may begin after the Canonical Object Contract is stable and need not wait for LTR. Its detailed ownership, visibility, attribution, and ACL semantics remain a later product-design decision.
+
+AutoRecall broad rollout remains a separate later decision. A naturally occurring AutoRecall success/failure with independent answer-bearing evidence may still justify one bounded read-only first-loss attribution, but provenance availability alone does not reopen retrieval tuning or dedicated canary chains.
 
 - **Resolve conflict-ownership overlap before enabling mutating Nightly Maintenance.** Keep preference/config conflict ownership in Session Checkpoint via `resolvePreferenceConflicts()` / `preference_latest_wins`. Change Nightly Maintenance generic `detectRelatedConflicts()` so it does not claim `category='preference'`; it should continue to own generic related-conflict detection for the remaining categories. This prevents the two pipelines from independently setting and clearing the same untyped `memory_confidence.conflict_flag`. Keep the current Nightly Maintenance cron in `--dry-run` until this ownership boundary is implemented and verified. Do not add conflict-source schema/state machinery unless later evidence shows that category separation is insufficient.
 
