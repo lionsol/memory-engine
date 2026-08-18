@@ -1,6 +1,6 @@
 # Phase 2.5-A — Canonical Memory Object Contract
 
-> Status: `Phase 2.5-A draft — L2 Database Boundary Closure is complete; review/finalization now active`
+> Status: `Phase 2.5-A contract finalized; OpenSpec architecture change active`
 >
 > Scope: Phase 2.5-A only. This document defines semantic ownership and projection boundaries. It does not authorize runtime mutation, DB migration, write-path changes, or rollout.
 
@@ -23,7 +23,8 @@ Today the same memory is reconstructed differently by hybrid retrieval, lifecycl
 - Category, source type, lifecycle, eligibility, risk, and content references are inferred in multiple places.
 - Lance rows carry a vector projection but do not state which semantic object they project.
 - the existing P4 `MemoryObject` contains query-time fields such as retrieval rank, retrieval score, trace id, and salience reason, so it cannot be the canonical semantic object.
-- the existing P4 `object_id` is projection-version-dependent, so it cannot be the durable identity of the underlying memory.
+- P4 `stableObjectId()` / `object_id` is not canonical identity: its exact-id path truncates the underlying id to 32 characters, while its id-less fallback identity mixes `projectionVersion` with path/span/text inputs.
+- P4 `memoryId()` may synthesize fallback identity when no exact Core id exists. Canonical v1 does neither: it requires the exact Core chunk id and fails closed when that id cannot be established.
 
 Phase 2.5 creates a stable semantic boundary before later ranking, vector, AutoRecall, lifecycle, and multi-agent work builds more policy on top of the same memory.
 
@@ -68,8 +69,8 @@ Canonical Memory Adapter
 Engine DB                Derived projections
   - confidence             - classification kind
   - category authority     - temporal relation
-  - hit count              - baseline eligibility
-  - archive/protect        - risk/disclosure baseline
+  - hit count              - category/kind basis
+  - archive/protect        - content projection basis
   - conflict state
         |
         v
@@ -98,6 +99,8 @@ Every field exposed by the Canonical Memory Object belongs to exactly one semant
 ### 5.1 `source_fact`
 
 A value copied from an authoritative source record without semantic reinterpretation.
+
+`source_fact` names the value's authority and ownership; the canonical JSON key does not need to have the same name as the Core column. Renaming `start_line` to `line_start`, for example, is a field mapping, not semantic inference.
 
 Examples:
 
@@ -141,10 +144,7 @@ Examples:
 - category fallback when no Engine category authority exists;
 - memory kind;
 - episode/date relation;
-- baseline retrieval eligibility;
-- vector eligibility;
-- baseline disclosure policy;
-- risk flags;
+- deterministic projection basis;
 - content hash used by projections.
 
 Derived fields must not be mistaken for storage authority. Where ambiguity matters, the object carries the derivation authority/basis explicitly.
@@ -219,7 +219,7 @@ The v1 semantic envelope is:
     "line_end": 24,
     "text": "<full core chunk text>",
     "core_hash": "<core hash or null>",
-    "updated_at": "<core value or null>"
+    "updated_at": "<exact Core.updated_at value or null>"
   },
   "classification": {
     "category": "project",
@@ -242,21 +242,6 @@ The v1 semantic envelope is:
     "archived": false,
     "protected": false,
     "conflict": false
-  },
-  "eligibility": {
-    "retrieval": {
-      "baseline_eligible": true,
-      "reason_codes": []
-    },
-    "vector": {
-      "eligible": true,
-      "reason_codes": []
-    },
-    "disclosure": {
-      "default_level": "memory_card",
-      "full_content_on_get": true,
-      "risk_flags": []
-    }
   },
   "content_ref": {
     "mode": "core_chunk",
@@ -302,9 +287,6 @@ The contract assigns every v1 field to one semantic class. Effective classificat
 | `lifecycle.archived` | `lifecycle_state` | Engine row, or `null` for external |
 | `lifecycle.protected` | `lifecycle_state` | Engine row, or `null` for external |
 | `lifecycle.conflict` | `lifecycle_state` | Engine row, or `null` for external |
-| `eligibility.retrieval.*` | `derived_projection` | Canonical baseline policy only |
-| `eligibility.vector.*` | `derived_projection` | Canonical baseline policy only |
-| `eligibility.disclosure.*` | `derived_projection` | Canonical baseline safety/disclosure policy only |
 | `content_ref.mode` | `derived_projection` | Canonical source-reference contract |
 | `content_ref.content_hash` | `derived_projection` | SHA-256 of exact canonical source text |
 
@@ -316,11 +298,34 @@ The following are intentionally absent from the matrix because they are `runtime
 
 `source` is Core-owned evidence.
 
+The current Core chunk schema is:
+
+```text
+id, path, source, start_line, end_line, hash, model, text,
+embedding, updated_at
+```
+
+Canonical v1 uses this exact mapping:
+
+```text
+Core.id         -> canonical memory_id and source.record_id
+Core.path       -> canonical source.path
+Core.start_line -> canonical source.line_start
+Core.end_line   -> canonical source.line_end
+Core.source     -> canonical source.core_source
+Core.hash       -> canonical source.core_hash
+Core.text       -> canonical source.text
+Core.updated_at -> canonical source.updated_at
+```
+
+`Core.model` and `Core.embedding` are excluded from the Canonical Memory Object v1 semantic payload. They are Core indexing/vector implementation metadata, not canonical memory semantic authority.
+
 Rules:
 
 - `record_id` and `memory_id` are the exact Core chunk id.
 - `text` is the full Core chunk text, not the 600-character retrieval preview and not the 2000-character Lance projection text.
-- `path`, `line_start`, `line_end`, `core_source` (copied from Core `source`), `core_hash`, and `updated_at` are copied from Core when present.
+- `Core.start_line -> source.line_start`, `Core.end_line -> source.line_end`, `Core.source -> source.core_source`, and `Core.hash -> source.core_hash` are exact source facts; the key renames do not add semantic inference.
+- `updated_at` preserves the exact raw value from `Core.updated_at` when present. The canonical adapter does not convert it to ISO, reinterpret it, or replace it with adapter execution time.
 - path normalization may be exposed as a derived helper, but must not erase the original source fact when the distinction matters.
 - the adapter must fail closed for a requested id that cannot be resolved to exactly one Core chunk.
 
@@ -334,15 +339,21 @@ Allowed `category_authority` values:
 engine
 source_metadata
 path_inference
-text_inference
 unknown
+text_inference   # future-reserved; MUST NOT be emitted by 2.5-B v1
 ```
 
 Rules:
 
-- if an Engine `memory_confidence` row exists, `lifecycle.category` contains that Engine-owned value and `classification.category` resolves from it with `category_authority="engine"`;
-- if no Engine row exists, `lifecycle.category` is `null`; a fallback `classification.category` may be deterministically inferred for routing/display, but the authority must not be reported as `engine`;
-- fallback inference does not convert an external Core item into an Engine-managed item;
+- Canonical v1 resolves category through this frozen authority chain, in order:
+  1. matching Engine `memory_confidence.category` -> `authority=engine`;
+  2. no Engine row plus explicit supported `Category:` metadata in source text -> `authority=source_metadata`;
+  3. supported deterministic path mapping from `category-inference.js` -> `authority=path_inference`;
+  4. otherwise `category=unknown` -> `authority=unknown`.
+- `autoRouteCategory()` is forbidden for Canonical v1. The adapter must not use unrestricted text heuristics.
+- `text_inference` is retained only as a future-reserved authority value; 2.5-B v1 MUST NOT emit it.
+- Supported `Category:` metadata must use the adapter's explicit supported category vocabulary. An arbitrary source-text label is not sufficient authority.
+- If no Engine row exists, `lifecycle.category` is `null`; fallback inference does not convert an external Core item into an Engine-managed item.
 - `kind` is a derived semantic projection. It does not replace category and does not own lifecycle state.
 
 Initial kind vocabulary remains compatible with the P4 Memory Card model:
@@ -360,6 +371,22 @@ quality_signal
 diagnostic
 ```
 
+### 8.2.1 `classification.kind`
+
+Canonical v1 freezes the following compatibility mapping. The adapter must not call an LLM or invent a free-form kind:
+
+| Authoritative category | Canonical kind |
+|---|---|
+| `preference` / `user_identity` | `preference` |
+| `project` | `project_state` |
+| `episodic` | `episode` |
+| `raw_log` | `diagnostic` |
+| `workflow` / `workflow_rule` | `workflow_rule` |
+| `stats` | `quality_signal` |
+| otherwise | `fact` |
+
+An additional explicit kind is accepted only when an authoritative source contract explicitly supplies and explains that kind. P4 presentation behavior is not itself canonical authority.
+
 ### 8.3 `temporal`
 
 Temporal fields distinguish observed source time from inferred episode relation.
@@ -367,7 +394,8 @@ Temporal fields distinguish observed source time from inferred episode relation.
 Rules:
 
 - source update time remains the Core-owned `source.updated_at` fact and is not duplicated as a second temporal authority;
-- `episode_date` is populated only when a date is unambiguously encoded by a supported canonical source path/metadata contract;
+- the only currently supported path/date relation is `memory/episodes/YYYY-MM-DD.md` produced by the canonical episode writer; its basename date may populate `episode_date` with `episode_date_basis="source_path"`;
+- an episode path without that exact date-shaped basename, or metadata without a supported canonical date relation, leaves `episode_date=null`;
 - natural-language dates found in text are not promoted to canonical episode dates in v1;
 - missing temporal facts remain `null` rather than being replaced with adapter execution time.
 
@@ -390,6 +418,7 @@ lifecycle.management = external
 For external objects:
 
 - `lifecycle.category` is `null`;
+- Engine confidence/lifecycle values are `null`;
 - confidence fields are `null`;
 - `base_tau_days` is `null`;
 - Engine hit/archive/protect/conflict values are not fabricated;
@@ -397,32 +426,27 @@ For external objects:
 
 This preserves the current managed/external safety distinction in hybrid retrieval.
 
-### 8.5 `eligibility`
+### 8.5 Eligibility contract
 
-Eligibility in the canonical object is a **baseline semantic projection**, not a final query decision.
-
-It may encode structural reasons such as:
+Canonical Memory Object v1 does not freeze retrieval, vector, or disclosure eligibility values. Those are downstream projection/policy concerns until a single deterministic, query-independent, agent-independent source/lifecycle rule is established.
 
 ```text
-archived
-quarantined
-dreaming_artifact
-retrieval_excluded_path
-missing_content
-unsupported_source
+ELIGIBILITY_CONTRACT=
+- frozen fields: none in the Canonical Memory Object v1 baseline;
+- deferred fields: eligibility.retrieval.*, eligibility.vector.*, eligibility.disclosure.*;
+- reason: current semantics are split across quality-scope/path-family rules,
+  retrieval/channel availability and thresholds, AutoRecall gates, and
+  Memory Card disclosure policy; no unique canonical baseline rule exists.
 ```
 
-It must not encode query-specific values such as:
+The following remain canonical source/lifecycle facts and may be consumed by a later projection policy: path family, `lifecycle.archived`, `lifecycle.protected`, `lifecycle.conflict`, and the managed/external distinction.
 
-- `minConfidence` comparison for the current request;
-- lexical-confidence vector skip;
-- channel availability;
-- query/intent match;
-- RRF rank;
-- current AutoRecall agent/chat gate;
-- current-turn citation/reinforcement status.
+The following are explicitly deferred or runtime-only and must not be copied into a canonical baseline risk/eligibility field:
 
-Those remain runtime-only evidence or downstream policy.
+- query threshold, lexical confidence, RRF score, channel availability, or vector-skip decision;
+- current agent/chat gate, current-turn citation, or reinforcement status;
+- `cross_agent_scope`, which is runtime context rather than canonical baseline risk;
+- card disclosure decisions derived by `resolveDisclosurePolicy()`.
 
 ### 8.6 `content_ref`
 
@@ -554,12 +578,14 @@ Existing legacy/combined read paths may continue until separately migrated; thei
 
 ## 13. Failure behavior
 
-The read-only adapter should fail closed when it cannot establish the minimum object contract.
+The read-only 2.5-B adapter must use exact Core id lookup only and fail closed when it cannot establish the minimum object contract.
 
 Examples:
 
+- exact Core id is missing from the request;
 - requested Core chunk id does not exist;
-- Core row is ambiguous or malformed;
+- Core id lookup is ambiguous;
+- required Core fields, including source text, are malformed or unavailable;
 - Engine row cannot be interpreted safely;
 - source text is unavailable when a projection requires canonical text.
 
@@ -569,7 +595,7 @@ Non-fatal absence:
 - missing optional Core timestamp/hash => preserve `null`;
 - unknown category => `category="unknown"` with `category_authority="unknown"`.
 
-The adapter must not repair persistent state as a side effect of reading.
+The adapter must not synthesize identity from path/span/text, repair persistent state, or write any database as a side effect of reading.
 
 ## 14. Versioning
 
@@ -617,7 +643,7 @@ A projection may add its own version and cache/rebuild policy without changing c
 
 ### Finding A — P4 MemoryObject is a projection, not the canonical object
 
-Current `lib/recall/auto-recall-memory-card.js` is intentionally read-only and remains useful, but its envelope mixes semantic fields with card presentation, disclosure policy, retrieval rank/score, and trace id. Its `object_id` also includes projection-version semantics. It should remain downstream of the new canonical contract.
+Current `lib/recall/auto-recall-memory-card.js` is intentionally read-only and remains useful, but its envelope mixes semantic fields with card presentation, disclosure policy, retrieval rank/score, and trace id. Its `stableObjectId()` / `object_id` is not canonical identity: the exact-id path truncates the underlying id to 32 characters, and the id-less fallback mixes `projectionVersion` with path/span/text inputs. Its `memoryId()` helper may synthesize fallback identity when no exact Core id exists. It should remain downstream of the new canonical contract.
 
 ### Finding B — Core/Engine identity is already suitable for v1 compatibility
 
@@ -645,4 +671,6 @@ Current isolated Core and Engine accessors already exist, while some legacy hybr
 4. managed and external ownership semantics are explicit and fail closed against fabricated Engine state;
 5. canonical content authority is the exact Core chunk text, not a retrieval or Lance preview;
 6. Phase 2.5-B is read-only and uses isolated Core/Engine handles;
-7. no new persistent store, DB migration, runtime canary, ranking change, or write-path change is required by 2.5-A.
+7. no new persistent store, DB migration, runtime canary, ranking change, or write-path change is required by 2.5-A;
+8. category authority and compatibility kind mappings are deterministic and fail closed against unrestricted text heuristics;
+9. eligibility retrieval/vector/disclosure policy remains explicitly deferred until a unique deterministic baseline exists.

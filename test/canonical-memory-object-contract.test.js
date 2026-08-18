@@ -40,6 +40,32 @@ test("canonical identity is Core-chunk based and independent of projection versi
   assert.match(doc, /does not invent a logical lineage id/i);
 });
 
+test("Core source mapping preserves exact authority and excludes index metadata", () => {
+  const doc = readContract();
+  for (const [coreField, canonicalField] of [
+    ["Core.start_line", "canonical source.line_start"],
+    ["Core.end_line", "canonical source.line_end"],
+    ["Core.source", "canonical source.core_source"],
+    ["Core.hash", "canonical source.core_hash"],
+    ["Core.updated_at", "canonical source.updated_at"],
+  ]) {
+    assert.match(doc, new RegExp(`${coreField.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+->\\s+${canonicalField.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  }
+  assert.match(doc, /source_fact.*authority and ownership/i);
+  assert.match(doc, /does not convert it to ISO/i);
+  assert.match(doc, /Core\.model.*excluded.*semantic payload/i);
+  assert.match(doc, /Core\.embedding.*excluded.*semantic payload/i);
+});
+
+test("canonical identity rejects P4 truncation and fallback identity synthesis", () => {
+  const doc = readContract();
+  assert.match(doc, /stableObjectId\(\)/);
+  assert.match(doc, /exact-id path truncates.*32 characters/i);
+  assert.match(doc, /id-less fallback identity mixes `?projectionVersion`|id-less fallback identity mixes `projectionVersion`/i);
+  assert.match(doc, /memoryId\(\).*synthesize fallback identity/i);
+  assert.match(doc, /requires the exact Core chunk id and fails closed/i);
+});
+
 test("Core, Engine, Lance, card, and runtime ownership stay distinct", () => {
   const doc = readContract();
   assert.match(doc, /Core source facts are read-only/i);
@@ -70,6 +96,41 @@ test("managed and external memories cannot blur Engine ownership", () => {
   assert.match(doc, /fallback inference does not convert an external Core item into an Engine-managed item/i);
 });
 
+test("category authority and kind mappings are frozen for Canonical v1", () => {
+  const doc = readContract();
+  for (const token of [
+    "matching Engine `memory_confidence.category` -> `authority=engine`",
+    "explicit supported `Category:` metadata in source text -> `authority=source_metadata`",
+    "supported deterministic path mapping from `category-inference.js` -> `authority=path_inference`",
+    "otherwise `category=unknown` -> `authority=unknown`",
+    "`autoRouteCategory()` is forbidden for Canonical v1",
+    "text_inference",
+    "2.5-B v1 MUST NOT emit it",
+    "`preference` / `user_identity`",
+    "`project` | `project_state`",
+    "`episodic` | `episode`",
+    "`raw_log` | `diagnostic`",
+    "`workflow` / `workflow_rule`",
+    "`stats` | `quality_signal`",
+    "otherwise | `fact`",
+    "must not call an LLM",
+  ]) {
+    assert.equal(doc.includes(token), true, `missing contract token: ${token}`);
+  }
+});
+
+test("temporal and eligibility boundaries are explicit", () => {
+  const doc = readContract();
+  assert.match(doc, /memory\/episodes\/YYYY-MM-DD\.md/);
+  assert.match(doc, /natural-language dates found in text are not promoted/i);
+  assert.match(doc, /ELIGIBILITY_CONTRACT=/);
+  assert.match(doc, /frozen fields: none/i);
+  assert.match(doc, /deferred fields: eligibility\.retrieval\.\*, eligibility\.vector\.\*, eligibility\.disclosure\.\*/i);
+  assert.match(doc, /no unique canonical baseline rule exists/i);
+  assert.match(doc, /cross_agent_scope.*runtime context rather than canonical baseline risk/i);
+  assert.match(doc, /query threshold.*RRF score.*vector-skip decision/i);
+});
+
 test("runtime query evidence is excluded from canonical payload", () => {
   const doc = readContract();
   for (const token of [
@@ -93,4 +154,7 @@ test("Phase 2.5-B stays read-only and isolated while 2.5-D owns later reconcilia
   assert.match(doc, /no generic combined Core\+Engine SQL required/i);
   assert.match(doc, /2\.5-D — Reconciliation Integration/i);
   assert.match(doc, /separate higher-risk persistent-write change/i);
+  assert.match(doc, /exact Core id lookup only/i);
+  assert.match(doc, /no Engine row => valid external object/i);
+  assert.match(doc, /must not synthesize identity from path\/span\/text/i);
 });

@@ -8,11 +8,11 @@
 
 ### NOW
 
-With L2 Database Boundary Closure complete, resume **Phase 2.5 — Canonical Memory Architecture**. The active bounded decision is to review and finalize the Phase 2.5-A Canonical Memory Object contract at `docs/canonical-memory-object-contract.md`. This review does not authorize runtime mutation, DB migration, write-path changes, or rollout.
+With L2 Database Boundary Closure complete, **Phase 2.5-A Canonical Memory Object Contract is finalized** at `docs/canonical-memory-object-contract.md`. The active OpenSpec change `canonical-memory-architecture` records the full A/B/C/D architecture authority; 2.5-B is not implemented, and this closeout does not authorize runtime mutation, DB migration, write-path changes, or rollout.
 
 ### NEXT
 
-After 2.5-A review/finalization, advance through **2.5-B Read-only Canonical Adapter**, **2.5-C Projection Unification**, and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
+After a separately scoped implementation decision, advance through **2.5-B Read-only Canonical Adapter**, **2.5-C Projection Unification**, and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
 
 ### CLOSED
 
