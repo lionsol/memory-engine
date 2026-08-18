@@ -8,13 +8,16 @@
 
 ### NOW
 
-The persistent-activation qualification line is closed. The separately authorized Session-Flush Reconciliation Persistent Rollout Successor recorded `PASS` on 2026-08-17, accepted the immutable `ac0e5f0` reconciliation candidate for persistent use, and explicitly requires no R5 or additional persistent-activation qualification. AutoRecall remains disabled by default and broad rollout remains a separate later decision.
-
-The **L2 Database Boundary Closure product-source change is implemented and source-verified**. Production wiring now removes the combined Engine+attached-Core capability, Hybrid production scope is isolated-only/fail-closed, normal action/get/status/startup/Console/Nightly paths use explicit Core-readonly and Engine-only handles, and direct writable Core maintenance modules remain outside normal runtime entrypoints. Node 24 full-suite verification passed `1867/0/8`. Before describing L2 as closed in the deployed runtime, land this source state and perform only the minimum separately authorized runtime/deployment verification needed to show the active plugin actually contains the closure; do not reopen the historical persistent-rollout retry chain.
+With L2 Database Boundary Closure complete, resume **Phase 2.5 — Canonical Memory Architecture**. The active bounded decision is to review and finalize the Phase 2.5-A Canonical Memory Object contract at `docs/canonical-memory-object-contract.md`. This review does not authorize runtime mutation, DB migration, write-path changes, or rollout.
 
 ### NEXT
 
-After the L2 source closure is landed and its deployment boundary is adjudicated, resume **Phase 2.5 — Canonical Memory Architecture**. Review/finalize the deferred 2.5-A draft at `docs/canonical-memory-object-contract.md`, then advance through **2.5-B Read-only Canonical Adapter**, **2.5-C Projection Unification**, and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
+After 2.5-A review/finalization, advance through **2.5-B Read-only Canonical Adapter**, **2.5-C Projection Unification**, and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
+
+### CLOSED
+
+- The persistent-activation qualification line is closed. The separately authorized Session-Flush Reconciliation Persistent Rollout Successor recorded `PASS` on 2026-08-17, accepted the immutable `ac0e5f0` reconciliation candidate for persistent use, and explicitly requires no R5 or additional persistent-activation qualification. AutoRecall remains disabled by default and broad rollout remains a separate later decision.
+- **L2 Database Boundary Closure** recorded `deployed runtime qualification PASS / L2 COMPLETE` at active runtime source parity `64596f4`. Gateway was `READY`; `AutoRecall=false`; Hybrid runtime used `KG_ACCESS_MODE=isolated` and `RECENT_ACCESS_MODE=isolated` with production legacy fallback `0`; the current Nightly dry-run isolated topology passed; and no unexpected memory/confidence mutation was observed.
 
 ### LATER
 

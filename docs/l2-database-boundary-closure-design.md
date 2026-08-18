@@ -1,8 +1,8 @@
 # L2 Database Boundary Closure — Implementation Design
 
-> Status: `Implemented in current worktree; source verification PASS; runtime deployment pending`
+> Status: `Implemented / source verified / deployed runtime qualified / CLOSED`
 >
-> Scope: close the remaining L2 Core / Engine runtime boundary. This is a source-level design and does not authorize deployment or persistent runtime activation.
+> Scope: close the remaining L2 Core / Engine runtime boundary and record its final qualification. This design does not authorize future deployment or persistent runtime activation.
 
 ## Decision
 
@@ -220,7 +220,7 @@ Minimum source-level verification:
 6. static Core-writer boundary test proves normal runtime entrypoints do not import direct writable Core maintenance modules;
 7. full test suite because DB/runtime/tool/retrieval shared behavior changes.
 
-Runtime deployment verification is a later separately authorized step. Source-level closure must be complete before any deployment discussion.
+Source verification was followed by the final separately authorized runtime qualification recorded below. This design does not authorize future deployment or persistent runtime activation.
 
 ## Implementation result — 2026-08-18
 
@@ -241,4 +241,12 @@ git diff --check=PASS
 Node 24 full suite: total=1875 pass=1867 fail=0 skipped=8
 ```
 
-No plugin reinstall, Gateway mutation, persistent activation, or live runtime verification was performed by this source change. The previously qualified `ac0e5f0` persistent runtime remains historical/current deployment evidence only and must not be described as already containing this worktree closure.
+No plugin reinstall, Gateway mutation, or persistent activation was performed by the source change itself. The final deployed runtime qualification was completed separately and is recorded below.
+
+## Final runtime qualification result — 2026-08-18
+
+`PASS` — **L2 COMPLETE** at active runtime source parity `64596f4`. Gateway was `READY`; `AutoRecall=false`; Hybrid runtime had `KG_ACCESS_MODE=isolated`, `RECENT_ACCESS_MODE=isolated`, and production legacy fallback `0`. The current Nightly dry-run isolated topology passed, and no unexpected memory/confidence mutation was observed.
+
+## Independent tool-policy observation
+
+This observation is historical/pre-existing and has no causal relationship to L2 DB boundary qualification: `tools.catalog` registration is complete, while `tools.profile=coding` causes `tools.effective` to filter tools from the `main` model. No `alsoAllow` or config change is authorized; this is an independent future product-policy decision.

@@ -1,6 +1,6 @@
 # Phase 2.5-A — Canonical Memory Object Contract
 
-> Status: `Deferred Phase 2.5-A draft — L2 Database Boundary Closure must complete first`
+> Status: `Phase 2.5-A draft — L2 Database Boundary Closure is complete; review/finalization now active`
 >
 > Scope: Phase 2.5-A only. This document defines semantic ownership and projection boundaries. It does not authorize runtime mutation, DB migration, write-path changes, or rollout.
 
