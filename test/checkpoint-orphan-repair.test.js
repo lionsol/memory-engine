@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -50,11 +50,33 @@ function createFixture({
     coreDb.exec(`
       CREATE TABLE chunks (
         id TEXT PRIMARY KEY,
-        text TEXT
+        path TEXT NOT NULL,
+        source TEXT NOT NULL,
+        start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        hash TEXT,
+        text TEXT,
+        updated_at INTEGER
       )
     `);
-    const insert = coreDb.prepare("INSERT INTO chunks (id, text) VALUES (?, ?)");
-    for (const row of coreRows) insert.run(row.id, row.text);
+    const insert = coreDb.prepare([
+      "INSERT INTO chunks",
+      "(id, path, source, start_line, end_line, hash, text, updated_at)",
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ].join(" "));
+    for (const row of coreRows) {
+      const path = row.path ?? `memory/${row.id}.md`;
+      insert.run(
+        row.id,
+        path,
+        row.source ?? path,
+        row.start_line ?? 1,
+        row.end_line ?? 1,
+        row.hash ?? null,
+        row.text,
+        row.updated_at ?? 1,
+      );
+    }
   } finally {
     coreDb.close();
   }
@@ -66,15 +88,38 @@ function createFixture({
         engineDb.exec(`
           CREATE TABLE memory_confidence (
             chunk_id TEXT PRIMARY KEY,
+            initial_confidence REAL NOT NULL DEFAULT 0.5,
+            confidence REAL NOT NULL DEFAULT 0.5,
+            last_confidence_update INTEGER,
+            base_tau REAL NOT NULL DEFAULT 7.0,
+            hit_count INTEGER NOT NULL DEFAULT 0,
+            is_archived INTEGER NOT NULL DEFAULT 0,
+            is_protected INTEGER NOT NULL DEFAULT 0,
+            conflict_flag INTEGER NOT NULL DEFAULT 0,
             category TEXT NOT NULL DEFAULT 'raw_log',
-            is_archived INTEGER NOT NULL DEFAULT 0
+            kg_data TEXT
           )
         `);
         const insert = engineDb.prepare(
-          "INSERT INTO memory_confidence (chunk_id, category, is_archived) VALUES (?, ?, ?)",
+          "INSERT INTO memory_confidence "
+          + "(chunk_id, initial_confidence, confidence, last_confidence_update, base_tau, "
+          + "hit_count, is_archived, is_protected, conflict_flag, category, kg_data) "
+          + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         );
         for (const row of engineRows) {
-          insert.run(row.chunk_id, row.category ?? "raw_log", row.is_archived ?? 0);
+          insert.run(
+            row.chunk_id,
+            row.initial_confidence ?? 0.5,
+            row.confidence ?? 0.5,
+            row.last_confidence_update ?? 1,
+            row.base_tau ?? 7,
+            row.hit_count ?? 0,
+            row.is_archived ?? 0,
+            row.is_protected ?? 0,
+            row.conflict_flag ?? 0,
+            row.category ?? "raw_log",
+            row.kg_data ?? null,
+          );
         }
       }
     } finally {
@@ -331,6 +376,130 @@ test("multiple orphan vectors are repaired in engine query order without duplica
   assert.deepEqual(addedIds, ["chunk-2", "chunk-3"]);
 });
 
+test("global orphan repair uses one canonical batch per ten ids and preserves exact projection text", async () => {
+  const coreRows = [];
+  const engineRows = [];
+  for (let i = 0; i < 11; i += 1) {
+    const id = `global-${String(i).padStart(2, "0")}`;
+    coreRows.push({ id, text: `legacy global text ${i}` });
+    engineRows.push({ chunk_id: id, category: "raw_log", is_archived: 0 });
+  }
+  const fixture = createFixture({ coreRows, engineRows });
+  const batchCalls = [];
+  const embeddingInputs = [];
+  const addedRows = [];
+
+  try {
+    const repaired = await runRepairWithLanceDb(fixture, {
+      connect: async () => ({
+        openTable: async () => ({
+          countRows: async () => 0,
+          search: () => ({
+            limit: () => ({
+              execute: async function* () {
+                yield [];
+              },
+            }),
+          }),
+          add: async rows => addedRows.push(...rows),
+        }),
+      }),
+    }, () => orphanRepair.repairOrphanVectors({
+      getCanonicalMemoriesByIds: ids => {
+        batchCalls.push(ids);
+        return {
+          ok: true,
+          results: ids.map(id => ({
+            memory_id: id,
+            ok: true,
+            memory: {
+              memory_id: id,
+              canonical_id: `cmem:core:${id}`,
+              source: { text: `CANONICAL GLOBAL SOURCE ${id}` },
+              content_ref: { content_hash: `sha256:${id}` },
+            },
+          })),
+        };
+      },
+      embedText: async text => {
+        embeddingInputs.push(text);
+        return [0.11, 0.22, 0.33];
+      },
+      now: () => 1780000000000,
+    }));
+
+    assert.equal(repaired, 11);
+    assert.deepEqual(batchCalls.map(ids => ids.length), [10, 1]);
+    assert.deepEqual(addedRows.map(row => row.id), [
+      ...Array.from({ length: 11 }, (_, index) => `global-${String(index).padStart(2, "0")}`),
+    ]);
+    assert.deepEqual(addedRows.map(row => row.text), embeddingInputs);
+    assert.deepEqual(embeddingInputs, addedRows.map(row => `CANONICAL GLOBAL SOURCE ${row.id}`));
+    assert.equal(addedRows.every(row => Object.keys(row).sort().join(",") === "id,text,timestamp,vector"), true);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("global canonical failure skips only the affected orphan", async () => {
+  const fixture = createFixture({
+    coreRows: [
+      { id: "global-fail", text: "fail source" },
+      { id: "global-ok", text: "ok source" },
+    ],
+    engineRows: [
+      { chunk_id: "global-fail", category: "raw_log", is_archived: 0 },
+      { chunk_id: "global-ok", category: "raw_log", is_archived: 0 },
+    ],
+  });
+  const addedIds = [];
+  const warnings = [];
+  const previousWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.map(String).join(" "));
+
+  try {
+    const repaired = await runRepairWithLanceDb(fixture, {
+      connect: async () => ({
+        openTable: async () => ({
+          countRows: async () => 0,
+          search: () => ({
+            limit: () => ({
+              execute: async function* () {
+                yield [];
+              },
+            }),
+          }),
+          add: async rows => addedIds.push(...rows.map(row => row.id)),
+        }),
+      }),
+    }, () => orphanRepair.repairOrphanVectors({
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => id === "global-fail"
+          ? { memory_id: id, ok: false, memory: null, reason: "core_not_found" }
+          : {
+            memory_id: id,
+            ok: true,
+            memory: {
+              memory_id: id,
+              canonical_id: `cmem:core:${id}`,
+              source: { text: "CANONICAL GLOBAL OK" },
+              content_ref: { content_hash: `sha256:${id}` },
+            },
+          }),
+      }),
+      embedText: async () => [0.11, 0.22, 0.33],
+    }));
+
+    assert.equal(repaired, 1);
+    assert.deepEqual(addedIds, ["global-ok"]);
+    assert.equal(warnings.some(line => line.includes("canonical_lookup_core_not_found")), true);
+  } finally {
+    console.warn = previousWarn;
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("archived engine rows are excluded from orphan detection", async () => {
   const fixture = createFixture({
     engineRows: [
@@ -544,10 +713,12 @@ test("orphan repair uses native readonly isolated Engine without attached schema
     assert.equal(repaired, 2);
   }))));
 
-  assert.equal(observations.length, 1);
-  assert.equal(observations[0].readonly, true);
-  assert.deepEqual(observations[0].databaseList.map((row) => row.name), ["main"]);
-  assert.equal(observations[0].databaseList[0].file, fixture.engineDbPath);
+  assert.equal(observations.length, 2);
+  assert.equal(observations.every(observation => observation.readonly === true), true);
+  assert.equal(observations.every(observation => (
+    JSON.stringify(observation.databaseList.map(row => row.name)) === JSON.stringify(["main"])
+  )), true);
+  assert.equal(observations.every(observation => observation.databaseList[0].file === fixture.engineDbPath), true);
   assert.deepEqual(readDatabaseList(fixture.engineDbPath).map((row) => row.name), ["main"]);
 });
 

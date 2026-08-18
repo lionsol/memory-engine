@@ -21,8 +21,9 @@
 
 ## 4. Phase 2.5-D — Reconciliation Integration
 
-- [ ] 4.1 Define Core-to-Engine-to-Lance reconciliation around exact Core/canonical identity without creating a third store.
-- [ ] 4.2 Obtain separate explicit owner authorization for persistent writes, migration, runtime activation, and rollout before implementation or qualification.
+- [x] 4.1 Implement the three direct Core-to-Engine-to-Lance writers around exact Core/canonical identity without creating a third store; persistent runtime execution remains separate.
+- [x] 4.2a Owner authorized this Phase 2.5-D source implementation.
+- [ ] 4.2b Obtain separate Owner authorization for persistent runtime/data execution, deployment, migration, qualification, and rollout.
 - [ ] 4.3 Add DB-boundary, rollback, and persistence evidence appropriate to the authorized write path.
 
 ## 5. Non-goal and safety review

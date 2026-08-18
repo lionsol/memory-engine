@@ -169,6 +169,7 @@ export default definePluginEntry({
         catParams,
         withCoreDb,
         withEngineDb: withEngineDbWritable,
+        withEngineDbReadonly,
         existsSync,
         readFileSync,
         kgPath: paths.kgPath,

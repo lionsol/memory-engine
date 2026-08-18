@@ -50,7 +50,7 @@ Reconciliation integration may later consume canonical identity, but any Core-to
 1. Close the 2.5-A contract and contract tests.
 2. In this change, build the read-only isolated 2.5-B adapter and prove managed/external/failure parity without adding a production consumer.
 3. C1 adds a source-only canonical-aware Memory Card/MemoryObject projection with explicit parity tests. C2 adds isolated top-K Hybrid result canonicalization and exact identity propagation behind batch-read and drift counters. C3 defines a pure canonical vector projection and Lance-row materializer with parity evidence; persistent Lance writer adoption remains a separately authorized 2.5-D decision.
-4. In a separately authorized 2.5-D change, design and qualify persistent reconciliation writes with rollback and DB-boundary evidence.
+4. Implement the 2.5-D source writer integration in this change; separately authorize and qualify any persistent runtime/data execution, deployment, migration, or rollout with rollback and DB-boundary evidence.
 
 No runtime/config/database mutation is part of this change.
 
@@ -68,10 +68,20 @@ C3 is source implemented and test-verified as a pure Canonical Vector Projection
 
 Eligibility review result: eligibility remains downstream projection policy; Canonical v1 introduces no `vector_eligible`, `retrieval_eligible`, `disclosure_eligible`, or risk fields.
 
-| Current path | id parity | projection-text parity | embedding/text parity | canonical source authority |
+The following table records the C3 pre-D review baseline; the D source implementation below closes the add-path drift in repository code.
+
+| C3 review baseline path | id parity | projection-text parity | embedding/text parity | canonical source authority |
 |---|---|---|---|---|
 | orphan/reconciliation | PASS | PASS | PASS | Core chunk text |
-| `memory_engine add` <=2000 chars | PASS | conditional | PASS | UNPROVEN/DRIFT: raw add input is not proven equal to final Core text |
-| `memory_engine add` >2000 chars | PASS | conditional | DRIFT | UNPROVEN/DRIFT: raw add input is not proven equal to final Core text |
+| legacy `memory_engine add` <=2000 chars | PASS | conditional | PASS | UNPROVEN/DRIFT: raw add input was not proven equal to final Core text |
+| legacy `memory_engine add` >2000 chars | PASS | conditional | DRIFT | UNPROVEN/DRIFT: raw add input was not proven equal to final Core text |
 
-Final C parity is `PASS_WITH_FINDINGS`: C1 card canonical projection parity PASS; C2 Hybrid result canonical projection parity PASS with mismatch counters retained; C3 vector projection contract PASS. The existing long-text `memory_engine add` vector/text drift and unproven raw-input/Core-source authority remain intentional findings deferred to 2.5-D; no legacy persistent inference was removed.
+Final C parity was `PASS_WITH_FINDINGS`: C1 card canonical projection parity PASS; C2 Hybrid result canonical projection parity PASS with mismatch counters retained; C3 vector projection contract PASS. The long-text add drift and unproven raw-input/Core-source authority were findings at C3 closeout and are now fixed in the D source implementation; no runtime qualification is implied.
+
+## Phase 2.5-D source implementation status
+
+The source implementation is `IMPLEMENTED / SOURCE VERIFIED` for the only three direct Lance writers: `memory_engine add`, scoped session-flush orphan reconciliation, and global orphan-vector repair. Each performs exact-id canonical read, canonical vector projection, embedding of `projection.embedding_input`, and `materializeCanonicalLanceRow()` before `table.add([row])`. Canonical lookup, projection, or embedding failure is fail-closed for the Lance write; no raw-input/Core-only/manual row fallback remains.
+
+The add path keeps its existing one-new-chunk direct-write behavior; scoped reconciliation remains active-only, existing-ID aware, and capped at 10; global repair remains active-row, existing-ID aware, and batched at 10. Core reads and canonical Engine reads use distinct readonly isolated accessors, while existing Engine lifecycle inserts remain on the writable accessor. Lance schema, embedding model, ranking, AutoRecall, and eligibility policy are unchanged.
+
+This source implementation fixes the previous long-text add-path vector/text drift in repository source. Persistent runtime/data execution, deployment, runtime qualification, and rollout are not authorized by this source change and remain pending Owner authorization.

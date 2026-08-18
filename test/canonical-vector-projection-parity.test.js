@@ -16,7 +16,7 @@ function canonicalWithLongText() {
   };
 }
 
-test("known vector write-path parity: orphan/reconciliation aligns, add over 2000 chars drifts", () => {
+test("historical vector write-path parity: orphan/reconciliation aligned, legacy add over 2000 chars drifted", () => {
   const canonical = canonicalWithLongText();
   const projection = projectCanonicalMemoryToVectorProjection(canonical);
   const vector = [0.25, 0.5];
@@ -28,7 +28,7 @@ test("known vector write-path parity: orphan/reconciliation aligns, add over 200
   assert.equal(orphanEmbeddingInput.length, 2000);
   assert.equal(orphanRow.text.length, 2000);
 
-  // Existing memory_engine add shape: the raw caller input is embedded, while Lance text is bounded.
+  // Historical memory_engine add shape: raw caller input was embedded, while Lance text was bounded.
   const addEmbeddingInput = canonical.source.text;
   const addLanceText = addEmbeddingInput.slice(0, 2000);
   assert.equal(addEmbeddingInput.length, 2500);
@@ -47,7 +47,7 @@ test("known vector write-path parity: orphan/reconciliation aligns, add over 200
   });
 });
 
-test("known vector write-path parity: add inputs at or below 2000 align conditionally", () => {
+test("historical vector write-path parity: legacy add inputs at or below 2000 aligned conditionally", () => {
   const text = "B".repeat(2000);
   const projection = projectCanonicalMemoryToVectorProjection({
     memory_id: "parity-short-core-id",

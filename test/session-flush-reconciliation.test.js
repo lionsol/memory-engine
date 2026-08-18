@@ -42,6 +42,8 @@ function createFixture({ sourceFiles = {}, coreRows = [], confidenceRows = [] } 
     CREATE TABLE chunks (
       id TEXT PRIMARY KEY,
       path TEXT NOT NULL,
+      source TEXT NOT NULL,
+      hash TEXT,
       text TEXT,
       updated_at INTEGER,
       start_line INTEGER,
@@ -49,12 +51,14 @@ function createFixture({ sourceFiles = {}, coreRows = [], confidenceRows = [] } 
     )
   `);
   const insertCore = core.prepare(
-    "INSERT INTO chunks (id, path, text, updated_at, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO chunks (id, path, source, hash, text, updated_at, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   );
   for (const row of coreRows) {
     insertCore.run(
       row.id,
       row.path,
+      row.source ?? row.path,
+      row.hash ?? null,
       row.text ?? "fixture text",
       row.updated_at ?? 1,
       row.start_line ?? null,
@@ -342,15 +346,20 @@ function makeLanceStub({ existingIds = [], totalRows = null, failAddIds = [] } =
 }
 
 function scopedLance(fixture, engineResult, lancedb, options = {}) {
+  const repairOptions = {
+    scope: "session_flush",
+    trigger: "nightly_checkpoint",
+    eligibleCoreRows: engineResult.eligibleCoreRows,
+    embedText: options.embedText || (async () => [0.1, 0.2, 0.3]),
+  };
+  if (options.getCanonicalMemoriesByIds) {
+    repairOptions.getCanonicalMemoriesByIds = options.getCanonicalMemoriesByIds;
+  }
+  if (options.now) repairOptions.now = options.now;
   return withFixtureRuntime(fixture, () => withPatchedRequireCache(
     "@lancedb/lancedb",
     lancedb.exports,
-    () => orphanRepair.repairOrphanVectors({
-      scope: "session_flush",
-      trigger: "nightly_checkpoint",
-      eligibleCoreRows: engineResult.eligibleCoreRows,
-      embedText: options.embedText || (async () => [0.1, 0.2, 0.3]),
-    }),
+    () => orphanRepair.repairOrphanVectors(repairOptions),
   ));
 }
 
@@ -685,6 +694,117 @@ test("scoped Lance reconciliation is exact, active-only, oldest-first, and bound
       "lance-01", "lance-02", "lance-03", "lance-04", "lance-05",
       "lance-06", "lance-07", "lance-08", "lance-09", "lance-10", "lance-11",
     ]);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("scoped Lance reconciliation resolves the selected ids through one canonical batch", async () => {
+  const source = makeBulkSource();
+  const path = "memory/smart-add/canonical-batch.md";
+  const coreRows = [];
+  for (let i = 0; i < 12; i += 1) {
+    coreRows.push({
+      id: `canonical-${String(i).padStart(2, "0")}`,
+      path,
+      text: `legacy fixture text ${i}`,
+      start_line: source.range.startLine,
+      end_line: source.range.endLine,
+      updated_at: 100 + i,
+    });
+  }
+  const fixture = createFixture({ sourceFiles: { [path]: source.content }, coreRows });
+  const lance = makeLanceStub();
+  const batchCalls = [];
+  const embeddingInputs = [];
+  try {
+    const engine = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({ nowSec: 1 }));
+    const first = await scopedLance(fixture, engine, lance, {
+      getCanonicalMemoriesByIds: ids => {
+        batchCalls.push(ids);
+        return {
+          ok: true,
+          results: ids.map(id => ({
+            memory_id: id,
+            ok: true,
+            memory: {
+              memory_id: id,
+              canonical_id: `cmem:core:${id}`,
+              source: { text: `CANONICAL SOURCE ${id}` },
+              content_ref: { content_hash: `sha256:${id}` },
+            },
+          })),
+        };
+      },
+      embedText: async text => {
+        embeddingInputs.push(text);
+        return [0.1, 0.2, 0.3];
+      },
+    });
+
+    assert.equal(batchCalls.length, 1);
+    assert.equal(batchCalls[0].length, 10);
+    assert.deepEqual(batchCalls[0], Array.from({ length: 10 }, (_, index) => (
+      `canonical-${String(index).padStart(2, "0")}`
+    )));
+    assert.equal(first.lance_added, 10);
+    assert.equal(first.lance_failed, 0);
+    assert.equal(embeddingInputs.length, 10);
+    assert.deepEqual(lance.state.addedIds, batchCalls[0]);
+    assert.deepEqual(embeddingInputs, batchCalls[0].map(id => `CANONICAL SOURCE ${id}`));
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("scoped canonical failure skips only that id and keeps the sibling retryable", async () => {
+  const source = makeBlocksSource();
+  const path = "memory/smart-add/canonical-failure.md";
+  const fixture = createFixture({
+    sourceFiles: { [path]: source.content },
+    coreRows: [
+      {
+        id: "canonical-fail",
+        path,
+        start_line: source.ranges.session_entry.startLine + 5,
+        end_line: source.ranges.session_entry.endLine - 1,
+        text: "legacy fail text",
+      },
+      {
+        id: "canonical-ok",
+        path,
+        start_line: source.ranges.session_entry.startLine + 5,
+        end_line: source.ranges.session_entry.endLine - 1,
+        text: "legacy ok text",
+      },
+    ],
+  });
+  const lance = makeLanceStub();
+  try {
+    const engine = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({ nowSec: 1 }));
+    const result = await scopedLance(fixture, engine, lance, {
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => id === "canonical-fail"
+          ? { memory_id: id, ok: false, memory: null, reason: "core_malformed" }
+          : {
+            memory_id: id,
+            ok: true,
+            memory: {
+              memory_id: id,
+              canonical_id: `cmem:core:${id}`,
+              source: { text: "CANONICAL SIBLING TEXT" },
+              content_ref: { content_hash: `sha256:${id}` },
+            },
+          }),
+      }),
+    });
+
+    assert.equal(result.lance_added, 1);
+    assert.equal(result.lance_failed, 1);
+    assert.equal(result.lance_backlog_remaining, 1);
+    assert.equal(result.lance_converged, false);
+    assert.deepEqual(lance.state.addedIds, ["canonical-ok"]);
   } finally {
     fixture.cleanup();
   }

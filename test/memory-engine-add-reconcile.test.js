@@ -110,6 +110,15 @@ test("memory_engine.add keeps Engine metadata and reports partial success when L
         throw new Error("vector offline");
       },
     }),
+    getCanonicalMemoryById: () => ({
+      ok: true,
+      memory: {
+        memory_id: "chunk-1",
+        canonical_id: "cmem:core:chunk-1",
+        source: { text: "canonical content survives vector failure" },
+        content_ref: { content_hash: "sha256:canonical-content" },
+      },
+    }),
     generateEmbedding: async () => [0.1, 0.2],
     recordMemoryEvent: event => events.push(event),
   }));

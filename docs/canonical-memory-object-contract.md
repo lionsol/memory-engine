@@ -571,7 +571,9 @@ Core chunk id == Engine memory_confidence.chunk_id == Lance row id
 
 Phase 2.5 keeps that compatibility invariant for v1 but makes its semantics explicit through `memory_id` and `canonical_id`.
 
-Later 2.5-D may make reconciliation consume Canonical Memory Objects so that eligibility, category authority, path/provenance, and vector projection all derive from the same object contract. Phase 2.5-A does not modify those writes.
+Phase 2.5-D source integration makes the direct reconciliation writers consume Canonical Memory Objects so that category authority, path/provenance, and vector projection derive from the same object contract. Persistent execution remains separately authorized.
+
+The Phase 2.5-D source implementation now routes the direct `memory_engine add`, scoped session-flush orphan-repair, and global orphan-vector repair Lance writers through the read-only Canonical Memory Adapter and Canonical Vector Projection before materializing the existing Lance row. This is a source-only contract integration; it does not authorize deployment, persistent runtime/data execution, or qualification.
 
 ## 12. Relationship to database-boundary work
 
