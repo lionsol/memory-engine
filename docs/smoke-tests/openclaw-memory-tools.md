@@ -27,11 +27,25 @@ cat openclaw.plugin.json
 
 ## Expected Tool Availability
 
-Expected memory-engine tool contract:
+Registry contract — all three tools are registered:
 
 - `memory_engine`
 - `memory_engine_search`
 - `memory_engine_get`
+
+Main model effective contract — with global `tools.profile=coding` and a main-scoped `alsoAllow` only:
+
+- `memory_engine_search`
+- `memory_engine_get`
+
+Management router contract:
+
+- `memory_engine` remains registered for management/action compatibility.
+- It is intentionally not exposed to the main model by default.
+
+Other agents remain isolated and do not automatically inherit the main agent's search/get availability.
+
+The policy boundary is intentionally narrow: do not switch the global profile to `full`, and do not broaden availability to `group:plugins` or `*`.
 
 Expected standard memory-core tools stay separate:
 
@@ -49,7 +63,7 @@ Memory-engine must not expose:
 - Memory-engine enhancement lookup uses `memory_engine_search` / `memory_engine_get`.
 - `memory_engine` remains the management/action router and should not replace the narrow search/get pair.
 - The memory-engine manifest must not shadow OpenClaw standard memory tools by reusing the `memory_search` / `memory_get` names.
-- If runtime inspection shows only `memory_engine`, `memory_engine_search`, and `memory_engine_get` for the plugin, that is the expected non-shadowing state.
+- If registry inspection shows `memory_engine`, `memory_engine_search`, and `memory_engine_get`, while effective main-model inspection shows only the search/get pair, that is the expected non-shadowing state.
 
 ## Manual Smoke Cases
 
@@ -74,7 +88,8 @@ Memory-engine must not expose:
 
 ## Pass Criteria
 
-- `memory_engine`, `memory_engine_search`, and `memory_engine_get` are available.
+- The registry contains `memory_engine`, `memory_engine_search`, and `memory_engine_get`.
+- The main model effective tool set contains `memory_engine_search` and `memory_engine_get`, but not the management router.
 - `memory_search` and `memory_get` are not exposed by memory-engine.
 - Memory-engine does not shadow OpenClaw standard memory tools.
 - Active-memory and memory-engine autoRecall are not both enabled.

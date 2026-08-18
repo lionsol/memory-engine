@@ -250,3 +250,7 @@ No plugin reinstall, Gateway mutation, or persistent activation was performed by
 ## Independent tool-policy observation
 
 This observation is historical/pre-existing and has no causal relationship to L2 DB boundary qualification: `tools.catalog` registration is complete, while `tools.profile=coding` causes `tools.effective` to filter tools from the `main` model. No `alsoAllow` or config change is authorized; this is an independent future product-policy decision.
+
+### Subsequent resolution
+
+After L2 closure, main-only `memory_engine_search` / `memory_engine_get` availability was runtime-qualified `PASS`, resolving the tool-policy gap without altering the historical L2 evidence or its causal classification.

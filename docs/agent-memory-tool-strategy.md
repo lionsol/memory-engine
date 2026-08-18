@@ -13,6 +13,21 @@
 - Do not enable `active-memory` and memory-engine autoRecall together unless explicit dedup is implemented.
 - Do not add `kind:"memory"` just to make memory-engine impersonate the standard memory substrate.
 
+## Effective availability contract
+
+The current runtime policy keeps the global profile at `tools.profile=coding` and grants only the `main` agent:
+
+```text
+tools.alsoAllow = [
+  "memory_engine_search",
+  "memory_engine_get",
+]
+```
+
+- `memory_engine_search` and `memory_engine_get` are available to the main model.
+- `memory_engine` remains the registered management/action router and is not a default main-model tool.
+- Other agents do not automatically inherit memory-engine tools.
+
 ## Tool selection
 
 Use `memory_search` when:

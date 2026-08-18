@@ -17,7 +17,7 @@ Memory Engine 是 OpenClaw `memory-core` 之上的**增强与治理层**，不�
 
 - `memory-core` 继续拥有标准 `memory_search` / `memory_get` 工具以及 `MEMORY.md`、`memory/*.md` 的基础索引。
 - `memory-engine` 提供混合检索重排、置信度生命周期、AutoRecall、安全强化、checkpoint、质量审计、人工标注和 Console 能力。
-- 面向 Agent 的增强工具是 `memory_engine_search` 与 `memory_engine_get`；`memory_engine` 保留为兼容和管理 action router。
+- 当前 main agent 显式获得 `memory_engine_search` 与 `memory_engine_get`；`memory_engine` 保留为兼容和管理 action router，默认不对模型可见。
 - `memory-engine` 不注册或覆盖标准 `memory_search` / `memory_get`，也不占用 `plugins.slots.memory`。
 - `active-memory` 与 memory-engine AutoRecall 默认都不应同时启用；没有显式去重时，同时启用会造成重复召回和重复注入。
 
@@ -154,7 +154,7 @@ memory-engine 对受管理记忆维护 category、confidence、base tau、hit co
 | `memory_get` | memory-core | 读取标准 memory 文件内容 |
 | `memory_engine_search` | memory-engine | 使用 engine 混合检索与治理元数据搜索 |
 | `memory_engine_get` | memory-engine | 显式读取搜索结果的完整记忆，并建立当轮强化证据 |
-| `memory_engine` | memory-engine | 兼容和管理 action router；不替代窄搜索/读取工具 |
+| `memory_engine` | memory-engine | 兼容和管理 action router；不替代窄搜索/读取工具，默认不对模型可见 |
 
 Agent 的默认选择规则见 [`docs/agent-memory-tool-strategy.md`](docs/agent-memory-tool-strategy.md)。
 
