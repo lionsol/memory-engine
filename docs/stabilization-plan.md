@@ -8,11 +8,11 @@
 
 ### NOW
 
-With L2 Database Boundary Closure complete, **Phase 2.5-A Canonical Memory Object Contract is `CLOSED / PASS`** and **Phase 2.5-B is implemented/source verified**. Phase **2.5-C1 Canonical-aware Memory Card Projection is implemented/source verified** under the active OpenSpec change `canonical-memory-architecture`; legacy candidate-only APIs and runtime wiring remain unchanged. **C2 Hybrid canonicalization and C3 vector-facing canonicalization are NEXT.**
+With L2 Database Boundary Closure complete, **Phase 2.5-A Canonical Memory Object Contract is `CLOSED / PASS`**, **Phase 2.5-B is implemented/source verified**, **Phase 2.5-C1 is `PASS`**, and **Phase 2.5-C2 Hybrid top-result canonicalization is implemented/source verified** under the active OpenSpec change `canonical-memory-architecture`. Legacy combined `withDb` output, ranking/channel selection, Lance writes, and AutoRecall runtime wiring remain unchanged. **C3 vector-facing canonicalization is NEXT.**
 
 ### NEXT
 
-After a separately scoped implementation decision, advance through **2.5-C2 Hybrid canonicalization**, **2.5-C3 vector-facing canonicalization**, and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
+After a separately scoped implementation decision, advance through **2.5-C3 vector-facing canonicalization** and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
 
 ### CLOSED
 

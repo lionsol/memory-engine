@@ -113,9 +113,9 @@ function createCurrentFixture() {
       kg_data TEXT
     );
     INSERT INTO memory_confidence (
-      chunk_id, confidence, last_confidence_update, base_tau, hit_count,
+      chunk_id, initial_confidence, confidence, last_confidence_update, base_tau, hit_count,
       is_protected, conflict_flag, category, is_archived, kg_data
-    ) VALUES ('current-chunk-1', 0.9, 10, 7, 1, 0, 0, 'raw_log', 0, '{"entity":"alpha"}');
+    ) VALUES ('current-chunk-1', 0.9, 0.9, 10, 7, 1, 0, 0, 'raw_log', 0, '{"entity":"alpha"}');
   `);
   engine.close();
   return { root, coreDbPath, engineDbPath };

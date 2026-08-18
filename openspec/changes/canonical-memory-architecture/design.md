@@ -12,7 +12,7 @@ The current Core chunk, Engine `memory_confidence`, Lance projection, retrieval 
 
 **Non-Goals:**
 
-- No production consumer wiring or runtime activation in this change; the 2.5-B source adapter remains read-only and isolated.
+- No runtime deployment or activation, persistent database mutation, or runtime/config change in this change; source consumers remain read-only and isolated.
 - No third database, Core schema mutation, Engine schema migration in A/B, Lance authority, ranking change in A/B, AutoRecall enablement, or multi-agent ACL.
 - No persistent write authorization from OpenSpec itself.
 
@@ -49,11 +49,15 @@ Reconciliation integration may later consume canonical identity, but any Core-to
 
 1. Close the 2.5-A contract and contract tests.
 2. In this change, build the read-only isolated 2.5-B adapter and prove managed/external/failure parity without adding a production consumer.
-3. C1 adds a source-only canonical-aware Memory Card/MemoryObject projection with explicit parity tests; later C2/C3 work migrates Hybrid and vector-facing consumers behind parity checks before removing duplicate semantics.
+3. C1 adds a source-only canonical-aware Memory Card/MemoryObject projection with explicit parity tests. C2 adds isolated top-K Hybrid result canonicalization and exact identity propagation behind batch-read and drift counters; C3 remains for vector-facing consumers before duplicated semantics are removed.
 4. In a separately authorized 2.5-D change, design and qualify persistent reconciliation writes with rollback and DB-boundary evidence.
 
 No runtime/config/database mutation is part of this change.
 
 ## Phase 2.5-C1 status
 
-C1 is source implemented and test-verified for the Memory Card/MemoryObject projection. The legacy candidate-only APIs remain available, the AutoRecall runtime wiring is unchanged, and no Hybrid result or Lance path consumes the new projector. C2 Hybrid canonicalization and C3 vector-facing canonicalization remain incomplete.
+C1 is source implemented and test-verified for the Memory Card/MemoryObject projection. The legacy candidate-only APIs remain available, the AutoRecall runtime wiring is unchanged, and no Hybrid result or Lance path consumes the C1 projector. At C1 closeout, C2 Hybrid canonicalization and C3 vector-facing canonicalization remained incomplete.
+
+## Phase 2.5-C2 status
+
+C2 is source implemented and test-verified for isolated Hybrid result projection. After ranking, only served top-K candidates are batch-read through isolated readonly Core and Engine handles; public `id` remains the 16-character compatibility prefix while `memory_id` and `canonical_id` carry exact canonical identity. Legacy combined `withDb` callers retain their existing output contract, ranking/channel selection is unchanged, and C3 vector-facing canonicalization remains incomplete.
