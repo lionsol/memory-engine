@@ -1,4 +1,4 @@
-import { tableExists, withDb } from "./db.js";
+import { tableExists, withCoreDb, withDb } from "./db.js";
 import { getMemoryEngineConfig } from "../../lib/config/runtime.js";
 import {
   PRODUCTION_HYBRID_OBSERVATION_SURFACES,
@@ -63,22 +63,25 @@ function eventDedupeKey(row = {}) {
   ].join("\u001f");
 }
 
-function readEventsFromSchema(db, schema) {
+function readEventsFromSchema(db, schema, eventSource = schema) {
   if (!schemaHasTable(db, schema, "memory_events")) return [];
   return db.prepare(`
     SELECT
       id, event_type, session_id, trace_id, memory_id,
       latency_ms, candidate_count, injected_count, cited_count,
       vector_score, fts_score, final_score, source, metadata_json, created_at,
-      '${schema}' AS event_source
+      '${eventSource}' AS event_source
     FROM ${schema}.memory_events
   `).all();
 }
 
 export function readUnifiedMemoryEvents(db, options = {}) {
+  const explicitCoreDb = options?.coreDb || null;
   const rows = [
     ...readEventsFromSchema(db, "main"),
-    ...readEventsFromSchema(db, "core"),
+    ...(explicitCoreDb
+      ? readEventsFromSchema(explicitCoreDb, "main", "core")
+      : readEventsFromSchema(db, "core")),
   ];
   const deduped = new Map();
   for (const row of rows) {
@@ -727,9 +730,11 @@ export function buildAutoRecallInjectionRateSummary(rows, { windowDays = 7, nowM
 
 export function overviewMetrics() {
   const metricTopN = Math.max(1, Number(getMemoryEngineConfig(null)?.metrics?.topN) || 10);
+  const memories = withCoreDb(db => (
+    tableExists(db, "chunks") ? db.prepare("SELECT COUNT(*) AS count FROM chunks").get().count : 0
+  ));
   return withDb(db => {
     const events = db.prepare("SELECT COUNT(*) AS count FROM memory_events").get().count;
-    const memories = tableExists(db, "chunks") ? db.prepare("SELECT COUNT(*) AS count FROM chunks").get().count : 0;
     const confidence = db.prepare(`
       SELECT COUNT(*) AS tracked, ROUND(AVG(confidence), 3) AS avg_confidence,
         SUM(CASE WHEN is_archived = 1 THEN 1 ELSE 0 END) AS archived,
@@ -770,7 +775,7 @@ export function retrievalMetrics({ nowMs = Date.now() } = {}) {
   const metricTopN = Math.max(1, Number(metricConfig?.topN) || 10);
   return withDb(db => {
     const metricsNowMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
-    const unifiedEvents = readUnifiedMemoryEvents(db);
+    const unifiedEvents = withCoreDb(coreDb => readUnifiedMemoryEvents(db, { coreDb }));
     const recallCompleted = unifiedEvents.filter(event => event?.event_type === "recall_completed");
     const avgNullable = values => {
       const nums = values.map(v => Number(v)).filter(Number.isFinite);

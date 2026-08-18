@@ -93,6 +93,27 @@ function makeDbPair({ engineEvents = [], coreEvents = [], engineHasTable = true,
   return { engineDb, corePath, enginePath };
 }
 
+test("unified events: explicit isolated Core handle merges without ATTACH", () => {
+  const engineDb = new Database(":memory:");
+  const coreDb = new Database(":memory:");
+  try {
+    engineDb.exec(EVENTS_TABLE_SQL);
+    coreDb.exec(EVENTS_TABLE_SQL);
+    insertEvent(engineDb, { event_type: "memory_candidate_retrieved", memory_id: "m-engine" });
+    insertEvent(coreDb, { event_type: "memory_candidate_retrieved", memory_id: "m-core" });
+
+    const rows = readUnifiedMemoryEvents(engineDb, { coreDb });
+    assert.deepEqual(engineDb.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
+    assert.deepEqual(coreDb.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
+    assert.equal(rows.length, 2);
+    assert.equal(rows.find(row => row.memory_id === "m-engine")?.event_source, "main");
+    assert.equal(rows.find(row => row.memory_id === "m-core")?.event_source, "core");
+  } finally {
+    coreDb.close();
+    engineDb.close();
+  }
+});
+
 test("unified events: only ENGINE_DB events", () => {
   const { engineDb } = makeDbPair({
     engineEvents: [{ event_type: "memory_candidate_retrieved", memory_id: "m-engine" }],
@@ -188,7 +209,7 @@ test("unified events: duplicate events across engine/core are deduplicated", () 
 });
 
 test("retrievalMetrics uses unified events for category counts and aggregate", () => {
-  const { engineDb } = makeDbPair({
+  const { engineDb, corePath } = makeDbPair({
     engineEvents: [
       {
         event_type: "memory_candidate_retrieved",
@@ -246,6 +267,7 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
       },
     ],
   });
+  const coreDb = new Database(corePath, { readonly: true, fileMustExist: true });
   try {
     const source = readFileSync(new URL("../console/services/metrics-service.js", import.meta.url), "utf8");
     const transformed = source
@@ -254,6 +276,7 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
     const context = {
       tableExists,
       withDb: fn => fn(engineDb),
+      withCoreDb: fn => fn(coreDb),
       getMemoryEngineConfig: () => ({ metrics: { windowDays: 7, topN: 10 } }),
       PRODUCTION_HYBRID_OBSERVATION_SURFACES,
       validateProductionHybridObservationProvenance,
@@ -347,6 +370,7 @@ test("retrievalMetrics uses unified events for category counts and aggregate", (
       },
     }));
   } finally {
+    coreDb.close();
     engineDb.close();
   }
 });

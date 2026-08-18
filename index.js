@@ -52,9 +52,9 @@ export default definePluginEntry({
     });
     const { paths, config, database, lancedb } = assembly;
     const {
-      withDb,
       withCoreDb,
-      withIsolatedEngineDb,
+      withEngineDbReadonly,
+      withEngineDbWritable,
       withHybridDbAccessScope,
     } = database;
     const {
@@ -68,7 +68,7 @@ export default definePluginEntry({
     const recordMemoryEvent = event => {
       if (!memoryStorageReady) return;
       try {
-        withDb(db => {
+        withEngineDbWritable(db => {
           insertMemoryEvent(db, event, { defaultSource: null });
         });
       } catch (error) {
@@ -80,13 +80,13 @@ export default definePluginEntry({
       catParams,
       inferCategoryFromChunk,
       withCoreDb,
-      withEngineDb: fn => withIsolatedEngineDb(fn, { readonly: false }),
+      withEngineDb: withEngineDbWritable,
     });
     const syncIndexIfNeeded = createIndexSyncRuntime({
       memoryRoot: paths.workspaceDir,
       watchDirs: INDEX_SYNC_WATCH_DIRS,
       withCoreDb,
-      withEngineDb: fn => withIsolatedEngineDb(fn, { readonly: false }),
+      withEngineDb: withEngineDbWritable,
       getSharedMemoryManager,
       collectIndexedFiles,
       readIndexedPathState,
@@ -94,13 +94,13 @@ export default definePluginEntry({
     });
 
     try {
-      withDb(db => {
-        ensureMemoryEngineTables(db);
-        const migration = migrateLegacyMemoryEventsFromCore(db);
-        if ((migration?.migrated || 0) > 0) {
-          console.log(`[memory-engine] migrated ${migration.migrated} legacy memory_events rows from core DB`);
-        }
-      });
+      withEngineDbWritable(db => ensureMemoryEngineTables(db));
+      const migration = withCoreDb(coreDb => withEngineDbWritable(engineDb => (
+        migrateLegacyMemoryEventsFromCore(engineDb, coreDb)
+      )));
+      if ((migration?.migrated || 0) > 0) {
+        console.log(`[memory-engine] migrated ${migration.migrated} legacy memory_events rows from core DB`);
+      }
       memoryStorageReady = database.ensureWritable();
     } catch (error) {
       console.error("[memory-engine] failed to init confidence table:", error.message);
@@ -126,13 +126,12 @@ export default definePluginEntry({
       autoRecallConfig,
       apiConfig: api?.config || null,
       recordMemoryEvent,
-      withDb,
+      withDb: withEngineDbWritable,
       resolvePrefixes,
       batchReinforce,
     });
     const hybridRuntimeContext = createHybridRuntimeContext({
       dataAccess: {
-        withDb,
         withHybridDbAccessScope,
         getLancedbTable,
         getLancedbRuntime: getLanceDBRuntime,
@@ -168,6 +167,8 @@ export default definePluginEntry({
         buildSmartAddFingerprint,
         appendSmartAdd,
         catParams,
+        withCoreDb,
+        withEngineDb: withEngineDbWritable,
         existsSync,
         readFileSync,
         kgPath: paths.kgPath,
@@ -183,6 +184,8 @@ export default definePluginEntry({
     const executeMemoryEngineGet = createMemoryEngineGetExecute({
       hybrid: hybridRuntimeContext,
       get: {
+        withCoreDb,
+        withEngineDb: withEngineDbReadonly,
         onMemoryEngineGetSuccess: autoRecallLifecycle.onMemoryEngineGetSuccess,
       },
     });

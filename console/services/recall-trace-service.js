@@ -1,4 +1,4 @@
-import { safeJson, tableExists, withDb } from "./db.js";
+import { safeJson, tableExists, withCoreDb, withDb } from "./db.js";
 
 function eventRow(row) {
   return { ...row, metadata: safeJson(row.metadata_json, {}) };
@@ -84,6 +84,9 @@ export function recentTraces({ limit = 50 } = {}) {
 }
 
 export function overviewSnapshot() {
+  const memoryCount = withCoreDb(db => (
+    tableExists(db, "chunks") ? db.prepare("SELECT COUNT(*) AS count FROM chunks").get().count : 0
+  ));
   return withDb(db => {
     const eventCounts = db.prepare(`
       SELECT event_type, COUNT(*) AS count
@@ -92,7 +95,6 @@ export function overviewSnapshot() {
       GROUP BY event_type
       ORDER BY count DESC
     `).all();
-    const memoryCount = tableExists(db, "chunks") ? db.prepare("SELECT COUNT(*) AS count FROM chunks").get().count : 0;
     const activeCount = db.prepare("SELECT COUNT(*) AS count FROM memory_confidence WHERE is_archived = 0").get().count;
     const archivedCount = db.prepare("SELECT COUNT(*) AS count FROM memory_confidence WHERE is_archived = 1").get().count;
     const recentEvents = db.prepare("SELECT * FROM memory_events ORDER BY id DESC LIMIT 12").all().map(eventRow);

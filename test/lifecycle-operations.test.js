@@ -6,6 +6,7 @@ import {
   applyKgBridge,
   archiveLowConfidence,
   detectRelatedConflicts,
+  detectRelatedConflictsIsolated,
 } from "../lib/lifecycle/operations.js";
 
 function createDb() {
@@ -128,5 +129,65 @@ test("detectRelatedConflicts flags one unique lower-confidence related memory", 
     assert.equal(db.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'other'").get().conflict_flag, 0);
   } finally {
     db.close();
+  }
+});
+
+test("detectRelatedConflictsIsolated preserves conflict behavior without cross-database SQL", () => {
+  const coreDb = new Database(":memory:");
+  const engineDb = new Database(":memory:");
+  try {
+    coreDb.exec(`
+      CREATE TABLE chunks (
+        id TEXT PRIMARY KEY,
+        text TEXT,
+        path TEXT
+      );
+    `);
+    engineDb.exec(`
+      CREATE TABLE memory_confidence (
+        chunk_id TEXT PRIMARY KEY,
+        confidence REAL,
+        last_confidence_update INTEGER,
+        hit_count INTEGER DEFAULT 0,
+        base_tau REAL DEFAULT 7,
+        is_protected INTEGER DEFAULT 0,
+        is_archived INTEGER DEFAULT 0,
+        conflict_flag INTEGER DEFAULT 0,
+        category TEXT,
+        kg_data TEXT
+      );
+    `);
+
+    const insertChunk = coreDb.prepare("INSERT INTO chunks (id, text, path) VALUES (?, ?, ?)");
+    insertChunk.run("old", "prefers compact terminal output and vim keybindings", "preferences/editor-a.md");
+    insertChunk.run("new", "prefers compact terminal output and vim keybindings with tabs", "preferences/editor-b.md");
+    insertChunk.run("other", "database vector retrieval architecture", "systems/vector-index.md");
+
+    const insertConfidence = engineDb.prepare(`
+      INSERT INTO memory_confidence
+      (chunk_id, confidence, last_confidence_update, hit_count, is_archived, category)
+      VALUES (?, ?, ?, ?, 0, 'preference')
+    `);
+    insertConfidence.run("old", 0.2, 100, 0);
+    insertConfidence.run("new", 0.9, 300, 8);
+    insertConfidence.run("other", 0.1, 200, 0);
+
+    const flagged = [];
+    const result = detectRelatedConflictsIsolated({
+      withCoreDb: run => run(coreDb),
+      withEngineDb: run => run(engineDb),
+      onFlagged: id => flagged.push(id),
+    });
+
+    assert.deepEqual(coreDb.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
+    assert.deepEqual(engineDb.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
+    assert.equal(result.pairs_checked >= 1, true);
+    assert.deepEqual(result.ids, ["old"]);
+    assert.deepEqual(flagged, ["old"]);
+    assert.equal(engineDb.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old'").get().conflict_flag, 1);
+    assert.equal(engineDb.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'other'").get().conflict_flag, 0);
+  } finally {
+    engineDb.close();
+    coreDb.close();
   }
 });

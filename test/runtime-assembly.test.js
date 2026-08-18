@@ -120,10 +120,17 @@ test("DB runtime pins Core and Engine paths after assembly", () => {
     process.env.MEMORY_ENGINE_CORE_DB_PATH = otherCoreDbPath;
     process.env.MEMORY_ENGINE_DB_PATH = otherEngineDbPath;
 
-    assembly.database.withDb(db => {
+    assembly.database.withEngineDbWritable(db => {
       db.exec("CREATE TABLE runtime_assembly_probe (value TEXT)");
       db.prepare("INSERT INTO runtime_assembly_probe (value) VALUES (?)").run("pinned");
-      assert.equal(db.prepare("SELECT id FROM core.chunks").get().id, "pinned-core");
+      assert.deepEqual(db.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
+    }, {
+      coreDbPath: otherCoreDbPath,
+      engineDbPath: otherEngineDbPath,
+    });
+    assembly.database.withCoreDb(db => {
+      assert.equal(db.prepare("SELECT id FROM chunks").get().id, "pinned-core");
+      assert.deepEqual(db.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
     }, {
       coreDbPath: otherCoreDbPath,
       engineDbPath: otherEngineDbPath,
@@ -149,7 +156,9 @@ test("DB runtime pins Core and Engine paths after assembly", () => {
         isolatedFts: true,
         isolatedKg: true,
         isolatedRecent: true,
+        legacyFallbackAllowed: false,
       });
+      assert.equal("withLegacyDb" in access, false);
       access.withCoreDb(db => {
         assert.equal(db.prepare("SELECT id FROM chunks").get().id, "pinned-core");
       });

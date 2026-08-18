@@ -219,6 +219,7 @@ function makeCtx(accessors, overrides = {}) {
     recentAccessMode: "legacy",
     recentIsolationRequested: false,
     recentIsolationFallbackReason: null,
+    legacyFallbackAllowed: true,
     minConfidence,
     ...overrides,
   };
@@ -519,6 +520,44 @@ test("isolated Recent falls back to legacy on archived or metadata TEXT guard fa
   assert.equal(metadataFallback.debug.recent_shadow_would_fail_closed, true);
   assert.equal(metadataFallback.debug.recent_shadow_dropped_candidate_count, 1);
   assert.equal(metadataFallback.debug.recent_shadow_risk_level, "medium");
+});
+
+test("production isolated Recent blocks legacy fallback when capability is disabled", async () => {
+  let legacyCalls = 0;
+  const ctx = makeCtx({
+    withDb: run => {
+      legacyCalls += 1;
+      return run({
+        prepare: () => ({ all: () => [{ id: "legacy", text: "alpha", path: "memory/smart-add/legacy.md", updated_at: 1, confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 3, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }] }),
+      });
+    },
+    withCoreDb: run => run({
+      readonly: true,
+      prepare: () => ({ all: () => [{ id: Buffer.from("blob"), text: "alpha", path: "memory/smart-add/blob.md", updated_at: 1 }] }),
+    }),
+    withEngineDb: run => run({
+      readonly: true,
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("COALESCE(is_archived, 0) != 0")) return { all: () => [] };
+        if (query.includes("WITH selected AS")) return { all: () => [] };
+        return { all: () => [] };
+      },
+    }),
+  }, {
+    ftsIsEmpty: false,
+    recentAccessMode: "isolated",
+    recentIsolationRequested: true,
+    legacyFallbackAllowed: false,
+  });
+
+  await collectRecentCandidates(ctx);
+  assert.equal(legacyCalls, 0);
+  assert.equal(ctx.debug.recent_access_mode, "isolated_blocked");
+  assert.equal(ctx.debug.recent_isolated_fallback_reason, "isolated_recent_core_candidate_id_invariant_failed");
+  assert.equal(ctx.debug.recent_legacy_fallback_disabled, true);
+  assert.equal(ctx.debug.recent_fail_closed_fallback_suppressed, true);
+  assert.equal(Array.isArray(ctx.channels.recent), false);
 });
 
 test("isolated Recent falls back to legacy when archived IDs are null, blob, integer, or real before Core SQL", async () => {

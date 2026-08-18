@@ -16,34 +16,32 @@ export { ensureMemoryConfidenceTable, ensureMemoryEventsTable, tableExists };
 export const DB_PATH = database.engineDbPath;
 export const CORE_PATH = database.coreDbPath;
 
-export function openDb(options = {}) {
-  return database.openDb({ readonly: options.readonly ?? false });
+export function withCoreDb(fn) {
+  return database.withCoreDb(fn);
 }
 
 export function initConsoleStorage() {
-  const db = openDb();
-  try {
+  database.withEngineDbWritable(db => {
     ensureMemoryEventsTable(db);
     ensureMemoryConfidenceTable(db);
-    migrateLegacyMemoryEventsFromCore(db);
-  } finally {
-    db.close();
-  }
+  });
+  return database.withCoreDb(coreDb => database.withEngineDbWritable(engineDb => (
+    migrateLegacyMemoryEventsFromCore(engineDb, coreDb)
+  )));
 }
 
+// Compatibility name for Console services that only use Engine-owned tables.
+// This no longer exposes an attached Core schema.
 export function withDb(fn, options = {}) {
   const readonly = Boolean(options.readonly);
-  const db = openDb({ readonly });
-  try {
+  const run = readonly ? database.withEngineDbReadonly : database.withEngineDbWritable;
+  return run(db => {
     if (!readonly) {
       ensureMemoryEventsTable(db);
       ensureMemoryConfidenceTable(db);
-      migrateLegacyMemoryEventsFromCore(db);
     }
     return fn(db);
-  } finally {
-    db.close();
-  }
+  });
 }
 
 export function safeJson(value, fallback = null) {

@@ -2,15 +2,14 @@
 /**
  * Command-safe Memory Engine nightly maintenance.
  *
- * Reads OpenClaw Core through an attached read-only namespace and delegates
- * Engine lifecycle mutation to the shared lifecycle service primitives.
+ * Core is always opened through an isolated read-only handle. Engine is
+ * isolated as well: read-only for --dry-run and writable only for mutating
+ * execution. No Core database is attached to the Engine connection.
  */
 
-const Database = require('better-sqlite3');
 const { existsSync, readFileSync } = require('node:fs');
 const { homedir } = require('node:os');
 const { resolve } = require('node:path');
-const { patchWriteGuards } = require('../lib/db/core-write-guard.cjs');
 
 const HOME = homedir();
 const WORKSPACE = process.env.OPENCLAW_WORKSPACE || resolve(HOME, '.openclaw/workspace');
@@ -29,21 +28,27 @@ function die(message) {
   process.exitCode = 1;
 }
 
-function escapeSqlString(value) {
-  return String(value).replace(/'/g, "''");
+function closeDb(db) {
+  if (db?.open) db.close();
 }
 
-function withBothDbs(fn) {
+function withIsolatedDbs({ openCoreDbReadonly, openEngineDbIsolated }, fn) {
   if (!existsSync(ENGINE_DB_PATH)) throw new Error(`engine DB not found: ${ENGINE_DB_PATH}`);
   if (!existsSync(CORE_DB_PATH)) throw new Error(`core DB not found: ${CORE_DB_PATH}`);
-  const db = new Database(ENGINE_DB_PATH, { readonly: false, fileMustExist: true });
-  db.pragma('busy_timeout = 5000');
-  db.exec(`ATTACH DATABASE '${escapeSqlString(CORE_DB_PATH)}' AS core`);
-  patchWriteGuards(db, { message: 'writes to OpenClaw core DB are blocked in nightly maintenance command' });
+  const dbOptions = {
+    coreDbPath: CORE_DB_PATH,
+    engineDbPath: ENGINE_DB_PATH,
+  };
+  const coreDb = openCoreDbReadonly(dbOptions);
+  const engineDb = openEngineDbIsolated({
+    ...dbOptions,
+    readonly: DRY_RUN,
+  });
   try {
-    return fn(db);
+    return fn({ coreDb, engineDb });
   } finally {
-    db.close();
+    closeDb(engineDb);
+    closeDb(coreDb);
   }
 }
 
@@ -55,8 +60,8 @@ function calcNightlyRealtimeConfidence(row, nowSec) {
   return Number(row.confidence || 0) * Math.exp(-deltaDays / tau);
 }
 
-function recordMemoryEvent(db, eventType, memoryId, source, metadata = {}) {
-  db.prepare([
+function recordMemoryEvent(engineDb, eventType, memoryId, source, metadata = {}) {
+  engineDb.prepare([
     'INSERT INTO memory_events',
     '(event_type, memory_id, source, metadata_json)',
     'VALUES (?, ?, ?, ?)',
@@ -72,9 +77,9 @@ function readKnowledgeGraph() {
   };
 }
 
-function status(db) {
-  const totalChunks = db.prepare('SELECT COUNT(*) AS c FROM core.chunks').get();
-  const confidence = db.prepare([
+function status(coreDb, engineDb) {
+  const coreIds = coreDb.prepare('SELECT id FROM chunks').all().map(row => String(row.id));
+  const confidence = engineDb.prepare([
     'SELECT COUNT(*) AS total,',
     'SUM(is_archived) AS archived,',
     'SUM(is_protected) AS protected,',
@@ -84,21 +89,19 @@ function status(db) {
     'ROUND(AVG(hit_count), 2) AS avg_hits',
     'FROM memory_confidence',
   ].join(' ')).get();
-  const byCategory = db.prepare([
+  const byCategory = engineDb.prepare([
     'SELECT category, COUNT(*) AS count',
     'FROM memory_confidence',
     'WHERE is_archived = 0',
     'GROUP BY category',
     'ORDER BY count DESC',
   ].join(' ')).all();
-  const missing = db.prepare([
-    'SELECT COUNT(*) AS c',
-    'FROM core.chunks c',
-    'LEFT JOIN memory_confidence mc ON c.id = mc.chunk_id',
-    'WHERE mc.chunk_id IS NULL',
-  ].join(' ')).get();
+  const tracked = new Set(
+    engineDb.prepare('SELECT chunk_id FROM memory_confidence').all().map(row => String(row.chunk_id)),
+  );
+  const missingCount = coreIds.reduce((count, id) => count + (tracked.has(id) ? 0 : 1), 0);
   return {
-    chunks_total: totalChunks.c,
+    chunks_total: coreIds.length,
     confidence_tracked: confidence.total || 0,
     archived: confidence.archived || 0,
     protected: confidence.protected || 0,
@@ -106,7 +109,7 @@ function status(db) {
     avg_confidence: confidence.avg_confidence || 0,
     avg_tau: confidence.avg_tau || 0,
     avg_hits: confidence.avg_hits || 0,
-    chunks_missing_confidence: missing.c || 0,
+    chunks_missing_confidence: missingCount,
     by_category: byCategory,
   };
 }
@@ -114,41 +117,48 @@ function status(db) {
 async function main() {
   try {
     const {
+      openCoreDbReadonly,
+      openEngineDbIsolated,
+    } = await import('../lib/db/isolated-dbs.js');
+    const {
       applyKgBridge,
       archiveLowConfidence,
-      detectRelatedConflicts,
+      detectRelatedConflictsIsolated,
     } = await import('../lib/lifecycle/operations.js');
     const startedAt = new Date().toISOString();
     const nowSec = Math.floor(Date.now() / 1000);
     const knowledgeGraph = readKnowledgeGraph();
 
-    const result = withBothDbs((db) => {
-      const detectConflicts = detectRelatedConflicts(db, {
-        chunksTable: 'core.chunks',
+    const result = withIsolatedDbs({ openCoreDbReadonly, openEngineDbIsolated }, ({ coreDb, engineDb }) => {
+      const withCoreDb = run => run(coreDb);
+      const withEngineDb = run => run(engineDb);
+      const detectConflicts = detectRelatedConflictsIsolated({
+        withCoreDb,
+        withEngineDb,
         dryRun: DRY_RUN,
         onFlagged(id, pairsChecked) {
-          recordMemoryEvent(db, 'memory_conflict_flagged', id, 'nightly-maintenance.detect-conflicts', {
+          recordMemoryEvent(engineDb, 'memory_conflict_flagged', id, 'nightly-maintenance.detect-conflicts', {
             pairs_checked: pairsChecked,
           });
         },
       });
-      const archive = archiveLowConfidence(db, {
+      const archive = archiveLowConfidence(engineDb, {
         threshold: ARCHIVE_THRESHOLD,
         dryRun: DRY_RUN,
         shouldArchive: row => calcNightlyRealtimeConfidence(row, nowSec) < ARCHIVE_THRESHOLD,
         onArchived(id) {
-          recordMemoryEvent(db, 'memory_archived', id, 'nightly-maintenance.archive', {
+          recordMemoryEvent(engineDb, 'memory_archived', id, 'nightly-maintenance.archive', {
             threshold: ARCHIVE_THRESHOLD,
           });
         },
       });
       const kgBridge = knowledgeGraph
-        ? applyKgBridge(db, {
+        ? applyKgBridge(engineDb, {
           ...knowledgeGraph,
           limit: 10,
           dryRun: DRY_RUN,
           onCompleted(metadata) {
-            recordMemoryEvent(db, 'kg_bridge_synced', null, 'nightly-maintenance.kg-bridge', metadata);
+            recordMemoryEvent(engineDb, 'kg_bridge_synced', null, 'nightly-maintenance.kg-bridge', metadata);
           },
         })
         : { skipped: true, reason: `knowledge graph not found: ${KG_PATH}`, dry_run: DRY_RUN };
@@ -156,10 +166,10 @@ async function main() {
         detect_conflicts: detectConflicts,
         archive,
         kg_bridge: kgBridge,
-        status: status(db),
+        status: status(coreDb, engineDb),
       };
       if (!DRY_RUN) {
-        recordMemoryEvent(db, 'nightly_maintenance_completed', null, 'nightly-maintenance.command', steps);
+        recordMemoryEvent(engineDb, 'nightly_maintenance_completed', null, 'nightly-maintenance.command', steps);
       }
       return steps;
     });

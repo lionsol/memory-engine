@@ -80,19 +80,16 @@ test("production isolated factory exposes all channel capabilities and main-only
   try {
     let coreHandle;
     let engineHandle;
-    const withHybridDbAccessScope = createIsolatedHybridDbAccessScope({
-      ...paths,
-      withLegacyDb: () => {
-        throw new Error("legacy accessor must not be used");
-      },
-    });
+    const withHybridDbAccessScope = createIsolatedHybridDbAccessScope(paths);
 
     const result = await withHybridDbAccessScope(async access => {
       assert.deepEqual(access.capabilities, {
         isolatedFts: true,
         isolatedKg: true,
         isolatedRecent: true,
+        legacyFallbackAllowed: false,
       });
+      assert.equal("withLegacyDb" in access, false);
       coreHandle = access.withCoreDb(db => db);
       engineHandle = access.withEngineDb(db => db);
       assert.deepEqual(coreHandle.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
@@ -153,7 +150,7 @@ test("explicit DB access scope routes metadata and channels to the declared read
 });
 
 test("incomplete explicit contracts fail closed without using legacy fallback", async () => {
-  for (const missing of ["withCoreDb", "withEngineDb", "withLegacyDb"]) {
+  for (const missing of ["withCoreDb", "withEngineDb"]) {
     let fallbackCalls = 0;
     const access = {
       withCoreDb: () => undefined,
@@ -196,6 +193,7 @@ test("legacy adapter uses one scoped entry and maps all readers to the scoped ac
     isolatedFts: access.capabilities.isolatedFts,
     isolatedKg: access.capabilities.isolatedKg,
     isolatedRecent: access.capabilities.isolatedRecent,
+    legacyFallbackAllowed: access.capabilities.legacyFallbackAllowed,
   }));
   assert.deepEqual(result, {
     core: "scoped",
@@ -204,6 +202,7 @@ test("legacy adapter uses one scoped entry and maps all readers to the scoped ac
     isolatedFts: false,
     isolatedKg: false,
     isolatedRecent: false,
+    legacyFallbackAllowed: true,
   });
   assert.equal(scopedRuns, 1);
   assert.equal(baseCalls, 0);

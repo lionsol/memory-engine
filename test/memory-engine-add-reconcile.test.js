@@ -74,6 +74,9 @@ test("memory_engine.add keeps Engine metadata and reports partial success when L
       if (normalized.includes("SELECT id FROM chunks WHERE path = ?")) {
         return { all: () => [{ id: "chunk-1" }] };
       }
+      if (normalized.includes("SELECT 1 FROM memory_confidence WHERE chunk_id = ?")) {
+        return { get: () => undefined };
+      }
       if (normalized.includes("INSERT INTO memory_confidence")) {
         return {
           run() {
@@ -91,7 +94,17 @@ test("memory_engine.add keeps Engine metadata and reports partial success when L
 
   const execute = createMemoryEngineExecute(createBaseRuntime({
     appendSmartAdd: async () => ({ appended: true, sync: { synced: true } }),
-    withDb: fn => fn(db),
+    withCoreDb: fn => fn({
+      prepare(sql) {
+        const normalized = String(sql);
+        sqlSeen.push(normalized);
+        if (normalized.includes("SELECT id FROM chunks WHERE path = ?")) {
+          return { all: () => [{ id: "chunk-1" }] };
+        }
+        throw new Error(`unexpected Core SQL: ${normalized}`);
+      },
+    }),
+    withEngineDb: fn => fn(db),
     getLancedbTable: () => ({
       add: async () => {
         throw new Error("vector offline");

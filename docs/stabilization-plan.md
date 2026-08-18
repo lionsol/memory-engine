@@ -10,11 +10,11 @@
 
 The persistent-activation qualification line is closed. The separately authorized Session-Flush Reconciliation Persistent Rollout Successor recorded `PASS` on 2026-08-17, accepted the immutable `ac0e5f0` reconciliation candidate for persistent use, and explicitly requires no R5 or additional persistent-activation qualification. AutoRecall remains disabled by default and broad rollout remains a separate later decision.
 
-Proceed with **Phase 2.5 — Canonical Memory Architecture**, beginning with **2.5-A Canonical Object Contract**. This roadmap records sequence only; the detailed object model, field ownership, and implementation semantics belong to the later product-design session rather than this governance closeout.
+The **L2 Database Boundary Closure product-source change is implemented and source-verified**. Production wiring now removes the combined Engine+attached-Core capability, Hybrid production scope is isolated-only/fail-closed, normal action/get/status/startup/Console/Nightly paths use explicit Core-readonly and Engine-only handles, and direct writable Core maintenance modules remain outside normal runtime entrypoints. Node 24 full-suite verification passed `1867/0/8`. Before describing L2 as closed in the deployed runtime, land this source state and perform only the minimum separately authorized runtime/deployment verification needed to show the active plugin actually contains the closure; do not reopen the historical persistent-rollout retry chain.
 
 ### NEXT
 
-Then advance, in order, through **2.5-B Read-only Canonical Adapter**, **2.5-C Projection Unification**, and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
+After the L2 source closure is landed and its deployment boundary is adjudicated, resume **Phase 2.5 — Canonical Memory Architecture**. Review/finalize the deferred 2.5-A draft at `docs/canonical-memory-object-contract.md`, then advance through **2.5-B Read-only Canonical Adapter**, **2.5-C Projection Unification**, and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
 
 ### LATER
 

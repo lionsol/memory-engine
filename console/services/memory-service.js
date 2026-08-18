@@ -1,4 +1,4 @@
-import { safeJson, tableExists, withDb } from "./db.js";
+import { safeJson, tableExists, withCoreDb, withDb } from "./db.js";
 import { inferCategoryFromPath } from "../../lib/category-inference.js";
 
 function normalizeMemory(row) {
@@ -29,61 +29,102 @@ function normalizeMemory(row) {
   };
 }
 
-export function listMemories({ q = "", category = "", archived = "active", limit = 100 } = {}) {
+function chunked(values, size = 400) {
+  const result = [];
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
+  return result;
+}
+
+function loadEngineMetadata(ids) {
+  if (ids.length === 0) return new Map();
   return withDb(db => {
-    if (!tableExists(db, "chunks")) return [];
-    const where = [];
-    const params = {};
-    if (q) {
-      where.push("(c.text LIKE @q OR c.path LIKE @q OR c.id LIKE @q)");
-      params.q = `%${q}%`;
+    if (!tableExists(db, "memory_confidence")) return new Map();
+    const map = new Map();
+    for (const batch of chunked(ids)) {
+      const placeholders = batch.map(() => "?").join(", ");
+      const rows = db.prepare(`
+        SELECT chunk_id, initial_confidence, confidence, last_confidence_update, base_tau,
+               hit_count, is_archived, is_protected, conflict_flag, category, kg_data
+        FROM memory_confidence
+        WHERE chunk_id IN (${placeholders})
+      `).all(...batch);
+      for (const row of rows) map.set(String(row.chunk_id), row);
     }
-    if (category) {
-      where.push("mc.category = @category");
-      params.category = category;
-    }
-    if (archived === "active") where.push("COALESCE(mc.is_archived, 0) = 0");
-    if (archived === "archived") where.push("COALESCE(mc.is_archived, 0) = 1");
-    params.limit = Math.min(Number(limit) || 100, 500);
-    const select = `
-      SELECT c.id, c.path, c.source, c.start_line, c.end_line, c.hash, c.model, c.text, c.updated_at,
-             mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
-             mc.hit_count, mc.is_archived, mc.is_protected, mc.conflict_flag, mc.category, mc.kg_data
-      FROM chunks c
-      LEFT JOIN memory_confidence mc ON mc.chunk_id = c.id
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-    `;
-    const orderedSql = `${select}
-      ORDER BY COALESCE(mc.is_protected, 0) DESC, COALESCE(mc.confidence, 0) DESC, c.id DESC
-      LIMIT @limit
-    `;
-    const fallbackSql = `${select}
-      LIMIT @limit
-    `;
-    try {
-      return db.prepare(orderedSql).all(params).map(normalizeMemory);
-    } catch (error) {
-      if (!/malformed/i.test(error.message)) throw error;
-      return db.prepare(fallbackSql).all(params).map(row => ({
-        ...normalizeMemory(row),
-        warning: "ordered query skipped because SQLite reported database disk image is malformed",
-      }));
-    }
+    return map;
   }, { readonly: true });
 }
 
+function mergeCoreAndEngine(coreRows, metadata) {
+  return coreRows.map(row => ({
+    ...row,
+    ...(metadata.get(String(row.id)) || {}),
+  }));
+}
+
+function compareMemoryRows(left, right) {
+  const protectedDiff = Number(right.is_protected ?? 0) - Number(left.is_protected ?? 0);
+  if (protectedDiff !== 0) return protectedDiff;
+  const confidenceDiff = Number(right.confidence ?? 0) - Number(left.confidence ?? 0);
+  if (confidenceDiff !== 0) return confidenceDiff;
+  return String(right.id || "").localeCompare(String(left.id || ""));
+}
+
+export function listMemories({ q = "", category = "", archived = "active", limit = 100 } = {}) {
+  const normalizedLimit = Math.min(Number(limit) || 100, 500);
+  let coreRows;
+  let orderedWarning = null;
+  try {
+    coreRows = withCoreDb(db => {
+      if (!tableExists(db, "chunks")) return [];
+      if (q) {
+        return db.prepare(`
+          SELECT id, path, source, start_line, end_line, hash, model, text, updated_at
+          FROM chunks
+          WHERE text LIKE @q OR path LIKE @q OR id LIKE @q
+        `).all({ q: `%${q}%` });
+      }
+      return db.prepare(`
+        SELECT id, path, source, start_line, end_line, hash, model, text, updated_at
+        FROM chunks
+      `).all();
+    });
+  } catch (error) {
+    if (!/malformed/i.test(error.message)) throw error;
+    orderedWarning = "ordered query skipped because SQLite reported database disk image is malformed";
+    coreRows = [];
+  }
+
+  const metadata = loadEngineMetadata(coreRows.map(row => row.id));
+  const merged = mergeCoreAndEngine(coreRows, metadata)
+    .filter(row => {
+      const meta = metadata.get(String(row.id));
+      if (category && meta?.category !== category) return false;
+      if (archived === "active" && Number(meta?.is_archived ?? 0) !== 0) return false;
+      if (archived === "archived" && Number(meta?.is_archived ?? 0) !== 1) return false;
+      return true;
+    })
+    .sort(compareMemoryRows)
+    .slice(0, normalizedLimit)
+    .map(normalizeMemory);
+
+  if (!orderedWarning) return merged;
+  return merged.map(row => ({ ...row, warning: orderedWarning }));
+}
+
 export function getMemory(idPrefix) {
-  return withDb(db => {
+  const row = withCoreDb(db => {
     if (!tableExists(db, "chunks")) return null;
-    const row = db.prepare(`
-      SELECT c.id, c.path, c.source, c.start_line, c.end_line, c.hash, c.model, c.text, c.updated_at,
-             mc.initial_confidence, mc.confidence, mc.last_confidence_update, mc.base_tau,
-             mc.hit_count, mc.is_archived, mc.is_protected, mc.conflict_flag, mc.category, mc.kg_data
-      FROM chunks c
-      LEFT JOIN memory_confidence mc ON mc.chunk_id = c.id
-      WHERE c.id LIKE ? || '%'
+    return db.prepare(`
+      SELECT id, path, source, start_line, end_line, hash, model, text, updated_at
+      FROM chunks
+      WHERE id LIKE ? || '%'
       LIMIT 1
-    `).get(idPrefix);
-    return row ? normalizeMemory(row) : null;
-  }, { readonly: true });
+    `).get(idPrefix) || null;
+  });
+  if (!row) return null;
+  const metadata = loadEngineMetadata([row.id]);
+  return normalizeMemory({
+    ...row,
+    ...(metadata.get(String(row.id)) || {}),
+  });
 }

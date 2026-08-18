@@ -117,6 +117,7 @@ function buildCtx({
   kgAccessMode = "legacy",
   kgIsolationRequested = false,
   kgIsolationFallbackReason = null,
+  legacyFallbackAllowed = true,
 }) {
   const candidateCounts = createCandidateCounts();
   const debug = createHybridDebug({
@@ -136,6 +137,7 @@ function buildCtx({
     kgAccessMode,
     kgIsolationRequested,
     kgIsolationFallbackReason,
+    legacyFallbackAllowed,
     channels: {},
     debug,
     candidateCounts,
@@ -413,6 +415,57 @@ test("isolated KG fail-closes to legacy on matching BLOB candidate IDs and never
       assert.equal(calls.legacy, 1);
       assert.equal(ctx.debug.kg_access_mode, "legacy_fallback");
       assert.equal(ctx.debug.kg_isolated_fallback_reason, "non_text_matching_candidate_id");
+    } finally {
+      engineDb.close();
+      coreDb.close();
+      legacyDb.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("production isolated KG blocks legacy fallback when capability is disabled", async () => {
+  const root = createFixtureRoot();
+  const core = createCoreDb(root);
+  const engine = createEngineDb(root, { duplicateFriendly: true });
+  try {
+    insertChunk(core, Buffer.from("blob-only"), 1000, "alpha blob");
+    insertConfidence(engine, Buffer.from("blob-only"), { kg_data: "alpha blob match" });
+    core.close();
+    engine.close();
+
+    const legacyDb = openLegacy(join(root, "engine.sqlite"), join(root, "core.sqlite"));
+    const coreDb = new Database(join(root, "core.sqlite"), { readonly: true, fileMustExist: true });
+    const engineDb = new Database(join(root, "engine.sqlite"), { readonly: true, fileMustExist: true });
+    const calls = { legacy: 0, core: 0, engine: 0 };
+    try {
+      const ctx = buildCtx({
+        withDb: fn => {
+          calls.legacy += 1;
+          return fn(legacyDb);
+        },
+        withCoreDb: fn => {
+          calls.core += 1;
+          return fn(coreDb);
+        },
+        withEngineDb: fn => {
+          calls.engine += 1;
+          return fn(engineDb);
+        },
+        kgAccessMode: "isolated",
+        kgIsolationRequested: true,
+        legacyFallbackAllowed: false,
+      });
+      const rows = await collectRows(ctx);
+      assert.deepEqual(rows, []);
+      assert.equal(calls.engine, 1);
+      assert.equal(calls.core, 0);
+      assert.equal(calls.legacy, 0);
+      assert.equal(ctx.debug.kg_access_mode, "isolated_blocked");
+      assert.equal(ctx.debug.kg_isolated_fallback_reason, "non_text_matching_candidate_id");
+      assert.equal(ctx.debug.kg_legacy_fallback_disabled, true);
+      assert.equal(ctx.debug.kg_fail_closed_fallback_suppressed, true);
     } finally {
       engineDb.close();
       coreDb.close();

@@ -250,9 +250,12 @@ test("memory_engine_get returns source path and line range when chunk metadata i
   assert.deepEqual(result.memory.line_range, { start: 12, end: 18 });
 });
 
-test("memory_engine_get returns multiple-match metadata for ambiguous id prefixes", async () => {
+test("memory_engine_get preserves managed-first and reinforcement ordering for ambiguous id prefixes", async () => {
   const runtime = createBaseRuntime({
-    withDb: (fn) => fn({
+    withDb: () => {
+      throw new Error("combined DB accessor must not be used");
+    },
+    withCoreDb: (fn) => fn({
       prepare(sql) {
         const query = String(sql);
         if (query.includes("PRAGMA table_info(chunks)")) {
@@ -279,6 +282,30 @@ test("memory_engine_get returns multiple-match metadata for ambiguous id prefixe
                 end_line: 12,
                 updated_at: 1710000000,
                 text: "first ambiguous memory",
+              },
+              {
+                id: "sharedprefix-222222222222",
+                path: "memory/smart-add/2026-05-28.md",
+                source: "memory/smart-add/2026-05-28.md",
+                start_line: 14,
+                end_line: 16,
+                updated_at: 1710000100,
+                text: "second ambiguous memory",
+              },
+            ],
+          };
+        }
+        throw new Error(`unexpected Core SQL: ${query}`);
+      },
+    }),
+    withEngineDb: (fn) => fn({
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("FROM memory_confidence WHERE chunk_id IN")) {
+          return {
+            all: () => [
+              {
+                chunk_id: "sharedprefix-111111111111",
                 confidence: 0.7,
                 last_confidence_update: 1710000000,
                 base_tau: 30,
@@ -289,13 +316,7 @@ test("memory_engine_get returns multiple-match metadata for ambiguous id prefixe
                 category: "preference",
               },
               {
-                id: "sharedprefix-222222222222",
-                path: "memory/smart-add/2026-05-28.md",
-                source: "memory/smart-add/2026-05-28.md",
-                start_line: 14,
-                end_line: 16,
-                updated_at: 1710000100,
-                text: "second ambiguous memory",
+                chunk_id: "sharedprefix-222222222222",
                 confidence: 0.6,
                 last_confidence_update: 1710000100,
                 base_tau: 7,
@@ -308,9 +329,8 @@ test("memory_engine_get returns multiple-match metadata for ambiguous id prefixe
             ],
           };
         }
-        return { all: () => [], get: () => null, run: () => ({}) };
+        throw new Error(`unexpected Engine SQL: ${query}`);
       },
-      transaction: (inner) => inner,
     }),
   });
   const executeGet = createMemoryEngineGetExecute(runtime);
@@ -321,8 +341,8 @@ test("memory_engine_get returns multiple-match metadata for ambiguous id prefixe
   assert.equal(result.id, "sharedprefix");
   assert.equal(result.error, "multiple matches");
   assert.deepEqual(result.matches, [
-    "sharedprefix-111",
     "sharedprefix-222",
+    "sharedprefix-111",
   ]);
   assert.equal("memory" in result, false);
 });
