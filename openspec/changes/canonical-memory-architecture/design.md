@@ -12,7 +12,7 @@ The current Core chunk, Engine `memory_confidence`, Lance projection, retrieval 
 
 **Non-Goals:**
 
-- No 2.5-B adapter implementation in this change.
+- No production consumer wiring or runtime activation in this change; the 2.5-B source adapter remains read-only and isolated.
 - No third database, Core schema mutation, Engine schema migration in A/B, Lance authority, ranking change in A/B, AutoRecall enablement, or multi-agent ACL.
 - No persistent write authorization from OpenSpec itself.
 
@@ -48,7 +48,7 @@ Reconciliation integration may later consume canonical identity, but any Core-to
 ## Migration Plan
 
 1. Close the 2.5-A contract and contract tests.
-2. In a later scoped implementation, build the read-only isolated 2.5-B adapter and prove managed/external/failure parity.
+2. In this change, build the read-only isolated 2.5-B adapter and prove managed/external/failure parity without adding a production consumer.
 3. In a later 2.5-C change, migrate projections behind parity checks before removing duplicate semantics.
 4. In a separately authorized 2.5-D change, design and qualify persistent reconciliation writes with rollback and DB-boundary evidence.
 

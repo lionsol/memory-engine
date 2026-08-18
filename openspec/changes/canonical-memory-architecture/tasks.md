@@ -2,13 +2,13 @@
 
 - [x] 1.1 Finalize `docs/canonical-memory-object-contract.md` with exact Core field mappings, exact-id failure behavior, category authority, kind mapping, temporal rules, and deferred eligibility boundaries.
 - [x] 1.2 Add contract regression assertions covering identity, ownership, category, kind, temporal, runtime evidence, eligibility, and A/B/D boundaries.
-- [ ] 1.3 Keep the finalized contract and this OpenSpec change as the references for all later Phase 2.5 work.
+- [x] 1.3 Keep the finalized contract and this OpenSpec change as the references for all later Phase 2.5 work.
 
 ## 2. Phase 2.5-B — Read-only Canonical Adapter
 
-- [ ] 2.1 Implement the adapter only with isolated readonly Core and Engine handles; do not add a canonical table, schema migration, or production wiring in the design phase.
-- [ ] 2.2 Implement exact-id, fail-closed lookup and valid external-object behavior for absent Engine rows.
-- [ ] 2.3 Prove Core field mapping, category authority chain, closed kind mapping, supported episode-date relation, and no-`text_inference` behavior with fixtures.
+- [x] 2.1 Implement the adapter only with isolated readonly Core and Engine handles; do not add a canonical table, schema migration, or production wiring.
+- [x] 2.2 Implement exact-id, fail-closed lookup and valid external-object behavior for absent Engine rows.
+- [x] 2.3 Prove Core field mapping, category authority chain, closed kind mapping, supported episode-date relation, and no-`text_inference` behavior with fixtures.
 
 ## 3. Phase 2.5-C — Projection Unification
 
@@ -24,4 +24,4 @@
 
 ## 5. Non-goal and safety review
 
-- [ ] 5.1 Confirm no phase task enables AutoRecall, changes ranking in A/B, changes multi-agent ACL, grants Lance authority, or treats this OpenSpec as persistent-write authorization.
+- [x] 5.1 Confirm no phase task enables AutoRecall, changes ranking in A/B, changes multi-agent ACL, grants Lance authority, or treats this OpenSpec as persistent-write authorization.
