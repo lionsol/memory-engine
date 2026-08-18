@@ -28,7 +28,7 @@ The read-only adapter reads Core through a readonly isolated handle and Engine t
 
 ### 3. Eligibility remains intentionally deferred
 
-The current code has multiple policy boundaries: quality scope/path family, retrieval/channel thresholds and availability, AutoRecall gates, and Memory Card disclosure policy. Since they do not provide one unique query-independent and agent-independent canonical baseline, retrieval/vector/disclosure eligibility fields are deferred to 2.5-C rather than frozen spec fiction.
+The current code has multiple policy boundaries: quality scope/path family, retrieval/channel thresholds and availability, AutoRecall gates, and Memory Card disclosure policy. Since they do not provide one unique query-independent and agent-independent canonical baseline, eligibility remains downstream projection policy and Canonical v1 adds no eligibility fields.
 
 ### 4. C requires parity before removal
 
@@ -41,7 +41,7 @@ Reconciliation integration may later consume canonical identity, but any Core-to
 ## Risks / Trade-offs
 
 - [Risk] A/B consumers may accidentally reintroduce combined database access. → Require isolated handle tests and static boundary checks before adapter implementation is accepted.
-- [Risk] A deferred eligibility field may be mistaken for a stable policy. → Keep the fields explicitly outside Canonical v1 until 2.5-C establishes one deterministic baseline rule.
+- [Risk] A deferred eligibility field may be mistaken for a stable policy. → Keep eligibility explicitly outside Canonical v1 and downstream after the C3 parity review.
 - [Risk] Projection migration may change user-visible recall/card behavior. → Require parity evidence before deleting duplicated inference and keep ranking/runtime evidence downstream.
 - [Risk] D could be treated as implicitly authorized by this architecture record. → Require separate owner authorization for every persistent write or runtime activation.
 
@@ -49,7 +49,7 @@ Reconciliation integration may later consume canonical identity, but any Core-to
 
 1. Close the 2.5-A contract and contract tests.
 2. In this change, build the read-only isolated 2.5-B adapter and prove managed/external/failure parity without adding a production consumer.
-3. C1 adds a source-only canonical-aware Memory Card/MemoryObject projection with explicit parity tests. C2 adds isolated top-K Hybrid result canonicalization and exact identity propagation behind batch-read and drift counters; C3 remains for vector-facing consumers before duplicated semantics are removed.
+3. C1 adds a source-only canonical-aware Memory Card/MemoryObject projection with explicit parity tests. C2 adds isolated top-K Hybrid result canonicalization and exact identity propagation behind batch-read and drift counters. C3 defines a pure canonical vector projection and Lance-row materializer with parity evidence; persistent Lance writer adoption remains a separately authorized 2.5-D decision.
 4. In a separately authorized 2.5-D change, design and qualify persistent reconciliation writes with rollback and DB-boundary evidence.
 
 No runtime/config/database mutation is part of this change.
@@ -60,4 +60,18 @@ C1 is source implemented and test-verified for the Memory Card/MemoryObject proj
 
 ## Phase 2.5-C2 status
 
-C2 is source implemented and test-verified for isolated Hybrid result projection. After ranking, only served top-K candidates are batch-read through isolated readonly Core and Engine handles; public `id` remains the 16-character compatibility prefix while `memory_id` and `canonical_id` carry exact canonical identity. Legacy combined `withDb` callers retain their existing output contract, ranking/channel selection is unchanged, and C3 vector-facing canonicalization remains incomplete.
+C2 is source implemented and test-verified for isolated Hybrid result projection. After ranking, only served top-K candidates are batch-read through isolated readonly Core and Engine handles; public `id` remains the 16-character compatibility prefix while `memory_id` and `canonical_id` carry exact canonical identity. Legacy combined `withDb` callers retain their existing output contract, and ranking/channel selection is unchanged. At C2 closeout, C3 vector-facing canonicalization remained incomplete.
+
+## Phase 2.5-C3 status and parity review
+
+C3 is source implemented and test-verified as a pure Canonical Vector Projection v1. It preserves exact `memory_id`/`canonical_id`, carries the canonical content hash in the projection envelope, and uses the first 2000 characters of canonical `source.text` as both vector `text` and `embedding_input`. `materializeCanonicalLanceRow()` emits only the existing `{ id, text, vector, timestamp }` row shape. No `table.add()`/`lancedbTable.add()` call, embedding model, runtime configuration, database, or persistent consumer was changed.
+
+Eligibility review result: eligibility remains downstream projection policy; Canonical v1 introduces no `vector_eligible`, `retrieval_eligible`, `disclosure_eligible`, or risk fields.
+
+| Current path | id parity | projection-text parity | embedding/text parity | canonical source authority |
+|---|---|---|---|---|
+| orphan/reconciliation | PASS | PASS | PASS | Core chunk text |
+| `memory_engine add` <=2000 chars | PASS | conditional | PASS | UNPROVEN/DRIFT: raw add input is not proven equal to final Core text |
+| `memory_engine add` >2000 chars | PASS | conditional | DRIFT | UNPROVEN/DRIFT: raw add input is not proven equal to final Core text |
+
+Final C parity is `PASS_WITH_FINDINGS`: C1 card canonical projection parity PASS; C2 Hybrid result canonical projection parity PASS with mismatch counters retained; C3 vector projection contract PASS. The existing long-text `memory_engine add` vector/text drift and unproven raw-input/Core-source authority remain intentional findings deferred to 2.5-D; no legacy persistent inference was removed.

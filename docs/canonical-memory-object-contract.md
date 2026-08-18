@@ -530,6 +530,15 @@ Only explicit cited memory ids from the current turn may enter reinforcement.
 
 Lance is a disposable/rebuildable projection keyed by canonical memory identity compatibility.
 
+Canonical Vector Projection v1 freezes the downstream text boundary as:
+
+```text
+CANONICAL_VECTOR_PROJECTION_VERSION = 1
+CANONICAL_VECTOR_TEXT_MAX_CHARS = 2000
+```
+
+The projection reads the exact canonical `source.text`, preserves the full source text in the Canonical Memory Object, and uses only `source.text.slice(0, 2000)` as both `text` and `embedding_input`. `text_truncated` and `source_text_length` describe the downstream projection; they do not truncate or mutate canonical content. A future vector projection version may change this boundary without changing `memory_id` or `canonical_id`.
+
 V1 mapping:
 
 ```text
@@ -547,6 +556,8 @@ LanceDB must not become authority for:
 - lifecycle;
 - source provenance;
 - disclosure policy.
+
+The pure vector projection envelope may carry `canonical_id`, `source_content_hash`, and `projection_version` for audit/rebuild reasoning. The current Lance row schema remains exactly `{ id, text, vector, timestamp }`; it does not store canonical metadata, category, confidence, lifecycle, path, or content hash. Vector materialization requires a caller-supplied finite timestamp and never calls the clock, embedding model, network, or runtime configuration.
 
 A missing or stale Lance row is a projection/reconciliation problem, not evidence that the canonical memory does not exist.
 
@@ -609,7 +620,7 @@ canonical schema version != Lance embedding/model version
 
 A canonical schema-version change must not change `canonical_id` for the same source chunk.
 
-A projection may add its own version and cache/rebuild policy without changing canonical identity.
+A projection may add its own version and cache/rebuild policy without changing canonical identity. An embedding model/version change also does not change `memory_id` or `canonical_id`.
 
 ## 15. Phase sequence
 

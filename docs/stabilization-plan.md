@@ -8,11 +8,11 @@
 
 ### NOW
 
-With L2 Database Boundary Closure complete, **Phase 2.5-A Canonical Memory Object Contract is `CLOSED / PASS`**, **Phase 2.5-B is implemented/source verified**, **Phase 2.5-C1 is `PASS`**, and **Phase 2.5-C2 Hybrid top-result canonicalization is implemented/source verified** under the active OpenSpec change `canonical-memory-architecture`. Legacy combined `withDb` output, ranking/channel selection, Lance writes, and AutoRecall runtime wiring remain unchanged. **C3 vector-facing canonicalization is NEXT.**
+With L2 Database Boundary Closure complete, **Phase 2.5-A is `CLOSED / PASS`**, **Phase 2.5-B is `CLOSED / PASS`**, and **Phase 2.5-C1/C2/C3 are `PASS`** under the active OpenSpec change `canonical-memory-architecture`; overall **Phase 2.5-C is `PASS_WITH_FINDINGS`**. The final finding is the existing long-text `memory_engine add` embedding/text drift and unproven raw-input/Core-source authority, deferred to separately authorized Phase 2.5-D. No persistent writer, Lance schema, embedding model, runtime config, or AutoRecall behavior changed.
 
 ### NEXT
 
-After a separately scoped implementation decision, advance through **2.5-C3 vector-facing canonicalization** and **2.5-D Reconciliation Integration**. Each step must be scoped and risk-classified when it becomes active work; this roadmap does not pre-commit its detailed schema, ownership model, or runtime mechanics.
+Advance next to **2.5-D Reconciliation Integration** only after a separate owner authorization appropriate to persistent writes, migration, runtime activation, or rollout. This roadmap does not itself authorize that work or pre-commit its detailed schema, ownership model, or runtime mechanics.
 
 ### CLOSED
 
