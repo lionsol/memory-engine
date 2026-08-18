@@ -13,6 +13,9 @@
 ## 3. Phase 2.5-C — Projection Unification
 
 - [ ] 3.1 Migrate Recall, Memory Card, and vector-facing semantic normalization to consume the Canonical Memory Object.
+  - [x] 3.1a Add canonical-aware Memory Card/MemoryObject projection with legacy candidate-only compatibility preserved.
+  - [ ] 3.1b Canonicalize Hybrid public results and propagate exact memory identity.
+  - [ ] 3.1c Canonicalize vector-facing semantic normalization without changing Lance authority or writes.
 - [ ] 3.2 Keep query/ranking/channel/agent/citation evidence downstream and establish deterministic eligibility policy before adding any canonical eligibility field.
 - [ ] 3.3 Demonstrate compatibility parity before removing duplicated semantic inference.
 

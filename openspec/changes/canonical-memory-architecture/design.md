@@ -24,7 +24,7 @@ The implementation contract remains `docs/canonical-memory-object-contract.md`; 
 
 ### 2. A/B are read-only and isolated
 
-The future adapter will read Core through a readonly isolated handle and Engine through an isolated readonly handle. It will not use combined Core+Engine SQL, infer an identity from path/span/text, repair persistent state, or emit `text_inference`. Missing Engine state produces an external object; missing or ambiguous Core identity fails closed.
+The read-only adapter reads Core through a readonly isolated handle and Engine through an isolated readonly handle. It does not use combined Core+Engine SQL, infer an identity from path/span/text, repair persistent state, or emit `text_inference`. Missing Engine state produces an external object; missing or ambiguous Core identity fails closed.
 
 ### 3. Eligibility remains intentionally deferred
 
@@ -49,7 +49,11 @@ Reconciliation integration may later consume canonical identity, but any Core-to
 
 1. Close the 2.5-A contract and contract tests.
 2. In this change, build the read-only isolated 2.5-B adapter and prove managed/external/failure parity without adding a production consumer.
-3. In a later 2.5-C change, migrate projections behind parity checks before removing duplicate semantics.
+3. C1 adds a source-only canonical-aware Memory Card/MemoryObject projection with explicit parity tests; later C2/C3 work migrates Hybrid and vector-facing consumers behind parity checks before removing duplicate semantics.
 4. In a separately authorized 2.5-D change, design and qualify persistent reconciliation writes with rollback and DB-boundary evidence.
 
 No runtime/config/database mutation is part of this change.
+
+## Phase 2.5-C1 status
+
+C1 is source implemented and test-verified for the Memory Card/MemoryObject projection. The legacy candidate-only APIs remain available, the AutoRecall runtime wiring is unchanged, and no Hybrid result or Lance path consumes the new projector. C2 Hybrid canonicalization and C3 vector-facing canonicalization remain incomplete.

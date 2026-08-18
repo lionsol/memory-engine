@@ -24,4 +24,4 @@ Phase 2.5 needs one stable semantic boundary before read-only adapters, downstre
 - Authoritative contract: `docs/canonical-memory-object-contract.md`.
 - Future read-only adapter and projection consumers must use exact Core identity and isolated Core/Engine access.
 - Future reconciliation integration is a separate persistent-write decision and is not authorized by this change.
-- This change adds only the read-only adapter source and tests; it adds no production consumer wiring, runtime configuration, database schema, migration, plugin installation, or Gateway operation.
+- This change adds only read-only adapter/projection source and tests; it adds no production consumer wiring, runtime configuration, database schema, migration, plugin installation, or Gateway operation.
