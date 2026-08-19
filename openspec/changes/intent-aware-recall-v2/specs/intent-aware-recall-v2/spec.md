@@ -58,3 +58,40 @@ V2-A intent metadata MUST remain observational and MUST NOT change Hybrid query 
 
 - **WHEN** task and recall intent values are produced
 - **THEN** the existing recall policy and Hybrid invocation receive the same inputs and options as before
+
+### Requirement: Offline candidate policy has no runtime authority
+
+The v2-B1 candidate mapping MUST exist only in an offline evaluation module or read-only evaluator. It MUST map exactly `["none"]` to no recall and valid non-`none` recall intents to recall, while rejecting empty, illegal, or mixed `none`/non-`none` arrays with `invalid_recall_intent_contract`. It MUST NOT be imported by production `should_recall`, focused-query, hook, Hybrid, ranking, channel, topK, gate, or Card/Get policy paths.
+
+#### Scenario: Candidate mapping is isolated
+
+- **WHEN** the v2-B1 evaluator maps an intent array
+- **THEN** it returns a bounded candidate decision without changing production analysis or runtime policy
+
+#### Scenario: Mixed none contract is rejected
+
+- **WHEN** an evaluation case contains `["none", "project_state"]` or an empty/illegal array
+- **THEN** the case is reported with `invalid_recall_intent_contract` instead of being normalized
+
+### Requirement: Three-way offline policy evaluation
+
+The evaluator MUST separately compare V1 current behavior, V2 oracle mapping from expected human `recall_intent`, and V2 runtime candidate mapping from actual classifier `recall_intent`. It MUST report separate confusion matrices and bounded diagnostics sufficient to distinguish classifier gaps from policy-mapping gaps.
+
+#### Scenario: Oracle separates mapping from classification
+
+- **WHEN** expected labels map to recall but actual classifier labels map to no recall
+- **THEN** the oracle result and runtime-candidate result remain separate and the case is diagnosable as a classifier gap
+
+#### Scenario: Evaluation labels remain independent
+
+- **WHEN** a classifier mismatch is found in the v2-B1 fixture
+- **THEN** the evaluator reports the mismatch without rewriting the fixture or changing the classifier
+
+### Requirement: Independent balanced evaluation fixture
+
+The v2-B1 fixture MUST remain separate from the frozen v2-A seed, reuse schema version 1 and the shared taxonomy, contain 36 design cases balanced at 18 expected recall-yes and 18 expected recall-no, and cover the nine declared case families. The fixture is evaluation design data and MUST NOT be presented as production traffic evidence.
+
+#### Scenario: Dataset balance and coverage
+
+- **WHEN** the v2-B1 fixture is validated
+- **THEN** it contains 36 rows, an 18/18 decision balance, and four rows in each required family

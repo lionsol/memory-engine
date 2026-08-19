@@ -20,3 +20,12 @@
 - [x] 4.1 Verify the unchanged frozen 12-row seed replay and existing behavior fields.
 - [x] 4.2 Verify no Hybrid/ranking/channel/topK/Card/Get policy path receives the new metadata.
 - [x] 4.3 Record source/tests/docs completion without runtime deployment or AutoRecall enablement.
+
+## 5. v2-B1 Policy evaluation
+
+- [x] 5.1 Define the offline-only `recall_intent` candidate mapping with exclusive `none` validation.
+- [x] 5.2 Add the independent balanced 36-row evaluation dataset without changing the frozen seed.
+- [x] 5.3 Add the v1/oracle/runtime three-way offline evaluator and read-only CLI.
+- [x] 5.4 Add confusion matrices, bounded diagnostics, and classifier/policy root-cause decomposition.
+- [x] 5.5 Verify no production policy, ranking, channel, topK, gate, Card/Get, DB, or runtime changes.
+- [x] 5.6 Record the actual evaluation result for the separate v2-B2 product decision.

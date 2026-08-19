@@ -12,6 +12,8 @@ With L2 Database Boundary Closure complete, **Phase 2.5-A is `PASS / CLOSED`**, 
 
 Intent-aware Recall v2-A is **`SOURCE IMPLEMENTED / VERIFIED`**. Its deterministic task/recall taxonomy is observational only: frozen 12-row replay now enforces both labels, and decision trace/debug metadata expose bounded intent values. Existing recall decisions, focused queries, retrieval policy, ranking, Card/Get behavior, and AutoRecall default-off state remain unchanged. The next v2-B decision is whether and how validated intent may influence recall policy.
 
+Intent-aware Recall v2-B1 is **`IMPLEMENTED / OFFLINE ONLY`**. Its independent 36-row balanced evaluation compares V1 current, V2 oracle mapping, and V2 runtime-classifier mapping. The observed matrices were V1 `18/5/13/0`, oracle `18/18/0/0`, and runtime candidate `8/18/0/10` for TP/TN/FP/FN. The run found 4 task-intent mismatches, 12 recall-intent mismatches, 13 false positives removed, and 10 false negatives introduced. The candidate policy is **not authorized** and has no production authority; v2-B2 is a separate planner adjudication.
+
 ### NEXT
 
 Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope.
@@ -26,7 +28,7 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Intent-aware Recall v2-B** — decide whether and how validated intent may influence `should_recall` / `focused_query`; v2-A does not authorize that policy coupling.
+1. **Intent-aware Recall v2-B2** — planner adjudication of the v2-B1 mapping/classifier findings and whether/how validated intent may influence `should_recall` / `focused_query`; v2-A/B1 do not authorize policy coupling.
 2. **Recall Hint**.
 3. **Statistical LTR**.
 
