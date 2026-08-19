@@ -8,6 +8,7 @@ The turn gold-set already defines `task_intent`, `recall_intent`, and `disclosur
 - Add deterministic, pure task and conservative recall intent classification to `analyzeAutoRecallIntent()` without changing existing recall-gate or focused-query behavior.
 - Make turn gold-set replay compare task and recall intents, classify explicit mismatches, and expose the bounded values through decision trace and debug surfaces.
 - Add v2-B1's evaluation-only candidate policy mapping, independent balanced fixture, and three-way offline evaluator for current v1, oracle mapping, and runtime-classifier mapping.
+- Add v2-B2 generalized deterministic lookup signals to close the known task/recall classifier gaps on the frozen B1 regression set without changing production policy authority.
 
 ## Non-goals
 
@@ -16,9 +17,10 @@ The turn gold-set already defines `task_intent`, `recall_intent`, and `disclosur
 - Adding an LLM classifier, database/schema migration, config change, runtime deployment, or Gateway operation.
 - Granting the candidate mapping authority over production `should_recall`, `focused_query`, or AutoRecall hook behavior.
 - Rewriting evaluation labels to fit classifier output or using the evaluation fixture as production evidence.
+- Treating 36/36 on the known B1 regression set as production-readiness evidence; an independent B3 holdout remains required.
 
 ## Impact
 
 - Runtime intent analysis gains observational deterministic metadata only.
 - The existing schema version remains `TURN_GOLD_SET_SCHEMA_VERSION = 1`; the existing 12-row seed remains frozen.
-- v2-B1 produces offline metrics and bounded case diagnostics only. `canonical-memory-architecture` is not reopened; runtime deployment and any future policy coupling remain separate decisions.
+- v2-B1 produces offline metrics and bounded case diagnostics only; v2-B2 closes the known regression set but does not authorize the candidate policy. `canonical-memory-architecture` is not reopened; runtime deployment and any future policy coupling remain separate decisions.

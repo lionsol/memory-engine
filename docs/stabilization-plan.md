@@ -10,9 +10,11 @@
 
 With L2 Database Boundary Closure complete, **Phase 2.5-A is `PASS / CLOSED`**, **Phase 2.5-B is `PASS / CLOSED`**, and **Phase 2.5-C is `PASS_WITH_FINDINGS / CLOSED`** under `canonical-memory-architecture`. Phase 2.5-D source, deployment, and runtime qualification are **`PASS / QUALIFIED`**. Phase 2.5-D.1 source and deployment are **`PASS / CLOSED`**, and its live writer qualification is **`PASS / QUALIFIED`**. Overall Phase 2.5 Canonical Memory Architecture is **`PASS / CLOSED`**.
 
-Intent-aware Recall v2-A is **`SOURCE IMPLEMENTED / VERIFIED`**. Its deterministic task/recall taxonomy is observational only: frozen 12-row replay now enforces both labels, and decision trace/debug metadata expose bounded intent values. Existing recall decisions, focused queries, retrieval policy, ranking, Card/Get behavior, and AutoRecall default-off state remain unchanged. The next v2-B decision is whether and how validated intent may influence recall policy.
+Intent-aware Recall v2-A is **`SOURCE IMPLEMENTED / VERIFIED`**. Its deterministic task/recall taxonomy is observational only: frozen 12-row replay now enforces both labels, and decision trace/debug metadata expose bounded intent values. Existing recall decisions, focused queries, retrieval policy, ranking, Card/Get behavior, and AutoRecall default-off state remain unchanged. Policy authority remains a separate decision.
 
-Intent-aware Recall v2-B1 is **`IMPLEMENTED / OFFLINE ONLY`**. Its independent 36-row balanced evaluation compares V1 current, V2 oracle mapping, and V2 runtime-classifier mapping. The observed matrices were V1 `18/5/13/0`, oracle `18/18/0/0`, and runtime candidate `8/18/0/10` for TP/TN/FP/FN. The run found 4 task-intent mismatches, 12 recall-intent mismatches, 13 false positives removed, and 10 false negatives introduced. The candidate policy is **not authorized** and has no production authority; v2-B2 is a separate planner adjudication.
+Intent-aware Recall v2-B1 remains an **offline-only evaluation**. Its initial 36-row result was V1 `18/5/13/0`, oracle `18/18/0/0`, and runtime candidate `8/18/0/10` for TP/TN/FP/FN, with 4 task and 12 recall mismatches.
+
+Intent-aware Recall v2-B2 is **`SOURCE IMPLEMENTED / KNOWN-GAP REGRESSION CLOSED`**. Generalized deterministic classifier signals now produce zero task/recall mismatch and runtime candidate `18/18/0/0` on the frozen B1 regression set; V1 remains unchanged at `18/5/13/0`. The candidate policy is **not runtime authorized**. AutoRecall remains disabled and the next required step is an independent B3 holdout evaluation.
 
 ### NEXT
 
@@ -28,7 +30,7 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Intent-aware Recall v2-B2** — planner adjudication of the v2-B1 mapping/classifier findings and whether/how validated intent may influence `should_recall` / `focused_query`; v2-A/B1 do not authorize policy coupling.
+1. **Intent-aware Recall v2-B3** — independent holdout evaluation of the classifier and candidate policy before any planner decision about `should_recall` / `focused_query` authority; v2-A/B1/B2 do not authorize policy coupling.
 2. **Recall Hint**.
 3. **Statistical LTR**.
 

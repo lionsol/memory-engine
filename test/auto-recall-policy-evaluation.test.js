@@ -96,13 +96,13 @@ test("three-way policy metrics separate current, oracle, and runtime-candidate b
     total: 36,
     scored: 36,
     invalid: 0,
-    true_positive: 8,
+    true_positive: 18,
     true_negative: 18,
     false_positive: 0,
-    false_negative: 10,
-    accuracy: 0.7222,
+    false_negative: 0,
+    accuracy: 1,
     precision: 1,
-    recall: 0.4444,
+    recall: 1,
   });
   assert.equal(report.policy.authority, "evaluation_only");
   assert.equal(report.policy.task_intent_authority, false);
@@ -110,21 +110,21 @@ test("three-way policy metrics separate current, oracle, and runtime-candidate b
 
 test("diagnostics provide bounded classifier and policy deltas without prompt bodies", () => {
   const report = fixtureReport();
-  assert.equal(report.diagnostics.task_intent_mismatch_count, 4);
-  assert.equal(report.diagnostics.recall_intent_mismatch_count, 12);
+  assert.equal(report.diagnostics.task_intent_mismatch_count, 0);
+  assert.equal(report.diagnostics.recall_intent_mismatch_count, 0);
   assert.equal(report.diagnostics.v1_false_positive_count, 13);
   assert.equal(report.diagnostics.v1_false_negative_count, 0);
   assert.equal(report.diagnostics.oracle_false_positive_count, 0);
   assert.equal(report.diagnostics.oracle_false_negative_count, 0);
   assert.equal(report.diagnostics.runtime_candidate_false_positive_count, 0);
-  assert.equal(report.diagnostics.runtime_candidate_false_negative_count, 10);
-  assert.equal(report.diagnostics.v1_to_runtime_changed_count, 23);
+  assert.equal(report.diagnostics.runtime_candidate_false_negative_count, 0);
+  assert.equal(report.diagnostics.v1_to_runtime_changed_count, 13);
   assert.equal(report.diagnostics.false_positive_reduced_count, 13);
-  assert.equal(report.diagnostics.false_negative_added_count, 10);
-  assert.equal(report.diagnostics.root_cause_counts.CLASSIFIER_GAP, 10);
+  assert.equal(report.diagnostics.false_negative_added_count, 0);
+  assert.equal(report.diagnostics.root_cause_counts.CLASSIFIER_GAP, 0);
   assert.equal(report.diagnostics.root_cause_counts.POLICY_MAPPING_GAP, 0);
   assert.equal(report.diagnostics.root_cause_counts.FALSE_POSITIVE_REMOVED, 13);
-  assert.equal(report.diagnostics.root_cause_counts.FALSE_NEGATIVE_INTRODUCED, 10);
+  assert.equal(report.diagnostics.root_cause_counts.FALSE_NEGATIVE_INTRODUCED, 0);
   assert.equal(JSON.stringify(report).includes("memory-engine L2 现在还剩什么"), false);
   assert.equal(report.side_effects.db_writes, false);
   assert.equal(report.side_effects.network, false);
@@ -147,7 +147,7 @@ test("root-cause decomposition distinguishes mapping and classifier gaps", () =>
       turn_id: "decomp_classifier_gap",
       family: "implicit_project_state",
       schema_version: 1,
-      prompt: "这个项目当前进度怎么样？",
+      prompt: "普通问题",
       task_intent: "answer_question",
       recall_intent: ["project_state", "task_state"],
       expected_should_recall: true,
@@ -165,7 +165,7 @@ test("root-cause decomposition distinguishes mapping and classifier gaps", () =>
       turn_id: "decomp_false_negative_introduced",
       family: "ambiguous_minimal_pairs",
       schema_version: 1,
-      prompt: "这个方案和之前相比怎么样？",
+      prompt: "普通问题",
       task_intent: "answer_question",
       recall_intent: ["prior_decision", "project_state"],
       expected_should_recall: true,

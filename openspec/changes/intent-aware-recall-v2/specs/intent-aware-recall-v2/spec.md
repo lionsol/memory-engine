@@ -95,3 +95,35 @@ The v2-B1 fixture MUST remain separate from the frozen v2-A seed, reuse schema v
 
 - **WHEN** the v2-B1 fixture is validated
 - **THEN** it contains 36 rows, an 18/18 decision balance, and four rows in each required family
+
+### Requirement: Known B1 classifier gap closure
+
+The classifier MAY add generalized deterministic semantic lookup signals for continuation, implicit project state, prior decisions, and historical entity background, while preserving the shared taxonomy, exact ordered arrays, preference/workflow distinctions, and fresh-project/entity-name false-positive guards. It MUST NOT use fixture IDs, LLM, embedding, DB, network, or user-specific exceptions.
+
+#### Scenario: Generalized semantic paraphrase
+
+- **WHEN** a semantically equivalent continuation, project-state, prior-decision, or historical-entity prompt is analyzed
+- **THEN** it receives the corresponding frozen taxonomy labels with deterministic ordering
+
+#### Scenario: Fresh work remains non-historical
+
+- **WHEN** a prompt only asks to inspect current input, explain an entity, or plan a new project without historical lookup wording
+- **THEN** its recall intent remains `["none"]`
+
+### Requirement: Classifier-only policy preservation
+
+v2-B2 classifier changes MUST NOT modify the existing production `should_recall`, `intent_reason`, `focused_query`, focused-query construction, long-input detection, generic-task detection, explicit-history feature, skipped flag, or any retrieval/presentation policy. The V1 confusion matrix MUST remain unchanged when the B1 evaluator is rerun.
+
+#### Scenario: Legacy policy remains frozen
+
+- **WHEN** representative long transformation, debug, review, continuation, and history-aware rewrite prompts are analyzed after B2
+- **THEN** their pre-B2 `should_recall`, `intent_reason`, and `focused_query` values are identical
+
+### Requirement: Known-set closure is not policy approval
+
+Reaching zero task/recall mismatch and perfect runtime-candidate results on the known 36-row B1 regression fixture MUST be recorded as regression closure only. It MUST NOT authorize the candidate mapping, runtime deployment, AutoRecall enablement, or production policy coupling. An independent B3 holdout evaluation remains required.
+
+#### Scenario: Regression closure remains bounded
+
+- **WHEN** the frozen B1 fixture reaches 36/36 classifier and runtime-candidate agreement
+- **THEN** the candidate policy remains evaluation-only and the next decision is an independent holdout review

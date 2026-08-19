@@ -29,3 +29,12 @@
 - [x] 5.4 Add confusion matrices, bounded diagnostics, and classifier/policy root-cause decomposition.
 - [x] 5.5 Verify no production policy, ranking, channel, topK, gate, Card/Get, DB, or runtime changes.
 - [x] 5.6 Record the actual evaluation result for the separate v2-B2 product decision.
+
+## 6. v2-B2 classifier gap closure
+
+- [x] 6.1 Freeze the B1 classifier-gap baseline before editing source.
+- [x] 6.2 Generalize continuation, project-state, prior-decision, and historical-entity lookup signals.
+- [x] 6.3 Close the known task-intent gaps without changing policy mapping or policy outputs.
+- [x] 6.4 Preserve v1 `should_recall`, `intent_reason`, focused-query, and legacy feature behavior.
+- [x] 6.5 Reach zero task/recall mismatch and `18/18` runtime-candidate classification on the known B1 regression set.
+- [x] 6.6 Record the holdout requirement before any future runtime policy authority decision.
