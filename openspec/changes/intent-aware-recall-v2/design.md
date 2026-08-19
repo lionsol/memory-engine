@@ -64,3 +64,19 @@ The evaluator generalizes only the row family allowlist. It reuses the unchanged
 Subtype (`task_intent` / `recall_intent`) mismatches are reported separately from boolean policy decision errors. The read-only B3 CLI performs no DB, network, LLM, retrieval, injection, memory-file, or report-file access.
 
 The frozen B3 evaluation is contract-valid and oracle-perfect, but runtime candidate results are `7 TP / 19 TN / 5 FP / 17 FN` (precision `0.5833`, recall `0.2917`). Task mismatches are `14`, recall mismatches are `25`, and semantic-only mismatches are reported separately. Seven families exceed the one-error concentration bound, so the result is `PASS_WITH_FINDINGS / HOLDOUT NOT READY`. This is evidence for Planner adjudication, not a classifier-tuning authorization, policy approval, deployment, or runtime mutation.
+
+## v2-B4 structured evidence model
+
+The B3 first independent run remains a historical record: `PASS_WITH_FINDINGS / HOLDOUT NOT READY` with runtime `7/19/5/17`, task mismatches `14`, and recall mismatches `25`. B4 does not rewrite that result. It replaces the classifier's raw-input positive-regex architecture with a pure bounded evidence layer:
+
+- request-scope extraction masks quoted and supplied content before task/history matching;
+- explicit history suppression and current-input-only evidence have precedence over positive history vocabulary;
+- project/entity anchors alone do not grant recall authority;
+- continuation, project-state, prior-decision, historical-entity, preference, and workflow lookup are mapped from structured relations with deterministic ordered arrays;
+- task classification uses the request surface where supplied text could otherwise contaminate the task label.
+
+The evidence object is classifier-internal and is not added to decision trace, debug metadata, memory events, Console telemetry, or persistent reports. The classifier remains pure, deterministic, bounded, and free of LLM, embedding, DB, network, retrieval, and runtime-state access. Existing V1 policy outputs and the v2-B1 candidate mapping are unchanged.
+
+After B4, the frozen v2-A seed, B1 fixture, and B3 fixture are regression corpora only. The known corpora close with the existing 12-row seed at `12/12`, B1 at zero task/recall mismatch and runtime `18/18/0/0`, and B3 at zero task/recall mismatch and runtime `24/24/0/0`; V1 remains `18/5/13/0` for B1 and `24/0/24/0` for B3. These results are known-regression closure, not generalization qualification. The B3 evaluator now reports `evidence_role=known_regression_after_v2b4` and `REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE`, even when its diagnostic thresholds pass.
+
+The candidate policy remains `NOT RUNTIME AUTHORIZED`. A fresh v2-B5 independent holdout, frozen after B4 and not created in this change, is required before any policy-authority review. B4 does not change `should_recall`, `intent_reason`, `focused_query`, retrieval/presentation policy, runtime deployment, or AutoRecall enablement.

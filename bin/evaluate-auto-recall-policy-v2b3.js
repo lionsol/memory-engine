@@ -36,7 +36,7 @@ function parseArgs(argv = []) {
 }
 
 function printHelp() {
-  console.log(`Evaluate the AutoRecall v2-B3 policy candidate offline
+  console.log(`Evaluate the AutoRecall v2-B3 corpus offline
 
 Usage:
   node bin/evaluate-auto-recall-policy-v2b3.js [options]
@@ -55,7 +55,7 @@ function renderSummary(report, datasetPath) {
   const matrices = report.confusion_matrices;
   const readiness = report.readiness;
   const lines = [
-    "# AutoRecall v2-B3 Independent Holdout Evaluation",
+    "# AutoRecall v2-B3 Regression Evaluation",
     "",
     `- dataset: ${datasetPath}`,
     `- total: ${report.dataset.total}`,
@@ -68,7 +68,11 @@ function renderSummary(report, datasetPath) {
     `- task_intent_mismatch_count: ${report.diagnostics.task_intent_mismatch_count}`,
     `- recall_intent_mismatch_count: ${report.diagnostics.recall_intent_mismatch_count}`,
     `- semantic_only_mismatch_count: ${report.diagnostics.semantic_only_mismatch_count}`,
-    `- readiness: ${readiness.overall_status}`,
+    `- evidence_role: ${report.evidence_role}`,
+    `- current_evaluation_status: ${report.current_evaluation_status}`,
+    `- historical_b3_status: ${report.historical_b3_status}`,
+    `- readiness_diagnostics: oracle=${readiness.oracle_gate_pass}, quantitative=${readiness.quantitative_gate_pass}, family=${readiness.family_gate_pass}`,
+    `- candidate_policy_status: ${report.candidate_policy_status}`,
     "",
     "Read-only side effects: none",
     "",

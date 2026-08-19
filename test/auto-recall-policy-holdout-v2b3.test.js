@@ -86,9 +86,13 @@ test("B3 evaluator accepts its family contract while B1 keeps its default contra
   assert.equal(b1.row_errors[0].errors.includes("family_unknown"), true);
 });
 
-test("B3 report separates oracle, runtime, semantic-only, and policy errors", () => {
+test("B3 current corpus report is regression-only after B4", () => {
   const report = fixtureReport();
   assert.equal(report.b3_evaluator_status, "PASS");
+  assert.equal(report.evidence_role, "known_regression_after_v2b4");
+  assert.equal(report.current_evaluation_status, "REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE");
+  assert.equal(report.historical_b3_status, "PASS_WITH_FINDINGS / HOLDOUT NOT READY");
+  assert.equal(report.candidate_policy_status, "NOT RUNTIME AUTHORIZED");
   assert.equal(report.validation.valid, true);
   assert.deepEqual(report.dataset, {
     total: 48,
@@ -112,25 +116,26 @@ test("B3 report separates oracle, runtime, semantic-only, and policy errors", ()
     total: 48,
     scored: 48,
     invalid: 0,
-    true_positive: 7,
-    true_negative: 19,
-    false_positive: 5,
-    false_negative: 17,
-    accuracy: 0.5417,
-    precision: 0.5833,
-    recall: 0.2917,
+    true_positive: 24,
+    true_negative: 24,
+    false_positive: 0,
+    false_negative: 0,
+    accuracy: 1,
+    precision: 1,
+    recall: 1,
   });
-  assert.equal(report.diagnostics.task_intent_mismatch_count, 14);
-  assert.equal(report.diagnostics.recall_intent_mismatch_count, 25);
-  assert.equal(report.diagnostics.semantic_only_mismatch_count, 11);
-  assert.equal(report.diagnostics.policy_decision_error_count, 22);
-  assert.equal(report.diagnostics.runtime_false_positive_count, 5);
-  assert.equal(report.diagnostics.runtime_false_negative_count, 17);
+  assert.equal(report.diagnostics.task_intent_mismatch_count, 0);
+  assert.equal(report.diagnostics.recall_intent_mismatch_count, 0);
+  assert.equal(report.diagnostics.semantic_only_mismatch_count, 0);
+  assert.equal(report.diagnostics.policy_decision_error_count, 0);
+  assert.equal(report.diagnostics.runtime_false_positive_count, 0);
+  assert.equal(report.diagnostics.runtime_false_negative_count, 0);
   assert.equal(report.readiness.dataset_contract_valid, true);
   assert.equal(report.readiness.oracle_gate_pass, true);
-  assert.equal(report.readiness.quantitative_gate_pass, false);
-  assert.equal(report.readiness.family_gate_pass, false);
-  assert.equal(report.readiness.overall_status, "PASS_WITH_FINDINGS / HOLDOUT NOT READY");
+  assert.equal(report.readiness.quantitative_gate_pass, true);
+  assert.equal(report.readiness.family_gate_pass, true);
+  assert.equal(report.readiness.independent_readiness_evidence, false);
+  assert.equal(report.readiness.overall_status, "REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE");
   assert.equal(report.readiness.candidate_policy_status, "NOT RUNTIME AUTHORIZED");
   assert.equal(JSON.stringify(report).includes("memory-engine 目前卡在哪一环"), false);
 });
@@ -153,7 +158,8 @@ test("B3 readiness uses inclusive quantitative thresholds and family concentrati
   const boundary = assessAutoRecallPolicyHoldoutV2B3(base);
   assert.equal(boundary.readiness.quantitative_gate_pass, true);
   assert.equal(boundary.readiness.family_gate_pass, true);
-  assert.equal(boundary.readiness.overall_status, "PASS / READY FOR POLICY AUTHORITY REVIEW");
+  assert.equal(boundary.readiness.overall_status, "REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE");
+  assert.equal(boundary.readiness.independent_readiness_evidence, false);
 
   const concentrated = assessAutoRecallPolicyHoldoutV2B3({
     ...base,
@@ -163,7 +169,7 @@ test("B3 readiness uses inclusive quantitative thresholds and family concentrati
     ],
   });
   assert.equal(concentrated.readiness.family_gate_pass, false);
-  assert.equal(concentrated.readiness.overall_status, "PASS_WITH_FINDINGS / HOLDOUT NOT READY");
+  assert.equal(concentrated.readiness.overall_status, "REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE");
 
   const belowBoundary = assessAutoRecallPolicyHoldoutV2B3({
     ...base,
@@ -173,6 +179,7 @@ test("B3 readiness uses inclusive quantitative thresholds and family concentrati
     },
   });
   assert.equal(belowBoundary.readiness.quantitative_gate_pass, false);
+  assert.equal(belowBoundary.readiness.overall_status, "REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE");
 });
 
 test("semantic subtype mismatch is not counted as policy decision error when the boolean decision agrees", () => {
@@ -236,6 +243,8 @@ test("B3 CLI is read-only and emits the frozen evaluation report", () => {
   assert.equal(report.dataset.yes, 24);
   assert.equal(report.dataset.no, 24);
   assert.equal(report.b3_evaluator_status, "PASS");
+  assert.equal(report.evidence_role, "known_regression_after_v2b4");
+  assert.equal(report.current_evaluation_status, "REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE");
   assert.equal(report.side_effects.db_writes, false);
   assert.equal(report.side_effects.network, false);
   assert.equal(report.side_effects.runtime_report_files, false);

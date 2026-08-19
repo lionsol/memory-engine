@@ -47,3 +47,14 @@
 - [x] 7.4 Report runtime decision errors and semantic intent mismatches separately.
 - [x] 7.5 Apply quantitative and family-concentration readiness gates.
 - [x] 7.6 Record the B3 result without granting runtime policy authority.
+
+## 8. v2-B4 structured evidence model
+
+- [x] 8.1 Freeze the B3 generalization failure as historical evidence.
+- [x] 8.2 Introduce a pure request-scope and bounded evidence extraction layer.
+- [x] 8.3 Add suppression and current-input negative precedence over positive history cues.
+- [x] 8.4 Rebuild continuation, project-state, prior-decision, entity, preference, and workflow lookup on structured evidence.
+- [x] 8.5 Move task classification to request-surface evidence where supplied content could contaminate it.
+- [x] 8.6 Close the v2-A/B1/B3 known regression corpora without changing V1 policy or candidate mapping.
+- [x] 8.7 Mark the B3 corpus as regression-only after B4 tuning.
+- [x] 8.8 Require a fresh B5 independent holdout before any policy-authority review.

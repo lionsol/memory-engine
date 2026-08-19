@@ -157,9 +157,63 @@ The B3 report MUST provide V1, oracle, and runtime-candidate confusion matrices;
 
 ### Requirement: B3 status does not grant runtime authority
 
-The B3 status vocabulary MUST treat `PASS / READY FOR POLICY AUTHORITY REVIEW` as evidence that only the quantitative, family, and oracle gates passed. `PASS_WITH_FINDINGS / HOLDOUT NOT READY` MUST record a valid evaluation with findings. Neither status grants production policy authority, AutoRecall enablement, deployment, or runtime mutation; any policy-authority decision remains separately authorized.
+Before B4 reuses the corpus for regression, the B3 status vocabulary MAY distinguish `PASS / READY FOR POLICY AUTHORITY REVIEW` from `PASS_WITH_FINDINGS / HOLDOUT NOT READY` based only on the quantitative, family, and oracle gates. Neither historical status grants production policy authority, AutoRecall enablement, deployment, or runtime mutation; any policy-authority decision remains separately authorized. After B4 classifier tuning, the B3 evaluator MUST follow the stricter regression-only role defined below.
 
 #### Scenario: Holdout findings remain bounded
 
 - **WHEN** B3 runtime precision/recall or family concentration fails its gate
 - **THEN** the result is recorded as `PASS_WITH_FINDINGS / HOLDOUT NOT READY` and no classifier, candidate mapping, or production policy change is inferred
+
+### Requirement: Structured request-scope evidence
+
+The v2-B4 classifier SHALL extract a pure, bounded request-scope/evidence object before mapping task or recall intent. Quoted or supplied history text MUST NOT independently grant history lookup authority, and the internal request text/evidence MUST NOT be persisted or added to debug, telemetry, decision trace, memory events, Console reports, or other user-content surfaces.
+
+#### Scenario: Quoted history is current supplied content
+
+- **WHEN** a transformation request quotes text containing historical vocabulary
+- **THEN** task and recall classification use the request surface, and the quoted vocabulary does not create a historical recall intent
+
+### Requirement: Suppression precedence
+
+Explicit history suppression or current-input-only evidence MUST override positive history cues and map `recall_intent` to exactly `["none"]`. Positive history vocabulary alone MUST NOT be treated as a lookup subtype.
+
+#### Scenario: Suppressed historical reference
+
+- **WHEN** a prompt says not to use a previous plan, decision, bug, or project history
+- **THEN** the classifier returns `["none"]` even if the same request contains a historical reference
+
+### Requirement: Structured lookup relations
+
+Project/entity anchors alone MUST NOT grant recall intent. Continuation, project-state, prior-decision, historical-entity, preference, and workflow lookup MUST require their corresponding deterministic relation evidence and preserve the frozen ordered taxonomy arrays.
+
+#### Scenario: Anchor without lookup relation
+
+- **WHEN** a prompt only names a project or entity while asking for current/factual analysis
+- **THEN** `recall_intent` remains `["none"]`
+
+### Requirement: B4 regression boundary
+
+The v2-B4 classifier MAY change only observational `task_intent` and `recall_intent`; it MUST preserve V1 `should_recall`, `intent_reason`, `focused_query`, focused-query construction, and the v2-B1 candidate mapping. The v2-A seed, B1 fixture, and B3 fixture MUST remain immutable.
+
+#### Scenario: Known corpus closure is not generalization
+
+- **WHEN** the frozen v2-A, B1, and B3 corpora are replayed after B4
+- **THEN** their results may be recorded as structured-evidence regression closure, but they MUST NOT be called independent readiness evidence or production approval
+
+### Requirement: B3 regression-only role after B4
+
+After B4 classifier tuning uses the B3 fixture, the B3 evaluator SHALL identify the corpus as known regression evidence, retain the historical first-run status `PASS_WITH_FINDINGS / HOLDOUT NOT READY`, and report `REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE`. Diagnostic threshold math MAY remain, but it MUST NOT produce a new policy-authority readiness status.
+
+#### Scenario: B3 score improves after B4
+
+- **WHEN** the current B3 corpus reaches perfect or threshold-passing runtime metrics
+- **THEN** the report remains regression-only and the candidate policy remains `NOT RUNTIME AUTHORIZED`
+
+### Requirement: Fresh B5 holdout
+
+An independent v2-B5 holdout MUST be frozen by a later Planner decision before any generalization or policy-authority review. B4 MUST NOT create or evaluate a B5 fixture.
+
+#### Scenario: Next evidence remains separate
+
+- **WHEN** B4 regression closure is documented
+- **THEN** the next status is `NOT STARTED / FRESH INDEPENDENT HOLDOUT REQUIRED`, with no runtime mutation or policy coupling

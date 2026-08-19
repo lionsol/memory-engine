@@ -16,11 +16,13 @@ Intent-aware Recall v2-B1 remains an **offline-only evaluation**. Its initial 36
 
 Intent-aware Recall v2-B2 is **`SOURCE IMPLEMENTED / KNOWN-GAP REGRESSION CLOSED`**. Generalized deterministic classifier signals now produce zero task/recall mismatch and runtime candidate `18/18/0/0` on the frozen B1 regression set; V1 remains unchanged at `18/5/13/0`. The candidate policy is **not runtime authorized**.
 
-Intent-aware Recall v2-B3 is **`PASS_WITH_FINDINGS / HOLDOUT NOT READY`**. The separate Planner-frozen holdout is valid at 48 rows and 24/24 balance, with an oracle `24/24/0/0` but runtime candidate `7/19/5/17`; precision `0.5833` and recall `0.2917` fail the `0.90` gates, and seven families exceed the one-error concentration limit. Task/recall subtype mismatches and semantic-only cases are reported separately. AutoRecall remains disabled, the candidate policy is **not runtime authorized**, and no classifier fix is inferred or authorized by this evaluation.
+Intent-aware Recall v2-B3's first independent run is a **historical `PASS_WITH_FINDINGS / HOLDOUT NOT READY`** record: the valid 48-row, 24/24 Planner-frozen holdout produced oracle `24/24/0/0` and runtime `7/19/5/17`, with precision `0.5833`, recall `0.2917`, task mismatches `14`, and recall mismatches `25`. B4 does not rewrite that first-run result.
+
+Intent-aware Recall v2-B4 is **`SOURCE IMPLEMENTED / STRUCTURED EVIDENCE REGRESSION CLOSED`**. The classifier now uses pure request-scope and structured history evidence with quoted-content masking and suppression precedence. The frozen v2-A seed remains `12/12`; B1 remains V1 `18/5/13/0` and runtime candidate `18/18/0/0`; B3 current regression is V1 `24/0/24/0` and runtime candidate `24/24/0/0`, with task/recall mismatch `0/0`. B3 is now explicitly **`REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE`** with evidence role `known_regression_after_v2b4`; these scores do not qualify generalization or authorize the candidate policy.
 
 ### NEXT
 
-Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. The next Intent-aware Recall decision is explicit Planner adjudication of the B3 findings; this commit does not start a classifier repair or grant policy authority.
+Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. The next Intent-aware Recall step is **v2-B5 fresh independent holdout evaluation**, not started in this change; candidate policy authority remains a separate Planner decision.
 
 ### CLOSED
 
@@ -32,7 +34,7 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Intent-aware Recall v2-B3 findings** — the independent holdout has closed `PASS_WITH_FINDINGS / HOLDOUT NOT READY`; any next decision about classifier work or `should_recall` / `focused_query` authority requires explicit Planner adjudication. v2-A/B1/B2/B3 do not authorize policy coupling.
+1. **Intent-aware Recall v2-B5 independent holdout** — freeze fresh cases after B4 and evaluate them without classifier tuning in the same stage. v2-A/B1/B2/B3 remain regression evidence only; no result so far authorizes `should_recall` / `focused_query` policy coupling.
 2. **Recall Hint**.
 3. **Statistical LTR**.
 
