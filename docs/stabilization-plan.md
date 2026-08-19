@@ -8,11 +8,11 @@
 
 ### NOW
 
-With L2 Database Boundary Closure complete, **Phase 2.5-A is `CLOSED / PASS`**, **Phase 2.5-B is `CLOSED / PASS`**, and **Phase 2.5-C1/C2/C3 are `PASS`** under the active OpenSpec change `canonical-memory-architecture`; overall **Phase 2.5-C is `PASS_WITH_FINDINGS`**. Phase 2.5-D source integration remains **`IMPLEMENTED / SOURCE VERIFIED`**: all three scoped Lance writers use canonical read and vector projection authority, fixing the prior long-text add drift in repository source. Phase 2.5-D.1 source correction is also implemented: add identity is the exact Core before/after delta, independent of Engine backfill state, and zero observed delta remains pending. Persistent runtime/data execution, deployment, and rollout remain pending separate Owner authorization; no D.1 runtime qualification is claimed.
+With L2 Database Boundary Closure complete, **Phase 2.5-A is `PASS / CLOSED`**, **Phase 2.5-B is `PASS / CLOSED`**, and **Phase 2.5-C is `PASS_WITH_FINDINGS / CLOSED`** under `canonical-memory-architecture`. Phase 2.5-D source, deployment, and runtime qualification are **`PASS / QUALIFIED`**. Phase 2.5-D.1 source and deployment are **`PASS / CLOSED`**, and its live writer qualification is **`PASS / QUALIFIED`**. Overall Phase 2.5 Canonical Memory Architecture is **`PASS / CLOSED`**.
 
 ### NEXT
 
-Advance next to **2.5-D persistent runtime qualification/deployment** only after separate Owner authorization appropriate to persistent writes, migration, runtime activation, or rollout. The D.1 source correction is complete, but is not deployed; this roadmap does not authorize its execution or qualification. The 2026-08-19 qualification finding that sync backfill inserted `111` Engine rows remains a separate `ADD_SYNC_BACKFILL_SCOPE_FINDING` and is out of D.1 scope.
+Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope.
 
 ### CLOSED
 

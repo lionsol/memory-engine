@@ -25,8 +25,8 @@
 - [x] 4.1a Phase 2.5-D.1: correct `memory_engine add` source identity observation with exact readonly Core before/after ID delta; keep `chunks_added` independent of Engine backfill/lifecycle-row existence and preserve one-direct-write Lance behavior.
 - [x] 4.2a Owner authorized this Phase 2.5-D source implementation.
 - [x] 4.2a-D.1 Owner authorized this source/tests/commit-only correction; no runtime deployment, Gateway restart, real Core/Engine/Lance mutation, second live add, reconciliation, AutoRecall, config, or ranking change is included.
-- [ ] 4.2b Obtain separate Owner authorization for persistent runtime/data execution, deployment, migration, qualification, and rollout.
-- [ ] 4.3 Add DB-boundary, rollback, and persistence evidence appropriate to the authorized write path.
+- [x] 4.2b Owner explicitly authorized persistent runtime/data execution, deployment, migration, qualification, and rollout for the D/D.1 closeout.
+- [x] 4.3 Obtain DB-boundary, deployment rollback readiness, source-parity, config-semantic-equivalence, and exact Core/Engine/Lance runtime persistence evidence for the authorized write path.
 
 ## 5. Non-goal and safety review
 

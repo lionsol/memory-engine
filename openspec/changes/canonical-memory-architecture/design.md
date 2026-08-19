@@ -84,7 +84,7 @@ The source implementation is `IMPLEMENTED / SOURCE VERIFIED` for the only three 
 
 The add path keeps its existing one-new-chunk direct-write behavior; scoped reconciliation remains active-only, existing-ID aware, and capped at 10; global repair remains active-row, existing-ID aware, and batched at 10. Core reads and canonical Engine reads use distinct readonly isolated accessors, while existing Engine lifecycle inserts remain on the writable accessor. Lance schema, embedding model, ranking, AutoRecall, and eligibility policy are unchanged.
 
-This source implementation fixes the previous long-text add-path vector/text drift in repository source. Persistent runtime/data execution, deployment, runtime qualification, and rollout are not authorized by this source change and remain pending Owner authorization.
+This source implementation fixes the previous long-text add-path vector/text drift in repository source. The later Owner-authorized runtime deployment and qualification are recorded in the Phase 2.5-D closeout below; this OpenSpec record does not itself create execution authority.
 
 ### Phase 2.5-D.1 add identity observation correction
 
@@ -92,4 +92,12 @@ The authorized D.1 source correction separates source identity observation from 
 
 A successful sync with zero exact Core delta returns `pending_index` with `needs_reconcile=true` and `reconcile_reason=index_not_observed`; it does not fall back to Engine-row absence. Core snapshot failures fail closed before append or return the persisted-source `index_observation_failed` recovery state after append. Engine failures return `pending_engine` without a Lance write. Core snapshots, writable Engine lifecycle access, and canonical readonly reads remain separate accessors; no sync/backfill, reconciliation, Hybrid, AutoRecall, ranking, config, schema, or canonical vector contract changed.
 
-The 2026-08-19 runtime qualification finding is recorded separately: runtime `057f43e` was active with Gateway `READY`; one controlled add reached `pending_index`, the exact Core marker was not observed, sync-side global confidence backfill inserted `111`, and the canonical Lance writer was not reached. This is `ADD_SYNC_BACKFILL_SCOPE_FINDING`; D.1 does not modify that backfill scope. D.1 is source implemented and verified only, not deployed or runtime-qualified.
+The earlier Core observation-gap conclusion is corrected and withdrawn as `EVIDENCE ERROR`: verification read the legacy Core database rather than the authoritative main-agent Core database. Runtime path resolution has preferred the agent database when present since `eaf6993`, but the earlier verifier queried the legacy location. Reconstruction of marker `PHASE25D_CANONICAL_WRITER_SMOKE_20260819T1254_057f43e` proved exact Core ID `1a47d2e6a183a2c884ff85637a0bc66251288e60b57cc5d11df40a73d73bdd72` existed and that the product failure was Engine-row absence being used as Core identity discovery after sync backfill.
+
+## Phase 2.5 runtime closeout
+
+Phase 2.5-D runtime is `PASS / QUALIFIED`; Phase 2.5-D.1 source and deployment are `PASS / CLOSED`, with live writer qualification `PASS / QUALIFIED`; overall Phase 2.5 Canonical Memory Architecture is `PASS / CLOSED`. Active runtime source is `3ce61697ef2ef77b91b60e229b0924b074038d86`, Gateway `READY`, and `AutoRecall=false`.
+
+Final marker `PHASE25D1_FINAL_WRITER_SMOKE_20260819T1521_3ce6169` produced exact Core ID `0c99335a14d6bb77d81e716dde49495b8d6552788b2a922976e2942738ad81eb`. Exact source/Core/Engine/event/Lance persistence was observed once; Lance id matched the Core id, Lance text matched the 526-character Core canonical projection, and event metadata recorded `category=temporary`, `confidence=0.4`, `tau=2`, `lance_written=1`, `derived_state=complete`, `needs_reconcile=false`, and `vector_error=null`. The later marker collision was a correct duplicate guard, not a failed qualification, and no reconciliation was required.
+
+`ADD_SYNC_BACKFILL_SCOPE_FINDING` remains non-blocking: the first live add inserted `111` confidence rows through existing sync/backfill behavior, which D.1 did not modify. Final preflight showed eligible Core `815`, Engine confidence `815`, and missing confidence `0`. A single stale Engine row from Core rechunking remains a later lifecycle-maintenance finding; no cleanup was performed and Phase 2.5 was not reopened.
