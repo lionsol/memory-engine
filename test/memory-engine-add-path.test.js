@@ -5,6 +5,7 @@ import { createMemoryEngineExecute } from "../lib/tools/memory-engine-actions.js
 
 test("memory_engine.add queries chunks.path using stable relative POSIX path", async () => {
   let selectedPath = null;
+  let coreRows = [];
   const execute = createMemoryEngineExecute({
     api: { config: {} },
     autoRouteCategory: () => "raw_log",
@@ -14,7 +15,10 @@ test("memory_engine.add queries chunks.path using stable relative POSIX path", a
     WORKSPACE: "/tmp/ws/",
     SMART_ADD_DIR: "memory/smart-add",
     buildSmartAddFingerprint: () => "fingerprint",
-    appendSmartAdd: () => ({ appended: true }),
+    appendSmartAdd: async () => {
+      coreRows = [{ id: "chunk-1" }];
+      return { appended: true, sync: { synced: true } };
+    },
     syncIndexIfNeeded: async () => ({}),
     catParams: () => ({ conf: 0.5, tau: 7 }),
     withDb: fn => fn({
@@ -24,7 +28,7 @@ test("memory_engine.add queries chunks.path using stable relative POSIX path", a
           return {
             all(pathValue) {
               selectedPath = pathValue;
-              return pathValue === "memory/smart-add/2026-06-08.md" ? [{ id: "chunk-1" }] : [];
+              return pathValue === "memory/smart-add/2026-06-08.md" ? coreRows : [];
             },
           };
         }
@@ -67,6 +71,7 @@ test("memory_engine.add queries chunks.path using stable relative POSIX path", a
 test("memory_engine.add passes async in-process sync runner into appendSmartAdd", async () => {
   let syncCalls = 0;
   let receivedSyncRunner = null;
+  let coreRows = [];
   const execute = createMemoryEngineExecute({
     api: { config: {} },
     autoRouteCategory: () => "raw_log",
@@ -83,6 +88,7 @@ test("memory_engine.add passes async in-process sync runner into appendSmartAdd"
     },
     syncIndexIfNeeded: async (reason) => {
       syncCalls += 1;
+      coreRows = [{ id: "chunk-1" }];
       return { synced: true, reason };
     },
     catParams: () => ({ conf: 0.5, tau: 7 }),
@@ -92,7 +98,7 @@ test("memory_engine.add passes async in-process sync runner into appendSmartAdd"
         if (normalized.includes("SELECT id FROM chunks WHERE path = ?")) {
           return {
             all(pathValue) {
-              return pathValue === "memory/smart-add/2026-06-08.md" ? [{ id: "chunk-1" }] : [];
+              return pathValue === "memory/smart-add/2026-06-08.md" ? coreRows : [];
             },
           };
         }

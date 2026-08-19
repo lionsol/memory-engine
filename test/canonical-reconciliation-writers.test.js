@@ -8,7 +8,7 @@ import { join, posix } from "node:path";
 import { withCoreDbReadonly, withEngineDbIsolated } from "../lib/db/isolated-dbs.js";
 import { createMemoryEngineExecute } from "../lib/tools/memory-engine-actions.js";
 
-function createFixture({ coreRows, engineRows = [] } = {}) {
+function createFixture({ coreRows = [], coreRowsBefore = [], engineRows = [] } = {}) {
   const root = mkdtempSync(join(tmpdir(), "memory-engine-canonical-writers-"));
   const workspaceDir = join(root, "workspace");
   const coreDbPath = join(root, "core.sqlite");
@@ -33,7 +33,7 @@ function createFixture({ coreRows, engineRows = [] } = {}) {
       (id, path, source, start_line, end_line, hash, text, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  for (const row of coreRows) {
+  for (const row of coreRowsBefore) {
     insertCore.run(
       row.id,
       row.path,
@@ -46,6 +46,31 @@ function createFixture({ coreRows, engineRows = [] } = {}) {
     );
   }
   core.close();
+
+  function appendCoreRows(rows) {
+    const db = new Database(coreDbPath);
+    try {
+      const insert = db.prepare(`
+        INSERT INTO chunks
+          (id, path, source, start_line, end_line, hash, text, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const row of rows) {
+        insert.run(
+          row.id,
+          row.path,
+          row.source ?? row.path,
+          row.start_line ?? 1,
+          row.end_line ?? 1,
+          row.hash ?? null,
+          row.text,
+          row.updated_at ?? 1,
+        );
+      }
+    } finally {
+      db.close();
+    }
+  }
 
   const engine = new Database(engineDbPath);
   engine.exec(`
@@ -90,6 +115,8 @@ function createFixture({ coreRows, engineRows = [] } = {}) {
     workspaceDir,
     coreDbPath,
     engineDbPath,
+    coreRowsAfter: coreRows,
+    appendCoreRows,
     cleanup() {
       rmSync(root, { recursive: true, force: true });
     },
@@ -113,7 +140,10 @@ function createActionRuntime(fixture, overrides = {}) {
     WORKSPACE: fixture.workspaceDir,
     SMART_ADD_DIR: "memory/smart-add",
     buildSmartAddFingerprint: () => "fingerprint",
-    appendSmartAdd: async () => ({ appended: true, sync: { synced: true } }),
+    appendSmartAdd: async () => {
+      fixture.appendCoreRows(fixture.coreRowsAfter);
+      return { appended: true, sync: { synced: true } };
+    },
     syncIndexIfNeeded: async () => ({ synced: true }),
     catParams: () => ({ conf: 0.5, tau: 7 }),
     withDb: () => {

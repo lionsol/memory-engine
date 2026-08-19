@@ -47,6 +47,12 @@ test("memory_engine.add reports canonical success when sync fails", async () => 
       dbCalls += 1;
       throw new Error("DB should not be queried after sync failure");
     },
+    withCoreDb: fn => fn({
+      prepare(sql) {
+        assert.match(String(sql), /SELECT id FROM chunks WHERE path = \? ORDER BY id ASC/);
+        return { all: () => [] };
+      },
+    }),
   }));
 
   const result = await execute("add-sync-failure", {
@@ -67,6 +73,7 @@ test("memory_engine.add keeps Engine metadata and reports partial success when L
   const sqlSeen = [];
   const events = [];
   let confidenceInserts = 0;
+  let coreRows = [];
   const db = {
     prepare(sql) {
       const normalized = String(sql);
@@ -93,13 +100,20 @@ test("memory_engine.add keeps Engine metadata and reports partial success when L
   };
 
   const execute = createMemoryEngineExecute(createBaseRuntime({
-    appendSmartAdd: async () => ({ appended: true, sync: { synced: true } }),
+    appendSmartAdd: async options => ({
+      appended: true,
+      sync: await options.syncRunner(),
+    }),
+    syncIndexIfNeeded: async () => {
+      coreRows = [{ id: "chunk-1" }];
+      return { synced: true };
+    },
     withCoreDb: fn => fn({
       prepare(sql) {
         const normalized = String(sql);
         sqlSeen.push(normalized);
         if (normalized.includes("SELECT id FROM chunks WHERE path = ?")) {
-          return { all: () => [{ id: "chunk-1" }] };
+          return { all: () => coreRows };
         }
         throw new Error(`unexpected Core SQL: ${normalized}`);
       },

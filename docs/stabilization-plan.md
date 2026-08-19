@@ -8,16 +8,16 @@
 
 ### NOW
 
-With L2 Database Boundary Closure complete, **Phase 2.5-A is `CLOSED / PASS`**, **Phase 2.5-B is `CLOSED / PASS`**, and **Phase 2.5-C1/C2/C3 are `PASS`** under the active OpenSpec change `canonical-memory-architecture`; overall **Phase 2.5-C is `PASS_WITH_FINDINGS`**. Phase 2.5-D source integration is now **`IMPLEMENTED / SOURCE VERIFIED`**: all three scoped Lance writers use canonical read and vector projection authority, fixing the prior long-text add drift in repository source. Persistent runtime/data execution, deployment, and rollout remain pending separate Owner authorization; no runtime qualification is claimed.
+With L2 Database Boundary Closure complete, **Phase 2.5-A is `CLOSED / PASS`**, **Phase 2.5-B is `CLOSED / PASS`**, and **Phase 2.5-C1/C2/C3 are `PASS`** under the active OpenSpec change `canonical-memory-architecture`; overall **Phase 2.5-C is `PASS_WITH_FINDINGS`**. Phase 2.5-D source integration remains **`IMPLEMENTED / SOURCE VERIFIED`**: all three scoped Lance writers use canonical read and vector projection authority, fixing the prior long-text add drift in repository source. Phase 2.5-D.1 source correction is also implemented: add identity is the exact Core before/after delta, independent of Engine backfill state, and zero observed delta remains pending. Persistent runtime/data execution, deployment, and rollout remain pending separate Owner authorization; no D.1 runtime qualification is claimed.
 
 ### NEXT
 
-Advance next to **2.5-D persistent runtime qualification/deployment** only after separate Owner authorization appropriate to persistent writes, migration, runtime activation, or rollout. The source implementation is complete, but this roadmap does not authorize its execution or qualification.
+Advance next to **2.5-D persistent runtime qualification/deployment** only after separate Owner authorization appropriate to persistent writes, migration, runtime activation, or rollout. The D.1 source correction is complete, but is not deployed; this roadmap does not authorize its execution or qualification. The 2026-08-19 qualification finding that sync backfill inserted `111` Engine rows remains a separate `ADD_SYNC_BACKFILL_SCOPE_FINDING` and is out of D.1 scope.
 
 ### CLOSED
 
 - The persistent-activation qualification line is closed. The separately authorized Session-Flush Reconciliation Persistent Rollout Successor recorded `PASS` on 2026-08-17, accepted the immutable `ac0e5f0` reconciliation candidate for persistent use, and explicitly requires no R5 or additional persistent-activation qualification. AutoRecall remains disabled by default and broad rollout remains a separate later decision.
-- **L2 Database Boundary Closure** recorded `deployed runtime qualification PASS / L2 COMPLETE` at active runtime source parity `64596f4`. Gateway was `READY`; `AutoRecall=false`; Hybrid runtime used `KG_ACCESS_MODE=isolated` and `RECENT_ACCESS_MODE=isolated` with production legacy fallback `0`; the current Nightly dry-run isolated topology passed; and no unexpected memory/confidence mutation was observed.
+- **L2 Database Boundary Closure** recorded `deployed runtime qualification PASS / L2 COMPLETE` at active runtime source parity `057f43e`. Gateway was `READY`; `AutoRecall=false`; Hybrid runtime used `KG_ACCESS_MODE=isolated` and `RECENT_ACCESS_MODE=isolated` with production legacy fallback `0`; the current Nightly dry-run isolated topology passed; and no unexpected memory/confidence mutation was observed.
 
 ### LATER
 
