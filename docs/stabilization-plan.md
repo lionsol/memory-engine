@@ -10,6 +10,8 @@
 
 With L2 Database Boundary Closure complete, **Phase 2.5-A is `PASS / CLOSED`**, **Phase 2.5-B is `PASS / CLOSED`**, and **Phase 2.5-C is `PASS_WITH_FINDINGS / CLOSED`** under `canonical-memory-architecture`. Phase 2.5-D source, deployment, and runtime qualification are **`PASS / QUALIFIED`**. Phase 2.5-D.1 source and deployment are **`PASS / CLOSED`**, and its live writer qualification is **`PASS / QUALIFIED`**. Overall Phase 2.5 Canonical Memory Architecture is **`PASS / CLOSED`**.
 
+Intent-aware Recall v2-A is **`SOURCE IMPLEMENTED / VERIFIED`**. Its deterministic task/recall taxonomy is observational only: frozen 12-row replay now enforces both labels, and decision trace/debug metadata expose bounded intent values. Existing recall decisions, focused queries, retrieval policy, ranking, Card/Get behavior, and AutoRecall default-off state remain unchanged. The next v2-B decision is whether and how validated intent may influence recall policy.
+
 ### NEXT
 
 Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope.
@@ -24,7 +26,7 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Intent-aware Recall v2**.
+1. **Intent-aware Recall v2-B** — decide whether and how validated intent may influence `should_recall` / `focused_query`; v2-A does not authorize that policy coupling.
 2. **Recall Hint**.
 3. **Statistical LTR**.
 

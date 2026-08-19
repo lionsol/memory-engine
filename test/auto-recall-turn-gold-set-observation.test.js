@@ -8,6 +8,10 @@ import {
   TURN_GOLD_SET_SEED_FREEZE,
   observeTurnGoldSetDataset,
 } from "../lib/recall/auto-recall-dataset-observation.js";
+import {
+  buildTurnGoldSetReplayFeedback,
+  replayTurnGoldSet,
+} from "../lib/recall/auto-recall-turn-gold-set.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const seedPath = resolve(repoRoot, "test/fixtures/auto-recall-turn-gold-set.seed.jsonl");
@@ -33,6 +37,56 @@ test("seed dataset freeze contract stays stable", () => {
   assert.equal(report.summary.coverage_gap_count, 0);
   assert.equal(report.summary.freeze_passed, true);
   assert.equal(report.freeze_checks.every(check => check.pass), true);
+});
+
+test("seed replay enforces actual task and recall intents for all twelve rows", () => {
+  const report = observeTurnGoldSetDataset(seedContent(), {
+    datasetName: "seed",
+    frozen: TURN_GOLD_SET_SEED_FREEZE,
+  });
+
+  assert.equal(report.summary.replay_passed_count, 12);
+  const replay = replayTurnGoldSet(seedContent().split(/\r?\n/u).filter(Boolean).map(line => JSON.parse(line)));
+  assert.equal(replay.summary.passed_count, 12);
+  for (const result of replay.results) {
+    assert.equal(result.actual.task_intent, result.expected.task_intent, result.turn_id);
+    assert.deepEqual(result.actual.recall_intent, result.expected.recall_intent, result.turn_id);
+    assert.equal(result.mismatches.includes("task_intent"), false, result.turn_id);
+    assert.equal(result.mismatches.includes("recall_intent"), false, result.turn_id);
+  }
+});
+
+test("replay reports explicit task and recall intent mismatches", () => {
+  const base = {
+    turn_id: "negative_intent_contract_001",
+    schema_version: 1,
+    prompt: "继续上次 session-checkpoint 拆分",
+    expected_should_recall: true,
+    expected_intent_reason: "explicit_history_context",
+  };
+  const report = replayTurnGoldSet([
+    {
+      ...base,
+      turn_id: "negative_task_intent_001",
+      task_intent: "answer_question",
+      recall_intent: ["task_state", "historical_context"],
+    },
+    {
+      ...base,
+      turn_id: "negative_recall_intent_001",
+      task_intent: "continue_prior_work",
+      recall_intent: ["project_state"],
+    },
+  ]);
+  const feedback = buildTurnGoldSetReplayFeedback(report);
+
+  assert.equal(report.summary.passed_count, 0);
+  assert.deepEqual(report.results[0].mismatches, ["task_intent"]);
+  assert.deepEqual(report.results[1].mismatches, ["recall_intent"]);
+  assert.deepEqual(
+    feedback.summary.categories.map(item => item.category).sort(),
+    ["recall_intent_mismatch", "task_intent_mismatch"].sort(),
+  );
 });
 
 test("seed dataset observation covers required intent and case families", () => {

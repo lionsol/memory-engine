@@ -225,6 +225,8 @@ test("search telemetry projects only structured fields and preserves counts and 
   const recallDebug = debugEvents.find(event => event.metadata_json?.debug_type !== "gate_decision");
   assert.equal(recallDebug.metadata_json.candidate_count, 2);
   assert.equal(recallDebug.metadata_json.injected_count, 1);
+  assert.equal(recallDebug.metadata_json.task_intent, "answer_question");
+  assert.deepEqual(recallDebug.metadata_json.recall_intent, ["project_state", "task_state"]);
   assert.equal(recallDebug.metadata_json.post_rerank_topK[0].id, injected.id);
   assert.equal(recallDebug.metadata_json.post_rerank_topK[0].category, "episodic");
   assert.equal(recallDebug.metadata_json.rejected_candidates[0].id, rejected.id);

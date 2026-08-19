@@ -174,6 +174,8 @@ test("reports charts include decision trace rendering hooks and fields", () => {
     "generic_task_detected",
     "explicit_history_context",
     "should_recall",
+    "task_intent",
+    "recall_intent",
     "intent_reason",
     "focused_query",
     "data-report-memory-card-preview",
@@ -676,6 +678,8 @@ test("reports service adds decision_trace for autoRecall long-input json reports
         details: {
           should_recall: true,
           intent_reason: "long_input_with_history_context_use_focused_query",
+          task_intent: "review_plan",
+          recall_intent: ["project_state", "prior_decision"],
           long_input_detected: true,
           generic_task_detected: false,
           explicit_history_context: true,
@@ -692,6 +696,8 @@ test("reports service adds decision_trace for autoRecall long-input json reports
     generic_task_detected: false,
     explicit_history_context: true,
     should_recall: true,
+    task_intent: "review_plan",
+    recall_intent: ["project_state", "prior_decision"],
     intent_reason: "long_input_with_history_context_use_focused_query",
     focused_query: "结合之前上下文 | memory-engine | focused query",
   });

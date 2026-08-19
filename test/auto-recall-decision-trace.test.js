@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { analyzeAutoRecallIntent } from "../lib/recall/auto-recall-intent.js";
-import { buildAutoRecallDecisionTrace } from "../lib/recall/auto-recall-decision-trace.js";
+import {
+  buildAutoRecallDecisionTrace,
+  isAutoRecallIntentAnalysis,
+} from "../lib/recall/auto-recall-decision-trace.js";
 
 function longBody(prefix, repeated = "LOG_LINE keep this body out of focused query\n", count = 80) {
   return `${prefix}\n${repeated.repeat(count)}`;
@@ -25,6 +28,8 @@ test("decision trace maps long rewrite skip", () => {
     generic_task_detected: true,
     explicit_history_context: false,
     should_recall: false,
+    task_intent: "rewrite_current_text",
+    recall_intent: ["none"],
     intent_reason: "generic_task_without_history_context_long_input",
     focused_query: intent.focused_query,
   });
@@ -37,6 +42,8 @@ test("decision trace maps long debug with history focused query", () => {
   assert.equal(trace.long_input_detected, true);
   assert.equal(trace.explicit_history_context, true);
   assert.equal(trace.intent_reason, "long_input_with_history_context_use_focused_query");
+  assert.equal(trace.task_intent, "debug_error");
+  assert.deepEqual(trace.recall_intent, ["project_state", "historical_context"]);
   assert.match(trace.focused_query, /memory-engine/);
   assert.equal(trace.focused_query.includes("Traceback"), false);
 });
@@ -49,7 +56,17 @@ test("decision trace output structure is stable", () => {
     "generic_task_detected",
     "explicit_history_context",
     "should_recall",
+    "task_intent",
+    "recall_intent",
     "intent_reason",
     "focused_query",
   ]);
+});
+
+test("decision trace rejects missing or invalid intent contract values", () => {
+  const intent = analyzeAutoRecallIntent("继续上次 session-checkpoint 拆分");
+  assert.equal(isAutoRecallIntentAnalysis(intent), true);
+  assert.equal(isAutoRecallIntentAnalysis({ ...intent, task_intent: "unknown" }), false);
+  assert.equal(isAutoRecallIntentAnalysis({ ...intent, recall_intent: ["unknown"] }), false);
+  assert.equal(buildAutoRecallDecisionTrace({ ...intent, recall_intent: ["unknown"] }), null);
 });

@@ -674,6 +674,8 @@ function renderReportDetail(report) {
       <div><span class="badge">generic_task_detected</span> ${esc(String(trace.generic_task_detected))}</div>
       <div><span class="badge">explicit_history_context</span> ${esc(String(trace.explicit_history_context))}</div>
       <div><span class="badge">should_recall</span> ${esc(String(trace.should_recall))}</div>
+      <div><span class="badge">task_intent</span> ${esc(trace.task_intent || '')}</div>
+      <div><span class="badge">recall_intent</span> ${esc(Array.isArray(trace.recall_intent) ? trace.recall_intent.join(', ') : '')}</div>
       <div><span class="badge">intent_reason</span> ${esc(trace.intent_reason || '')}</div>
       <div><span class="badge">focused_query</span> ${esc(trace.focused_query || '')}</div>
     </div>` : `<div class="muted">Decision trace unavailable for this report.</div>`;

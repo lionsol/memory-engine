@@ -185,6 +185,31 @@ test("session-scoped lifecycle rejects ordinary sessions before Hybrid search", 
   assert.equal(fixture.events.some(event => event.event_type === "memory_injected"), false);
 });
 
+test("intent-skipped recall exposes bounded task and recall metadata", async () => {
+  const fixture = createLifecycle({ autoRecallConfig: { enabled: true } });
+  const hybridContext = createHybridContext(fixture.events, async () => {
+    throw new Error("intent skip path must not execute Hybrid Search");
+  });
+  fixture.lifecycle.register(hybridContext);
+
+  const beforePrompt = fixture.hooks.find(item => item.name === "before_prompt_build").handler;
+  await beforePrompt({
+    prompt: `请润色下面这段文字，保持原意。\n${"LOG_LINE body\n".repeat(80)}`,
+    runId: "run-intent-skip",
+    sessionId: "session-intent-skip",
+  }, {
+    agentId: "edi",
+    trigger: "user",
+    runId: "run-intent-skip",
+    sessionId: "session-intent-skip",
+  });
+
+  const debug = fixture.events.find(event => event.event_type === "auto_recall_debug");
+  assert.equal(debug.metadata_json.task_intent, "rewrite_current_text");
+  assert.deepEqual(debug.metadata_json.recall_intent, ["none"]);
+  assert.equal(debug.metadata_json.skipped_by_recall_intent, true);
+});
+
 test("allowed prompt executes Hybrid and stores injected reinforcement state", async () => {
   const fixture = createLifecycle({
     autoRecallConfig: { enabled: true, topK: 2, sessionAllowlist: ["session-allowed"] },
@@ -235,10 +260,15 @@ test("allowed prompt executes Hybrid and stores injected reinforcement state", a
   const started = fixture.events.find(event => event.event_type === "recall_started");
   assert.equal(Object.hasOwn(started.metadata_json, "prompt"), false);
   assert.equal(Object.hasOwn(started.metadata_json, "focused_query"), false);
+  assert.equal(started.metadata_json.task_intent, "answer_question");
+  assert.deepEqual(started.metadata_json.recall_intent, ["none"]);
   const retrieved = fixture.events.find(event => event.event_type === "memory_candidate_retrieved");
   assert.equal(Object.hasOwn(retrieved.metadata_json, "preview"), false);
   const injectedEvent = fixture.events.find(event => event.event_type === "memory_injected");
   assert.equal(Object.hasOwn(injectedEvent.metadata_json, "preview"), false);
+  const recallDebug = fixture.events.find(event => event.event_type === "auto_recall_debug");
+  assert.equal(recallDebug.metadata_json.task_intent, "answer_question");
+  assert.deepEqual(recallDebug.metadata_json.recall_intent, ["none"]);
   assert.match(fixture.getSupplement()({ sessionId: "session-allowed" }).join("\n"), /MEMORY_SUPPLEMENT_INJECTED_COUNT: 1/);
 });
 

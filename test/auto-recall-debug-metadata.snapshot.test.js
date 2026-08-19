@@ -185,6 +185,8 @@ test("autoRecall debug metadata includes recall intent telemetry fields", () => 
       query_stripped: "memory-engine 当前基线 review",
       recall_intent_should_recall: true,
       recall_intent_reason: "long_input_with_history_context_use_focused_query",
+      task_intent: "review_plan",
+      recall_intent: ["project_state", "prior_decision"],
       long_input_detected: true,
       generic_task_detected: false,
       focused_query: "memory-engine 当前基线 review",
@@ -196,6 +198,8 @@ test("autoRecall debug metadata includes recall intent telemetry fields", () => 
 
   assert.equal(result.recall_intent_should_recall, true);
   assert.equal(result.recall_intent_reason, "long_input_with_history_context_use_focused_query");
+  assert.equal(result.task_intent, "review_plan");
+  assert.deepEqual(result.recall_intent, ["project_state", "prior_decision"]);
   assert.equal(result.long_input_detected, true);
   assert.equal(result.focused_query_chars, 27);
   assert.equal(result.original_input_chars, 3200);
@@ -208,6 +212,20 @@ test("autoRecall debug metadata includes recall intent telemetry fields", () => 
   assert.equal(result.query_normalized_chars > 0, true);
   assert.equal(result.fts_query_chars > 0, true);
   assert.equal(result.skipped_by_recall_intent, false);
+});
+
+test("autoRecall debug metadata bounds intent values to the shared contract", () => {
+  const metadata = buildAutoRecallDebugMetadata("query", {
+    results: [],
+    debug: {
+      task_intent: "not_a_task_intent",
+      recall_intent: ["not_a_recall_intent"],
+    },
+  });
+
+  assert.equal(metadata.task_intent, null);
+  assert.deepEqual(metadata.recall_intent, []);
+  assert.equal(Object.hasOwn(metadata, "prompt"), false);
 });
 
 test("executed Hybrid access metadata is persisted with stable fallback summary", () => {

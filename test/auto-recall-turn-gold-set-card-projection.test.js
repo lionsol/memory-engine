@@ -76,7 +76,7 @@ test("full_content_on_get labels project a card with get token but no injected f
     schema_version: 1,
     prompt: "继续上次 memory-engine P4 card object 设计",
     task_intent: "continue_prior_work",
-    recall_intent: ["project_state"],
+    recall_intent: ["task_state", "historical_context"],
     disclosure_level: "full_content_on_get",
     expected_should_recall: true,
     expected_intent_reason: "explicit_history_context",
