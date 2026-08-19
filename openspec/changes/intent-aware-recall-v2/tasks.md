@@ -38,3 +38,12 @@
 - [x] 6.4 Preserve v1 `should_recall`, `intent_reason`, focused-query, and legacy feature behavior.
 - [x] 6.5 Reach zero task/recall mismatch and `18/18` runtime-candidate classification on the known B1 regression set.
 - [x] 6.6 Record the holdout requirement before any future runtime policy authority decision.
+
+## 7. v2-B3 independent holdout
+
+- [x] 7.1 Freeze the Planner-specified independent 48-row holdout before evaluation.
+- [x] 7.2 Generalize the evaluator dataset-family contract without changing policy semantics.
+- [x] 7.3 Run B3 exactly against the frozen classifier and candidate policy.
+- [x] 7.4 Report runtime decision errors and semantic intent mismatches separately.
+- [x] 7.5 Apply quantitative and family-concentration readiness gates.
+- [x] 7.6 Record the B3 result without granting runtime policy authority.

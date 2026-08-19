@@ -50,3 +50,17 @@ v2-B2 keeps the v2-B1 candidate mapping unchanged and improves only the observat
 These semantic signals affect only `task_intent` and `recall_intent`. The existing legacy policy calculation remains authoritative and unchanged: `should_recall`, `intent_reason`, `focused_query`, focused-query construction, and all retrieval/presentation policy surfaces retain their v1 behavior.
 
 The frozen B1 fixture now reports zero task mismatches and zero recall mismatches. V1 remains `18 TP / 5 TN / 13 FP / 0 FN`; both oracle and runtime candidate mapping report `18 TP / 18 TN / 0 FP / 0 FN`. This is a known-gap regression closure, not production-readiness evidence: the candidate policy remains evaluation-only, and an independent B3 holdout is required before any policy-authority decision.
+
+## v2-B3 independent holdout evaluation
+
+The B3 holdout is the exact Planner-specified `test/fixtures/auto-recall-policy-holdout.v2b3.jsonl` fixture: 48 schema-version-1 rows, 12 families with four rows each, and an even 24/24 expected recall balance. All rows use the frozen taxonomy, high-confidence labels, and the `v2b3_planner_holdout` annotator marker. The fixture was statically validated and committed separately at `ceded7d7a629cb35817fe9a1b95d6849e55c8256` before classifier evaluation; it is immutable for this stage.
+
+The evaluator generalizes only the row family allowlist. It reuses the unchanged v2-B1 candidate mapping and three-way matrices, and adds B3 family metrics, semantic-only mismatch diagnostics, and readiness gates:
+
+- the oracle gate requires zero oracle false positives and false negatives;
+- the quantitative runtime-candidate gate requires precision and recall at least `0.90`, with no more than two false positives or false negatives;
+- the family-concentration gate allows at most one runtime decision error in any family.
+
+Subtype (`task_intent` / `recall_intent`) mismatches are reported separately from boolean policy decision errors. The read-only B3 CLI performs no DB, network, LLM, retrieval, injection, memory-file, or report-file access.
+
+The frozen B3 evaluation is contract-valid and oracle-perfect, but runtime candidate results are `7 TP / 19 TN / 5 FP / 17 FN` (precision `0.5833`, recall `0.2917`). Task mismatches are `14`, recall mismatches are `25`, and semantic-only mismatches are reported separately. Seven families exceed the one-error concentration bound, so the result is `PASS_WITH_FINDINGS / HOLDOUT NOT READY`. This is evidence for Planner adjudication, not a classifier-tuning authorization, policy approval, deployment, or runtime mutation.

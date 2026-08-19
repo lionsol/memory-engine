@@ -9,6 +9,7 @@ The turn gold-set already defines `task_intent`, `recall_intent`, and `disclosur
 - Make turn gold-set replay compare task and recall intents, classify explicit mismatches, and expose the bounded values through decision trace and debug surfaces.
 - Add v2-B1's evaluation-only candidate policy mapping, independent balanced fixture, and three-way offline evaluator for current v1, oracle mapping, and runtime-classifier mapping.
 - Add v2-B2 generalized deterministic lookup signals to close the known task/recall classifier gaps on the frozen B1 regression set without changing production policy authority.
+- Add v2-B3's Planner-frozen independent 48-row holdout, parameterized offline evaluator, family-concentration/readiness gates, and bounded mismatch decomposition without granting policy runtime authority.
 
 ## Non-goals
 
@@ -18,9 +19,10 @@ The turn gold-set already defines `task_intent`, `recall_intent`, and `disclosur
 - Granting the candidate mapping authority over production `should_recall`, `focused_query`, or AutoRecall hook behavior.
 - Rewriting evaluation labels to fit classifier output or using the evaluation fixture as production evidence.
 - Treating 36/36 on the known B1 regression set as production-readiness evidence; an independent B3 holdout remains required.
+- Tuning the classifier or candidate mapping after the B3 holdout is frozen, or treating B3 readiness as runtime authorization.
 
 ## Impact
 
 - Runtime intent analysis gains observational deterministic metadata only.
 - The existing schema version remains `TURN_GOLD_SET_SCHEMA_VERSION = 1`; the existing 12-row seed remains frozen.
-- v2-B1 produces offline metrics and bounded case diagnostics only; v2-B2 closes the known regression set but does not authorize the candidate policy. `canonical-memory-architecture` is not reopened; runtime deployment and any future policy coupling remain separate decisions.
+- v2-B1 produces offline metrics and bounded case diagnostics only; v2-B2 closes the known regression set but does not authorize the candidate policy. v2-B3 adds independent holdout evidence and a Planner-facing readiness result; `canonical-memory-architecture` is not reopened, and runtime deployment and any future policy coupling remain separate decisions.

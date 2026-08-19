@@ -127,3 +127,39 @@ Reaching zero task/recall mismatch and perfect runtime-candidate results on the 
 
 - **WHEN** the frozen B1 fixture reaches 36/36 classifier and runtime-candidate agreement
 - **THEN** the candidate policy remains evaluation-only and the next decision is an independent holdout review
+
+### Requirement: Independent B3 holdout immutability
+
+The v2-B3 holdout MUST be the exact 48-row Planner-specified fixture with 12 required families, four rows per family, schema version 1, and a 24/24 expected decision balance. The fixture MUST be statically validated and frozen in a separate commit before classifier/evaluator execution. After that freeze, neither the fixture labels nor the classifier may be changed to improve the result in the same stage.
+
+#### Scenario: Holdout is frozen before evaluation
+
+- **WHEN** the B3 fixture contract is checked before evaluation
+- **THEN** its rows, labels, family coverage, and annotator marker are committed and remain immutable for the B3 run
+
+### Requirement: Parameterized offline holdout evaluation
+
+The offline evaluator MUST accept a dataset-specific family allowlist while preserving the v2-B1 default contract and candidate mapping semantics. The B3 evaluator MUST remain read-only and MUST NOT access DB, network, LLM, embedding, retrieval, injection, memory files, or runtime policy.
+
+#### Scenario: B1 compatibility and B3 family validation
+
+- **WHEN** B1 rows are evaluated without a custom family allowlist and B3 rows are evaluated with the B3 allowlist
+- **THEN** each dataset is validated against its own family contract without changing any three-way policy calculation
+
+### Requirement: B3 readiness and error decomposition
+
+The B3 report MUST provide V1, oracle, and runtime-candidate confusion matrices; task/recall mismatch counts and bounded case IDs; semantic-only mismatch IDs; runtime false-positive/false-negative IDs; per-family decision-error counts; and separate oracle, quantitative, and family-concentration gates. A subtype mismatch with the same boolean candidate decision MUST NOT be reported as a policy decision error.
+
+#### Scenario: Oracle and runtime findings remain distinct
+
+- **WHEN** the oracle is perfect but the runtime candidate has classifier subtype or boolean decision errors
+- **THEN** the report keeps oracle mapping, semantic mismatch, and runtime policy decision results separate
+
+### Requirement: B3 status does not grant runtime authority
+
+The B3 status vocabulary MUST treat `PASS / READY FOR POLICY AUTHORITY REVIEW` as evidence that only the quantitative, family, and oracle gates passed. `PASS_WITH_FINDINGS / HOLDOUT NOT READY` MUST record a valid evaluation with findings. Neither status grants production policy authority, AutoRecall enablement, deployment, or runtime mutation; any policy-authority decision remains separately authorized.
+
+#### Scenario: Holdout findings remain bounded
+
+- **WHEN** B3 runtime precision/recall or family concentration fails its gate
+- **THEN** the result is recorded as `PASS_WITH_FINDINGS / HOLDOUT NOT READY` and no classifier, candidate mapping, or production policy change is inferred
