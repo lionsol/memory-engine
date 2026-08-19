@@ -18,6 +18,7 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 - The persistent-activation qualification line is closed. The separately authorized Session-Flush Reconciliation Persistent Rollout Successor recorded `PASS` on 2026-08-17, accepted the immutable `ac0e5f0` reconciliation candidate for persistent use, and explicitly requires no R5 or additional persistent-activation qualification. AutoRecall remains disabled by default and broad rollout remains a separate later decision.
 - **L2 Database Boundary Closure** recorded `deployed runtime qualification PASS / L2 COMPLETE` at active runtime source parity `057f43e`. Gateway was `READY`; `AutoRecall=false`; Hybrid runtime used `KG_ACCESS_MODE=isolated` and `RECENT_ACCESS_MODE=isolated` with production legacy fallback `0`; the current Nightly dry-run isolated topology passed; and no unexpected memory/confidence mutation was observed.
+- **Conflict Ownership Closure** is `SOURCE CLOSED / PASS`: Session Checkpoint exclusively owns `category='preference'` conflict flags through `resolvePreferenceConflicts()` / `preference_latest_wins`, while generic lifecycle detection excludes preference and preserves non-preference conflict behavior. No schema change was made. Nightly Maintenance apply rollout remains a separate, unauthorized decision.
 
 ### LATER
 
@@ -31,7 +32,6 @@ Multi-agent memory architecture may begin after the Canonical Object Contract is
 
 AutoRecall broad rollout remains a separate later decision. A naturally occurring AutoRecall success/failure with independent answer-bearing evidence may still justify one bounded read-only first-loss attribution, but provenance availability alone does not reopen retrieval tuning or dedicated canary chains.
 
-- **Resolve conflict-ownership overlap before enabling mutating Nightly Maintenance.** Keep preference/config conflict ownership in Session Checkpoint via `resolvePreferenceConflicts()` / `preference_latest_wins`. Change Nightly Maintenance generic `detectRelatedConflicts()` so it does not claim `category='preference'`; it should continue to own generic related-conflict detection for the remaining categories. This prevents the two pipelines from independently setting and clearing the same untyped `memory_confidence.conflict_flag`. Keep the current Nightly Maintenance cron in `--dry-run` until this ownership boundary is implemented and verified. Do not add conflict-source schema/state machinery unless later evidence shows that category separation is insufficient.
 
 ### DEFERRED
 

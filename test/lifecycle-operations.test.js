@@ -100,39 +100,44 @@ test("applyKgBridge writes one shared payload to the newest eligible rows", () =
   }
 });
 
-test("detectRelatedConflicts flags one unique lower-confidence related memory", () => {
+test("detectRelatedConflicts excludes preference and flags one generic non-preference memory", () => {
   const db = createDb();
   try {
     const insertChunk = db.prepare("INSERT INTO chunks (id, text, path) VALUES (?, ?, ?)");
-    insertChunk.run("old", "prefers compact terminal output and vim keybindings", "preferences/editor-a.md");
-    insertChunk.run("new", "prefers compact terminal output and vim keybindings with tabs", "preferences/editor-b.md");
-    insertChunk.run("other", "database vector retrieval architecture", "systems/vector-index.md");
+    insertChunk.run("old-pref", "prefers compact terminal output and vim keybindings", "preferences/editor-a.md");
+    insertChunk.run("new-pref", "prefers compact terminal output and vim keybindings with tabs", "preferences/editor-b.md");
+    insertChunk.run("old-episode", "project deployment failed after gateway restart", "projects/deployment-a.md");
+    insertChunk.run("new-episode", "project deployment failed after gateway restart and rollback", "projects/deployment-b.md");
 
     const insertConfidence = db.prepare(`
       INSERT INTO memory_confidence
       (chunk_id, confidence, last_confidence_update, hit_count, is_archived, category)
-      VALUES (?, ?, ?, ?, 0, 'preference')
+      VALUES (?, ?, ?, ?, 0, ?)
     `);
-    insertConfidence.run("old", 0.2, 100, 0);
-    insertConfidence.run("new", 0.9, 300, 8);
-    insertConfidence.run("other", 0.1, 200, 0);
+    insertConfidence.run("old-pref", 0.2, 100, 0, "preference");
+    insertConfidence.run("new-pref", 0.9, 300, 8, "preference");
+    insertConfidence.run("old-episode", 0.4, 100, 0, "episodic");
+    insertConfidence.run("new-episode", 0.9, 300, 8, "episodic");
 
     const flagged = [];
     const result = detectRelatedConflicts(db, {
       onFlagged: id => flagged.push(id),
     });
 
-    assert.equal(result.pairs_checked >= 1, true);
-    assert.deepEqual(result.ids, ["old"]);
-    assert.deepEqual(flagged, ["old"]);
-    assert.equal(db.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old'").get().conflict_flag, 1);
-    assert.equal(db.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'other'").get().conflict_flag, 0);
+    assert.equal(result.pairs_checked, 1);
+    assert.deepEqual(result.ids, ["old-episode"]);
+    assert.deepEqual(flagged, ["old-episode"]);
+    assert.match(result.note, /non-preference/);
+    assert.equal(db.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-pref'").get().conflict_flag, 0);
+    assert.equal(db.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'new-pref'").get().conflict_flag, 0);
+    assert.equal(db.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-episode'").get().conflict_flag, 1);
+    assert.equal(db.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'new-episode'").get().conflict_flag, 0);
   } finally {
     db.close();
   }
 });
 
-test("detectRelatedConflictsIsolated preserves conflict behavior without cross-database SQL", () => {
+test("detectRelatedConflictsIsolated excludes preference without cross-database SQL", () => {
   const coreDb = new Database(":memory:");
   const engineDb = new Database(":memory:");
   try {
@@ -159,18 +164,20 @@ test("detectRelatedConflictsIsolated preserves conflict behavior without cross-d
     `);
 
     const insertChunk = coreDb.prepare("INSERT INTO chunks (id, text, path) VALUES (?, ?, ?)");
-    insertChunk.run("old", "prefers compact terminal output and vim keybindings", "preferences/editor-a.md");
-    insertChunk.run("new", "prefers compact terminal output and vim keybindings with tabs", "preferences/editor-b.md");
-    insertChunk.run("other", "database vector retrieval architecture", "systems/vector-index.md");
+    insertChunk.run("old-pref", "prefers compact terminal output and vim keybindings", "preferences/editor-a.md");
+    insertChunk.run("new-pref", "prefers compact terminal output and vim keybindings with tabs", "preferences/editor-b.md");
+    insertChunk.run("old-episode", "project deployment failed after gateway restart", "projects/deployment-a.md");
+    insertChunk.run("new-episode", "project deployment failed after gateway restart and rollback", "projects/deployment-b.md");
 
     const insertConfidence = engineDb.prepare(`
       INSERT INTO memory_confidence
       (chunk_id, confidence, last_confidence_update, hit_count, is_archived, category)
-      VALUES (?, ?, ?, ?, 0, 'preference')
+      VALUES (?, ?, ?, ?, 0, ?)
     `);
-    insertConfidence.run("old", 0.2, 100, 0);
-    insertConfidence.run("new", 0.9, 300, 8);
-    insertConfidence.run("other", 0.1, 200, 0);
+    insertConfidence.run("old-pref", 0.2, 100, 0, "preference");
+    insertConfidence.run("new-pref", 0.9, 300, 8, "preference");
+    insertConfidence.run("old-episode", 0.4, 100, 0, "episodic");
+    insertConfidence.run("new-episode", 0.9, 300, 8, "episodic");
 
     const flagged = [];
     const result = detectRelatedConflictsIsolated({
@@ -181,11 +188,14 @@ test("detectRelatedConflictsIsolated preserves conflict behavior without cross-d
 
     assert.deepEqual(coreDb.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
     assert.deepEqual(engineDb.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
-    assert.equal(result.pairs_checked >= 1, true);
-    assert.deepEqual(result.ids, ["old"]);
-    assert.deepEqual(flagged, ["old"]);
-    assert.equal(engineDb.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old'").get().conflict_flag, 1);
-    assert.equal(engineDb.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'other'").get().conflict_flag, 0);
+    assert.equal(result.pairs_checked, 1);
+    assert.deepEqual(result.ids, ["old-episode"]);
+    assert.deepEqual(flagged, ["old-episode"]);
+    assert.match(result.note, /non-preference/);
+    assert.equal(engineDb.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-pref'").get().conflict_flag, 0);
+    assert.equal(engineDb.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'new-pref'").get().conflict_flag, 0);
+    assert.equal(engineDb.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-episode'").get().conflict_flag, 1);
+    assert.equal(engineDb.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'new-episode'").get().conflict_flag, 0);
   } finally {
     engineDb.close();
     coreDb.close();

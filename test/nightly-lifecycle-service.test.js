@@ -19,6 +19,8 @@ function createFixture() {
   const insertChunk = core.prepare("INSERT INTO chunks (id, text, path) VALUES (?, ?, ?)");
   insertChunk.run("old-pref", "prefers compact terminal output and vim keybindings", "preferences/editor-a.md");
   insertChunk.run("new-pref", "prefers compact terminal output and vim keybindings with tabs", "preferences/editor-b.md");
+  insertChunk.run("old-episode", "project deployment failed after gateway restart", "projects/deployment-a.md");
+  insertChunk.run("new-episode", "project deployment failed after gateway restart and rollback", "projects/deployment-b.md");
   insertChunk.run("low-temp", "temporary low confidence item", "temporary/item.md");
   insertChunk.run("kg-row", "knowledge graph memory", "knowledge/kg.md");
   core.close();
@@ -53,6 +55,8 @@ function createFixture() {
   const now = Math.floor(Date.now() / 1000);
   insertConfidence.run("old-pref", 0.2, now - 86400, 0, 30, "preference");
   insertConfidence.run("new-pref", 0.9, now, 8, 30, "preference");
+  insertConfidence.run("old-episode", 0.4, now, 0, 30, "episodic");
+  insertConfidence.run("new-episode", 0.9, now, 8, 30, "episodic");
   insertConfidence.run("low-temp", 0.01, now - 30 * 86400, 0, 2, "temporary");
   insertConfidence.run("kg-row", 0.8, now, 1, 90, "kg_node");
   engine.close();
@@ -91,6 +95,7 @@ test("nightly maintenance delegates lifecycle mutations and preserves dry-run", 
 
     let engine = new Database(fixture.engineDbPath, { readonly: true });
     assert.equal(engine.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-pref'").get().conflict_flag, 0);
+    assert.equal(engine.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-episode'").get().conflict_flag, 0);
     assert.equal(engine.prepare("SELECT is_archived FROM memory_confidence WHERE chunk_id = 'low-temp'").get().is_archived, 0);
     assert.equal(engine.prepare("SELECT kg_data FROM memory_confidence WHERE chunk_id = 'kg-row'").get().kg_data, null);
     assert.equal(engine.prepare("SELECT COUNT(*) AS count FROM memory_events").get().count, 0);
@@ -103,14 +108,17 @@ test("nightly maintenance delegates lifecycle mutations and preserves dry-run", 
     assert.equal(applied.result.kg_bridge.chunks_updated, 1);
 
     engine = new Database(fixture.engineDbPath, { readonly: true });
-    assert.equal(engine.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-pref'").get().conflict_flag, 1);
+    assert.equal(engine.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-pref'").get().conflict_flag, 0);
+    assert.equal(engine.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'new-pref'").get().conflict_flag, 0);
+    assert.equal(engine.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'old-episode'").get().conflict_flag, 1);
+    assert.equal(engine.prepare("SELECT conflict_flag FROM memory_confidence WHERE chunk_id = 'new-episode'").get().conflict_flag, 0);
     assert.equal(engine.prepare("SELECT is_archived FROM memory_confidence WHERE chunk_id = 'low-temp'").get().is_archived, 1);
     assert.equal(engine.prepare("SELECT kg_data FROM memory_confidence WHERE chunk_id = 'kg-row'").get().kg_data !== null, true);
     assert.equal(engine.prepare("SELECT COUNT(*) AS count FROM memory_events").get().count, 4);
     engine.close();
 
     const core = new Database(fixture.coreDbPath, { readonly: true });
-    assert.equal(core.prepare("SELECT COUNT(*) AS count FROM chunks").get().count, 4);
+    assert.equal(core.prepare("SELECT COUNT(*) AS count FROM chunks").get().count, 6);
     core.close();
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
