@@ -7,13 +7,19 @@
 - [x] 1.5 Freeze the offline evidence and fixture boundaries.
 - [x] 1.6 Validate the documentation-only OpenSpec change.
 
-## 2. Future stages — not started
+## 2. Phase D.2-C.6 offline evaluator implementation
 
-- [ ] 2.1 Implement a separately authorized offline shadow evaluator.
-- [ ] 2.2 Execute shadow evaluation without mutating the frozen fixture.
-- [ ] 2.3 Review evidence before any runtime integration decision.
-- [ ] 2.4 Obtain explicit authorization before implementing runtime capability calculation.
+- [x] 2.1 Implement pure deterministic shadow capability calculation.
+- [x] 2.2 Compare current selector disclosure with capability-constrained disclosure.
+- [x] 2.3 Add synthetic tests for capability states, no-upgrade behavior, and metrics.
+- [x] 2.4 Confirm no production caller and keep the frozen v2 fixture unevaluated.
 
-This change defines architecture only. It does not implement or execute a
-shadow evaluator, modify selector/admissibility behavior, generate metrics,
-enable runtime policy, or mutate configuration, databases, or data.
+## 3. Future stages — not started
+
+- [ ] 3.1 Execute shadow evaluation without mutating the frozen fixture.
+- [ ] 3.2 Review evidence before any runtime integration decision.
+- [ ] 3.3 Obtain explicit authorization before implementing runtime capability calculation.
+
+This change implements an offline evaluator only. It does not modify
+selector/admissibility behavior, enable runtime policy, or mutate
+configuration, databases, or data.

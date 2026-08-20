@@ -1,8 +1,7 @@
 ## Contract boundary
 
-This is an architecture specification for a future offline evaluation. No
-shadow calculation, selector execution, metric generation, source change, or
-runtime adoption occurs in this change.
+This is an architecture specification plus a pure offline evaluator. The
+frozen v2 fixture is not executed in this change; no runtime adoption occurs.
 
 ## Current and shadow flows
 
@@ -73,6 +72,21 @@ answer-bearing disclosure.
 
 Each path reports `selected_cards`, `withheld_cards`,
 `irrelevant_disclosures`, and `reduction_rate`.
+
+## Phase D.2-C.6 implementation note
+
+`lib/recall/disclosure/disclosure-capability-shadow-evaluator.js` provides the
+pure offline implementation and `test/recall-disclosure/disclosure-capability-shadow-evaluator.test.js`
+covers synthetic candidates only. A candidate with a valid active safe
+context is predicted `CARD_DISCLOSABLE`; blocked artifacts, invalid
+projections, blocked lifecycle/scope, and unsafe risk flags are predicted
+`RETRIEVAL_ONLY`; explicitly sensitive context is predicted
+`INTERNAL_CONTEXT`. `RAW_DISCLOSABLE` is never emitted.
+
+The existing v2 fixture has no `expected_capability` label. The evaluator
+therefore treats `CARD` labels as the minimum card expectation and leaves
+`NONE` capability expectations unspecified; it does not rewrite or extend the
+fixture. No v2 fixture execution or metrics run is part of this implementation.
 
 ## Evidence and authority boundary
 

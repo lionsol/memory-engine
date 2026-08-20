@@ -1,11 +1,11 @@
 ## Status
 
-Offline shadow-evaluation contract only; not executed.
+Offline shadow-evaluation implementation only; v2 fixture evaluation not executed.
 
-This change defines a side-by-side evaluation contract for current disclosure
-behavior and a future capability-constrained shadow path. It does not
-implement a capability calculator or evaluator, change selector behavior, or
-authorize runtime adoption.
+This change defines and implements a pure side-by-side evaluator for current
+disclosure behavior and a capability-constrained shadow path. It does not
+change selector behavior, execute the frozen v2 fixture, or authorize runtime
+adoption.
 
 ## Problem
 
@@ -36,8 +36,9 @@ this change. A future shadow run must identify itself as
 
 ## Non-goals
 
-- No capability calculator, shadow evaluator, selector, admissibility,
-  projection, envelope, fixture, or runtime source implementation.
+- No production capability calculator, selector, admissibility, projection,
+  envelope, fixture, or runtime source implementation.
+- The shadow evaluator is offline-only and has no production caller.
 - No prompt intent, `task_intent`, `recall_intent`, retrieval, ranking, or
   AutoRecall policy authority.
 - No runtime hook, configuration, database, data, Gateway, deployment, or raw
