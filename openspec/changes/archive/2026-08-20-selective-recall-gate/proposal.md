@@ -25,3 +25,7 @@ The next product question is therefore narrower: can a deterministic layer safel
 ## Impact
 
 C1 is source/offline only. Existing V1 `should_recall` remains authoritative in production. The new gate and evaluator are isolated from runtime policy paths and exist only to test whether a conservative skip override is a viable successor architecture.
+
+## Final adjudication
+
+The first fresh independent C2 holdout evaluation is `PASS_WITH_FINDINGS / HOLDOUT NOT READY`: V1 scored `23/0/24/1`, selective scored `22/5/19/2`, hard safety failed, and utility passed. The deterministic authority experiment is `REJECTED / CLOSED / NOT RUNTIME AUTHORIZED`; C2-C repair is `CANCELLED / DO NOT START`. The failure is not a missing-token defect to repair or a reason to tune against the fixture. Future retrieval-first selective-use/disclosure control and learned/statistical recall policy remain later, not-started directions.

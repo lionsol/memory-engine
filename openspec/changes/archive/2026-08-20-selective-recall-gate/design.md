@@ -113,3 +113,25 @@ The future fixture MUST be committed before its first evaluation. After that fre
 The exact Planner-specified fixture `test/fixtures/selective-recall-gate-holdout.v2c2.jsonl` is now frozen as a separate 48-row behavioral holdout: 24 expected recall-yes rows and 24 expected recall-no rows, across the exact 12-family allowlist with four rows per family and a 2/2 YES/NO balance in each family. Every row uses schema version `1`, `label_confidence="high"`, and `annotator="v2c2_planner_holdout"`; no task or recall semantic labels were added.
 
 The C2-B wrapper performs only JSONL parsing and static behavioral-shape validation. The C1 gate and C2 decision evaluator were not executed on this fixture, so C2-B contains no independent result or readiness metrics. The fixture is immutable for the subsequent independent evaluation; no classifier, gate, evaluator, runtime policy, deployment, or AutoRecall authority is implied by the freeze.
+
+## Final adjudication
+
+The first fresh independent C2 evaluation retained the frozen contract and produced:
+
+```text
+V1       = 23 TP / 0 TN / 24 FP / 1 FN
+Selective = 22 TP / 5 TN / 19 FP / 2 FN
+SAFE_SKIP = 6
+safe correct = 5
+unsafe SAFE_SKIP = 1
+safe_skip_precision = 0.8333
+introduced FN = 1
+FP reduced = 5
+FP reduction rate = 0.2083
+```
+
+The hard safety gate failed because an unsafe SAFE_SKIP and an introduced false negative were observed. Utility passed, but the overall result is `PASS_WITH_FINDINGS / HOLDOUT NOT READY` and `FAIL FOR PRODUCTION AUTHORITY`.
+
+This is not adjudicated as a missing-token defect. The result demonstrates that absence of detected history-reference evidence is not sufficient proof that a mixed natural-language request has no history requirement. C1 is therefore `REJECTED / CLOSED / NOT RUNTIME AUTHORIZED`, and C2-C repair is `CANCELLED / DO NOT START`. No regex/classifier tuning or automatic retry is authorized.
+
+The intent taxonomy, structured evidence, C1/C2 evaluators, and B1/B3/B5/C2 corpora remain retained experimental artifacts. Retrieval-first selective-use/disclosure control and learned/statistical recall policy are later, not-started directions requiring sufficient real labeled traffic and a separate product decision.

@@ -118,3 +118,14 @@ The C2-B wrapper and test MUST perform only JSONL parsing and static contract va
 
 - **WHEN** the C2-B static fixture test passes
 - **THEN** the fixture is recorded as `FROZEN / NOT YET EVALUATED`, with no independent readiness result or candidate-authority change
+
+### Requirement: Final experiment closure
+
+This change is an offline experiment and is closed after the first fresh C2 evaluation. The historical result is `PASS_WITH_FINDINGS / HOLDOUT NOT READY`: V1 `23 TP / 0 TN / 24 FP / 1 FN`, selective `22 TP / 5 TN / 19 FP / 2 FN`, unsafe SAFE_SKIP `1`, introduced FN `1`, SAFE_SKIP precision `0.8333`, and five false positives reduced at rate `0.2083`. Hard safety fails even though utility passes; the result MUST NOT grant production authority.
+
+The C1 Selective Abstention Gate is `REJECTED / CLOSED / NOT RUNTIME AUTHORIZED`, and C2-C repair is `CANCELLED / DO NOT START`. The failure MUST NOT be treated as a missing-token defect, classifier-tuning authorization, or automatic retry trigger. The intent taxonomy, structured evidence, evaluators, and corpora remain experimental artifacts; any retrieval-first selective-use/disclosure or learned/statistical policy is a later, separately authorized product direction.
+
+#### Scenario: Rejected experiment is archived without production spec promotion
+
+- **WHEN** the selective-recall-gate change is closed after the failed hard-safety gate
+- **THEN** it MUST be archived with spec updates skipped so rejected experimental requirements do not become production specifications

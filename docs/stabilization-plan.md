@@ -22,21 +22,21 @@ Intent-aware Recall v2-B4 is **`SOURCE IMPLEMENTED / STRUCTURED EVIDENCE REGRESS
 
 ### NEXT
 
-Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. Intent-aware Recall v2-B is now closed: B3 and B5 both failed independent generalization, the full deterministic semantic production-authority route is rejected, and v2-B6 is cancelled. The successor workstream is the separate `selective-recall-gate` change.
+Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. Intent-aware Recall v2-B and the successor Selective Recall Gate deterministic-authority experiment are now closed: the full semantic route and skip-only C1 route are rejected, and v2-B6/C2-C repair are cancelled. No runtime authority was granted.
 
 ### CLOSED
 
 - The persistent-activation qualification line is closed. The separately authorized Session-Flush Reconciliation Persistent Rollout Successor recorded `PASS` on 2026-08-17, accepted the immutable `ac0e5f0` reconciliation candidate for persistent use, and explicitly requires no R5 or additional persistent-activation qualification. AutoRecall remains disabled by default and broad rollout remains a separate later decision.
 - **L2 Database Boundary Closure** recorded `deployed runtime qualification PASS / L2 COMPLETE` at active runtime source parity `057f43e`. Gateway was `READY`; `AutoRecall=false`; Hybrid runtime used `KG_ACCESS_MODE=isolated` and `RECENT_ACCESS_MODE=isolated` with production legacy fallback `0`; the current Nightly dry-run isolated topology passed; and no unexpected memory/confidence mutation was observed.
 - **Conflict Ownership Closure** is `SOURCE CLOSED / PASS`: Session Checkpoint exclusively owns `category='preference'` conflict flags through `resolvePreferenceConflicts()` / `preference_latest_wins`, while generic lifecycle detection excludes preference and preserves non-preference conflict behavior. No schema change was made. Nightly Maintenance apply rollout remains a separate, unauthorized decision.
+- **Intent-aware / Selective Recall deterministic authority experiment** is `REJECTED / CLOSED / NOT RUNTIME AUTHORIZED`. The first fresh C2 holdout produced V1 `23/0/24/1` and selective `22/5/19/2`; hard safety failed (`unsafe SAFE_SKIP=1`, introduced FN `1`, SAFE_SKIP precision `0.8333`) while utility passed (`5` FP reduced, rate `0.2083`). C2-C repair is `CANCELLED / DO NOT START`; taxonomy, evidence, evaluators, and corpora remain retained experimental artifacts.
 
 ### LATER
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Selective Recall Gate v2-C1** — source/offline implementation complete. The conservative skip-only gate uses `SAFE_SKIP` / `ABSTAIN`, preserves V1 on abstention, and abstains whenever a history reference survives request-scope masking; on known B1/B3/B5 regression corpora it reduces aggregate false positives `60→52` with `0` introduced false negatives (`B1 13→13`, `B3 24→17`, `B5 23→22`). These corpora are not independent readiness evidence, and the guard intentionally sacrifices skip coverage rather than repairing B4 semantic evidence.
-2. **Selective Recall Gate v2-C2-A** — evaluation contract prepared offline only: future rows use behavioral labels rather than v2-B semantic labels, with independent unsafe-SAFE_SKIP and introduced-FN safety gates. No fresh fixture exists yet; the future holdout must be committed before evaluation, and known B1/B3/B5 corpora cannot qualify C2.
-3. **Selective Recall Gate v2-C2-B** — exact 48-row fresh fixture frozen and statically validated with 12 balanced families. The C1 gate and C2 evaluator have not been run on it; no independent result or runtime authority exists yet.
+1. **Retrieval-first selective-use / disclosure control** — `LATER / NOT STARTED`; future product design only, with no implementation stage opened by this closeout.
+2. **Learned/statistical recall policy** — `LATER / NOT STARTED`; requires sufficient real labeled traffic and a separate Planner decision.
 3. **Recall Hint**.
 4. **Statistical LTR**.
 

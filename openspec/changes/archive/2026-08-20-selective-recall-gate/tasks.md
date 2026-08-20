@@ -33,3 +33,11 @@
 - [x] 5.2 Add the explicit 12-family allowlist and static-only wrapper.
 - [x] 5.3 Validate counts, family balance, IDs, schema, and absence of semantic labels without decision evaluation.
 - [x] 5.4 Record the fixture as frozen and not yet evaluated; defer all C1/C2 metrics to the next authorized task.
+
+## 6. Final adjudication and closure
+
+- [x] 6.1 Run the first C2 evaluation exactly once against the immutable fixture and retain its historical metrics.
+- [x] 6.2 Record `PASS_WITH_FINDINGS / HOLDOUT NOT READY`, hard-safety failure, utility pass, and `FAIL FOR PRODUCTION AUTHORITY`.
+- [x] 6.3 Close C1 as `REJECTED / CLOSED / NOT RUNTIME AUTHORIZED`.
+- [x] 6.4 Cancel C2-C repair as `CANCELLED / DO NOT START`; do not tune classifier/gate against C2.
+- [x] 6.5 Retain taxonomy, evidence, evaluators, and corpora as experimental artifacts; leave future directions later/not started.
