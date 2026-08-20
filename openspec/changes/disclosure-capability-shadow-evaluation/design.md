@@ -1,7 +1,8 @@
-## Contract boundary
+## Phase D.2-C.10 implementation boundary
 
-This is an architecture specification plus a pure offline evaluator. The
-frozen v2 fixture is not executed in this change; no runtime adoption occurs.
+This change refines the pure offline evaluator to implement
+`DisclosureCapability v1.1`. The frozen v2 fixture is not executed in this
+change; no runtime adoption occurs.
 
 ## Current and shadow flows
 
@@ -32,6 +33,25 @@ The selector MUST NOT upgrade capability. In particular,
 `INTERNAL_CONTEXT -> CARD_DISCLOSABLE` is forbidden. Retrieval evidence,
 missing evidence, and selector convenience are not capability authority.
 
+`CARD_DISCLOSABLE` requires active lifecycle, valid projection, allowed scope,
+acceptable risk, and `safe_to_disclose=true`. The v2 evaluation envelope
+stores `safe_to_disclose` in the bounded candidate label; the shadow-only
+adapter supplies that predicate to capability calculation without changing
+the envelope schema, fixture, or production selector.
+
+The v1.1 shadow mapping is:
+
+- blocked or unusable input -> `RETRIEVAL_ONLY`;
+- unsafe but internally usable input, including `safe_to_disclose=false` ->
+  `INTERNAL_CONTEXT`;
+- all v1.1 card predicates satisfied -> `CARD_DISCLOSABLE`;
+- `RAW_DISCLOSABLE` is never emitted.
+
+Each result carries a bounded `capability_reason`. Supported denial reasons
+include `unsafe_disclosure`, `unsafe_artifact`, `invalid_projection`,
+`blocked_lifecycle`, `scope_denied`, and
+`safe_disclosure_not_authorized`.
+
 ## Shadow result contract
 
 Each candidate-level result is bounded to:
@@ -42,6 +62,7 @@ Each candidate-level result is bounded to:
 - `current_disclosure`;
 - `shadow_disclosure`;
 - `expected_disclosure`.
+- `capability_reason`.
 
 Diagnostics must use identifiers, families, and bounded reasons only. Prompt
 bodies, canonical memory bodies, raw content, and evidence excerpts are not
@@ -73,15 +94,20 @@ answer-bearing disclosure.
 Each path reports `selected_cards`, `withheld_cards`,
 `irrelevant_disclosures`, and `reduction_rate`.
 
-## Phase D.2-C.6 implementation note
+The report also includes `capability_denial_breakdown`, counting bounded
+capability reasons for candidates that are not `CARD_DISCLOSABLE`.
+
+## Phase D.2-C.10 implementation note
 
 `lib/recall/disclosure/disclosure-capability-shadow-evaluator.js` provides the
-pure offline implementation and `test/recall-disclosure/disclosure-capability-shadow-evaluator.test.js`
-covers synthetic candidates only. A candidate with a valid active safe
-context is predicted `CARD_DISCLOSABLE`; blocked artifacts, invalid
-projections, blocked lifecycle/scope, and unsafe risk flags are predicted
-`RETRIEVAL_ONLY`; explicitly sensitive context is predicted
-`INTERNAL_CONTEXT`. `RAW_DISCLOSABLE` is never emitted.
+pure offline v1.1 implementation and
+`test/recall-disclosure/disclosure-capability-shadow-evaluator.test.js` covers
+synthetic candidates only. A candidate with a valid active safe context and
+`safe_to_disclose=true` is predicted `CARD_DISCLOSABLE`; blocked artifacts,
+invalid projections, blocked lifecycle/scope, and unsafe risk flags are
+predicted `RETRIEVAL_ONLY`; explicitly sensitive context or
+`safe_to_disclose=false` is predicted `INTERNAL_CONTEXT` when it remains
+internally usable. `RAW_DISCLOSABLE` is never emitted.
 
 The existing v2 fixture has no `expected_capability` label. The evaluator
 therefore treats `CARD` labels as the minimum card expectation and leaves

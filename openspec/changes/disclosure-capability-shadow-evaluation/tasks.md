@@ -14,12 +14,18 @@
 - [x] 2.3 Add synthetic tests for capability states, no-upgrade behavior, and metrics.
 - [x] 2.4 Confirm no production caller and keep the frozen v2 fixture unevaluated.
 
-## 3. Future stages — not started
+## 3. Phase D.2-C.10 Disclosure Capability v1.1 evaluator refinement
 
-- [ ] 3.1 Execute shadow evaluation without mutating the frozen fixture.
-- [ ] 3.2 Review evidence before any runtime integration decision.
-- [ ] 3.3 Obtain explicit authorization before implementing runtime capability calculation.
+- [x] 3.1 Preserve the string capability helper while enforcing the `safe_to_disclose` predicate in the shadow-only adapter.
+- [x] 3.2 Add bounded capability reasons and denial-breakdown metrics.
+- [x] 3.3 Cover unsafe/internal, blocked, invalid projection, no-upgrade, and never-raw behavior with synthetic tests.
 
-This change implements an offline evaluator only. It does not modify
+## 4. Future stages — not started
+
+- [ ] 4.1 Execute shadow evaluation without mutating the frozen fixture.
+- [ ] 4.2 Review evidence before any runtime integration decision.
+- [ ] 4.3 Obtain explicit authorization before implementing runtime capability calculation.
+
+This change implements an offline v1.1 evaluator only. It does not modify
 selector/admissibility behavior, enable runtime policy, or mutate
 configuration, databases, or data.

@@ -12,17 +12,45 @@ the selector decision.
 - **WHEN** a candidate is evaluated
 - **THEN** the result records separate current and shadow disclosure outcomes
 
-### Requirement: Shadow capability uses the Disclosure Capability Contract
+### Requirement: Shadow capability uses Disclosure Capability v1.1
 
 The shadow path MUST use only `RETRIEVAL_ONLY`, `INTERNAL_CONTEXT`,
 `CARD_DISCLOSABLE`, and reserved `RAW_DISCLOSABLE` states from the Disclosure
-Capability Contract. The selector MUST NOT upgrade a capability.
+Capability Contract. `CARD_DISCLOSABLE` MUST require active lifecycle, valid
+projection, allowed scope, acceptable risk, and `safe_to_disclose=true`. The
+selector MUST NOT upgrade a capability.
 
 #### Scenario: Internal context cannot become card disclosure
 
 - **WHEN** predicted capability is `INTERNAL_CONTEXT`
 - **THEN** the shadow path MUST NOT report `CARD_DISCLOSABLE` authority merely
   because the selector can produce a card
+
+### Requirement: Unsafe disclosure remains internally distinct from blocking
+
+The shadow evaluator MUST map `safe_to_disclose=false` to `INTERNAL_CONTEXT`
+when the candidate remains internally usable, and MUST map blocked or unusable
+candidates to `RETRIEVAL_ONLY`. `RAW_DISCLOSABLE` MUST never be emitted.
+
+#### Scenario: Unsafe candidate is withheld without retrieval denial
+
+- **WHEN** a candidate is otherwise usable but `safe_to_disclose=false`
+- **THEN** the predicted capability is `INTERNAL_CONTEXT` and the shadow
+  disclosure is `NONE`
+
+### Requirement: Capability denial reasons remain bounded
+
+Each shadow result MUST expose a bounded capability reason, and aggregate
+metrics MUST include a capability denial breakdown. Reasons MUST identify
+policy categories such as `unsafe_disclosure`, `invalid_projection`,
+`blocked_lifecycle`, and `scope_denied`; they MUST NOT contain prompt or
+memory content.
+
+#### Scenario: Denial diagnostics contain no content
+
+- **WHEN** a candidate is denied card capability
+- **THEN** its reason is a bounded enum and its result contains no prompt or
+  memory body
 
 ### Requirement: Shadow results use a bounded candidate-level schema
 
