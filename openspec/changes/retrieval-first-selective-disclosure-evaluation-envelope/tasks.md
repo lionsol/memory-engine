@@ -10,3 +10,13 @@
 
 This phase closes evaluation inputs only. It does not evaluate the v2 fixture,
 change selector behavior, or authorize runtime deployment.
+
+## 2. Phase D.2-A frozen v2 holdout boundary
+
+- [x] 2.1 Verify the Planner-specified v2 fixture SHA and static shape.
+- [x] 2.2 Record dataset identity, counts, annotator, and evidence boundary.
+- [x] 2.3 Add static freeze validation without selector/evaluator execution.
+- [x] 2.4 Preserve the v1 fixture as an unchanged historical record.
+
+This boundary is frozen for future independent evaluation only. It does not
+constitute evaluation evidence or runtime authorization.

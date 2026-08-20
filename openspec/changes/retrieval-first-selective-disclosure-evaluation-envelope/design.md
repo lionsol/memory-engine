@@ -35,3 +35,15 @@ historical record and remains byte-identical.
 This phase closes the input contract only. The v2 fixture is not evaluated,
 does not produce selector-quality metrics, and does not authorize any runtime
 or production policy change.
+
+## Phase D.2-A freeze boundary
+
+The v2 fixture is now frozen as `future_independent_holdout` before any
+candidate-level selector evaluation. Its SHA256, static counts, dataset
+identity, and non-runtime evidence boundary are recorded in
+`docs/retrieval-disclosure-holdout-v2-freeze.md`. The v1 fixture remains a
+separate `historical_record`.
+
+This freeze does not execute the selector or evaluator, produce metrics, or
+grant runtime authorization. Any later independent evaluation must consume the
+frozen artifact without changing its content or labels.
