@@ -22,7 +22,7 @@ Intent-aware Recall v2-B4 is **`SOURCE IMPLEMENTED / STRUCTURED EVIDENCE REGRESS
 
 ### NEXT
 
-Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. v2-B5 fresh independent holdout evaluation is complete with `PASS_WITH_FINDINGS / HOLDOUT NOT READY`; candidate policy authority remains a separate Planner decision and no classifier repair is implied.
+Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. Intent-aware Recall v2-B is now closed: B3 and B5 both failed independent generalization, the full deterministic semantic production-authority route is rejected, and v2-B6 is cancelled. The successor workstream is the separate `selective-recall-gate` change.
 
 ### CLOSED
 
@@ -34,8 +34,8 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Intent-aware Recall v2-B5 independent holdout** — completed as a frozen, read-only evaluation. The oracle contract passed, but runtime candidate precision/recall were `0.3/0.125` with `7 FP / 21 FN`; the candidate remains not runtime authorized.
-2. **Intent-aware Recall v2-B6 policy-authority review** — not started; requires Planner adjudication of B5 findings and does not authorize classifier repair or runtime activation by default.
+1. **Selective Recall Gate v2-C1** — source/offline implementation complete. The conservative skip-only gate uses `SAFE_SKIP` / `ABSTAIN`, preserves V1 on abstention, and abstains whenever a history reference survives request-scope masking; on known B1/B3/B5 regression corpora it reduces aggregate false positives `60→52` with `0` introduced false negatives (`B1 13→13`, `B3 24→17`, `B5 23→22`). These corpora are not independent readiness evidence, and the guard intentionally sacrifices skip coverage rather than repairing B4 semantic evidence.
+2. **Selective Recall Gate fresh holdout** — freeze a new independent corpus only after C1 design is stable; require zero introduced false negatives before any policy-authority review.
 3. **Recall Hint**.
 4. **Statistical LTR**.
 

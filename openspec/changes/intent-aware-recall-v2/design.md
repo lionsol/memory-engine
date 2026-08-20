@@ -95,4 +95,8 @@ The formal B5 result is contract-valid and oracle-perfect:
 - Task-intent mismatches: 16; recall-intent mismatches: 29; semantic-only mismatches: 7.
 - Eight families exceeded the maximum one boolean decision error concentration.
 
-Therefore v2-B5 is PASS_WITH_FINDINGS / HOLDOUT NOT READY: the evaluator ran successfully and the fresh corpus is valid evidence, but the quantitative and family gates failed. The candidate policy remains NOT RUNTIME AUTHORIZED. This result does not authorize classifier repair, production policy coupling, deployment, AutoRecall enablement, or runtime mutation. A separate Planner decision is required before any v2-B6 policy-authority review; B5 findings do not automatically start a classifier-repair stage.
+Therefore v2-B5 is PASS_WITH_FINDINGS / HOLDOUT NOT READY: the evaluator ran successfully and the fresh corpus is valid evidence, but the quantitative and family gates failed. The candidate policy remains NOT RUNTIME AUTHORIZED. This result does not authorize classifier repair, production policy coupling, deployment, AutoRecall enablement, or runtime mutation.
+
+## Final v2-B adjudication
+
+B3 and B5 are two independent generalization failures separated by the B4 structured-evidence revision. The full deterministic semantic classifier therefore does not receive production recall authority. v2-B6 is cancelled rather than used as another repair/retry stage. The taxonomy and oracle mapping remain useful observational/evaluation assets, while successor policy design moves to the separate `selective-recall-gate` change with a skip-only abstention model.

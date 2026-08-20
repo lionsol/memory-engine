@@ -67,4 +67,5 @@
 - [x] 9.4 Report semantic subtype mismatches separately from boolean policy decision errors.
 - [x] 9.5 Apply the oracle, quantitative, and family-concentration readiness gates.
 - [x] 9.6 Record the B5 result without granting runtime policy authority.
-- [x] 9.7 Keep any B6 policy-authority review as a separate Planner decision; do not infer classifier repair or runtime activation from B5 findings.
+- [x] 9.7 Record final Planner adjudication: reject the full deterministic semantic production-authority route after B3/B5 generalization failure and cancel v2-B6.
+- [x] 9.8 Move successor policy design to the separate `selective-recall-gate` OpenSpec change without runtime activation.

@@ -13,6 +13,7 @@ The turn gold-set already defines `task_intent`, `recall_intent`, and `disclosur
 - Add v2-B4's pure request-scope and structured history-evidence model, including suppression precedence, supplied-content masking, generalized lookup relations, and request-surface task classification.
 - Reclassify the B3 corpus as known regression evidence after B4 tuning, freeze the Planner-specified B5 independent holdout, and evaluate it offline without classifier tuning.
 - Record B5 oracle, quantitative, family-concentration, semantic-mismatch, and boolean decision findings without granting runtime policy authority.
+- Close the full deterministic semantic production-authority route after the independent B3 and B5 generalization failures; cancel v2-B6 and hand successor policy design to the separate `selective-recall-gate` change.
 
 ## Non-goals
 
@@ -29,4 +30,4 @@ The turn gold-set already defines `task_intent`, `recall_intent`, and `disclosur
 
 - Runtime intent analysis gains observational deterministic metadata only.
 - The existing schema version remains `TURN_GOLD_SET_SCHEMA_VERSION = 1`; the existing 12-row seed remains frozen.
-- v2-B1 produces offline metrics and bounded case diagnostics only; v2-B2 closes the known regression set but does not authorize the candidate policy. v2-B3 remains historical holdout evidence and B4 makes it regression-only. v2-B5 adds the fresh independent holdout result and Planner-facing findings; `canonical-memory-architecture` is not reopened, and runtime deployment and any future policy coupling remain separate decisions.
+- v2-B1 produces offline metrics and bounded case diagnostics only; v2-B2 closes the known regression set but does not authorize the candidate policy. v2-B3 remains historical holdout evidence and B4 makes it regression-only. v2-B5 adds the fresh independent holdout result and Planner-facing findings. Final Planner adjudication rejects the full deterministic semantic production-authority route and cancels v2-B6; successor policy design lives in `selective-recall-gate`. `canonical-memory-architecture` is not reopened, and runtime deployment remains a separate decision.
