@@ -107,3 +107,14 @@ The C2-A report MUST use `evidence_role=evaluation_contract_only`, `independent_
 
 - **WHEN** C2-A tests run only on synthetic in-test rows before a Planner fixture exists
 - **THEN** the result MUST remain contract-only and MUST NOT be labeled independent readiness evidence
+
+### Requirement: C2-B fixture freeze before evaluation
+
+The C2-B fixture MUST be the exact Planner-specified `test/fixtures/selective-recall-gate-holdout.v2c2.jsonl` with 48 rows, 24 expected recall-yes rows, 24 expected recall-no rows, the exact 12-family allowlist, four rows per family, and a 2/2 expected balance within every family. Each row MUST use schema version `1`, `label_confidence="high"`, and `annotator="v2c2_planner_holdout"`; task and recall semantic labels MUST remain absent.
+
+The C2-B wrapper and test MUST perform only JSONL parsing and static contract validation. They MUST NOT call the C1 gate or the C2 decision evaluator on any fresh row. The fixture MUST be committed before the first independent evaluation and MUST remain immutable during that evaluation.
+
+#### Scenario: Fresh fixture is frozen without a result
+
+- **WHEN** the C2-B static fixture test passes
+- **THEN** the fixture is recorded as `FROZEN / NOT YET EVALUATED`, with no independent readiness result or candidate-authority change

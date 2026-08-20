@@ -26,3 +26,10 @@
 - [x] 4.3 Encode the 48-row, 24/24, 12-family, four-rows-per-family contract and future family-allowlist hook.
 - [x] 4.4 Add bounded V1/C1 metrics, independent unsafe-SAFE_SKIP safety, and utility gates.
 - [x] 4.5 Keep C2-A contract-only: do not create or evaluate the fresh fixture.
+
+## 5. v2-C2-B fresh independent holdout freeze
+
+- [x] 5.1 Freeze the exact Planner-specified 48-row behavioral fixture.
+- [x] 5.2 Add the explicit 12-family allowlist and static-only wrapper.
+- [x] 5.3 Validate counts, family balance, IDs, schema, and absence of semantic labels without decision evaluation.
+- [x] 5.4 Record the fixture as frozen and not yet evaluated; defer all C1/C2 metrics to the next authorized task.

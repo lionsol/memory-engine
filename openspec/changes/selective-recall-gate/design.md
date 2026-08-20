@@ -107,3 +107,9 @@ false_positive_reduction_rate >= 0.10
 Safety dominates utility. A utility failure does not authorize classifier tuning, and a fresh-holdout failure does not authorize automatic repair or retry. C2-A evidence role is `evaluation_contract_only`, with `independent_readiness_evidence=false` and candidate authority `OFFLINE ONLY / NOT RUNTIME AUTHORIZED`.
 
 The future fixture MUST be committed before its first evaluation. After that freeze, neither the C1 gate nor the fixture may change within the same independent qualification. Known B1/B3/B5 corpora cannot qualify C2.
+
+## v2-C2-B fresh independent holdout freeze
+
+The exact Planner-specified fixture `test/fixtures/selective-recall-gate-holdout.v2c2.jsonl` is now frozen as a separate 48-row behavioral holdout: 24 expected recall-yes rows and 24 expected recall-no rows, across the exact 12-family allowlist with four rows per family and a 2/2 YES/NO balance in each family. Every row uses schema version `1`, `label_confidence="high"`, and `annotator="v2c2_planner_holdout"`; no task or recall semantic labels were added.
+
+The C2-B wrapper performs only JSONL parsing and static behavioral-shape validation. The C1 gate and C2 decision evaluator were not executed on this fixture, so C2-B contains no independent result or readiness metrics. The fixture is immutable for the subsequent independent evaluation; no classifier, gate, evaluator, runtime policy, deployment, or AutoRecall authority is implied by the freeze.
