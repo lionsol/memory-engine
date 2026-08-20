@@ -35,7 +35,7 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
 1. **Selective Recall Gate v2-C1** — source/offline implementation complete. The conservative skip-only gate uses `SAFE_SKIP` / `ABSTAIN`, preserves V1 on abstention, and abstains whenever a history reference survives request-scope masking; on known B1/B3/B5 regression corpora it reduces aggregate false positives `60→52` with `0` introduced false negatives (`B1 13→13`, `B3 24→17`, `B5 23→22`). These corpora are not independent readiness evidence, and the guard intentionally sacrifices skip coverage rather than repairing B4 semantic evidence.
-2. **Selective Recall Gate fresh holdout** — freeze a new independent corpus only after C1 design is stable; require zero introduced false negatives before any policy-authority review.
+2. **Selective Recall Gate v2-C2-A** — evaluation contract prepared offline only: future rows use behavioral labels rather than v2-B semantic labels, with independent unsafe-SAFE_SKIP and introduced-FN safety gates. No fresh fixture exists yet; the future holdout must be committed before evaluation, and known B1/B3/B5 corpora cannot qualify C2.
 3. **Recall Hint**.
 4. **Statistical LTR**.
 

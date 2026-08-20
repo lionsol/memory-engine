@@ -18,3 +18,11 @@
 - [x] 3.1 Keep C1 source/offline only with no runtime policy coupling.
 - [x] 3.2 Require a fresh frozen independent holdout before any production-authority review.
 - [x] 3.3 Keep deployment, AutoRecall enablement, config/data mutation, and runtime qualification out of scope.
+
+## 4. v2-C2-A fresh holdout evaluation contract
+
+- [x] 4.1 Freeze the C1 candidate boundary before preparing the future holdout contract.
+- [x] 4.2 Define the minimal behavioral row schema without v2-B semantic labels.
+- [x] 4.3 Encode the 48-row, 24/24, 12-family, four-rows-per-family contract and future family-allowlist hook.
+- [x] 4.4 Add bounded V1/C1 metrics, independent unsafe-SAFE_SKIP safety, and utility gates.
+- [x] 4.5 Keep C2-A contract-only: do not create or evaluate the fresh fixture.

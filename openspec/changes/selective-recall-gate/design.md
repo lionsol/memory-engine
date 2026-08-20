@@ -67,3 +67,43 @@ These numbers are regression/design evidence only and do not grant readiness or 
 ## Future authority boundary
 
 Before any production-authority review, C1 requires a fresh independent holdout frozen before evaluation. Runtime coupling, rollout, and AutoRecall enablement remain separate owner-authorized decisions even if that holdout passes.
+
+## v2-C2-A fresh holdout evaluation contract
+
+C2-A prepares the contract for a future fresh independent holdout; it does not create the fixture or produce independent evidence. The C1 candidate in `lib/recall/selective-recall-gate.js` is frozen before the future fixture is supplied.
+
+The future row schema is deliberately behavioral and minimal:
+
+```text
+schema_version
+turn_id
+family
+prompt
+expected_should_recall
+label_confidence
+annotator
+```
+
+Rows MUST use schema version `1`, a boolean `expected_should_recall`, `label_confidence="high"`, and `annotator="v2c2_planner_holdout"`. `task_intent` and `recall_intent` are not required: C2 evaluates selective override safety, not rejected v2-B semantic-label accuracy.
+
+The default future contract is 48 rows balanced at 24 expected recall-yes and 24 expected recall-no, across 12 families with four rows per family. The future Planner wrapper supplies an explicit family allowlist; the pure evaluator validates that allowlist without embedding family names in C2-A.
+
+For each row the offline evaluator records V1 `should_recall`, the frozen C1 decision/reason, final selective `should_recall`, and whether `SAFE_SKIP` changed V1. It reports V1 and selective confusion matrices, SAFE_SKIP/ABSTAIN/override counts, SAFE_SKIP expected-label counts, unsafe SAFE_SKIP count, SAFE_SKIP precision, introduced false negatives, false positives reduced, V1/selective false positives, and false-positive reduction rate. Diagnostics contain only bounded `turn_id`, `family`, and `reason` descriptors; prompt bodies are excluded.
+
+Readiness gates are frozen before fixture creation:
+
+```text
+HARD SAFETY:
+dataset_contract_valid = true
+unsafe_safe_skip_count = 0
+introduced_false_negative_count = 0
+safe_skip_precision = 1.0 when SAFE_SKIP exists
+
+UTILITY:
+false_positive_reduced_count >= 2
+false_positive_reduction_rate >= 0.10
+```
+
+Safety dominates utility. A utility failure does not authorize classifier tuning, and a fresh-holdout failure does not authorize automatic repair or retry. C2-A evidence role is `evaluation_contract_only`, with `independent_readiness_evidence=false` and candidate authority `OFFLINE ONLY / NOT RUNTIME AUTHORIZED`.
+
+The future fixture MUST be committed before its first evaluation. After that freeze, neither the C1 gate nor the fixture may change within the same independent qualification. Known B1/B3/B5 corpora cannot qualify C2.
