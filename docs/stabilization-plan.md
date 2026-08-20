@@ -22,9 +22,9 @@ Intent-aware Recall v2-B4 is **`SOURCE IMPLEMENTED / STRUCTURED EVIDENCE REGRESS
 
 Retrieval-first Selective Disclosure Phase D.2-B is **`FAILED / PRODUCT ARCHITECTURE GAP`**. The frozen v2 candidate-level evaluation produced `41` selected cards and `7` withheld candidates, with `23` unsafe disclosures, `0` unauthorized full-content surfaces, and answer-bearing disclosure recall `0.75`. This is an offline product finding, not a fixture or runtime failure; no selector, admissibility, evaluator, fixture, or runtime source was changed.
 
-The **Disclosure Capability Contract** is now documented as **Stage 1 / CONTRACT ONLY**. It separates retrieval availability, internal context, bounded card disclosure, and reserved raw disclosure. Offline shadow evaluation is a future separate stage; runtime integration requires explicit authorization.
+The **Disclosure Capability Contract v1.1** is now documented as **Stage 1 / CONTRACT ONLY**. It separates retrieval availability, internal context, bounded card disclosure, and reserved raw disclosure; `safe_to_disclose` is explicitly owned by capability calculation and required for `CARD_DISCLOSABLE`. Offline evaluator update and shadow re-evaluation are future separate stages; runtime integration requires explicit authorization.
 
-The **Disclosure Capability Shadow Evaluation** is now specified as an offline contract only. It compares current disclosure with a future capability-constrained shadow result using `evidence_role=offline_shadow_evaluation`; it has not been executed and is not independent readiness evidence.
+The **Disclosure Capability Shadow Evaluation** is now specified as an offline contract only. Its historical D.2-C.7 result did not reduce unsafe disclosure (`23` current and `23` shadow unsafe disclosures; reduction `0`) and does not authorize implementation or runtime adoption. A future evaluator update and re-evaluation remain separate, explicitly authorized stages.
 
 ### NEXT
 
