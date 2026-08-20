@@ -65,6 +65,7 @@
 - `current_fact`: the intent taxonomy, structured evidence, and C1/C2 evaluators remain observational/experimental artifacts, and B1/B3/B5/C2 remain retained corpora. Retrieval-first selective-use/disclosure control and learned/statistical recall policy are **`LATER / NOT STARTED`** after sufficient real labeled traffic; no new implementation stage is opened.
 - `historical_record`: Retrieval-first Selective Disclosure Phase D.2-B evaluated the frozen v2 candidate-level holdout and closed `FAILED / PRODUCT ARCHITECTURE GAP`: `48` rows, `24` answer-bearing candidates, `41` selected cards, `7` withheld, `23` unsafe disclosures, `0` unauthorized full-content surfaces, and answer-bearing disclosure recall `0.75`. The fixture, selector, admissibility policy, and evaluator were unchanged; no runtime authority was granted.
 - `accepted_design`: A documentation-only Disclosure Capability Contract now separates `RETRIEVAL_ONLY`, `INTERNAL_CONTEXT`, `CARD_DISCLOSABLE`, and reserved `RAW_DISCLOSABLE` capability. The capability contract is not source implementation or runtime authorization; future offline shadow evaluation and any runtime integration remain separate stages.
+- `accepted_design`: Disclosure Capability Shadow Evaluation is specified as an offline-only, side-by-side comparison of current disclosure and a future capability-constrained shadow path. It is not executed, is not independent holdout evidence, and grants no production or runtime authority; the frozen v2 fixture remains unchanged.
 
 ## Documentation and authorization boundary
 

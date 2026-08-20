@@ -24,6 +24,8 @@ Retrieval-first Selective Disclosure Phase D.2-B is **`FAILED / PRODUCT ARCHITEC
 
 The **Disclosure Capability Contract** is now documented as **Stage 1 / CONTRACT ONLY**. It separates retrieval availability, internal context, bounded card disclosure, and reserved raw disclosure. Offline shadow evaluation is a future separate stage; runtime integration requires explicit authorization.
 
+The **Disclosure Capability Shadow Evaluation** is now specified as an offline contract only. It compares current disclosure with a future capability-constrained shadow result using `evidence_role=offline_shadow_evaluation`; it has not been executed and is not independent readiness evidence.
+
 ### NEXT
 
 Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. Intent-aware Recall v2-B and the successor Selective Recall Gate deterministic-authority experiment are now closed: the full semantic route and skip-only C1 route are rejected, and v2-B6/C2-C repair are cancelled. No runtime authority was granted.
