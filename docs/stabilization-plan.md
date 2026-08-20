@@ -20,6 +20,10 @@ Intent-aware Recall v2-B3's first independent run is a **historical `PASS_WITH_F
 
 Intent-aware Recall v2-B4 is **`SOURCE IMPLEMENTED / STRUCTURED EVIDENCE REGRESSION CLOSED`**. The classifier now uses pure request-scope and structured history evidence with quoted-content masking and suppression precedence. The frozen v2-A seed remains `12/12`; B1 remains V1 `18/5/13/0` and runtime candidate `18/18/0/0`; B3 current regression is V1 `24/0/24/0` and runtime candidate `24/24/0/0`, with task/recall mismatch `0/0`. B3 is now explicitly **`REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE`** with evidence role `known_regression_after_v2b4`; these scores do not qualify generalization or authorize the candidate policy.
 
+Retrieval-first Selective Disclosure Phase D.2-B is **`FAILED / PRODUCT ARCHITECTURE GAP`**. The frozen v2 candidate-level evaluation produced `41` selected cards and `7` withheld candidates, with `23` unsafe disclosures, `0` unauthorized full-content surfaces, and answer-bearing disclosure recall `0.75`. This is an offline product finding, not a fixture or runtime failure; no selector, admissibility, evaluator, fixture, or runtime source was changed.
+
+The **Disclosure Capability Contract** is now documented as **Stage 1 / CONTRACT ONLY**. It separates retrieval availability, internal context, bounded card disclosure, and reserved raw disclosure. Offline shadow evaluation is a future separate stage; runtime integration requires explicit authorization.
+
 ### NEXT
 
 Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. Intent-aware Recall v2-B and the successor Selective Recall Gate deterministic-authority experiment are now closed: the full semantic route and skip-only C1 route are rejected, and v2-B6/C2-C repair are cancelled. No runtime authority was granted.
@@ -35,7 +39,7 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Retrieval-first selective-use / disclosure control** — `LATER / NOT STARTED`; future product design only, with no implementation stage opened by this closeout.
+1. **Retrieval-first selective-use / disclosure control** — capability contract documented at `Stage 1 / CONTRACT ONLY`; offline shadow evaluation and runtime integration remain `LATER / NOT STARTED` and separately authorized.
 2. **Learned/statistical recall policy** — `LATER / NOT STARTED`; requires sufficient real labeled traffic and a separate Planner decision.
 3. **Recall Hint**.
 4. **Statistical LTR**.
