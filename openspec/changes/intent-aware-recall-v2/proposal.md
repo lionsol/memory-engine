@@ -11,7 +11,8 @@ The turn gold-set already defines `task_intent`, `recall_intent`, and `disclosur
 - Add v2-B2 generalized deterministic lookup signals to close the known task/recall classifier gaps on the frozen B1 regression set without changing production policy authority.
 - Add v2-B3's Planner-frozen independent 48-row holdout, parameterized offline evaluator, family-concentration/readiness gates, and bounded mismatch decomposition without granting policy runtime authority.
 - Add v2-B4's pure request-scope and structured history-evidence model, including suppression precedence, supplied-content masking, generalized lookup relations, and request-surface task classification.
-- Reclassify the B3 corpus as known regression evidence after B4 tuning and require a fresh B5 independent holdout before any policy-authority review.
+- Reclassify the B3 corpus as known regression evidence after B4 tuning, freeze the Planner-specified B5 independent holdout, and evaluate it offline without classifier tuning.
+- Record B5 oracle, quantitative, family-concentration, semantic-mismatch, and boolean decision findings without granting runtime policy authority.
 
 ## Non-goals
 
@@ -20,12 +21,12 @@ The turn gold-set already defines `task_intent`, `recall_intent`, and `disclosur
 - Adding an LLM classifier, database/schema migration, config change, runtime deployment, or Gateway operation.
 - Granting the candidate mapping authority over production `should_recall`, `focused_query`, or AutoRecall hook behavior.
 - Rewriting evaluation labels to fit classifier output or using the evaluation fixture as production evidence.
-- Treating 36/36 on the known B1 regression set as production-readiness evidence; an independent B3 holdout remains required.
-- Tuning the classifier or candidate mapping after the B3 holdout is frozen, or treating B3 readiness as runtime authorization.
-- Treating B4 closure on the v2-A/B1/B3 corpora as generalization qualification, or creating the B5 holdout in this change.
+- Treating 36/36 on the known B1 regression set or current B3 regression closure as generalization or production-readiness evidence; B5 remains the fresh independent evidence boundary.
+- Tuning the classifier, evidence rules, candidate mapping, or B5 fixture after the B5 holdout is frozen, or treating B5 readiness as runtime authorization.
+- Treating B4 closure on the v2-A/B1/B3 corpora as generalization qualification, or creating additional holdout labels after the B5 freeze.
 
 ## Impact
 
 - Runtime intent analysis gains observational deterministic metadata only.
 - The existing schema version remains `TURN_GOLD_SET_SCHEMA_VERSION = 1`; the existing 12-row seed remains frozen.
-- v2-B1 produces offline metrics and bounded case diagnostics only; v2-B2 closes the known regression set but does not authorize the candidate policy. v2-B3 adds independent holdout evidence and a Planner-facing readiness result; `canonical-memory-architecture` is not reopened, and runtime deployment and any future policy coupling remain separate decisions.
+- v2-B1 produces offline metrics and bounded case diagnostics only; v2-B2 closes the known regression set but does not authorize the candidate policy. v2-B3 remains historical holdout evidence and B4 makes it regression-only. v2-B5 adds the fresh independent holdout result and Planner-facing findings; `canonical-memory-architecture` is not reopened, and runtime deployment and any future policy coupling remain separate decisions.

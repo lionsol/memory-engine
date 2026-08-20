@@ -211,9 +211,45 @@ After B4 classifier tuning uses the B3 fixture, the B3 evaluator SHALL identify 
 
 ### Requirement: Fresh B5 holdout
 
-An independent v2-B5 holdout MUST be frozen by a later Planner decision before any generalization or policy-authority review. B4 MUST NOT create or evaluate a B5 fixture.
+The B4 stage MUST NOT create or evaluate a B5 fixture. A separate v2-B5 stage MUST freeze the independent holdout by a later Planner decision before its evaluator runs or any policy-authority review is considered.
 
 #### Scenario: Next evidence remains separate
 
-- **WHEN** B4 regression closure is documented
-- **THEN** the next status is `NOT STARTED / FRESH INDEPENDENT HOLDOUT REQUIRED`, with no runtime mutation or policy coupling
+- **WHEN** the separate B5 stage begins after B4 regression closure
+- **THEN** the exact holdout is frozen before evaluation, and its result remains offline evidence without runtime mutation or policy coupling
+
+### Requirement: B5 fixture freeze before evaluation
+
+The v2-B5 holdout MUST be the exact Planner-specified 48-row fixture with 12 required families, four rows per family, schema version 1, and a 24/24 expected decision balance. It MUST be statically validated and committed before classifier or evaluator execution; after freeze, the fixture MUST remain immutable.
+
+#### Scenario: B5 labels are frozen
+
+- **WHEN** the B5 fixture contract is checked before evaluation
+- **THEN** its rows, labels, family coverage, annotator marker, and disclosure levels are committed and no classifier, evidence, or fixture tuning is allowed during the evaluation
+
+### Requirement: B5 shared offline evaluation
+
+The B5 evaluator MUST reuse the shared three-way policy evaluator and unchanged candidate mapping, accept the B5 family allowlist, remain read-only, and report dataset, family, V1, oracle, and runtime-candidate metrics.
+
+#### Scenario: B5 readiness gates
+
+- **WHEN** a valid B5 dataset is evaluated
+- **THEN** oracle false positives, false negatives, and invalid cases MUST be zero for the oracle gate; runtime precision and recall MUST be at least 0.90 with at most two false positives and two false negatives; and no family may contain more than one boolean decision error for readiness
+
+### Requirement: Semantic mismatch and policy decision separation
+
+B5 reporting MUST keep exact task-intent and recall-intent subtype mismatches separate from boolean candidate policy errors. A non-none subtype mismatch with the same boolean candidate decision MUST be semantic-only evidence and MUST NOT be counted as a false positive or false negative.
+
+#### Scenario: Subtype mismatch with stable decision
+
+- **WHEN** expected and actual recall intents differ but both map to the same boolean candidate decision
+- **THEN** the case is reported as a semantic mismatch without becoming a policy decision error
+
+### Requirement: B5 does not grant runtime authority
+
+B5 PASS means only `READY FOR POLICY AUTHORITY REVIEW`; B5 findings MUST NOT authorize runtime policy coupling, production should-recall changes, deployment, AutoRecall enablement, or configuration/data mutation. A failed B5 gate MUST NOT automatically authorize a classifier-repair stage; any v2-B6 policy-authority review remains a separate Planner decision.
+
+#### Scenario: B5 findings remain bounded
+
+- **WHEN** the B5 quantitative or family gate fails
+- **THEN** the status is `PASS_WITH_FINDINGS / HOLDOUT NOT READY`, the findings are recorded, and runtime authority remains separate

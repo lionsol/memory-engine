@@ -58,3 +58,13 @@
 - [x] 8.6 Close the v2-A/B1/B3 known regression corpora without changing V1 policy or candidate mapping.
 - [x] 8.7 Mark the B3 corpus as regression-only after B4 tuning.
 - [x] 8.8 Require a fresh B5 independent holdout before any policy-authority review.
+
+## 9. v2-B5 fresh independent holdout
+
+- [x] 9.1 Freeze the Planner-specified 48-row B5 holdout before classifier/evaluator execution.
+- [x] 9.2 Preserve the B4 classifier/evidence and the v2-B1 candidate mapping exactly after freeze.
+- [x] 9.3 Evaluate B5 with the shared read-only three-way policy evaluator and CLI.
+- [x] 9.4 Report semantic subtype mismatches separately from boolean policy decision errors.
+- [x] 9.5 Apply the oracle, quantitative, and family-concentration readiness gates.
+- [x] 9.6 Record the B5 result without granting runtime policy authority.
+- [x] 9.7 Keep any B6 policy-authority review as a separate Planner decision; do not infer classifier repair or runtime activation from B5 findings.

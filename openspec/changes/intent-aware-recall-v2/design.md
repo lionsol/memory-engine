@@ -79,4 +79,20 @@ The evidence object is classifier-internal and is not added to decision trace, d
 
 After B4, the frozen v2-A seed, B1 fixture, and B3 fixture are regression corpora only. The known corpora close with the existing 12-row seed at `12/12`, B1 at zero task/recall mismatch and runtime `18/18/0/0`, and B3 at zero task/recall mismatch and runtime `24/24/0/0`; V1 remains `18/5/13/0` for B1 and `24/0/24/0` for B3. These results are known-regression closure, not generalization qualification. The B3 evaluator now reports `evidence_role=known_regression_after_v2b4` and `REGRESSION ONLY / NOT INDEPENDENT READINESS EVIDENCE`, even when its diagnostic thresholds pass.
 
-The candidate policy remains `NOT RUNTIME AUTHORIZED`. A fresh v2-B5 independent holdout, frozen after B4 and not created in this change, is required before any policy-authority review. B4 does not change `should_recall`, `intent_reason`, `focused_query`, retrieval/presentation policy, runtime deployment, or AutoRecall enablement.
+The candidate policy remains `NOT RUNTIME AUTHORIZED`. B4 did not create or evaluate the fresh v2-B5 holdout; the separate B5 stage froze and evaluated it without changing `should_recall`, `intent_reason`, `focused_query`, retrieval/presentation policy, runtime deployment, or AutoRecall enablement.
+
+## v2-B5 fresh independent holdout
+
+The Planner-specified B5 fixture test/fixtures/auto-recall-policy-holdout.v2b5.jsonl was statically validated and frozen before any classifier/evaluator execution in commit 926f034. It contains 48 schema-version-1 rows, 12 families with four rows each, and a 24/24 expected decision balance. The fixture remains immutable for this evaluation.
+
+B5 reuses the shared three-way evaluator and the unchanged evaluation-only candidate mapping. The evaluator accepts the B5 family allowlist, reports per-family decision errors, and keeps exact task/recall subtype mismatches separate from boolean policy false positives and false negatives. The read-only CLI has no DB, network, LLM, retrieval, injection, memory-file, report-file, or runtime-policy access.
+
+The formal B5 result is contract-valid and oracle-perfect:
+
+- V1: 24 TP / 1 TN / 23 FP / 0 FN.
+- V2 oracle: 24 TP / 24 TN / 0 FP / 0 FN.
+- V2 runtime candidate: 3 TP / 17 TN / 7 FP / 21 FN, precision 0.3, recall 0.125.
+- Task-intent mismatches: 16; recall-intent mismatches: 29; semantic-only mismatches: 7.
+- Eight families exceeded the maximum one boolean decision error concentration.
+
+Therefore v2-B5 is PASS_WITH_FINDINGS / HOLDOUT NOT READY: the evaluator ran successfully and the fresh corpus is valid evidence, but the quantitative and family gates failed. The candidate policy remains NOT RUNTIME AUTHORIZED. This result does not authorize classifier repair, production policy coupling, deployment, AutoRecall enablement, or runtime mutation. A separate Planner decision is required before any v2-B6 policy-authority review; B5 findings do not automatically start a classifier-repair stage.

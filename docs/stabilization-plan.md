@@ -22,7 +22,7 @@ Intent-aware Recall v2-B4 is **`SOURCE IMPLEMENTED / STRUCTURED EVIDENCE REGRESS
 
 ### NEXT
 
-Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. The next Intent-aware Recall step is **v2-B5 fresh independent holdout evaluation**, not started in this change; candidate policy authority remains a separate Planner decision.
+Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. v2-B5 fresh independent holdout evaluation is complete with `PASS_WITH_FINDINGS / HOLDOUT NOT READY`; candidate policy authority remains a separate Planner decision and no classifier repair is implied.
 
 ### CLOSED
 
@@ -34,9 +34,10 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Intent-aware Recall v2-B5 independent holdout** — freeze fresh cases after B4 and evaluate them without classifier tuning in the same stage. v2-A/B1/B2/B3 remain regression evidence only; no result so far authorizes `should_recall` / `focused_query` policy coupling.
-2. **Recall Hint**.
-3. **Statistical LTR**.
+1. **Intent-aware Recall v2-B5 independent holdout** — completed as a frozen, read-only evaluation. The oracle contract passed, but runtime candidate precision/recall were `0.3/0.125` with `7 FP / 21 FN`; the candidate remains not runtime authorized.
+2. **Intent-aware Recall v2-B6 policy-authority review** — not started; requires Planner adjudication of B5 findings and does not authorize classifier repair or runtime activation by default.
+3. **Recall Hint**.
+4. **Statistical LTR**.
 
 Multi-agent memory architecture may begin after the Canonical Object Contract is stable and need not wait for LTR. Its detailed ownership, visibility, attribution, and ACL semantics remain a later product-design decision.
 
