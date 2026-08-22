@@ -34,6 +34,7 @@
 - [x] 3.14 Define Redaction Evidence Resolution Semantics (`D.3-C.11: REDACTION EVIDENCE RESOLUTION SEMANTICS DEFINED`; docs/OpenSpec-only, no resolver, authority authentication, or production wiring).
 - [x] 3.15 Define the `INTERNAL_AGENT_CONTEXT` Representation Design (`D.3-C.12: INTERNAL_AGENT_CONTEXT REPRESENTATION BOUNDARY DEFINED`; docs/OpenSpec-only, no projector, capability/selector, or runtime wiring).
 - [x] 3.16 Implement the pure `INTERNAL_AGENT_CONTEXT` Projection Contract Prototype (`D.3-C.13: INTERNAL_AGENT_CONTEXT PROJECTION CONTRACT PROTOTYPE IMPLEMENTED / OFFLINE ONLY / NOT CAPABILITY AUTHORIZED`; source/test contract only, with no holdout, runtime, capability, or selector wiring).
+- [x] 3.17 Freeze the independent `INTERNAL_AGENT_CONTEXT` holdout (`D.3-C.14: INDEPENDENT INTERNAL_AGENT_CONTEXT HOLDOUT FROZEN / NOT YET EVALUATED`; fresh synthetic fixture, pure validator, freeze tests/record only, no evaluator or runtime wiring).
 
 ## 4. Phase D.3-D production integration
 

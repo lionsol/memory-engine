@@ -673,9 +673,15 @@ detector or selector, summarizer, LLM, production caller, capability/selector
 change, runtime consumer, or holdout. The current `DISCLOSURE_CARD` projector
 and its risky-content withholding behavior remain unchanged.
 
-The next bounded candidate is **D.3-C.14 Independent INTERNAL_AGENT_CONTEXT
-Holdout Freeze — CANDIDATE / NOT AUTHORIZED BY C.13**. Any future holdout must
-use a fresh synthetic namespace and must not imply runtime integration.
+#### D.3-C.14 — Independent INTERNAL_AGENT_CONTEXT Holdout Freeze
+
+D.3-C.14 is **`INDEPENDENT INTERNAL_AGENT_CONTEXT HOLDOUT FROZEN / NOT YET EVALUATED`**. The fresh `internal-agent-context-holdout-v1` JSONL contract contains 12 synthetic rows across six families, with two balanced rows per family and one answer-bearing row per family. The fixture uses the independent `IACH1_` namespace and was created after the C.13 prototype; C.13 unit literals and the C.1/C.6 fixtures were not reused.
+
+The pure validator at `lib/recall/disclosure/internal-agent-context-holdout.js` independently enforces the closed row, canonical-memory, caller-supplied range, risk-flag, label, family-balance, source-slice, and source-full-selection contracts. It does not import or call the C.13 projector, read a fixture, perform evaluation, access capability/selector/runtime/storage/network/LLM facilities, or freeze expected output. The freeze test binds the exact fixture SHA, old fixture immutability, independent bounds, no-authority labels, and fail-closed mutation cases.
+
+C.14 freezes acceptance constraints only: source-derived semantic anchors must be inside selected ranges, instruction-like literals are labeled as data evidence, expected risk flags mirror selection metadata, and full-source selection is recorded as a representation fact. It does not produce measured projection results, capability labels, runtime authority, or a production readiness claim. No evaluator execution occurred.
+
+The next bounded candidate is **D.3-C.15 Pure Independent INTERNAL_AGENT_CONTEXT Evaluator — CANDIDATE / NOT AUTHORIZED BY C.14**. It must keep the frozen C.14 fixture unevaluated until separately authorized and must not add runtime/capability/selector wiring.
 
 ### D.3-D — Production integration
 
