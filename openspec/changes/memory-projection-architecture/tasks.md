@@ -31,6 +31,7 @@
 - [x] 3.11 Execute the C.6 frozen holdout exactly once after the C.7 evaluator decision (`D.3-C.8: PASS / FIRST-RUN EVIDENCE ACCEPTED`; report `reports/redacted-card-holdout-v1-first-run-20260822.md`).
 - [x] 3.12 Define Redaction Plan Authority & Safety Boundary (`D.3-C.9: REDACTION PLAN AUTHORITY BOUNDARY DEFINED`; docs/OpenSpec-only, no detector or production wiring).
 - [x] 3.13 Implement the pure Structured Redaction Evidence Contract (`D.3-C.10: STRUCTURED REDACTION EVIDENCE CONTRACT IMPLEMENTED / OFFLINE ONLY / NOT PRODUCTION AUTHORITY`; no resolver, detector, or production wiring).
+- [x] 3.14 Define Redaction Evidence Resolution Semantics (`D.3-C.11: REDACTION EVIDENCE RESOLUTION SEMANTICS DEFINED`; docs/OpenSpec-only, no resolver, authority authentication, or production wiring).
 
 ## 4. Phase D.3-D production integration
 

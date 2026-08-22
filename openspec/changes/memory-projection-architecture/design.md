@@ -565,10 +565,45 @@ redaction application, capability, selector, runtime, configuration, DB/data,
 or deployment behavior. The baseline artifact is supplied by the caller; C.10
 does not create a projector or accept a runtime candidate.
 
-The next bounded candidate is **D.3-C.11 Redaction Evidence Resolution
-Semantics — NEXT / CANDIDATE / NOT AUTHORIZED BY C.10**. It may define
-multiple-claim handling, conflicts, authority precedence, detector-evidence
-isolation, and stale-evidence rejection, but is not implemented by C.10.
+The C.10 source contract is closed without implementing resolution or
+authenticated evidence origin. The next bounded decision is D.3-C.11.
+
+#### D.3-C.11 — Redaction Evidence Resolution Semantics
+
+D.3-C.11 is **`REDACTION EVIDENCE RESOLUTION SEMANTICS DEFINED`** and is a
+docs/OpenSpec-only architecture decision. The decision record is
+`docs/redaction-evidence-resolution-semantics-v1.md`.
+
+C.11 defines semantics for future multi-envelope interpretation without
+implementing a resolver. Every input must first pass C.10 against the same
+canonical identity and baseline projection; any malformed, stale, mismatched,
+unsupported, overlapping, or order-dependent claim invalidates the entire set.
+No invalid claim may be silently dropped, and no partial redaction may be
+salvaged.
+
+`authority_kind` remains claim classification rather than authenticated
+authority identity. `STRUCTURED_SOURCE_ANNOTATION` and
+`EXPLICIT_REDACTION_DIRECTIVE` are authority-eligible future candidates, not
+automatic production precedence; `DETERMINISTIC_DETECTOR_EVIDENCE` remains
+research-only and may only be retained as non-authoritative corroboration.
+Exact field/literal duplicates are corroboration, distinct fields may coexist,
+and overlapping or order-dependent targets are conflicts. The taxonomy is
+`INVALID_EVIDENCE_SET`, `CONFLICTING_EVIDENCE_SET`,
+`NON_AUTHORITATIVE_EVIDENCE_ONLY`, and
+`CONSISTENT_AUTHORITY_ELIGIBLE_SET`; the last remains neither an
+`AuthorizedRedactionPlan` nor capability/selector authority.
+
+C.11 also records that positive claims do not prove complete sensitive-content
+coverage, and resolution does not clear risk, change lifecycle/scope, set
+`safe_to_disclose`, grant `CARD_DISCLOSABLE`, or choose a selector outcome.
+No resolver, detector, authority-origin authentication, production plan
+source, capability, selector, runtime, configuration, DB/data, or deployment
+change is part of C.11.
+
+The redaction branch does not automatically create a C.12 resolver stage. The
+next direction is a separate `INTERNAL_AGENT_CONTEXT` design for raw/tool
+output; trusted-origin production work remains a future D.3-D product
+decision.
 
 ### D.3-D — Production integration
 
