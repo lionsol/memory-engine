@@ -644,11 +644,38 @@ validity, boundedness, source faithfulness, semantic preservation,
 instruction/data isolation, risk/provenance preservation, and absence of
 capability authority. No fresh fixture or production threshold is created.
 
-The next bounded candidate is **D.3-C.13 INTERNAL_AGENT_CONTEXT Projection
-Contract Prototype — CANDIDATE / NOT AUTHORIZED BY C.12**. It may define a pure
-offline payload contract using caller-supplied bounded synthetic segments, but
-no source implementation, runtime integration, or capability/selector change
-is authorized by C.12.
+#### D.3-C.13 — INTERNAL_AGENT_CONTEXT Projection Contract Prototype
+
+D.3-C.13 is **`INTERNAL_AGENT_CONTEXT PROJECTION CONTRACT PROTOTYPE IMPLEMENTED / OFFLINE ONLY / NOT CAPABILITY AUTHORIZED`**. The existing `ProjectionArtifact` module now exposes a pure `INTERNAL_AGENT_CONTEXT` adapter and validator; no second artifact framework was introduced.
+
+The prototype accepts only a closed caller selection containing ordered,
+non-overlapping JavaScript code-unit character ranges over
+`canonicalMemory.source.text` plus bounded caller-supplied risk flags. Segment
+text is always derived by the adapter from the canonical source slice; callers
+cannot submit segment text or an external body. The prototype bounds segments
+to four, each segment to 1024 characters, total selected text to 2048
+characters, risk flags to 16 entries, and each flag to 64 characters. It
+preserves `\t`, `\n`, and `\r`, and rejects other control/format/non-printing
+characters without normalization.
+
+The payload is a closed v1 contract with
+`content_role: "untrusted_evidence"`, inherited canonical category/kind and
+identity/provenance binding, source/selection counts, explicit full-selection
+state, source-derived segments, and value-preserved caller risk metadata.
+Validation rechecks the source slices and recursively rejects authority/policy
+fields. `content_role` is representation semantics only; it is not an
+`INTERNAL_CONTEXT` capability, user disclosure, selector decision, or runtime
+instruction channel. `RAW_REFERENCE` remains recognized but unimplemented,
+and `REFERENCE_ONLY` remains outside this source change.
+
+C.13 includes handcrafted contract tests only. It does not implement a segment
+detector or selector, summarizer, LLM, production caller, capability/selector
+change, runtime consumer, or holdout. The current `DISCLOSURE_CARD` projector
+and its risky-content withholding behavior remain unchanged.
+
+The next bounded candidate is **D.3-C.14 Independent INTERNAL_AGENT_CONTEXT
+Holdout Freeze — CANDIDATE / NOT AUTHORIZED BY C.13**. Any future holdout must
+use a fresh synthetic namespace and must not imply runtime integration.
 
 ### D.3-D — Production integration
 
