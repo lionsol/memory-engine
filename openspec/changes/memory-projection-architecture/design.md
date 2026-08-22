@@ -544,8 +544,31 @@ must fail closed when stale. The discussion is surface-specific to
 No production envelope, detector, resolver, capability, selector, runtime,
 configuration, DB/data, or deployment change is part of C.9.
 
-The next bounded candidate is **D.3-C.10 Structured Redaction Evidence
-Contract — NEXT / CANDIDATE / NOT AUTHORIZED BY C.9**.
+The C.9 decision record is closed without implementing a literal-level
+production authority source. The next bounded contract is D.3-C.10.
+
+#### D.3-C.10 — Structured Redaction Evidence Contract
+
+D.3-C.10 is **`STRUCTURED REDACTION EVIDENCE CONTRACT IMPLEMENTED / OFFLINE
+ONLY / NOT PRODUCTION AUTHORITY`**. The pure module
+`lib/recall/disclosure/redaction-evidence-contract.js` defines a closed schema
+v1 for identity-bound, surface-bound, baseline-bound evidence. It validates
+exact `DISCLOSURE_CARD` identity and baseline projection binding, deterministic
+SHA-256 representation hashes, bounded authority kinds and evidence references,
+exact presentation-field targets, duplicate rejection, and stale evidence.
+
+`STRUCTURED_SOURCE_ANNOTATION`, `EXPLICIT_REDACTION_DIRECTIVE`, and
+`DETERMINISTIC_DETECTOR_EVIDENCE` are structurally representable kinds only;
+detector evidence remains research-only. Structural validity is not production
+authorization, and the module has no resolver, detector, plan conversion,
+redaction application, capability, selector, runtime, configuration, DB/data,
+or deployment behavior. The baseline artifact is supplied by the caller; C.10
+does not create a projector or accept a runtime candidate.
+
+The next bounded candidate is **D.3-C.11 Redaction Evidence Resolution
+Semantics — NEXT / CANDIDATE / NOT AUTHORIZED BY C.10**. It may define
+multiple-claim handling, conflicts, authority precedence, detector-evidence
+isolation, and stale-evidence rejection, but is not implemented by C.10.
 
 ### D.3-D — Production integration
 
