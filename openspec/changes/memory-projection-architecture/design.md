@@ -475,6 +475,30 @@ The next bounded decision is **D.3-C.7 — pure independent REDACTED_CARD
 evaluator**, which is not authorized by C.6. D.3-D production integration
 remains separately unauthorized.
 
+#### D.3-C.7 — Pure independent REDACTED_CARD evaluator
+
+D.3-C.7 is **`PURE INDEPENDENT REDACTED_CARD EVALUATOR IMPLEMENTED / FROZEN HOLDOUT NOT YET EXECUTED`**.
+`lib/recall/disclosure/redacted-card-evaluator.js` accepts only caller-supplied
+in-memory rows that pass the C.6 contract. It builds a baseline
+`DISCLOSURE_CARD`, invokes the existing representation-only prototype, and
+computes bounded evidence for transform success, structural compatibility,
+surface safety, semantic preservation, protected-field preservation, and
+unplanned presentation-field drift.
+
+The evaluator returns no candidate or baseline payload, canonical memory,
+runtime input, capability, disclosure authority, selector decision, or get
+token. Its aggregate metrics use answer-bearing rows as the denominator for
+semantic-preservation and useful-projection rates. It has no filesystem,
+fixture, DB, retrieval, network, LLM, capability, selector, or runtime
+dependency and reports an explicit offline side-effect contract.
+
+C.7 tests use only handcrafted C7 synthetic rows, including a generated
+12-row/six-family contract-valid set for the full-contract API. The frozen C.6
+fixture was not opened or evaluated, no evaluation report was generated, and
+the prototype, holdout validator, capability, selector, and production paths
+remain unchanged. The next bounded decision is **D.3-C.8 — one-shot execution
+of the frozen C.6 holdout**, which is not authorized by C.7.
+
 ### D.3-D — Production integration
 
 Only after D.3-C evidence and a separate product decision may production
