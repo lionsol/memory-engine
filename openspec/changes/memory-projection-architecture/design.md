@@ -501,7 +501,7 @@ of the frozen C.6 holdout**, which is not authorized by C.7.
 
 #### D.3-C.8 — One-shot independent REDACTED_CARD evaluation
 
-D.3-C.8 is **`ONE-SHOT FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`**.
+D.3-C.8 is **`PASS / FIRST-RUN EVIDENCE ACCEPTED`** by Planner adjudication.
 At the immutable C.7 execution HEAD, the frozen 12-row C.6 fixture was passed
 through `evaluateRedactedCardFixture(rows)` exactly once. The bounded result
 recorded 12/12 transform successes, 12/12 structural-compatibility matches,
@@ -515,8 +515,37 @@ The complete bounded evidence is recorded in
 representation evidence only: it creates no capability or production
 authority, defines no PASS/FAIL threshold, and does not authorize source,
 fixture, runtime, configuration, DB/data, or deployment changes. The next
-decision is Planner adjudication of the C.8 evidence; no C.9 repair or
-production integration follows automatically.
+decision is the D.3-C.9 authority-boundary design; no production integration
+follows automatically.
+
+#### D.3-C.9 — Redaction Plan Authority & Safety Boundary
+
+D.3-C.9 is **`REDACTION PLAN AUTHORITY BOUNDARY DEFINED`** and is a
+docs/OpenSpec-only architecture decision. The decision record is
+`docs/redaction-plan-authority-boundary-v1.md`.
+
+C.9 separates Risk Authority, Redaction Directive Authority, and
+Transformation. Existing object-level risk flags can justify withholding,
+review, or lower capability, but cannot synthesize an exact field/literal
+directive. The current `projectRedactedCardCandidate()` executes only an
+explicit bounded plan; no literal-level production authority source is
+currently implemented.
+
+The runtime `redactEvidenceText()` helper is limited to runtime evidence
+capture sanitization and is not a Canonical Memory, redaction-directive, or
+`DISCLOSURE_CARD` authority. Future authority candidates are
+`STRUCTURED_SOURCE_ANNOTATION`, `EXPLICIT_REDACTION_DIRECTIVE`, and research-only
+`DETERMINISTIC_DETECTOR_EVIDENCE`; no LLM or risk-flag authority is defined.
+
+Future authoritative directives must bind exact field/literal evidence to
+`memory_id`, `canonical_id`, `source_content_hash`, and a target surface, and
+must fail closed when stale. The discussion is surface-specific to
+`DISCLOSURE_CARD`; successful redaction does not clear risk or grant capability.
+No production envelope, detector, resolver, capability, selector, runtime,
+configuration, DB/data, or deployment change is part of C.9.
+
+The next bounded candidate is **D.3-C.10 Structured Redaction Evidence
+Contract — NEXT / CANDIDATE / NOT AUTHORIZED BY C.9**.
 
 ### D.3-D — Production integration
 
