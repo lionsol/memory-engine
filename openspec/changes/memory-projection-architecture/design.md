@@ -234,19 +234,28 @@ The frozen D.2 v2 fixture remains immutable historical evidence for the binary
 capability-gate question.
 
 A later D.3 projection evaluation requires a separate dataset/fixture contract
-that is frozen before projector tuning. Each case should distinguish at least:
+that is frozen before projector tuning. The frozen D.3-C.1 case boundary stores
+at least:
 
 ```text
-canonical_context
+canonical_memory
+runtime_candidate
+policy_context
 projection_surface
-projection_input_class
-projected_payload or bounded projection features
+answer_bearing
 expected_projection_valid
-expected_surface_safety
-expected_capability
-expected_disclosure
-answer_bearing / semantic-preservation label
+surface_safety.forbidden_literals
+semantic_preservation.required_literals / required
+current_v1_1.expected_capability / expected_disclosure_authority
 ```
+
+The fixture stores independent validity, safety, and semantic-preservation
+acceptance constraints; `expected_projection_valid` is a contract-level case
+constraint, not a projector-specific predicted payload. It does not store a
+projector-specific expected surface-safety boolean or a projector output. A future evaluator computes
+`actual_surface_safe` and `actual_semantic_preserved` from the actual projected
+payload or bounded projection features. Those values are evaluator evidence,
+not frozen fixture labels.
 
 The evaluation must be capable of distinguishing:
 
@@ -327,10 +336,33 @@ not runtime qualification or production adoption.
 
 ### D.3-C — Projection-aware offline evaluation
 
-Freeze a new projection-specific evaluation contract/fixture, then evaluate
-candidate projection strategies. Do not tune against the frozen evaluation set.
-The decision is whether safe projection can recover useful disclosure while
-preserving the capability boundary.
+#### D.3-C.1 — Projection-aware holdout contract freeze
+
+D.3-C.1 is **`HOLDOUT CONTRACT FROZEN / NOT YET EVALUATED`**. The independent
+synthetic fixture `memory-projection-holdout-v1` contains 24 rows across six
+families, with four rows per family and a 2/2 answer-bearing balance. Every row
+targets `DISCLOSURE_CARD` and carries a valid synthetic Canonical Memory v1,
+bounded runtime projection input, and bounded v1.1 policy context.
+
+The contract keeps projection representation, capability permission, and
+selection separate. In particular, `surface_safety.forbidden_literals` and
+`semantic_preservation.required_literals` are independent acceptance
+constraints, while current v1.1 capability/disclosure authority remains a
+separate label. The `capability_blocked` answer-bearing cases permit a future
+`projection_feasible_but_capability_blocked` result: satisfying projection
+constraints cannot upgrade `RETRIEVAL_ONLY` to `CARD_DISCLOSABLE`.
+
+The D.2 v2 fixture remains immutable and is not reused as projection-safety
+evidence. No projection evaluation has run, and no projector, capability,
+selector, runtime, configuration, DB/data, Gateway, or AutoRecall mutation is
+part of C.1.
+
+#### D.3-C.2 — Projection-aware evaluator
+
+The next bounded decision is to implement a pure projection-aware offline
+evaluator against the frozen C.1 fixture. It must compute actual projected
+payload/bounded-feature evidence and derive surface safety and semantic
+preservation without rewriting the fixture or tuning a production projector.
 
 ### D.3-D — Production integration
 

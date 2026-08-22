@@ -18,9 +18,9 @@
 
 ## 3. Phase D.3-C projection-aware offline evaluation
 
-- [ ] 3.1 Define and freeze a new projection-aware evaluation contract without modifying the D.2 v2 holdout.
-- [ ] 3.2 Include actual projected payload or bounded projection features sufficient to evaluate projection validity and target-surface safety.
-- [ ] 3.3 Label safety and semantic preservation separately so a safe-but-useless projection cannot count as a utility success.
+- [x] 3.1 Define and freeze a new projection-aware evaluation contract without modifying the D.2 v2 holdout (`D.3-C.1: HOLDOUT CONTRACT FROZEN / NOT YET EVALUATED`).
+- [x] 3.2 Freeze canonical/runtime projection inputs and bounded target-surface safety/semantic acceptance constraints; actual projected payload/features remain evaluator output (`D.3-C.1`).
+- [x] 3.3 Label safety and semantic preservation separately so a safe-but-useless projection cannot count as a utility success (`D.3-C.1`).
 - [ ] 3.4 Evaluate whether concrete safe projections recover useful disclosure while keeping unsafe disclosure at zero.
 - [ ] 3.5 Do not tune production heuristics or projector logic against the frozen evaluation set after freeze.
 
