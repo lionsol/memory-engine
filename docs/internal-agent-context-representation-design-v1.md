@@ -55,8 +55,9 @@ user-facing research candidate and is not merged into this design.
 Internal does not mean full raw source or a prompt copy. A future artifact
 must be bounded, explicitly truncated or segmented where necessary, and must
 not imply full raw access, `RAW_DISCLOSABLE`, a get token, or tool execution
-authority. `RAW_REFERENCE` remains an independent projection strategy and
-surface contract; it is not an alias for `INTERNAL_AGENT_CONTEXT`.
+authority. `REFERENCE_ONLY` remains a separate projection strategy, while
+`RAW_REFERENCE` remains a separate unimplemented projection surface; neither
+is an alias for `INTERNAL_AGENT_CONTEXT`.
 
 ## Data-only consumer semantics
 
@@ -162,6 +163,7 @@ Projection Validation
       ↓
 Capability Authorization
       ↓
+Internal-context consumer
 ```
 
 An internal context candidate must not pass through the user-facing card
