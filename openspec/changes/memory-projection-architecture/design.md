@@ -359,10 +359,32 @@ part of C.1.
 
 #### D.3-C.2 — Projection-aware evaluator
 
-The next bounded decision is to implement a pure projection-aware offline
-evaluator against the frozen C.1 fixture. It must compute actual projected
-payload/bounded-feature evidence and derive surface safety and semantic
-preservation without rewriting the fixture or tuning a production projector.
+D.3-C.2 is **`SOURCE IMPLEMENTED / NOT YET FORMALLY EVALUATED`**. The pure
+`projection-aware-evaluator.js` accepts caller-supplied synthetic rows, invokes
+the existing canonical-aware disclosure-card projector, re-validates the
+returned artifact, and evaluates only the validated bounded card payload.
+Surface safety and semantic preservation are computed from deterministic
+normalized string literals; no source body, provenance, capability metadata,
+selector, retrieval, DB, network, or LLM path is used.
+
+The evaluator adapts only the bounded `policy_context` to the existing
+`explainShadowCapability()` helper after actual projection validation. A valid
+projection therefore cannot upgrade capability. Case results and aggregate
+metrics expose actual capability/authority separately from structural validity,
+surface safety, semantic preservation, and useful projection. Projection or
+capability errors fail closed with bounded reason codes and no raw exception or
+payload excerpts.
+
+C.2 tests use handcrafted synthetic rows only. The frozen 24-row C.1 fixture
+has not been read for evaluation, and no formal D.3 result or production
+threshold is defined by this implementation.
+
+#### D.3-C.3 — Frozen projection-aware evaluation
+
+The next bounded decision is to run the frozen 24-row projection-aware
+evaluation once, without changing the C.1 fixture, freeze record, projector,
+capability source, selector, or runtime path. Product interpretation remains a
+separate decision after that evidence.
 
 ### D.3-D — Production integration
 
