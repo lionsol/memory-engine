@@ -72,6 +72,29 @@ test("redacted-card holdout has exact independent schema and balance", () => {
   assert.equal(rows.every(row => row.annotator === REDACTED_CARD_HOLDOUT_ANNOTATOR), true);
 });
 
+test("non-answer rows reject semantic anchors at row and fixture levels", () => {
+  const rows = readJsonl(FIXTURE_PATH);
+  const original = rows.find(row => row.label.answer_bearing === false);
+  const mutatedRow = structuredClone(original);
+  mutatedRow.label.semantic_preservation.required = false;
+  mutatedRow.label.semantic_preservation.required_literals = ["RCH1_FAKE_NONANSWER_ANCHOR"];
+
+  const rowResult = validateRedactedCardHoldoutRow(mutatedRow);
+  assert.equal(rowResult.valid, false);
+  assert.equal(
+    rowResult.diagnostics.some(diagnostic => diagnostic.code === "non_answer_semantic_literals_not_empty"),
+    true,
+  );
+
+  const mutatedRows = rows.map(row => row.case_id === mutatedRow.case_id ? mutatedRow : row);
+  const fixtureResult = validateRedactedCardHoldoutFixture(mutatedRows);
+  assert.equal(fixtureResult.valid, false);
+  assert.equal(
+    fixtureResult.diagnostics.some(diagnostic => diagnostic.code === "non_answer_semantic_literals_not_empty"),
+    true,
+  );
+});
+
 test("holdout labels contain acceptance constraints but no expected output or capability", () => {
   const rows = readJsonl(FIXTURE_PATH);
   const forbiddenKeys = [
