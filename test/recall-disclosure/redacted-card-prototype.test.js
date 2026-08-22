@@ -190,6 +190,65 @@ test("malformed plan fails closed with a bounded reason", () => {
   assert.equal(result.candidate_payload, null);
 });
 
+test("extra benign top-level plan fields fail closed", () => {
+  const result = projectRedactedCardCandidate(
+    canonicalMemory(),
+    runtimeCandidate(),
+    {
+      ...plan([{ field: "summary", literal: "UNIT_SECRET_RED_9001" }]),
+      metadata: "synthetic metadata",
+    },
+  );
+
+  assert.equal(result.structural_compatibility.reason, "invalid_redaction_plan");
+  assert.equal(result.candidate_payload, null);
+});
+
+test("capability-like top-level plan fields fail closed as invalid plans", () => {
+  const result = projectRedactedCardCandidate(
+    canonicalMemory(),
+    runtimeCandidate(),
+    {
+      ...plan([{ field: "summary", literal: "UNIT_SECRET_RED_9001" }]),
+      capability: "CARD_DISCLOSABLE",
+    },
+  );
+
+  assert.equal(result.structural_compatibility.reason, "invalid_redaction_plan");
+  assert.equal(result.candidate_payload, null);
+});
+
+test("safe_to_disclose top-level plan fields fail closed as invalid plans", () => {
+  const result = projectRedactedCardCandidate(
+    canonicalMemory(),
+    runtimeCandidate(),
+    {
+      ...plan([{ field: "summary", literal: "UNIT_SECRET_RED_9001" }]),
+      safe_to_disclose: true,
+    },
+  );
+
+  assert.equal(result.structural_compatibility.reason, "invalid_redaction_plan");
+  assert.equal(result.candidate_payload, null);
+});
+
+test("plan validation precedes baseline projection failure", () => {
+  const canonical = canonicalMemory();
+  canonical.content_ref.content_hash = new String("sha256:invalid-synthetic-content-hash");
+  const result = projectRedactedCardCandidate(
+    canonical,
+    runtimeCandidate(),
+    {
+      ...plan([{ field: "summary", literal: "UNIT_SECRET_RED_9001" }]),
+      capability: "CARD_DISCLOSABLE",
+    },
+  );
+
+  assert.equal(result.structural_compatibility.reason, "invalid_redaction_plan");
+  assert.notEqual(result.structural_compatibility.reason, "baseline_projection_failed");
+  assert.equal(result.candidate_payload, null);
+});
+
 test("canonical authority and protected payload fields remain unchanged", () => {
   const canonical = canonicalMemory();
   const runtime = runtimeCandidate({ risk_flags: ["conflict_flag"] });
