@@ -151,6 +151,13 @@ function directSafeRow() {
   });
 }
 
+function invalidProjectionRow(expectedProjectionValid) {
+  const row = directSafeRow();
+  row.label.expected_projection_valid = expectedProjectionValid;
+  row.canonical_memory.content_ref.content_hash = new String("sha256:synthetic-direct-safe-unit-01");
+  return row;
+}
+
 function redactableSecretRow() {
   return makeRow({
     caseId: "redactable-secret-unit-01",
@@ -227,6 +234,47 @@ test("direct safe case measures valid, safe, preserved, and card-authorized inde
   assert.equal(Object.hasOwn(result, "canonical_memory"), false);
   assert.equal(Object.hasOwn(result, "runtime_candidate"), false);
   assert.equal(Object.hasOwn(result.projected_payload, "provenance"), false);
+});
+
+test("actual valid projection matches an expected valid projection", () => {
+  const result = evaluateProjectionAwareCase(directSafeRow());
+
+  assert.equal(result.expected_projection_valid, true);
+  assert.equal(result.projection_valid, true);
+  assert.equal(result.projection_valid_matches_expected, true);
+});
+
+test("actual invalid projection matches an expected invalid projection", () => {
+  const result = evaluateProjectionAwareCase(invalidProjectionRow(false));
+
+  assert.equal(result.expected_projection_valid, false);
+  assert.equal(result.projection_valid, false);
+  assert.equal(result.projection_valid_matches_expected, true);
+});
+
+test("actual invalid projection does not match an expected valid projection", () => {
+  const result = evaluateProjectionAwareCase(invalidProjectionRow(true));
+
+  assert.equal(result.expected_projection_valid, true);
+  assert.equal(result.projection_valid, false);
+  assert.equal(result.projection_valid_matches_expected, false);
+});
+
+test("expected projection validity is evidence only, not projector or capability input", () => {
+  const expectedValidRow = directSafeRow();
+  const expectedInvalidRow = structuredClone(expectedValidRow);
+  expectedInvalidRow.label.expected_projection_valid = false;
+
+  const expectedValid = evaluateProjectionAwareCase(expectedValidRow);
+  const expectedInvalid = evaluateProjectionAwareCase(expectedInvalidRow);
+
+  assert.deepEqual(expectedInvalid.projected_payload, expectedValid.projected_payload);
+  assert.equal(expectedInvalid.projection_valid, expectedValid.projection_valid);
+  assert.equal(expectedInvalid.actual_capability, expectedValid.actual_capability);
+  assert.equal(expectedInvalid.actual_capability_reason, expectedValid.actual_capability_reason);
+  assert.equal(expectedInvalid.actual_disclosure_authority, expectedValid.actual_disclosure_authority);
+  assert.equal(expectedValid.projection_valid_matches_expected, true);
+  assert.equal(expectedInvalid.projection_valid_matches_expected, false);
 });
 
 test("unsafe literal survives a valid projection without becoming a useful projection", () => {
@@ -328,6 +376,7 @@ test("aggregate metrics distinguish safety, semantics, usefulness, and authority
     cases: 1,
     answer_bearing: 1,
     projection_valid: 1,
+    projection_valid_match: 1,
     surface_safe: 1,
     semantic_preserved: 1,
     useful_projection: 1,
@@ -337,6 +386,7 @@ test("aggregate metrics distinguish safety, semantics, usefulness, and authority
     cases: 1,
     answer_bearing: 1,
     projection_valid: 1,
+    projection_valid_match: 1,
     surface_safe: 1,
     semantic_preserved: 1,
     useful_projection: 1,
@@ -351,6 +401,21 @@ test("aggregate metrics distinguish safety, semantics, usefulness, and authority
     llm: false,
     runtime: false,
   });
+});
+
+test("aggregate metrics report projection validity contract matches", () => {
+  const result = evaluateProjectionAwareCases([
+    directSafeRow(),
+    invalidProjectionRow(false),
+    invalidProjectionRow(true),
+  ]);
+
+  assert.equal(result.case_count, 3);
+  assert.equal(result.projection_valid_count, 1);
+  assert.equal(result.projection_invalid_count, 2);
+  assert.equal(result.projection_valid_match_count, 2);
+  assert.equal(result.projection_valid_match_rate, 0.6667);
+  assert.equal(result.family_breakdown.direct_safe.projection_valid_match, 2);
 });
 
 test("fixture API requires the complete frozen contract without opening a fixture", () => {
