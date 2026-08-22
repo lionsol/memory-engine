@@ -681,7 +681,15 @@ The pure validator at `lib/recall/disclosure/internal-agent-context-holdout.js` 
 
 C.14 freezes acceptance constraints only: source-derived semantic anchors must be inside selected ranges, instruction-like literals are labeled as data evidence, expected risk flags mirror selection metadata, and full-source selection is recorded as a representation fact. It does not produce measured projection results, capability labels, runtime authority, or a production readiness claim. No evaluator execution occurred.
 
-The next bounded candidate is **D.3-C.15 Pure Independent INTERNAL_AGENT_CONTEXT Evaluator — CANDIDATE / NOT AUTHORIZED BY C.14**. It must keep the frozen C.14 fixture unevaluated until separately authorized and must not add runtime/capability/selector wiring.
+D.3-C.15 is recorded below as a separately bounded offline evaluator stage. It keeps the frozen C.14 fixture unevaluated and does not add runtime/capability/selector wiring.
+
+#### D.3-C.15 — Pure Independent INTERNAL_AGENT_CONTEXT Evaluator
+
+D.3-C.15 is **`PURE INDEPENDENT INTERNAL_AGENT_CONTEXT EVALUATOR IMPLEMENTED / FROZEN HOLDOUT NOT YET EXECUTED`**. The pure evaluator at `lib/recall/disclosure/internal-agent-context-evaluator.js` accepts caller-supplied in-memory rows through case, cases, and complete-fixture APIs; it never opens the C.14 JSONL fixture. Each case first passes the C.14 row contract, invokes the existing C.13 source-derived adapter, validates actual projection validity, and independently measures boundedness, source faithfulness, answer-bearing semantic preservation, source-full-selection consistency, risk metadata, canonical/provenance integrity, and authority-key absence.
+
+Instruction-like content is reported only as representation-level data-only evidence: the evaluator checks the `untrusted_evidence` marker, preservation of labeled literals, and absence of authority keys. `useful_internal_projection` is a representation metric, not `INTERNAL_CONTEXT` capability, runtime injection authorization, selector selection, or production readiness. Aggregate ratios use bounded denominators and six-family breakdowns; no production threshold is defined.
+
+C.15 tests use only fresh handcrafted unit rows and a fresh in-memory contract-valid 12-row set. They do not read or execute the frozen C.14 fixture. The evaluator has no filesystem, storage, retrieval, network, LLM, runtime, capability, selector, or AutoRecall dependency. No evaluator report or formal holdout result exists. The next bounded candidate is **D.3-C.16 INTERNAL_AGENT_CONTEXT Holdout First Run — CANDIDATE / NOT AUTHORIZED BY C.15**.
 
 ### D.3-D — Production integration
 
