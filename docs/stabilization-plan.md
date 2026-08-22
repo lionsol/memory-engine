@@ -22,13 +22,15 @@ Intent-aware Recall v2-B4 is **`SOURCE IMPLEMENTED / STRUCTURED EVIDENCE REGRESS
 
 Retrieval-first Selective Disclosure Phase D.2-B is **`FAILED / PRODUCT ARCHITECTURE GAP`**. The frozen v2 candidate-level evaluation produced `41` selected cards and `7` withheld candidates, with `23` unsafe disclosures, `0` unauthorized full-content surfaces, and answer-bearing disclosure recall `0.75`. This is an offline product finding, not a fixture or runtime failure; no selector, admissibility, evaluator, fixture, or runtime source was changed.
 
-The **Disclosure Capability Contract v1.1** is now documented as **Stage 1 / CONTRACT ONLY**. It separates retrieval availability, internal context, bounded card disclosure, and reserved raw disclosure; `safe_to_disclose` is explicitly owned by capability calculation and required for `CARD_DISCLOSABLE`. Offline evaluator update and shadow re-evaluation are future separate stages; runtime integration requires explicit authorization.
+The **Disclosure Capability Contract v1.1** is **`PASS / CONTRACT CLOSED`**. It separates retrieval availability, internal context, bounded card disclosure, and reserved raw disclosure; `safe_to_disclose` is owned by capability calculation and is required for `CARD_DISCLOSABLE`. The contract does not itself authorize production integration or runtime adoption.
 
-The **Disclosure Capability Shadow Evaluation** is now specified as an offline contract only. Its historical D.2-C.7 result did not reduce unsafe disclosure (`23` current and `23` shadow unsafe disclosures; reduction `0`) and does not authorize implementation or runtime adoption. A future evaluator update and re-evaluation remain separate, explicitly authorized stages.
+The **Disclosure Capability Shadow Evaluation v1.1** is **`PASS / OFFLINE EVALUATION COMPLETE`**. The pure offline evaluator is implemented at commit `8db96038cb44818df2674b5f3b87a99adab93728` and preserves the existing production selector. On the frozen 48-row v2 fixture (`d372ebac9bf4d80aaac85dfb0d43eacec792291871b744b7812009ac06d071bd`), D.2-C.11 reduced unsafe card disclosure from `23` to `0`, while answer-bearing disclosure recall remained `0.75`; selected cards changed `41 -> 18` and irrelevant disclosures `23 -> 0`. This is offline architecture evidence only: no production selector/admissibility change, runtime integration, deployment, AutoRecall enablement, config mutation, or data mutation occurred.
+
+**Phase D.3 Memory Projection Architecture** is now active. D.3-A closed the architecture contract, and D.3-B is `SOURCE IMPLEMENTED / VERIFIED`: a pure `ProjectionArtifact` v1 contract now wraps the existing canonical vector and canonical-aware Memory Card projectors without changing production consumers. Projection remains representation rather than authorization; the new card artifact omits legacy permission/get authority, while `INTERNAL_AGENT_CONTEXT` and `RAW_REFERENCE` remain explicit fail-closed surfaces pending later design. No production or runtime mutation is authorized.
 
 ### NEXT
 
-Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains; later retrieval, recall, and lifecycle work follows the separate roadmap decisions below. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. Intent-aware Recall v2-B and the successor Selective Recall Gate deterministic-authority experiment are now closed: the full semantic route and skip-only C1 route are rejected, and v2-B6/C2-C repair are cancelled. No runtime authority was granted.
+Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment or qualification work remains. Intent-aware Recall v2-B and the successor Selective Recall Gate deterministic-authority experiment are closed: the full semantic route and skip-only C1 route are rejected, and v2-B6/C2-C repair are cancelled. Retrieval-first Selective Disclosure D.2-C completed its capability contract and offline v1.1 shadow evaluation. D.3-A and D.3-B are now closed at architecture/source level. **NEXT: Phase D.3-C Projection-aware Offline Evaluation**, beginning with a new separately frozen projection-aware evaluation contract; the D.2 v2 holdout must remain immutable and must not be reused as sanitized-projection evidence. `ADD_SYNC_BACKFILL_SCOPE_FINDING` remains a non-blocking operational/lifecycle finding outside D.1 scope. No D.3 runtime authority is granted.
 
 ### CLOSED
 
@@ -41,10 +43,12 @@ Phase 2.5 Canonical Memory Architecture is closed. No further D/D.1 deployment o
 
 After the canonical semantic contract is stable, advance Intelligent Recall in this order:
 
-1. **Retrieval-first selective-use / disclosure control** — capability contract documented at `Stage 1 / CONTRACT ONLY`; offline shadow evaluation and runtime integration remain `LATER / NOT STARTED` and separately authorized.
-2. **Learned/statistical recall policy** — `LATER / NOT STARTED`; requires sufficient real labeled traffic and a separate Planner decision.
-3. **Recall Hint**.
-4. **Statistical LTR**.
+1. **Phase D.3-C Projection-aware Offline Evaluation** — `NOW / DESIGN + FREEZE NEXT`. Define and freeze a new projection-specific evidence contract using actual projected payloads or bounded projection features; label projection validity, target-surface safety, and semantic preservation separately.
+2. **D.3-C offline evaluation execution** — `LATER / NOT STARTED`; run only after the projection-aware boundary is frozen, without tuning projector logic against the frozen set.
+3. **D.3-D production/runtime integration** — `LATER / NOT AUTHORIZED`; requires a separate product decision and explicit runtime authorization after D.3-C evidence.
+4. **Learned/statistical recall policy** — `LATER / NOT STARTED`; requires sufficient real labeled traffic and a separate Planner decision.
+5. **Recall Hint**.
+6. **Statistical LTR**.
 
 Multi-agent memory architecture may begin after the Canonical Object Contract is stable and need not wait for LTR. Its detailed ownership, visibility, attribution, and ACL semantics remain a later product-design decision.
 
