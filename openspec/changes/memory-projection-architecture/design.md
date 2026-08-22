@@ -422,6 +422,33 @@ offline prototype decision, followed separately by possible
 neither implementation. D.3-D production integration remains unchecked and
 separately unauthorized.
 
+#### D.3-C.5 — REDACTED_CARD offline prototype
+
+D.3-C.5 is **`REDACTED_CARD OFFLINE PROTOTYPE IMPLEMENTED / NOT INDEPENDENTLY EVALUATED`**.
+`lib/recall/disclosure/redacted-card-prototype.js` provides a pure,
+representation-only prototype that starts from the existing canonical-aware
+`DISCLOSURE_CARD` projection, applies an explicit bounded field-specific plan,
+and validates the resulting candidate payload with the existing artifact
+validation machinery.
+
+The prototype uses the fixed replacement `[REDACTED]`, permits directives only
+for `title`, `summary`, `salience_reason`, and `source_hint`, and fails closed
+for malformed plans, forbidden fields, missing exact targets, baseline
+projection failure, or candidate validation failure. Canonical identity,
+category, kind, confidence, and risk flags remain unchanged. No content
+detection authority is introduced: the caller supplies the redaction plan.
+
+The result is a `REDACTED_CARD` strategy candidate, not a new formal
+`ProjectionArtifact` kind and not a capability state. It carries no capability,
+safe-to-disclose, disclosure-authority, selector, lifecycle, or scope decision.
+The C.1 fixture and C.3 first-run report were not reused for tuning or
+evaluation; existing production projector, evaluator, capability, selector,
+and runtime paths remain unchanged.
+
+The next bounded decision is independent offline evaluation evidence for this
+prototype. C.5 does not claim redaction safety, production readiness, or
+authorization to implement secret detection or runtime integration.
+
 ### D.3-D — Production integration
 
 Only after D.3-C evidence and a separate product decision may production

@@ -25,6 +25,8 @@
 - [x] 3.5 Execute the frozen 24-row projection-aware evaluation once without projector/fixture tuning (`D.3-C.3: FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`; report `reports/memory-projection-holdout-v1-first-run-20260822.md`).
 - [ ] 3.6 Treat projector, capability, selector, runtime, and both frozen fixtures as an ongoing immutable constraint after C.1 freeze; verify by diff/SHA at each future evaluation rather than marking this constraint complete.
 - [x] 3.7 Define the projection strategy taxonomy and decision record from C.3 evidence (`D.3-C.4: PROJECTION STRATEGY TAXONOMY DEFINED`; docs/OpenSpec-only, no implementation).
+- [x] 3.8 Implement the bounded `REDACTED_CARD` representation-only prototype with handcrafted synthetic tests (`D.3-C.5: REDACTED_CARD OFFLINE PROTOTYPE IMPLEMENTED / NOT INDEPENDENTLY EVALUATED`).
+- [ ] 3.9 Independently evaluate the `REDACTED_CARD` prototype without reusing the frozen C.1 holdout for tuning (`NEXT: separate evaluation decision`).
 
 ## 4. Phase D.3-D production integration
 
