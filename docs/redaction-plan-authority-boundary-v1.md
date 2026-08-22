@@ -107,9 +107,14 @@ not automatically reusable for `VECTOR_INDEX`, `INTERNAL_AGENT_CONTEXT`, or
 `RAW_REFERENCE`; each surface requires its own contract.
 
 If object-level risk exists without sufficient authoritative literal-level
-evidence, the system must not guess a plan. The downstream result remains
-`WITHHOLD`, `REFERENCE_ONLY`, `INTERNAL_CONTEXT`, or another lower capability
-outcome selected by existing capability policy.
+evidence, the system must not guess a plan. The system remains fail-closed:
+capability may remain `INTERNAL_CONTEXT` or `RETRIEVAL_ONLY`, a
+`REFERENCE_ONLY` projection strategy may be used where separately applicable,
+and the selector may ultimately return `WITHHOLD`.
+
+The exact fallback remains the responsibility of the existing projection,
+capability, and selector layers; Redaction Directive Authority does not choose
+or upgrade any of them.
 
 Even when a transform is surface-safe and semantically preserved, risk remains
 unchanged. Redaction does not remove `sensitive_source`, change lifecycle or
