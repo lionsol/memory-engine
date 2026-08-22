@@ -26,7 +26,9 @@
 - [ ] 3.6 Treat projector, capability, selector, runtime, and both frozen fixtures as an ongoing immutable constraint after C.1 freeze; verify by diff/SHA at each future evaluation rather than marking this constraint complete.
 - [x] 3.7 Define the projection strategy taxonomy and decision record from C.3 evidence (`D.3-C.4: PROJECTION STRATEGY TAXONOMY DEFINED`; docs/OpenSpec-only, no implementation).
 - [x] 3.8 Implement the bounded `REDACTED_CARD` representation-only prototype with handcrafted synthetic tests (`D.3-C.5: REDACTED_CARD OFFLINE PROTOTYPE IMPLEMENTED / NOT INDEPENDENTLY EVALUATED`).
-- [ ] 3.9 Independently evaluate the `REDACTED_CARD` prototype without reusing the frozen C.1 holdout for tuning (`NEXT: separate evaluation decision`).
+- [x] 3.9 Freeze the independent `REDACTED_CARD` holdout without reusing the frozen C.1 holdout or C.5 unit literals (`D.3-C.6: INDEPENDENT REDACTED_CARD HOLDOUT FROZEN / NOT YET EVALUATED`).
+- [ ] 3.10 Implement the pure independent `REDACTED_CARD` evaluator against the C.6 contract (`D.3-C.7: NOT STARTED`).
+- [ ] 3.11 Execute the C.6 frozen holdout once after the C.7 evaluator decision (`NOT STARTED`).
 
 ## 4. Phase D.3-D production integration
 

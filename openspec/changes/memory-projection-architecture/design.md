@@ -449,6 +449,32 @@ The next bounded decision is independent offline evaluation evidence for this
 prototype. C.5 does not claim redaction safety, production readiness, or
 authorization to implement secret detection or runtime integration.
 
+#### D.3-C.6 — Independent REDACTED_CARD holdout freeze
+
+D.3-C.6 is **`INDEPENDENT REDACTED_CARD HOLDOUT FROZEN / NOT YET EVALUATED`**.
+The fresh synthetic `redacted-card-holdout-v1` fixture has 12 rows across six
+families, with two rows per family and one answer-bearing/non-answer-bearing
+row per family. Its plans are intended-valid instances of the closed C.5 plan
+schema and cover all four allowed presentation fields.
+
+The fixture freezes only caller-supplied projection inputs, explicit redaction
+plans, and independent acceptance constraints: forbidden literals,
+answer-bearing semantic anchors, and expected structural compatibility. It does
+not store expected candidate payloads, rewritten fields, full artifacts,
+replacement output, capability expectations, or disclosure authority. It has
+no capability label because this contract tests representation transformation
+only.
+
+`lib/recall/disclosure/redacted-card-holdout.js` is a pure contract validator
+that does not import the prototype, projection artifact, evaluator, capability,
+selector, storage, network, or LLM paths. C.6 did not call the prototype and
+did not evaluate the new fixture. The C.1 fixture, C.3 report, and C.5 unit
+literals remain outside the new holdout's design inputs.
+
+The next bounded decision is **D.3-C.7 — pure independent REDACTED_CARD
+evaluator**, which is not authorized by C.6. D.3-D production integration
+remains separately unauthorized.
+
 ### D.3-D — Production integration
 
 Only after D.3-C evidence and a separate product decision may production
