@@ -215,6 +215,18 @@ test("validator fails closed for output, range, label, and risk mutations", () =
   const full = rows.find(row => row.family === "full_source_selection");
   const multi = rows.find(row => row.family === "multi_segment_operational");
 
+  const expectedProjectionInvalid = structuredClone(answer);
+  expectedProjectionInvalid.label.expected_projection_valid = false;
+  const invalidProjectionRow = validateInternalAgentContextHoldoutRow(expectedProjectionInvalid);
+  assert.equal(invalidProjectionRow.valid, false);
+  assert.equal(invalidProjectionRow.diagnostics.some(diagnostic => (
+    diagnostic.code === "invalid_expected_projection_valid"
+  )), true);
+  const invalidProjectionFixture = rows.map(row => row.case_id === expectedProjectionInvalid.case_id
+    ? expectedProjectionInvalid
+    : row);
+  assertFixtureInvalid(invalidProjectionFixture, "invalid_expected_projection_valid");
+
   const expectedCapability = structuredClone(answer);
   expectedCapability.label.expected_capability = "INTERNAL_CONTEXT";
   assert.equal(validateInternalAgentContextHoldoutRow(expectedCapability).valid, false);
@@ -247,7 +259,7 @@ test("validator fails closed for output, range, label, and risk mutations", () =
   fullSelectionMismatch.label.expected_source_fully_selected = false;
   assert.equal(validateInternalAgentContextHoldoutRow(fullSelectionMismatch).valid, false);
 
-  for (const mutated of [expectedCapability, expectedOutput, rangeText, overlap, order, nonAnswerSemantic, riskMismatch, fullSelectionMismatch]) {
+  for (const mutated of [expectedProjectionInvalid, expectedCapability, expectedOutput, rangeText, overlap, order, nonAnswerSemantic, riskMismatch, fullSelectionMismatch]) {
     const mutatedRows = rows.map(row => row.case_id === mutated.case_id ? mutated : row);
     assertFixtureInvalid(mutatedRows);
   }
