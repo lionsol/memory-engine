@@ -21,8 +21,8 @@
 - [x] 3.1 Define and freeze a new projection-aware evaluation contract without modifying the D.2 v2 holdout (`D.3-C.1: HOLDOUT CONTRACT FROZEN / NOT YET EVALUATED`).
 - [x] 3.2 Freeze canonical/runtime projection inputs and bounded target-surface safety/semantic acceptance constraints; actual projected payload/features remain evaluator output (`D.3-C.1`).
 - [x] 3.3 Label safety and semantic preservation separately so a safe-but-useless projection cannot count as a utility success (`D.3-C.1`).
-- [x] 3.4 Implement pure projection-aware evaluator with bounded case results, capability separation, aggregate metrics, and handcrafted synthetic tests (`D.3-C.2: SOURCE IMPLEMENTED / NOT YET FORMALLY EVALUATED`).
-- [ ] 3.5 Execute the frozen 24-row projection-aware evaluation once without projector/fixture tuning (`D.3-C.3`).
+- [x] 3.4 Implement pure projection-aware evaluator with bounded case results, capability separation, aggregate metrics, and handcrafted synthetic tests (`D.3-C.2: SOURCE IMPLEMENTED`).
+- [x] 3.5 Execute the frozen 24-row projection-aware evaluation once without projector/fixture tuning (`D.3-C.3: FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`; report `reports/memory-projection-holdout-v1-first-run-20260822.md`).
 - [ ] 3.6 Keep projector, capability, selector, runtime, and both frozen fixtures immutable after C.1 freeze.
 
 ## 4. Phase D.3-D production integration

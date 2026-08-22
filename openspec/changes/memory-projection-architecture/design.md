@@ -353,7 +353,8 @@ separate label. The `capability_blocked` answer-bearing cases permit a future
 constraints cannot upgrade `RETRIEVAL_ONLY` to `CARD_DISCLOSABLE`.
 
 The D.2 v2 fixture remains immutable and is not reused as projection-safety
-evidence. No projection evaluation has run, and no projector, capability,
+evidence. At the C.1 freeze boundary no projection evaluation had run. The
+subsequent first run is recorded under D.3-C.3; no projector, capability,
 selector, runtime, configuration, DB/data, Gateway, or AutoRecall mutation is
 part of C.1.
 
@@ -375,16 +376,27 @@ surface safety, semantic preservation, and useful projection. Projection or
 capability errors fail closed with bounded reason codes and no raw exception or
 payload excerpts.
 
-C.2 tests use handcrafted synthetic rows only. The frozen 24-row C.1 fixture
-has not been read for evaluation, and no formal D.3 result or production
-threshold is defined by this implementation.
+C.2 tests use handcrafted synthetic rows only. Before the separate C.3
+execution, the frozen 24-row C.1 fixture had not been read for evaluation, and
+no production threshold is defined by this implementation.
 
 #### D.3-C.3 — Frozen projection-aware evaluation
 
-The next bounded decision is to run the frozen 24-row projection-aware
-evaluation once, without changing the C.1 fixture, freeze record, projector,
-capability source, selector, or runtime path. Product interpretation remains a
-separate decision after that evidence.
+D.3-C.3 is **`FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`**.
+At `b62121773966dea56102661c1dfc45105a50bf2e`, the frozen 24-row fixture was
+passed through `evaluateProjectionAwareFixture(rows)` exactly once without
+changing the C.1 fixture, freeze record, projector, capability source,
+selector, or runtime path. The run produced 24/24 valid projections, 24/24
+projection-validity expectation matches, 20/24 surface-safe projections,
+8/12 answer-bearing semantic-preservation results, 6/12 useful projections,
+2 CARD-authorized useful projections, and 4 useful projections blocked by
+capability. Capability and disclosure-authority expectation matches were both
+24/24. The bounded case and family evidence is recorded in
+`reports/memory-projection-holdout-v1-first-run-20260822.md`.
+
+This is evidence only: no PASS/FAIL/READY threshold or product interpretation
+is assigned here. Product interpretation remains a separate Planner decision
+and no D.3-D production/runtime authority follows from this run.
 
 ### D.3-D — Production integration
 
