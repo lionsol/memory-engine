@@ -398,6 +398,30 @@ This is evidence only: no PASS/FAIL/READY threshold or product interpretation
 is assigned here. Product interpretation remains a separate Planner decision
 and no D.3-D production/runtime authority follows from this run.
 
+#### D.3-C.4 — Projection strategy taxonomy and decision record
+
+D.3-C.4 is **`PROJECTION STRATEGY TAXONOMY DEFINED`** and is an
+docs/OpenSpec-only architecture decision. The accepted design direction is
+recorded in `docs/memory-projection-strategy-taxonomy-v1.md`.
+
+The taxonomy freezes `DIRECT_CARD`, `REDACTED_CARD`, `SUMMARIZED_CARD`,
+`INTERNAL_CONTEXT_PROJECTION`, and `REFERENCE_ONLY` as representation strategy
+names, not capability states. Canonical Memory remains semantic authority;
+ProjectionArtifact validation remains the structural/provenance/surface-bound
+check; capability remains authorization; and selector remains selection.
+Projection success cannot grant `CARD_DISCLOSABLE`, change lifecycle or scope
+authority, or bypass capability.
+
+The C.3 evidence interpretation is bounded: the current artifact contract had
+no structural failure on the frozen synthetic holdout, current v1.1 capability
+matched the frozen expected contract `24/24`, and the current card
+representation showed specific surface-safety and semantic-preservation gaps.
+The first future research priority is a separately bounded `REDACTED_CARD`
+offline prototype decision, followed separately by possible
+`INTERNAL_AGENT_CONTEXT` design research for raw/tool output. C.4 authorizes
+neither implementation. D.3-D production integration remains unchecked and
+separately unauthorized.
+
 ### D.3-D — Production integration
 
 Only after D.3-C evidence and a separate product decision may production

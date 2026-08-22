@@ -23,7 +23,8 @@
 - [x] 3.3 Label safety and semantic preservation separately so a safe-but-useless projection cannot count as a utility success (`D.3-C.1`).
 - [x] 3.4 Implement pure projection-aware evaluator with bounded case results, capability separation, aggregate metrics, and handcrafted synthetic tests (`D.3-C.2: SOURCE IMPLEMENTED`).
 - [x] 3.5 Execute the frozen 24-row projection-aware evaluation once without projector/fixture tuning (`D.3-C.3: FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`; report `reports/memory-projection-holdout-v1-first-run-20260822.md`).
-- [ ] 3.6 Keep projector, capability, selector, runtime, and both frozen fixtures immutable after C.1 freeze.
+- [ ] 3.6 Treat projector, capability, selector, runtime, and both frozen fixtures as an ongoing immutable constraint after C.1 freeze; verify by diff/SHA at each future evaluation rather than marking this constraint complete.
+- [x] 3.7 Define the projection strategy taxonomy and decision record from C.3 evidence (`D.3-C.4: PROJECTION STRATEGY TAXONOMY DEFINED`; docs/OpenSpec-only, no implementation).
 
 ## 4. Phase D.3-D production integration
 
