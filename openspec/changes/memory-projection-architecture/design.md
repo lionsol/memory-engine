@@ -600,10 +600,55 @@ No resolver, detector, authority-origin authentication, production plan
 source, capability, selector, runtime, configuration, DB/data, or deployment
 change is part of C.11.
 
-The redaction branch does not automatically create a C.12 resolver stage. The
-next direction is a separate `INTERNAL_AGENT_CONTEXT` design for raw/tool
-output; trusted-origin production work remains a future D.3-D product
+The redaction branch is closed at C.11 and does not create a resolver stage.
+The next bounded decision is the separate `INTERNAL_AGENT_CONTEXT` design for
+raw/tool output; trusted-origin production work remains a future D.3-D product
 decision.
+
+#### D.3-C.12 — INTERNAL_AGENT_CONTEXT Representation Design
+
+D.3-C.12 is **`INTERNAL_AGENT_CONTEXT REPRESENTATION BOUNDARY DEFINED`** and
+is a docs/OpenSpec-only architecture decision. The decision record is
+`docs/internal-agent-context-representation-design-v1.md`.
+
+C.3 evidence for both `raw_log` and `tool_output` was projection-valid `4/4`
+and surface-safe `4/4`, but answer-bearing semantic preservation was `0/2`
+and useful projection was `0`; both had expected capability
+`RETRIEVAL_ONLY`. This demonstrates a current `DISCLOSURE_CARD`
+semantic-preservation gap only. It does not authorize `INTERNAL_CONTEXT`, and
+the current generic withheld `safeSummary` behavior for risky card content
+remains an intentional card safety mechanism.
+
+C.12 freezes three separate terms: `INTERNAL_CONTEXT_PROJECTION` is a
+representation strategy, `INTERNAL_AGENT_CONTEXT` is a projection surface,
+and `INTERNAL_CONTEXT` is a capability state. The first research direction is
+a bounded deterministic extractive, source-faithful representation, not an
+abstractive summary or LLM rewrite. `SUMMARIZED_CARD` and `REFERENCE_ONLY`
+remain separate strategies; `RAW_REFERENCE` remains a separate unimplemented
+surface.
+
+Future internal payloads must be bounded, provenance/identity-bound,
+explicitly data-only and untrusted, preserve relevant structure and risk
+metadata, and carry explicit truncation/segmentation evidence. They must not
+carry capability, selector, get-token, raw-disclosure, or execution authority.
+Internal evidence must remain separate from system/developer/tool
+instructions, and future consumers must interpret instruction-like content as
+data only. C.12 does not freeze a final payload schema, content-role field,
+segment selector, numeric bound, prompt wrapper, or runtime integration.
+
+The current expected capability remains `RETRIEVAL_ONLY`; projection
+feasibility does not change it. The scope is limited to `raw_log` and
+`tool_output`, not `sensitive_source`, `dreaming_artifact`, or cross-agent
+material. Future offline evaluation must separately measure structural
+validity, boundedness, source faithfulness, semantic preservation,
+instruction/data isolation, risk/provenance preservation, and absence of
+capability authority. No fresh fixture or production threshold is created.
+
+The next bounded candidate is **D.3-C.13 INTERNAL_AGENT_CONTEXT Projection
+Contract Prototype — CANDIDATE / NOT AUTHORIZED BY C.12**. It may define a pure
+offline payload contract using caller-supplied bounded synthetic segments, but
+no source implementation, runtime integration, or capability/selector change
+is authorized by C.12.
 
 ### D.3-D — Production integration
 
