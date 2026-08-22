@@ -499,6 +499,25 @@ the prototype, holdout validator, capability, selector, and production paths
 remain unchanged. The next bounded decision is **D.3-C.8 — one-shot execution
 of the frozen C.6 holdout**, which is not authorized by C.7.
 
+#### D.3-C.8 — One-shot independent REDACTED_CARD evaluation
+
+D.3-C.8 is **`ONE-SHOT FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`**.
+At the immutable C.7 execution HEAD, the frozen 12-row C.6 fixture was passed
+through `evaluateRedactedCardFixture(rows)` exactly once. The bounded result
+recorded 12/12 transform successes, 12/12 structural-compatibility matches,
+12/12 surface-safe results, 6/6 answer-bearing semantic-preservation results,
+12/12 protected-field-preservation results, 12/12 no-unplanned-drift results,
+and 6 useful answer-bearing projections. All six frozen families contributed
+two cases and one useful answer-bearing result.
+
+The complete bounded evidence is recorded in
+`reports/redacted-card-holdout-v1-first-run-20260822.md`. This result is
+representation evidence only: it creates no capability or production
+authority, defines no PASS/FAIL threshold, and does not authorize source,
+fixture, runtime, configuration, DB/data, or deployment changes. The next
+decision is Planner adjudication of the C.8 evidence; no C.9 repair or
+production integration follows automatically.
+
 ### D.3-D — Production integration
 
 Only after D.3-C evidence and a separate product decision may production

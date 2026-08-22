@@ -28,7 +28,7 @@
 - [x] 3.8 Implement the bounded `REDACTED_CARD` representation-only prototype with handcrafted synthetic tests (`D.3-C.5: REDACTED_CARD OFFLINE PROTOTYPE IMPLEMENTED / NOT INDEPENDENTLY EVALUATED`).
 - [x] 3.9 Freeze the independent `REDACTED_CARD` holdout without reusing the frozen C.1 holdout or C.5 unit literals (`D.3-C.6: INDEPENDENT REDACTED_CARD HOLDOUT FROZEN / NOT YET EVALUATED`).
 - [x] 3.10 Implement the pure independent `REDACTED_CARD` evaluator against the C.6 contract (`D.3-C.7: PURE INDEPENDENT REDACTED_CARD EVALUATOR IMPLEMENTED / FROZEN HOLDOUT NOT YET EXECUTED`).
-- [ ] 3.11 Execute the C.6 frozen holdout once after the C.7 evaluator decision (`NOT STARTED`).
+- [x] 3.11 Execute the C.6 frozen holdout exactly once after the C.7 evaluator decision (`D.3-C.8: ONE-SHOT FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`; report `reports/redacted-card-holdout-v1-first-run-20260822.md`).
 
 ## 4. Phase D.3-D production integration
 
