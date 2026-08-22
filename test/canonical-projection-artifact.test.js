@@ -247,6 +247,11 @@ test("INTERNAL_AGENT_CONTEXT is implemented while RAW_REFERENCE remains fail-clo
   assert.equal(PROJECTION_KINDS.INTERNAL_AGENT_CONTEXT, "canonical_internal_agent_context_v1");
   assert.equal(internal.surface, "INTERNAL_AGENT_CONTEXT");
   assert.equal(internal.projection_kind, PROJECTION_KINDS.INTERNAL_AGENT_CONTEXT);
+  assert.deepEqual(internal.provenance, {
+    canonical_schema_version: canonical.schema_version,
+    adapter: "canonical_internal_agent_context_extract_v1",
+    selection_mode: "caller_supplied_char_ranges",
+  });
   assert.deepEqual(explainProjectionArtifactValidation(internal, canonical), {
     valid: true,
     reason: "valid",
@@ -275,6 +280,54 @@ test("INTERNAL_AGENT_CONTEXT is implemented while RAW_REFERENCE remains fail-clo
     valid: false,
     reason: "surface_projection_kind_mismatch",
   });
+});
+
+test("internal context provenance is closed and rejects authority-like or mismatched metadata", () => {
+  const canonical = canonicalMemory({ source: { text: "C13_PROVENANCE_BOUNDARY" } });
+  const base = projectCanonicalMemoryToInternalAgentContextArtifact(
+    canonical,
+    internalSelection([{ start: 0, end: canonical.source.text.length }]),
+  );
+
+  assert.deepEqual(base.provenance, {
+    canonical_schema_version: canonical.schema_version,
+    adapter: "canonical_internal_agent_context_extract_v1",
+    selection_mode: "caller_supplied_char_ranges",
+  });
+
+  for (const field of [
+    "execution_authority",
+    "tool_call",
+    "instruction_role",
+    "selector",
+    "selector_result",
+  ]) {
+    const artifact = {
+      ...base,
+      provenance: { ...base.provenance, [field]: true },
+    };
+    assert.deepEqual(explainProjectionArtifactValidation(artifact, canonical), {
+      valid: false,
+      reason: "invalid_internal_context_provenance",
+    });
+  }
+
+  const cases = [
+    [{ benign_metadata: true }, "invalid_internal_context_provenance"],
+    [{ adapter: "other_adapter" }, "invalid_internal_context_provenance"],
+    [{ selection_mode: "runtime_candidate" }, "invalid_internal_context_provenance"],
+    [{ canonical_schema_version: 2 }, "invalid_internal_context_provenance"],
+  ];
+  for (const [change, reason] of cases) {
+    const artifact = {
+      ...base,
+      provenance: { ...base.provenance, ...change },
+    };
+    assert.deepEqual(explainProjectionArtifactValidation(artifact, canonical), {
+      valid: false,
+      reason,
+    });
+  }
 });
 
 test("a structurally valid risky card artifact still carries no disclosure authorization", () => {
