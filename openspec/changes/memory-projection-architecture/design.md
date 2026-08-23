@@ -928,12 +928,79 @@ canonical acquisition and the direct-card boundary; Slice C would cover
 AutoRecall formatter/lifecycle/telemetry integration. These are design only;
 no slice is implemented here.
 
-The next candidate is `D.3-D.2 DIRECT_CARD Safe-to-Disclose Authority
-Decision`, status **`CANDIDATE / NOT AUTHORIZED`**. It answers who produces
-production `safe_to_disclose` authority and how it binds exact Canonical
-Memory source to the `DISCLOSURE_CARD` projection. It must not create an
-implementation, fixture, evaluator, detector, DB schema, persistent safety
-state, or runtime mechanism automatically.
+The D.3-D.2 authority decision is recorded below. It is a separate product
+decision and does not automatically create an implementation, fixture,
+evaluator, detector, DB schema, persistent safety state, or runtime mechanism.
+
+#### D.3-D.2 — DIRECT_CARD Safe-to-Disclose Authority Decision
+
+D.3-D.2 is **`PASS / DECISION CLOSED`**. `DIRECT_CARD` production source
+migration remains **`HOLD`** with blocker
+**`PRODUCTION_DISCLOSURE_ATTESTATION_PROVIDER_NOT_IMPLEMENTED`**. This does
+not revoke the D.3-C product interpretation or the
+`APPROVED FOR DIRECT_CARD SOURCE MIGRATION ONLY` product-entry decision;
+product entry is not source readiness.
+
+The decision record is
+`docs/direct-card-safe-to-disclose-authority-decision-v1.md`. Its fact
+classification is explicit: current code/schema/tool/provenance behavior is
+`current_fact`; the Owner attestation owner, exact binding, and fail-closed
+contract are `accepted_design`; D.3-D.1 and C.3 holdout evidence are
+`historical_record`.
+
+The sole v1 positive safe-to-disclose authority is
+`OWNER_EXPLICIT_ATTESTATION`, produced by a host-authenticated Owner
+management action. Memory Engine may persist and validate the attestation in a
+future dedicated Engine-owned state boundary, but it must not infer safety.
+Ordinary agent tools, `memory_engine.add`, AutoRecall, projectors, selectors,
+retrieval, Codex, and EDi cannot create or modify positive authority. Assert
+and revoke operations are not ordinary agent-callable `memory_engine` actions.
+
+The attestation binds the exact `memory_id`, `canonical_id`,
+`source_content_hash`, `surface=DISCLOSURE_CARD`, projection schema version,
+`projection_kind=DISCLOSURE_CARD`, exact projection/baseline hash,
+`authority_kind=OWNER_EXPLICIT_ATTESTATION`, `audience_scope=OWNER_SELF`,
+policy/attestation schema version, and active/revoked state. The projection
+hash covers the artifact schema version, kind, both identities, source hash,
+surface, and exact payload. Existing
+`computeDisclosureCardBaselineProjectionHash()` provides reusable exact
+binding semantics; no source change is part of D.3-D.2.
+
+No attestation, unauthenticated/self-reported authority, revoked state,
+identity/source/projection hash mismatch, surface/kind/schema/policy-version
+mismatch, unauthenticated `OWNER_SELF` scope, or invalid ProjectionArtifact
+must ever produce a positive capability. Each such condition yields
+`safe_to_disclose=false/absent`, `RETRIEVAL_ONLY`, and `WITHHOLD`. Canonical
+source, projection payload, or bound version changes invalidate the old
+attestation; loose matching and automatic migration are forbidden. The
+attestation is necessary but cannot bypass lifecycle, scope, risk, projection
+validation, or any other hard-deny condition.
+
+Caller-supplied booleans, tool/provenance metadata, `is_protected`, category or
+path allowlists, retrieval rank, legacy `disclosure_level`,
+`can_inject_card`/`get_token`, empty artifact risk flags, telemetry, model/LLM
+assertions, unqualified detectors/classifiers, and source Markdown annotations
+are rejected as positive authority. A detector may later provide risk
+evidence or a candidate recommendation only after an independent product
+decision and qualification.
+
+Future implementation requires dedicated Engine-owned attestation state; it
+must not reuse `memory_confidence`, `is_protected`, `memory_events`, or source
+Markdown. Existing memories are unasserted and withhold. No backfill or
+inference from legacy fields/provenance is allowed. An authenticated Owner
+boundary may inspect the exact current `DISCLOSURE_CARD` binding, assert that
+exact binding, or revoke it, but may not authorize all current or future
+memory.
+
+The next candidate is **`D.3-D.3 DIRECT_CARD Owner-Attested Authority Source
+Implementation` — `CANDIDATE / NOT AUTHORIZED`**. Only that separately
+authorized stage may implement the dedicated store, authenticated non-agent
+management boundary, binding/hash validator, capability provider, and focused
+tests. D.3-D.2 creates no source, schema, migration, persistent state,
+detector, classifier, fixture, evaluator, or runtime mechanism. OpenSpec 4.2
+remains unchecked; deployment, Gateway, AutoRecall, configuration, DB/data,
+runtime qualification, and `RAW_REFERENCE`/`RAW_DISCLOSABLE` remain outside
+scope.
 
 ## Risks / trade-offs
 
