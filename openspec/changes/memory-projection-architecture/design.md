@@ -693,7 +693,7 @@ C.15 tests use only fresh handcrafted unit rows and a fresh in-memory contract-v
 
 #### D.3-C.16 — One-shot INTERNAL_AGENT_CONTEXT holdout first run
 
-D.3-C.16 is **`ONE-SHOT FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`**.
+D.3-C.16 is **`PASS / FIRST-RUN EVIDENCE ACCEPTED`**.
 At execution HEAD `f5cae8c321e588e8ccd9a2844a2623aac0599255`, the frozen C.14
 fixture was read and passed through `evaluateInternalAgentContextFixture(rows)`
 exactly once. The formal execution returned RC `0` with no warmup, sample,
@@ -712,8 +712,11 @@ projections `6/6`. The evaluator returned `runtime_authorized=false` and
 `capability_authorized=false`; the full bounded case/family evidence is in
 `reports/internal-agent-context-holdout-v1-first-run-20260823.md`.
 
-These are measured offline representation results only. No PASS/FAIL threshold
-or final architecture interpretation is assigned here. In particular,
+These are measured offline representation results only. The accepted product
+interpretation is bounded extractive `INTERNAL_AGENT_CONTEXT` representation
+generalization across the frozen C.14 synthetic families when caller-supplied
+source ranges are already correct. Automatic range selection is not proven.
+In particular,
 `instruction_data_representation_valid` is representation-level evidence and
 does not prove runtime prompt-injection isolation, system/developer/tool-channel
 isolation, or safe runtime injection. `useful_internal_projection` is a metric
@@ -726,15 +729,100 @@ The post-execution immutable SHA check matched the preflight values, and
 `git diff f5cae8c321e588e8ccd9a2844a2623aac0599255..HEAD -- lib test` was empty.
 No production source, fixture, evaluator, validator, projector,
 capability/selector, runtime/configuration, DB/data, or persistent state was
-mutated. No C.17, D.3-D, or runtime stage was created. Planner adjudication is
-the next decision.
+mutated. No C.17 was created. The product interpretation and D.3-D entry
+decision are recorded in `docs/memory-projection-product-interpretation-v1.md`.
+
+#### D.3-C product interpretation / D.3-D entry decision
+
+The Planner/Owner accepted the D.3-C product interpretation on 2026-08-23.
+The disposition is `D.3-C PRODUCT INTERPRETATION ACCEPTED`. The first and only
+production integration candidate is `DIRECT_CARD`, because it has both
+representation evidence and `CARD_DISCLOSABLE` authorization evidence: C.3
+direct-safe is valid `4/4`, surface safe `4/4`, answer-bearing semantics
+preserved `2/2`, and useful CARD-authorized answer-bearing cases `2/2`; D.2
+capability shadow reduced unsafe card disclosure `23 -> 0` while preserving
+answer-bearing disclosure recall `0.75`.
+
+`REDACTED_CARD` is `HOLD / RESEARCH_ONLY`: its independent C.8 transform,
+safety, and semantic results are `12/12`, `12/12`, and `6/6`, but C.9-C.11
+provide no production literal-level redaction authority. `INTERNAL_AGENT_CONTEXT`
+is `HOLD / RESEARCH_ONLY`: C.16 is accepted representation evidence, but
+segment-selection authority, `INTERNAL_CONTEXT` capability, and runtime
+consumer isolation are not established. `REFERENCE_ONLY` and
+`SUMMARIZED_CARD` are deferred research-only strategies; `RAW_REFERENCE` and
+`RAW_DISCLOSABLE` remain reserved/disabled. The complete matrix is in the
+decision record above.
+
+OpenSpec D.3-D task 4.1 is now complete: **`[x]` separate Planner/Owner
+product decision accepted; entry approved for `DIRECT_CARD` source migration
+only**. This is a product-entry decision, not source, deployment, or runtime
+authorization. Tasks 4.2 source migration, 4.3 runtime/deployment/config/DB/
+data operations, and 4.4 raw enablement remain unchecked.
+
+The inspected production path is still the legacy card-first flow:
+
+```text
+lib/recall/auto-recall-hook-lifecycle.js
+  -> formatAutoRecallCardContext()
+auto-recall.js
+  -> buildAutoRecallCardContext()
+  -> projectCandidateToMemoryCard()
+  -> isInjectableMemoryCard()
+```
+
+It does not use `ProjectionArtifact`, the new disclosure capability boundary,
+or `selectDisclosureCandidates()`. `selectDisclosureCandidates()`,
+`createRecallCandidateEnvelope()`, and
+`projectCanonicalMemoryToDisclosureCardArtifact()` have no production caller.
+D.3-D is therefore migration of the existing legacy source path, not
+replacement of a production-wired D.3 selector.
 
 ### D.3-D — Production integration
 
-Only after D.3-C evidence and a separate product decision may production
-capability/admissibility/selector/card paths be migrated. Deployment, Gateway,
-AutoRecall, configuration, database/data mutation, and runtime qualification
-remain separately authorized.
+D.3-D entry is **`APPROVED FOR DIRECT_CARD SOURCE MIGRATION ONLY`**. The
+approved target is:
+
+```text
+Hybrid / gated recall candidates
+        ↓
+Canonical Memory authority
+        ↓
+DISCLOSURE_CARD ProjectionArtifact
+        ↓
+Projection validation
+        ↓
+Disclosure Capability
+        ↓
+CARD_DISCLOSABLE only
+        ↓
+Disclosure Selector
+        ↓
+DISCLOSE_CARD
+        ↓
+AutoRecall card formatter
+        ↓
+prompt supplement
+```
+
+`RETRIEVAL_ONLY` and `INTERNAL_CONTEXT` cannot use this direct-card disclosure
+path. Future source migration must take canonical semantics from Canonical
+Memory, use a validated `DISCLOSURE_CARD` artifact with no permission
+authority, let capability decide `CARD_DISCLOSABLE`, let the selector emit
+`DISCLOSE_CARD`/`WITHHOLD`, and let the formatter consume only the selected
+card. The new artifact payload does not contain `get_token`; legacy
+`disclosure_level`, `can_inject_card`, and `get_token` must not become D.3
+authorization authority.
+
+The migration must fail closed on canonical read failure, invalid projection,
+missing capability evidence, capability other than `CARD_DISCLOSABLE`, or
+selector `WITHHOLD`; no legacy card, raw text/content, or get-token fallback is
+permitted. These are source-migration requirements only. 4.2 remains unchecked.
+
+`D.3-D.1 DIRECT_CARD Production Boundary Migration Design` is the next
+candidate, `CANDIDATE / NOT AUTHORIZED BY THIS DECISION`; it must not start
+automatically. Deployment, Gateway, AutoRecall enablement, configuration,
+database/data mutation, and runtime qualification remain separately
+authorized.
 
 ## Risks / trade-offs
 

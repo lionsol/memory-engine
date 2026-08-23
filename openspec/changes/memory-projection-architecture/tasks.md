@@ -36,11 +36,11 @@
 - [x] 3.16 Implement the pure `INTERNAL_AGENT_CONTEXT` Projection Contract Prototype (`D.3-C.13: INTERNAL_AGENT_CONTEXT PROJECTION CONTRACT PROTOTYPE IMPLEMENTED / OFFLINE ONLY / NOT CAPABILITY AUTHORIZED`; source/test contract only, with no holdout, runtime, capability, or selector wiring).
 - [x] 3.17 Freeze the independent `INTERNAL_AGENT_CONTEXT` holdout (`D.3-C.14: INDEPENDENT INTERNAL_AGENT_CONTEXT HOLDOUT FROZEN / NOT YET EVALUATED`; fresh synthetic fixture, pure validator, freeze tests/record only, no evaluator or runtime wiring).
 - [x] 3.18 Implement the pure independent `INTERNAL_AGENT_CONTEXT` evaluator (`D.3-C.15: PURE INDEPENDENT INTERNAL_AGENT_CONTEXT EVALUATOR IMPLEMENTED / FROZEN HOLDOUT NOT YET EXECUTED`; caller-supplied in-memory rows only, handcrafted tests, no C.14 execution or runtime wiring).
-- [x] 3.19 Execute `INTERNAL_AGENT_CONTEXT` frozen holdout first run exactly once (`D.3-C.16: ONE-SHOT FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`; report `reports/internal-agent-context-holdout-v1-first-run-20260823.md`; no retry, second execution, runtime verification, or production integration).
+- [x] 3.19 Execute `INTERNAL_AGENT_CONTEXT` frozen holdout first run exactly once (`D.3-C.16: PASS / FIRST-RUN EVIDENCE ACCEPTED`; report `reports/internal-agent-context-holdout-v1-first-run-20260823.md`; accepted only as bounded extractive representation evidence when caller-supplied source ranges are already correct; automatic range selection, capability, runtime, and production integration remain unproven).
 
 ## 4. Phase D.3-D production integration
 
-- [ ] 4.1 Require a separate Planner/Owner product decision after D.3-C evidence.
+- [x] 4.1 Require a separate Planner/Owner product decision after D.3-C evidence (`D.3-C PRODUCT INTERPRETATION ACCEPTED / D.3-D ENTRY APPROVED FOR DIRECT_CARD SOURCE MIGRATION ONLY` on 2026-08-23; product-entry decision only, not runtime/deployment authorization; decision record `docs/memory-projection-product-interpretation-v1.md`).
 - [ ] 4.2 Migrate production capability/admissibility/selector/card paths only under separately authorized source work.
 - [ ] 4.3 Treat deployment, Gateway operations, AutoRecall enablement, configuration, DB/data mutation, and runtime qualification as separately authorized operations.
 - [ ] 4.4 Keep `RAW_DISCLOSABLE` / raw-reference enablement out of scope unless explicitly reopened as its own product decision.
