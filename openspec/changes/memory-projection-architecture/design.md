@@ -1118,6 +1118,64 @@ Host remediation requires a new explicit authorization and is not started.
 OpenSpec 4.2, 4.3, and 4.4 remain unchecked. Full evidence is in
 `docs/direct-card-production-disclosure-boundary-migration-blocker-v1.md`.
 
+#### D.3-D.4-H1 — OpenClaw Pre-Prompt Owner Audience Contract Design
+
+D.3-D.4-H1 is **`PASS_WITH_FINDINGS / CONTRACT DESIGN FROZEN`**. The finding
+is **`OPENCLAW_AUTHORITATIVE_SOURCE_CHECKOUT_NOT_PRESENT_LOCALLY`**: the
+installed OpenClaw package is `2026.6.9`, but its official `v2026.6.9` source
+checkout could not be obtained because the environment could not resolve its
+proxy. Installed dist evidence was used only to design the contract; no
+OpenClaw source or memory-engine source was changed.
+
+The selected design is option A, an event-local field on the prompt-mutation
+event:
+
+~~~~ts
+type PluginHookBeforePromptBuildEvent = {
+  prompt: string;
+  messages: unknown[];
+  senderIsOwner?: boolean;
+};
+~~~~
+
+The value must come from the host-authenticated current run/request, remain
+bound to the same `ctx.runId`, preserve `true`/`false`/absent as three states,
+and be checked only as `event?.senderIsOwner === true`. `false` and
+`undefined` are fail-closed and cannot produce `OWNER_SELF` authority. The
+field is only an audience input; it cannot produce capability, attestation,
+projection, lifecycle, scope, risk, or selector authorization.
+
+Option B, adding the field to the generic `PluginHookAgentContext`, is
+rejected as the primary public design because that context is shared across
+unrelated lifecycle hooks; a private harness propagation field may support the
+same event-local contract. Option C, allowing `before_agent_run` to mutate the
+prompt, is rejected because it changes the gate contract and arrives too late.
+Option D, cross-hook caching, is rejected because it cannot guarantee same-run
+binding. Option E, sender/session/channel/config inference, is rejected because
+the plugin must not reproduce host authentication. Option F, upgrade to a
+formally verified upstream release, is a conditional preference requiring
+separate upgrade authorization and source/test verification.
+
+The installed runner matrix is frozen as follows: the selection path already
+holds `params.senderIsOwner` for the later `before_agent_run` gate and should
+propagate the same host fact into the earlier prompt event; the embedded
+harness currently omits it from `AgentHarnessHookContext` and needs a private
+propagation boundary; the installed CLI path has no local prompt-build hook and
+is `NOT APPLICABLE`; cron, heartbeat, and subagent paths must supply no positive
+proof; retries may reuse an immutable fact only for the same run; and group or
+channel shape cannot infer Owner status.
+
+The conditional H2 slices are: H2-A public hook type and contract tests;
+H2-B selection runner propagation; H2-C private agent-harness propagation;
+H2-D compatibility/security tests for all three states, same-run retry,
+new-run non-reuse, fail-closed synthetic runners, and unchanged gate semantics;
+and H2-E the separately authorized memory-engine consumer. H2 is
+**`CANDIDATE / NOT AUTHORIZED`**. D.3-D.4 remains **`BLOCKED / NOT IMPLEMENTED`**
+with production migration **`HOLD`** under the existing audience-boundary
+blocker. OpenSpec 4.2, 4.3, and 4.4 remain unchecked. Full H1 design and
+installed evidence are in
+`docs/openclaw-pre-prompt-owner-audience-contract-design-v1.md`.
+
 ## Risks / trade-offs
 
 - **Architecture duplication:** adding a new universal projector framework could
