@@ -41,6 +41,7 @@
 ## 4. Phase D.3-D production integration
 
 - [x] 4.1 Require a separate Planner/Owner product decision after D.3-C evidence (`D.3-C PRODUCT INTERPRETATION ACCEPTED / D.3-D ENTRY APPROVED FOR DIRECT_CARD SOURCE MIGRATION ONLY` on 2026-08-23; product-entry decision only, not runtime/deployment authorization; decision record `docs/memory-projection-product-interpretation-v1.md`).
+- [x] 4.1.1 Freeze `D.3-D.1 DIRECT_CARD Production Boundary Migration Design` (`D.3-D.1 DESIGN: PASS_WITH_FINDINGS`; `DIRECT_CARD` production source migration: `HOLD`; blocker: `PRODUCTION_SAFE_TO_DISCLOSE_AUTHORITY_MISSING`; docs/OpenSpec-only; design record `docs/direct-card-production-boundary-migration-design-v1.md`; no source, test, runtime, deployment, configuration, DB/data, or persistent-state mutation).
 - [ ] 4.2 Migrate production capability/admissibility/selector/card paths only under separately authorized source work.
 - [ ] 4.3 Treat deployment, Gateway operations, AutoRecall enablement, configuration, DB/data mutation, and runtime qualification as separately authorized operations.
 - [ ] 4.4 Keep `RAW_DISCLOSABLE` / raw-reference enablement out of scope unless explicitly reopened as its own product decision.

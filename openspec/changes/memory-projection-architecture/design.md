@@ -818,11 +818,122 @@ missing capability evidence, capability other than `CARD_DISCLOSABLE`, or
 selector `WITHHOLD`; no legacy card, raw text/content, or get-token fallback is
 permitted. These are source-migration requirements only. 4.2 remains unchecked.
 
-`D.3-D.1 DIRECT_CARD Production Boundary Migration Design` is the next
-candidate, `CANDIDATE / NOT AUTHORIZED BY THIS DECISION`; it must not start
-automatically. Deployment, Gateway, AutoRecall enablement, configuration,
-database/data mutation, and runtime qualification remain separately
-authorized.
+D.3-D.1 is recorded below as a docs/OpenSpec-only design decision with
+`PASS_WITH_FINDINGS`; direct-card source migration remains `HOLD` pending the
+production safe-to-disclose authority decision. Deployment, Gateway,
+AutoRecall enablement, configuration, database/data mutation, and runtime
+qualification remain separately authorized.
+
+#### D.3-D.1 — DIRECT_CARD Production Boundary Migration Design
+
+D.3-D.1 is **`PASS_WITH_FINDINGS`**. `DIRECT_CARD` production source
+migration is **`HOLD`** with blocker
+**`PRODUCTION_SAFE_TO_DISCLOSE_AUTHORITY_MISSING`**. This design does not
+revoke the D.3-C product interpretation or its
+`APPROVED FOR DIRECT_CARD SOURCE MIGRATION ONLY` product-entry decision;
+product entry is not source readiness.
+
+The actual legacy production flow is:
+
+```text
+lib/recall/auto-recall-hook-lifecycle.js
+  -> hybridSearch()
+  -> shouldInjectCandidate()
+  -> gatedResults
+  -> formatAutoRecallCardContext()
+
+auto-recall.js
+  -> buildAutoRecallCardContext()
+  -> projectCandidateToMemoryCard()
+  -> isInjectableMemoryCard()
+```
+
+Production isolated Hybrid search already reads Canonical Memory through
+separate Core/Engine read access and returns a bounded reduced result. It must
+not attach `canonicalMemory.source.text` to the generic Hybrid result. The D.3
+symbols `projectCanonicalMemoryToDisclosureCardArtifact()`,
+`createRecallCandidateEnvelope()`, and `selectDisclosureCandidates()` have no
+real AutoRecall production caller; their current references are source,
+offline/evaluation, or test paths.
+
+The C.3 first-run evidence is bounded to `direct_safe` projection valid `4/4`,
+surface safe `4/4`, and `CARD_DISCLOSABLE` `4/4`; `redactable_secret` is
+projection valid `4/4`, surface safe `0/4`, and capability
+`INTERNAL_CONTEXT` `4/4`. `redactable_secret` may have empty synthetic
+`runtime_candidate.risk_flags` while secret risk exists only in synthetic
+policy context, so artifact risk flags alone cannot establish
+`safe_to_disclose` authority. Current `safe_to_disclose` values exist only in
+offline/synthetic policy context or evaluation labels; no production authority
+provider exists.
+
+The future canonical acquisition boundary is after the query gate: use the
+candidate's exact full `memory_id`, remain inside the existing
+`withHybridDbAccessScope`, call `getCanonicalMemoriesByIds()`, perform one
+bounded Core `IN` read and one Engine `IN` read, and validate candidate
+`canonical_id` against the exact canonical identity returned. Individual
+unresolved/malformed/mismatched candidates withhold; a batch-level canonical
+read failure withholds the batch. Full canonical source remains inside this
+boundary and is not added to general Hybrid results.
+
+`CARD_DISCLOSABLE` requires target-surface-specific authority bound to exact
+`memory_id`, `canonical_id`, `source_content_hash`, `DISCLOSURE_CARD`, projection
+kind, projection payload/hash, policy/provenance version, and the
+`safe_to_disclose` decision. Evaluation labels, synthetic policy context,
+caller booleans, legacy `disclosure_level`, `can_inject_card`, `get_token`,
+retrieval scores, selector convenience, artifact risk flags alone, and source
+path/category allowlists are not substitutes. Missing, invalid, expired, or
+identity/hash-mismatched evidence means `RETRIEVAL_ONLY` and `WITHHOLD`.
+
+The frozen order is:
+
+```text
+Canonical Memory
+  -> DISCLOSURE_CARD ProjectionArtifact
+  -> projection validation
+  -> authorized safe_to_disclose evidence
+  -> DisclosureCapability
+  -> CARD_DISCLOSABLE only
+  -> selector
+  -> DISCLOSE_CARD / WITHHOLD
+```
+
+The future production envelope omits `canonical.source.text`, carries exact
+identity, bounded retrieval evidence, the validated `DISCLOSURE_CARD`
+ProjectionArtifact, and an independently calculated capability result. The
+selector may only select `CARD_DISCLOSABLE`; `RETRIEVAL_ONLY`,
+`INTERNAL_CONTEXT`, and missing capability withhold. It does not generate,
+clean, or re-project content. The formatter consumes only bounded card payload
+from `DISCLOSE_CARD`, does not call a projector, read raw candidate text,
+output `get_token`, fall back to `formatAutoRecallContext`/raw text, or use
+legacy policy fields as authorization. The new artifact payload does not
+contain `get_token`.
+
+The current hook records prompt cards, `injectedIds`,
+`reinforcementAllowedIds`, `memory_injected`, `recall_completed.injected_count`,
+and turn-state injection count from `gatedResults` before actual formatter or
+selector success. Future values must derive only from actual `DISCLOSE_CARD`
+selections; gated-but-withheld candidates must not be injected or receive
+citation reinforcement authority.
+
+D.3-D.1 rejects attaching full Canonical Memory to Hybrid results, using
+synthetic safe labels in production, treating empty artifact risk flags as
+safe, restoring `get_token`, using legacy card policy as capability, creating
+an always-withhold dead pipeline, or introducing a detector, LLM classifier,
+DB schema, persistent safety flag, or data backfill in this stage.
+
+Conditional future source slices require a separately approved and validated
+production safe-to-disclose authority provider. Slice A would cover production
+capability/envelope/selector boundaries; Slice B would cover bounded exact
+canonical acquisition and the direct-card boundary; Slice C would cover
+AutoRecall formatter/lifecycle/telemetry integration. These are design only;
+no slice is implemented here.
+
+The next candidate is `D.3-D.2 DIRECT_CARD Safe-to-Disclose Authority
+Decision`, status **`CANDIDATE / NOT AUTHORIZED`**. It answers who produces
+production `safe_to_disclose` authority and how it binds exact Canonical
+Memory source to the `DISCLOSURE_CARD` projection. It must not create an
+implementation, fixture, evaluator, detector, DB schema, persistent safety
+state, or runtime mechanism automatically.
 
 ## Risks / trade-offs
 
