@@ -679,9 +679,9 @@ D.3-C.14 is **`INDEPENDENT INTERNAL_AGENT_CONTEXT HOLDOUT FROZEN / NOT YET EVALU
 
 The pure validator at `lib/recall/disclosure/internal-agent-context-holdout.js` independently enforces the closed row, canonical-memory, caller-supplied range, risk-flag, label, family-balance, source-slice, and source-full-selection contracts. It does not import or call the C.13 projector, read a fixture, perform evaluation, access capability/selector/runtime/storage/network/LLM facilities, or freeze expected output. The freeze test binds the exact fixture SHA, old fixture immutability, independent bounds, no-authority labels, and fail-closed mutation cases.
 
-C.14 freezes acceptance constraints only: source-derived semantic anchors must be inside selected ranges, instruction-like literals are labeled as data evidence, expected risk flags mirror selection metadata, and full-source selection is recorded as a representation fact. It does not produce measured projection results, capability labels, runtime authority, or a production readiness claim. No evaluator execution occurred.
+C.14 freezes acceptance constraints only: source-derived semantic anchors must be inside selected ranges, instruction-like literals are labeled as data evidence, expected risk flags mirror selection metadata, and full-source selection is recorded as a representation fact. It does not produce measured projection results, capability labels, runtime authority, or a production readiness claim. At the C.14 freeze boundary, no evaluator execution had occurred; the separately bounded C.16 evidence is recorded below.
 
-D.3-C.15 is recorded below as a separately bounded offline evaluator stage. It keeps the frozen C.14 fixture unevaluated and does not add runtime/capability/selector wiring.
+D.3-C.15 is recorded below as a separately bounded offline evaluator stage. It added no runtime/capability/selector wiring; the subsequent C.16 first run remains a separate one-shot evidence record.
 
 #### D.3-C.15 — Pure Independent INTERNAL_AGENT_CONTEXT Evaluator
 
@@ -689,7 +689,45 @@ D.3-C.15 is **`PURE INDEPENDENT INTERNAL_AGENT_CONTEXT EVALUATOR IMPLEMENTED / F
 
 Instruction-like content is reported only as representation-level data-only evidence: the evaluator checks the `untrusted_evidence` marker, preservation of labeled literals, and absence of authority keys. `useful_internal_projection` is a representation metric, not `INTERNAL_CONTEXT` capability, runtime injection authorization, selector selection, or production readiness. Aggregate ratios use bounded denominators and six-family breakdowns; no production threshold is defined.
 
-C.15 tests use only fresh handcrafted unit rows and a fresh in-memory contract-valid 12-row set. They do not read or execute the frozen C.14 fixture. The evaluator has no filesystem, storage, retrieval, network, LLM, runtime, capability, selector, or AutoRecall dependency. No evaluator report or formal holdout result exists. The next bounded candidate is **D.3-C.16 INTERNAL_AGENT_CONTEXT Holdout First Run — CANDIDATE / NOT AUTHORIZED BY C.15**.
+C.15 tests use only fresh handcrafted unit rows and a fresh in-memory contract-valid 12-row set. They do not read or execute the frozen C.14 fixture. The evaluator has no filesystem, storage, retrieval, network, LLM, runtime, capability, selector, or AutoRecall dependency. The next bounded decision is recorded below.
+
+#### D.3-C.16 — One-shot INTERNAL_AGENT_CONTEXT holdout first run
+
+D.3-C.16 is **`ONE-SHOT FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`**.
+At execution HEAD `f5cae8c321e588e8ccd9a2844a2623aac0599255`, the frozen C.14
+fixture was read and passed through `evaluateInternalAgentContextFixture(rows)`
+exactly once. The formal execution returned RC `0` with no warmup, sample,
+partial, family-by-family run, retry, or second execution. The bounded result
+is stored outside the repository at
+`/tmp/memory-engine-c16-first-run.json`, with SHA-256
+`7e7b7343a97da3b5c3d575665ec8dd1e5fbffb40d0d1e6109f85d7e8e2c8d6da`.
+
+The measured aggregate contains 12 cases and records projection success
+`12/12`, projection validity `12/12`, boundedness `12/12`, source faithfulness
+`12/12`, answer-bearing semantic preservation `6/6`, instruction-like
+representation validity `2/2`, data-only marker validity `12/12`, risk metadata
+preservation `12/12`, provenance preservation `12/12`, no capability authority
+`12/12`, source-full-selection label matches `12/12`, and useful internal
+projections `6/6`. The evaluator returned `runtime_authorized=false` and
+`capability_authorized=false`; the full bounded case/family evidence is in
+`reports/internal-agent-context-holdout-v1-first-run-20260823.md`.
+
+These are measured offline representation results only. No PASS/FAIL threshold
+or final architecture interpretation is assigned here. In particular,
+`instruction_data_representation_valid` is representation-level evidence and
+does not prove runtime prompt-injection isolation, system/developer/tool-channel
+isolation, or safe runtime injection. `useful_internal_projection` is a metric
+under the frozen offline representation constraints and does not prove
+`INTERNAL_CONTEXT` capability, production eligibility, selector eligibility, or
+runtime readiness. `actual_source_fully_selected=true` does not mean
+`RAW_DISCLOSABLE` or raw-access authority.
+
+The post-execution immutable SHA check matched the preflight values, and
+`git diff f5cae8c321e588e8ccd9a2844a2623aac0599255..HEAD -- lib test` was empty.
+No production source, fixture, evaluator, validator, projector,
+capability/selector, runtime/configuration, DB/data, or persistent state was
+mutated. No C.17, D.3-D, or runtime stage was created. Planner adjudication is
+the next decision.
 
 ### D.3-D — Production integration
 

@@ -36,6 +36,7 @@
 - [x] 3.16 Implement the pure `INTERNAL_AGENT_CONTEXT` Projection Contract Prototype (`D.3-C.13: INTERNAL_AGENT_CONTEXT PROJECTION CONTRACT PROTOTYPE IMPLEMENTED / OFFLINE ONLY / NOT CAPABILITY AUTHORIZED`; source/test contract only, with no holdout, runtime, capability, or selector wiring).
 - [x] 3.17 Freeze the independent `INTERNAL_AGENT_CONTEXT` holdout (`D.3-C.14: INDEPENDENT INTERNAL_AGENT_CONTEXT HOLDOUT FROZEN / NOT YET EVALUATED`; fresh synthetic fixture, pure validator, freeze tests/record only, no evaluator or runtime wiring).
 - [x] 3.18 Implement the pure independent `INTERNAL_AGENT_CONTEXT` evaluator (`D.3-C.15: PURE INDEPENDENT INTERNAL_AGENT_CONTEXT EVALUATOR IMPLEMENTED / FROZEN HOLDOUT NOT YET EXECUTED`; caller-supplied in-memory rows only, handcrafted tests, no C.14 execution or runtime wiring).
+- [x] 3.19 Execute `INTERNAL_AGENT_CONTEXT` frozen holdout first run exactly once (`D.3-C.16: ONE-SHOT FIRST-RUN EVIDENCE RECORDED / AWAITING PLANNER ADJUDICATION`; report `reports/internal-agent-context-holdout-v1-first-run-20260823.md`; no retry, second execution, runtime verification, or production integration).
 
 ## 4. Phase D.3-D production integration
 
