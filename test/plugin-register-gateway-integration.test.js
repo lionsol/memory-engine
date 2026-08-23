@@ -84,6 +84,7 @@ test("plugin register keeps product tools and hooks without governance gateway m
     const gatewayMethods = new Map();
     const tools = [];
     const hooks = [];
+    const commands = [];
     const apiConfig = {
       plugins: {
         entries: {
@@ -107,6 +108,9 @@ test("plugin register keeps product tools and hooks without governance gateway m
       registerTool(tool) {
         tools.push(tool.name);
       },
+      registerCommand(name, options) {
+        commands.push({ name, options });
+      },
       on(name) {
         hooks.push(name);
       },
@@ -118,6 +122,11 @@ test("plugin register keeps product tools and hooks without governance gateway m
     assert.deepEqual([...gatewayMethods.keys()], []);
     assert.deepEqual(tools.sort(), ["memory_engine", "memory_engine_get", "memory_engine_search"]);
     assert.deepEqual(hooks, ["before_tool_call"]);
+    assert.deepEqual(commands.map(command => command.name), ["memory-disclosure"]);
+    assert.equal(commands[0].options.requireAuth, true);
+    assert.deepEqual(commands[0].options.requiredScopes, ["operator.write"]);
+    assert.equal(commands[0].options.exposeSenderIsOwner, true);
+    assert.equal(commands[0].options.acceptsArgs, true);
   } finally {
     console.log = originalLog;
     if (previous.HOME === undefined) delete process.env.HOME;

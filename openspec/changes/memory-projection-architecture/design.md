@@ -941,6 +941,11 @@ not revoke the D.3-C product interpretation or the
 `APPROVED FOR DIRECT_CARD SOURCE MIGRATION ONLY` product-entry decision;
 product entry is not source readiness.
 
+The blocker above is the historical D.3-D.2 decision state. D.3-D.3 now
+implements the repository source provider and Owner boundary, but it is not
+wired into production AutoRecall; production source migration remains
+`HOLD` pending D.3-D.4.
+
 The decision record is
 `docs/direct-card-safe-to-disclose-authority-decision-v1.md`. Its fact
 classification is explicit: current code/schema/tool/provenance behavior is
@@ -958,13 +963,15 @@ and revoke operations are not ordinary agent-callable `memory_engine` actions.
 
 The attestation binds the exact `memory_id`, `canonical_id`,
 `source_content_hash`, `surface=DISCLOSURE_CARD`, projection schema version,
-`projection_kind=DISCLOSURE_CARD`, exact projection/baseline hash,
+the actual artifact `projection_kind=legacy_memory_card_v1`, exact
+projection/baseline hash, projection adapter version,
 `authority_kind=OWNER_EXPLICIT_ATTESTATION`, `audience_scope=OWNER_SELF`,
 policy/attestation schema version, and active/revoked state. The projection
 hash covers the artifact schema version, kind, both identities, source hash,
 surface, and exact payload. Existing
 `computeDisclosureCardBaselineProjectionHash()` provides reusable exact
-binding semantics; no source change is part of D.3-D.2.
+binding semantics and intentionally excludes provenance; no source change is
+part of D.3-D.2.
 
 No attestation, unauthenticated/self-reported authority, revoked state,
 identity/source/projection hash mismatch, surface/kind/schema/policy-version
@@ -992,15 +999,51 @@ boundary may inspect the exact current `DISCLOSURE_CARD` binding, assert that
 exact binding, or revoke it, but may not authorize all current or future
 memory.
 
-The next candidate is **`D.3-D.3 DIRECT_CARD Owner-Attested Authority Source
-Implementation` — `CANDIDATE / NOT AUTHORIZED`**. Only that separately
-authorized stage may implement the dedicated store, authenticated non-agent
-management boundary, binding/hash validator, capability provider, and focused
-tests. D.3-D.2 creates no source, schema, migration, persistent state,
-detector, classifier, fixture, evaluator, or runtime mechanism. OpenSpec 4.2
-remains unchecked; deployment, Gateway, AutoRecall, configuration, DB/data,
-runtime qualification, and `RAW_REFERENCE`/`RAW_DISCLOSABLE` remain outside
-scope.
+The D.3-D.3 implementation result is recorded below. OpenSpec 4.2 remains
+unchecked; deployment, Gateway, AutoRecall, configuration, DB/data, runtime
+qualification, and `RAW_REFERENCE`/`RAW_DISCLOSABLE` remain outside scope.
+
+#### D.3-D.3 — DIRECT_CARD Owner-Attested Authority Source Implementation
+
+D.3-D.3 is **`IMPLEMENTED / REPOSITORY-TESTED`**. The implementation record
+is `docs/direct-card-owner-attested-authority-source-implementation-v1.md`.
+It implements only the Owner-attested authority source and focused repository
+tests; it does not migrate or activate the AutoRecall production disclosure
+path.
+
+The Engine-owned `disclosure_attestations` table is created by
+`lib/db/schema.js` and is isolated from Core. The exact contract/store/provider
+in `lib/recall/disclosure/owner-attestation.js` persists and validates
+`OWNER_EXPLICIT_ATTESTATION` bindings, exact projection hashes, adapter
+versions, `OWNER_SELF`, policy/schema versions, and active/revoked state.
+Missing, malformed, stale, revoked, unavailable, or mismatched records fail
+closed. The provider returns only bounded `safe_to_disclose=true` authority
+evidence and never returns capability or selector outcomes.
+
+`lib/recall/disclosure/owner-attestable-projection.js` provides the
+Canonical-only Owner preview/assert projection. The terminology correction is
+frozen in source and docs: surface `DISCLOSURE_CARD`, actual artifact kind
+`legacy_memory_card_v1`; the fabricated `projection_kind=DISCLOSURE_CARD` is
+not stored or validated. The stable projection reuses the existing projector
+behavior and `computeDisclosureCardBaselineProjectionHash()` without changing
+the generic projector.
+
+`index.js` registers `/memory-disclosure` through `api.registerCommand()` with
+`requireAuth=true`, `requiredScopes=["operator.write"]`, and
+`exposeSenderIsOwner=true`. The handler independently requires authorized
+sender and Owner status before any DB read, supports only exact preview/assert/
+status/revoke operations, rejects bulk/wildcard input, and is not present in
+any agent tool surface. No AutoRecall, selector, formatter, telemetry,
+reinforcement, Hybrid result, or production capability path was changed.
+
+The focused D.3-D.3 tests use temporary/in-memory databases and cover schema
+idempotence/isolation, exact binding persistence, validator/provider failure
+cases, source/payload invalidation, no-write stale hashes, command auth and
+operations, and unchanged agent tools. Runtime deployment was not performed
+and no real attestation state was created.
+
+The next candidate is **`D.3-D.4 DIRECT_CARD Production Disclosure Boundary
+Migration` — `CANDIDATE / NOT AUTHORIZED`**. OpenSpec 4.2 remains unchecked.
 
 ## Risks / trade-offs
 

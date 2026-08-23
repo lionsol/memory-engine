@@ -11,6 +11,7 @@ import runtimePaths from "./lib/runtime/paths.cjs";
 import { createMemoryEngineRuntimeAssembly } from "./lib/runtime/assembly.js";
 import { insertMemoryEvent } from "./lib/db/events.js";
 import { ensureMemoryEngineTables, migrateLegacyMemoryEventsFromCore } from "./lib/db/schema.js";
+import { getCanonicalMemoryById } from "./lib/canonical/read-adapter.js";
 import {
   createBackfillConfidenceForIndexedChunks,
   createIndexSyncRuntime,
@@ -34,6 +35,7 @@ import {
   createMemoryEngineSearchExecute,
 } from "./lib/tools/memory-engine-actions.js";
 import { registerMemoryEngineTools } from "./lib/tools/register-memory-engine-tools.js";
+import { createOwnerDisclosureCommandHandler } from "./lib/recall/disclosure/owner-disclosure-command.js";
 import { generateEmbedding } from "./lib/siliconflow-runtime.js";
 
 const { INDEX_SYNC_WATCH_DIRS } = runtimePaths;
@@ -195,6 +197,20 @@ export default definePluginEntry({
       memoryEngine: executeMemoryEngineAction,
       memoryEngineSearch: executeMemoryEngineSearch,
       memoryEngineGet: executeMemoryEngineGet,
+    });
+
+    api.registerCommand("memory-disclosure", {
+      description: "Owner-authenticated preview and exact attestation management for disclosure cards.",
+      acceptsArgs: true,
+      requireAuth: true,
+      requiredScopes: ["operator.write"],
+      exposeSenderIsOwner: true,
+      handler: createOwnerDisclosureCommandHandler({
+        getCanonicalMemoryById,
+        withCoreDb,
+        withEngineDbReadonly,
+        withEngineDbWritable,
+      }),
     });
   },
 });

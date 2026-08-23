@@ -115,7 +115,7 @@ Every v1 attestation must bind all of the following fields:
 | `source_content_hash` | Hash of the exact canonical source content |
 | `surface` | `DISCLOSURE_CARD` |
 | `projection_schema_version` | Exact schema version of the validated artifact |
-| `projection_kind` | `DISCLOSURE_CARD` |
+| `projection_kind` | Actual artifact kind: `legacy_memory_card_v1` |
 | exact projection/baseline hash | Hash of the exact projected representation |
 | `authority_kind` | `OWNER_EXPLICIT_ATTESTATION` |
 | `audience_scope` | `OWNER_SELF` |
@@ -131,6 +131,13 @@ The exact projection/baseline hash must cover the current `ProjectionArtifact`:
 - `source_content_hash`;
 - surface; and
 - exact payload.
+
+The projection surface is `DISCLOSURE_CARD`, while the current artifact's
+actual `projection_kind` is `legacy_memory_card_v1`. The attestation must bind
+that actual kind; it must not store the fabricated combination
+`projection_kind=DISCLOSURE_CARD`. The adapter/provenance version is bound
+separately because the reusable projection hash intentionally excludes
+provenance.
 
 The existing `computeDisclosureCardBaselineProjectionHash()` provides a
 reusable implementation of this exact binding semantic. This decision does
