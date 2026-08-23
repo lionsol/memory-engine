@@ -199,7 +199,8 @@ export default definePluginEntry({
       memoryEngineGet: executeMemoryEngineGet,
     });
 
-    api.registerCommand("memory-disclosure", {
+    api.registerCommand({
+      name: "memory-disclosure",
       description: "Owner-authenticated preview and exact attestation management for disclosure cards.",
       acceptsArgs: true,
       requireAuth: true,

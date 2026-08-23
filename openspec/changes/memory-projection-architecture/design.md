@@ -1011,6 +1011,14 @@ It implements only the Owner-attested authority source and focused repository
 tests; it does not migrate or activate the AutoRecall production disclosure
 path.
 
+The initial implementation at `ca574d7` had two Planner findings: plugin
+registration used the obsolete two-argument command API, and the Owner
+projection produced a generic placeholder because it passed no source-derived
+presentation input. The same-stage corrective patch closes both findings:
+registration now passes one command object, and the Owner projection derives a
+bounded presentation from the server-read Canonical source using the explicit
+adapter `owner_attestable_canonical_card_v1`.
+
 The Engine-owned `disclosure_attestations` table is created by
 `lib/db/schema.js` and is isolated from Core. The exact contract/store/provider
 in `lib/recall/disclosure/owner-attestation.js` persists and validates
@@ -1024,11 +1032,14 @@ evidence and never returns capability or selector outcomes.
 Canonical-only Owner preview/assert projection. The terminology correction is
 frozen in source and docs: surface `DISCLOSURE_CARD`, actual artifact kind
 `legacy_memory_card_v1`; the fabricated `projection_kind=DISCLOSURE_CARD` is
-not stored or validated. The stable projection reuses the existing projector
-behavior and `computeDisclosureCardBaselineProjectionHash()` without changing
-the generic projector.
+not stored or validated. The stable projection supplies only a server-derived
+Canonical source-text presentation input to the existing projector, then binds
+the resulting artifact to `owner_attestable_canonical_card_v1`. It reuses
+`computeDisclosureCardBaselineProjectionHash()` without changing the generic
+projector behavior.
 
-`index.js` registers `/memory-disclosure` through `api.registerCommand()` with
+`index.js` registers `/memory-disclosure` through the current single-object
+`api.registerCommand({ name: "memory-disclosure", ... })` contract with
 `requireAuth=true`, `requiredScopes=["operator.write"]`, and
 `exposeSenderIsOwner=true`. The handler independently requires authorized
 sender and Owner status before any DB read, supports only exact preview/assert/
@@ -1038,7 +1049,9 @@ reinforcement, Hybrid result, or production capability path was changed.
 
 The focused D.3-D.3 tests use temporary/in-memory databases and cover schema
 idempotence/isolation, exact binding persistence, validator/provider failure
-cases, source/payload invalidation, no-write stale hashes, command auth and
+cases, meaningful deterministic source-derived preview, source/payload
+invalidation, raw-log/tool-output-like withheld semantics, no-write stale
+hashes, the single-object command registration contract, command auth and
 operations, and unchanged agent tools. Runtime deployment was not performed
 and no real attestation state was created.
 

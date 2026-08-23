@@ -16,23 +16,33 @@ import {
 } from "../lib/recall/disclosure/owner-attestation.js";
 import {
   buildOwnerDisclosurePreview,
+  OWNER_DISCLOSURE_PRESENTATION_INPUT_VERSION,
+  OWNER_DISCLOSURE_PROJECTION_ADAPTER_VERSION,
   projectCanonicalMemoryToOwnerDisclosureCardArtifact,
 } from "../lib/recall/disclosure/owner-attestable-projection.js";
 import { createOwnerDisclosureCommandHandler } from "../lib/recall/disclosure/owner-disclosure-command.js";
 
 const MEMORY_ID = "owner-attestation-memory-001";
+const SAFE_SOURCE_PREFIX = "OWNER_SAFE_CANONICAL_PREFIX_20260823";
+const FULL_SOURCE_SENTINEL = "OWNER_ATTESTATION_FULL_SOURCE_SENTINEL_20260823";
 const LONG_SOURCE_TEXT = [
-  "Owner-attestable disclosure preview content.",
+  `${SAFE_SOURCE_PREFIX} Owner-attestable disclosure preview content.`,
   "This synthetic canonical source is deliberately longer than the bounded card summary.",
-  "OWNER_ATTESTATION_SOURCE_SENTINEL_20260823",
+  "The bounded representation must preserve the beginning while withholding the complete source.",
   "The complete source must remain outside the preview response.",
+  FULL_SOURCE_SENTINEL,
 ].join(" ");
 
-function canonicalMemory({ memoryId = MEMORY_ID, text = LONG_SOURCE_TEXT } = {}) {
+function canonicalMemory({
+  memoryId = MEMORY_ID,
+  text = LONG_SOURCE_TEXT,
+  path = "memory/projects/owner-attestation.md",
+  category = "project",
+} = {}) {
   return composeCanonicalMemoryObject(
     {
       id: memoryId,
-      path: "memory/projects/owner-attestation.md",
+      path,
       source: "openclaw_core",
       start_line: 1,
       end_line: 4,
@@ -50,7 +60,7 @@ function canonicalMemory({ memoryId = MEMORY_ID, text = LONG_SOURCE_TEXT } = {})
       is_archived: 0,
       is_protected: 0,
       conflict_flag: 0,
-      category: "project",
+      category,
     },
   );
 }
@@ -164,9 +174,19 @@ test("Owner projection uses the actual legacy_memory_card_v1 kind and is determi
   assert.equal(first.artifact.surface, "DISCLOSURE_CARD");
   assert.equal(first.artifact.projection_kind, "legacy_memory_card_v1");
   assert.notEqual(first.artifact.projection_kind, "DISCLOSURE_CARD");
-  assert.equal(first.artifact.provenance.adapter, "legacy_canonical_memory_card_v1");
+  assert.equal(first.artifact.provenance.adapter, OWNER_DISCLOSURE_PROJECTION_ADAPTER_VERSION);
+  assert.equal(first.artifact.provenance.presentation_input, OWNER_DISCLOSURE_PRESENTATION_INPUT_VERSION);
   assert.equal(first.binding.projection_kind, "legacy_memory_card_v1");
-  assert.equal(first.binding.projection_adapter_version, "legacy_canonical_memory_card_v1");
+  assert.equal(first.binding.projection_adapter_version, OWNER_DISCLOSURE_PROJECTION_ADAPTER_VERSION);
+  assert.ok(
+    [first.artifact.payload.title, first.artifact.payload.summary]
+      .some(value => value.includes(SAFE_SOURCE_PREFIX)),
+  );
+  assert.notEqual(first.artifact.payload.summary, "Memory item available for review.");
+  assert.ok(first.artifact.payload.title.length <= 80);
+  assert.ok(first.artifact.payload.summary.length <= 240);
+  assert.ok(first.artifact.payload.salience_reason.length <= 180);
+  assert.equal(JSON.stringify(first).includes(FULL_SOURCE_SENTINEL), false);
   assert.deepEqual(canonical, before);
   assert.equal(JSON.stringify(first).includes(canonical.source.text), false);
   assert.equal(Object.hasOwn(first.artifact.payload, "get_token"), false);
@@ -187,7 +207,7 @@ test("attestation assert, revoke, reassert, and exact-binding persistence are de
     assert.equal(first.changed, true);
     assert.equal(first.attestation.state, "active");
     assert.equal(first.attestation.projection_kind, "legacy_memory_card_v1");
-    assert.equal(first.attestation.projection_adapter_version, "legacy_canonical_memory_card_v1");
+    assert.equal(first.attestation.projection_adapter_version, OWNER_DISCLOSURE_PROJECTION_ADAPTER_VERSION);
 
     const repeat = assertDisclosureAttestation(db, binding, { now: 200 });
     assert.equal(repeat.changed, false);
@@ -280,8 +300,11 @@ test("source and payload changes invalidate old exact authority without loose ma
       withEngineDbReadonly: fn => fn(db),
     });
 
-    const changedSource = canonicalMemory({ text: `${LONG_SOURCE_TEXT} SOURCE_CHANGED` });
+    const changedSource = canonicalMemory({
+      text: LONG_SOURCE_TEXT.replace(SAFE_SOURCE_PREFIX, `${SAFE_SOURCE_PREFIX}_CHANGED`),
+    });
     const changedSourcePreview = buildOwnerDisclosurePreview(changedSource);
+    assert.notDeepEqual(changedSourcePreview.artifact.payload, originalPreview.artifact.payload);
     assert.notEqual(changedSourcePreview.projection_hash, originalPreview.projection_hash);
     assert.equal(provider.getSafeToDiscloseEvidence({
       canonicalMemory: changedSource,
@@ -301,6 +324,40 @@ test("source and payload changes invalidate old exact authority without loose ma
     });
     assert.equal(changedPayloadResult.safe_to_disclose, false);
     assert.ok(["attestation_missing", "projection_hash_mismatch"].includes(changedPayloadResult.reason));
+  } finally {
+    db.close();
+  }
+});
+
+test("Owner projection preserves deterministic withheld semantics for raw-log-like source", () => {
+  const rawLog = canonicalMemory({
+    memoryId: "owner-attestation-raw-log-001",
+    path: "memory/logs/tool-output.log",
+    category: "raw_log",
+    text: "RAW_LOG_FULL_SOURCE_SENTINEL_20260823 ERROR stack trace must remain withheld.",
+  });
+  const preview = buildOwnerDisclosurePreview(rawLog);
+
+  assert.ok(preview.artifact.payload.risk_flags.includes("raw_log_like"));
+  assert.equal(preview.artifact.payload.title, "Withheld operational memory");
+  assert.match(preview.artifact.payload.summary, /withheld/u);
+  assert.equal(JSON.stringify(preview).includes("RAW_LOG_FULL_SOURCE_SENTINEL_20260823"), false);
+  assert.doesNotThrow(() => projectCanonicalMemoryToOwnerDisclosureCardArtifact(rawLog));
+
+  const db = new Database(":memory:");
+  try {
+    ensureDisclosureAttestationsTable(db);
+    assertDisclosureAttestation(db, preview.binding, { now: 100 });
+    const provider = createDisclosureAttestationAuthorityProvider({
+      withEngineDbReadonly: fn => fn(db),
+    });
+    const evidence = provider.getSafeToDiscloseEvidence({
+      canonicalMemory: rawLog,
+      projectionArtifact: preview.artifact,
+    });
+    assert.equal(evidence.safe_to_disclose, true);
+    assert.equal(Object.hasOwn(evidence, "capability"), false);
+    assert.equal(Object.hasOwn(evidence, "selector"), false);
   } finally {
     db.close();
   }
@@ -405,7 +462,13 @@ test("Owner management command previews, asserts exact hashes, reports status, r
     assert.equal(preview.ok, true);
     assert.equal(preview.preview.surface, "DISCLOSURE_CARD");
     assert.equal(preview.preview.projection_kind, "legacy_memory_card_v1");
-    assert.equal(preview.preview.projection_adapter_version, "legacy_canonical_memory_card_v1");
+    assert.equal(preview.preview.projection_adapter_version, OWNER_DISCLOSURE_PROJECTION_ADAPTER_VERSION);
+    assert.ok(
+      [preview.preview.payload.title, preview.preview.payload.summary]
+        .some(value => value.includes(SAFE_SOURCE_PREFIX)),
+    );
+    assert.notEqual(preview.preview.payload.summary, "Memory item available for review.");
+    assert.equal(JSON.stringify(preview).includes(FULL_SOURCE_SENTINEL), false);
     assert.equal(JSON.stringify(preview).includes(LONG_SOURCE_TEXT), false);
     assert.equal(Object.hasOwn(preview.preview, "capability"), false);
     assert.equal(Object.hasOwn(preview.preview, "selector"), false);
@@ -421,7 +484,7 @@ test("Owner management command previews, asserts exact hashes, reports status, r
     assert.equal(asserted.ok, true);
     assert.equal(asserted.attestation.state, "active");
     assert.equal(asserted.attestation.projection_kind, "legacy_memory_card_v1");
-    assert.equal(asserted.attestation.projection_adapter_version, "legacy_canonical_memory_card_v1");
+    assert.equal(asserted.attestation.projection_adapter_version, OWNER_DISCLOSURE_PROJECTION_ADAPTER_VERSION);
 
     const status = readReply(await fixture.handler(authContext(`status ${MEMORY_ID}`)));
     assert.equal(status.ok, true);

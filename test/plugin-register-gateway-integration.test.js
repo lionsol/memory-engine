@@ -108,8 +108,12 @@ test("plugin register keeps product tools and hooks without governance gateway m
       registerTool(tool) {
         tools.push(tool.name);
       },
-      registerCommand(name, options) {
-        commands.push({ name, options });
+      registerCommand(command) {
+        assert.equal(arguments.length, 1);
+        assert.equal(typeof command, "object");
+        assert.notEqual(command, null);
+        assert.equal(Array.isArray(command), false);
+        commands.push(command);
       },
       on(name) {
         hooks.push(name);
@@ -123,10 +127,12 @@ test("plugin register keeps product tools and hooks without governance gateway m
     assert.deepEqual(tools.sort(), ["memory_engine", "memory_engine_get", "memory_engine_search"]);
     assert.deepEqual(hooks, ["before_tool_call"]);
     assert.deepEqual(commands.map(command => command.name), ["memory-disclosure"]);
-    assert.equal(commands[0].options.requireAuth, true);
-    assert.deepEqual(commands[0].options.requiredScopes, ["operator.write"]);
-    assert.equal(commands[0].options.exposeSenderIsOwner, true);
-    assert.equal(commands[0].options.acceptsArgs, true);
+    assert.equal(commands[0].description, "Owner-authenticated preview and exact attestation management for disclosure cards.");
+    assert.equal(commands[0].requireAuth, true);
+    assert.deepEqual(commands[0].requiredScopes, ["operator.write"]);
+    assert.equal(commands[0].exposeSenderIsOwner, true);
+    assert.equal(commands[0].acceptsArgs, true);
+    assert.equal(typeof commands[0].handler, "function");
   } finally {
     console.log = originalLog;
     if (previous.HOME === undefined) delete process.env.HOME;

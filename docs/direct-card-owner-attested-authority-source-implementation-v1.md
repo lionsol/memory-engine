@@ -21,6 +21,24 @@ selector, formatter, telemetry, or reinforcement path. D.3-C's
 `DIRECT_CARD` product-entry approval remains intact, but source migration is
 still blocked until the later boundary work is separately authorized.
 
+## Same-stage corrective patch
+
+The initial D.3-D.3 implementation at `ca574d7` had two Planner findings:
+
+1. the plugin registration used the obsolete two-argument command API instead
+   of the current single command-object contract; and
+2. the Owner preview passed an empty runtime presentation input, producing a
+   generic placeholder card rather than a useful bounded representation of the
+   current Canonical source.
+
+This same-stage corrective patch closes both findings. Registration now passes
+one object containing `name` and all command fields. The Owner projection now
+derives a text-only presentation input from the server-read Canonical source,
+uses the independent adapter version
+`owner_attestable_canonical_card_v1`, and preserves the actual artifact kind
+`legacy_memory_card_v1`. Existing deterministic withheld-card risk handling,
+exact attestation binding, and fail-closed authority semantics remain intact.
+
 ## Current implementation facts
 
 ### Engine-owned store
@@ -75,8 +93,10 @@ risk bypass.
 
 `lib/recall/disclosure/owner-attestable-projection.js` adds the dedicated
 `projectCanonicalMemoryToOwnerDisclosureCardArtifact(canonicalMemory)` entry
-point. It accepts only the current Canonical Memory, invokes the existing
-projection behavior without a runtime candidate, validates the result, and
+point. It accepts only the current Canonical Memory, derives a server-side
+text-only presentation input from `canonicalMemory.source.text`, invokes the
+existing projection behavior without caller-supplied retrieval/runtime fields,
+rebinds the artifact to the Owner-specific adapter, validates the result, and
 returns only the bounded artifact.
 
 The terminology boundary is explicit:
@@ -84,6 +104,7 @@ The terminology boundary is explicit:
 ```text
 surface        = DISCLOSURE_CARD
 projection_kind = legacy_memory_card_v1
+adapter         = owner_attestable_canonical_card_v1
 ```
 
 The fabricated `projection_kind=DISCLOSURE_CARD` combination is not stored or
@@ -97,6 +118,7 @@ returned.
 `api.registerCommand()` with:
 
 ```text
+name: "memory-disclosure"
 requireAuth: true
 requiredScopes: ["operator.write"]
 exposeSenderIsOwner: true
@@ -126,11 +148,13 @@ operation was added to `memory_engine`, `memory_engine_search`,
 
 The repository tests cover Engine/Core isolation, schema idempotence, no
 inferred backfill, exact persistence, revoke/reassert, every binding and state
-mismatch, invalid artifacts, deterministic hashes, source/payload invalidation,
-read-only provider fail-closed behavior, positive scoped evidence without
-capability/selector output, command authorization, bounded preview, stale and
-wrong hash no-write behavior, exact revoke/reassert, malformed arguments, and
-unchanged agent tool surfaces.
+mismatch, invalid artifacts, deterministic hashes, meaningful source-derived
+preview, source/payload invalidation, raw-log/tool-output-like withheld
+semantics, read-only provider fail-closed behavior, positive scoped evidence
+without capability/selector output, the single-object command registration
+contract, command authorization, bounded preview, stale and wrong hash
+no-write behavior, exact revoke/reassert, malformed arguments, and unchanged
+agent tool surfaces.
 
 Tests use temporary or in-memory databases only. No frozen holdout was run.
 No real Core/Engine database or runtime memory state was read or modified.
