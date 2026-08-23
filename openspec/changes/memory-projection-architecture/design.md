@@ -818,16 +818,18 @@ missing capability evidence, capability other than `CARD_DISCLOSABLE`, or
 selector `WITHHOLD`; no legacy card, raw text/content, or get-token fallback is
 permitted. These are source-migration requirements only. 4.2 remains unchecked.
 
-D.3-D.1 is recorded below as a docs/OpenSpec-only design decision with
-`PASS_WITH_FINDINGS`; direct-card source migration remains `HOLD` pending the
-production safe-to-disclose authority decision. Deployment, Gateway,
+D.3-D.1 is recorded below as a docs/OpenSpec-only historical design decision
+with `PASS_WITH_FINDINGS`; at that decision point, direct-card source migration
+was `HOLD` pending the production safe-to-disclose authority decision. The
+later D.3-D.2 and D.3-D.4 records define the subsequent authority states.
+Deployment, Gateway,
 AutoRecall enablement, configuration, database/data mutation, and runtime
 qualification remain separately authorized.
 
 #### D.3-D.1 — DIRECT_CARD Production Boundary Migration Design
 
-D.3-D.1 is **`PASS_WITH_FINDINGS`**. `DIRECT_CARD` production source
-migration is **`HOLD`** with blocker
+D.3-D.1 was **`PASS_WITH_FINDINGS`**. At that historical decision point,
+`DIRECT_CARD` production source migration was **`HOLD`** with blocker
 **`PRODUCTION_SAFE_TO_DISCLOSE_AUTHORITY_MISSING`**. This design does not
 revoke the D.3-C product interpretation or its
 `APPROVED FOR DIRECT_CARD SOURCE MIGRATION ONLY` product-entry decision;
@@ -934,17 +936,18 @@ evaluator, detector, DB schema, persistent safety state, or runtime mechanism.
 
 #### D.3-D.2 — DIRECT_CARD Safe-to-Disclose Authority Decision
 
-D.3-D.2 is **`PASS / DECISION CLOSED`**. `DIRECT_CARD` production source
-migration remains **`HOLD`** with blocker
-**`PRODUCTION_DISCLOSURE_ATTESTATION_PROVIDER_NOT_IMPLEMENTED`**. This does
-not revoke the D.3-C product interpretation or the
+D.3-D.2 is **`PASS / DECISION CLOSED`**. At that historical decision point,
+`DIRECT_CARD` production source migration was **`HOLD`** with historical
+blocker **`PRODUCTION_DISCLOSURE_ATTESTATION_PROVIDER_NOT_IMPLEMENTED`**. This
+does not revoke the D.3-C product interpretation or the
 `APPROVED FOR DIRECT_CARD SOURCE MIGRATION ONLY` product-entry decision;
 product entry is not source readiness.
 
-The blocker above is the historical D.3-D.2 decision state. D.3-D.3 now
-implements the repository source provider and Owner boundary, but it is not
-wired into production AutoRecall; production source migration remains
-`HOLD` pending D.3-D.4.
+The blocker above is the historical D.3-D.2 decision state. D.3-D.3
+subsequently implements the repository source provider and Owner boundary, but
+it is not wired into production AutoRecall. Current production source
+migration remains `HOLD` under the D.3-D.4 audience-boundary blocker; the
+D.3-D.4 pre-implementation review is complete and is not pending.
 
 The decision record is
 `docs/direct-card-safe-to-disclose-authority-decision-v1.md`. Its fact
