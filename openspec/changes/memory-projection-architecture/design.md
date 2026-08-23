@@ -753,13 +753,13 @@ consumer isolation are not established. `REFERENCE_ONLY` and
 `RAW_DISCLOSABLE` remain reserved/disabled. The complete matrix is in the
 decision record above.
 
-OpenSpec D.3-D task 4.1 is now complete: **`[x]` separate Planner/Owner
-product decision accepted; entry approved for `DIRECT_CARD` source migration
-only**. This is a product-entry decision, not source, deployment, or runtime
-authorization. Tasks 4.2 source migration, 4.3 runtime/deployment/config/DB/
-data operations, and 4.4 raw enablement remain unchecked.
+OpenSpec D.3-D task 4.1 is complete: **`[x]` separate Planner/Owner product
+decision accepted; entry approved for `DIRECT_CARD` source migration only**.
+The separately authorized D.3-D.4-H2-E stage now completes task 4.2 at source
+level; task 4.3 runtime/deployment/config/DB/data operations and task 4.4 raw
+enablement remain unchecked.
 
-The inspected production path is still the legacy card-first flow:
+Before H2-E, the inspected production path was the legacy card-first flow:
 
 ```text
 lib/recall/auto-recall-hook-lifecycle.js
@@ -770,12 +770,11 @@ auto-recall.js
   -> isInjectableMemoryCard()
 ```
 
-It does not use `ProjectionArtifact`, the new disclosure capability boundary,
-or `selectDisclosureCandidates()`. `selectDisclosureCandidates()`,
-`createRecallCandidateEnvelope()`, and
-`projectCanonicalMemoryToDisclosureCardArtifact()` have no production caller.
-D.3-D is therefore migration of the existing legacy source path, not
-replacement of a production-wired D.3 selector.
+That historical path did not use `ProjectionArtifact`, the new disclosure
+capability boundary, or `selectDisclosureCandidates()`. H2-E now uses a
+separate production selector and formatter for the enabled card branch, while
+the legacy raw-text branch remains unchanged. The generic legacy APIs remain
+backward-compatible and are not the D.3 authority path.
 
 ### D.3-D — Production integration
 
@@ -816,7 +815,8 @@ authorization authority.
 The migration must fail closed on canonical read failure, invalid projection,
 missing capability evidence, capability other than `CARD_DISCLOSABLE`, or
 selector `WITHHOLD`; no legacy card, raw text/content, or get-token fallback is
-permitted. These are source-migration requirements only. 4.2 remains unchecked.
+permitted. These were the source-migration requirements implemented by H2-E;
+task 4.2 is now checked, while 4.3 and 4.4 remain unchecked.
 
 D.3-D.1 is recorded below as a docs/OpenSpec-only historical design decision
 with `PASS_WITH_FINDINGS`; at that decision point, direct-card source migration
@@ -1058,7 +1058,7 @@ hashes, the single-object command registration contract, command auth and
 operations, and unchanged agent tools. Runtime deployment was not performed
 and no real attestation state was created.
 
-#### D.3-D.4 — DIRECT_CARD Production Disclosure Boundary Migration Blocker
+#### D.3-D.4 — DIRECT_CARD Production Disclosure Boundary Migration Blocker (historical pre-H2-E record)
 
 The D.3-D.4 pre-implementation review on 2026-08-23 is
 **`BLOCKED / NOT IMPLEMENTED`**. `DIRECT_CARD` production source migration
@@ -1115,7 +1115,9 @@ The minimum host contract required to remove this blocker is:
 > turns by the plugin.
 
 Host remediation requires a new explicit authorization and is not started.
-OpenSpec 4.2, 4.3, and 4.4 remain unchecked. Full evidence is in
+At that pre-H2-E decision point, OpenSpec 4.2, 4.3, and 4.4 remained
+unchecked. H2-E source closeout is recorded below; 4.3 and 4.4 remain
+unchecked. Full historical evidence is in
 `docs/direct-card-production-disclosure-boundary-migration-blocker-v1.md`.
 
 #### D.3-D.4-H1 — OpenClaw Pre-Prompt Owner Audience Contract Design
@@ -1169,12 +1171,51 @@ The conditional H2 slices are: H2-A public hook type and contract tests;
 H2-B selection runner propagation; H2-C private agent-harness propagation;
 H2-D compatibility/security tests for all three states, same-run retry,
 new-run non-reuse, fail-closed synthetic runners, and unchanged gate semantics;
-and H2-E the separately authorized memory-engine consumer. H2 is
-**`CANDIDATE / NOT AUTHORIZED`**. D.3-D.4 remains **`BLOCKED / NOT IMPLEMENTED`**
-with production migration **`HOLD`** under the existing audience-boundary
-blocker. OpenSpec 4.2, 4.3, and 4.4 remain unchecked. Full H1 design and
-installed evidence are in
+and H2-E the separately authorized memory-engine consumer. H2 was
+**`CANDIDATE / NOT AUTHORIZED`** at the H1 design freeze. D.3-D.4 was then
+**`BLOCKED / NOT IMPLEMENTED`** with production migration **`HOLD`** under the
+audience-boundary blocker. The later H2-E source stage is recorded below; the
+full H1 design and installed evidence are in
 `docs/openclaw-pre-prompt-owner-audience-contract-design-v1.md`.
+
+#### D.3-D.4-H2-E — DIRECT_CARD Pre-Prompt Owner Audience Consumer
+
+D.3-D.4-H2-E is **`PASS / SOURCE IMPLEMENTED / REPOSITORY-TESTED`**. The
+authoritative OpenClaw H2 source checkout was independently verified read-only
+at commit `2e67ab06b6f7f1cf7655d0a8d508fc2a2ad78176`, with a clean worktree.
+Its `PluginHookBeforePromptBuildEvent` exposes the event-local
+`senderIsOwner?: boolean` fact. This is a later authoritative-source
+correction to the H1 finding: the `v2026.6.9` source does contain the CLI
+prompt-build path, and H2 covers it. The H1 record remains historical.
+
+The enabled production card branch now flows:
+
+```text
+before_prompt_build
+  -> Hybrid retrieval
+  -> shouldInjectCandidate() coarse gate
+  -> event.senderIsOwner === true
+  -> bounded exact candidate.memory_id Canonical batch read in the isolated
+     Core-readonly / Engine-readonly Hybrid scope
+  -> Canonical-source-derived owner_attestable_canonical_card_v1 artifact
+  -> exact active OWNER_EXPLICIT_ATTESTATION / OWNER_SELF evidence
+  -> lifecycle, scope, risk, and source hard-deny capability checks
+  -> sufficient retrieval evidence
+  -> selection-only DISCLOSE_CARD / WITHHOLD
+  -> bounded direct-card formatter
+  -> prependContext and selection-derived telemetry
+```
+
+The branch never uses `projectCandidateToMemoryCard()` as authority, never
+returns Canonical source text to Hybrid/selector/telemetry, and never falls
+back to raw text or the legacy card formatter on failure. The disabled card
+runtime retains the existing legacy raw-text path. Direct-card tests use only
+temporary/in-memory databases and cover positive conjunction, false/missing
+audience, exact attestation/projection/source invalidation, unsafe lifecycle/
+risk/scope, selector insufficiency, no fallback, and selection-derived
+telemetry. OpenSpec 4.2 is checked; 4.3 deployment/runtime authority and 4.4
+raw disclosure remain unchecked. The concise implementation record is
+`docs/direct-card-pre-prompt-owner-audience-consumer-implementation-v1.md`.
 
 ## Risks / trade-offs
 

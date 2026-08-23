@@ -311,3 +311,14 @@ local fork. H1 does not upgrade or deploy OpenClaw.
 - AutoRecall was not enabled, no real attestation was created, and no frozen
   holdout or EDi run was performed.
 - H2 was not started.
+
+## Later authoritative-source correction
+
+The H1 finding above is historical and is not rewritten. During the separately
+authorized D.3-D.4-H2-E preflight, the authoritative OpenClaw source checkout
+`/home/lionsol/src/openclaw-h2` was independently verified read-only at clean
+commit `2e67ab06b6f7f1cf7655d0a8d508fc2a2ad78176`. Its source exposes
+`PluginHookBeforePromptBuildEvent.senderIsOwner?: boolean`; the
+`v2026.6.9` source does contain the CLI prompt-build path, and H2 covers that
+path. The memory-engine consumer implementation is recorded in
+`docs/direct-card-pre-prompt-owner-audience-consumer-implementation-v1.md`.
