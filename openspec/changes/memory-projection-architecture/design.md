@@ -1055,8 +1055,65 @@ hashes, the single-object command registration contract, command auth and
 operations, and unchanged agent tools. Runtime deployment was not performed
 and no real attestation state was created.
 
-The next candidate is **`D.3-D.4 DIRECT_CARD Production Disclosure Boundary
-Migration` — `CANDIDATE / NOT AUTHORIZED`**. OpenSpec 4.2 remains unchecked.
+#### D.3-D.4 — DIRECT_CARD Production Disclosure Boundary Migration Blocker
+
+The D.3-D.4 pre-implementation review on 2026-08-23 is
+**`BLOCKED / NOT IMPLEMENTED`**. `DIRECT_CARD` production source migration
+remains **`HOLD`** with blocker
+**`PRODUCTION_OWNER_SELF_AUDIENCE_AUTHORITY_UNAVAILABLE_AT_PROMPT_INJECTION_BOUNDARY`**.
+This is a docs/OpenSpec blocker record; no production source, runtime, host,
+configuration, Gateway, DB/data, or deployment change was made.
+
+The memory-engine production path still registers
+`before_prompt_build` in `lib/recall/auto-recall-hook-lifecycle.js:183`,
+formats the legacy card-first `gatedResults` at lines 408-415, and returns
+`prependContext` at line 533. Its runtime context at lines 278-287 contains
+agent/session/request/run/trigger identity but no trusted Owner audience bit.
+
+The installed OpenClaw version is `2026.6.9`. The stable SDK re-export is in
+`dist/plugin-sdk/types.d.ts`; the installed type evidence shows that
+`PluginHookBeforePromptBuildEvent` exposes only `prompt` and `messages`, while
+`PluginHookAgentContext` has `senderId` but no `senderIsOwner`. The later
+`PluginHookBeforeAgentRunEvent` provides optional trusted `senderIsOwner`, but
+its result is only `InputGateDecision | void` and cannot return prompt mutation
+fields. The corresponding installed type evidence is
+`/home/lionsol/.local/lib/node_modules/openclaw/dist/hook-types-Cz3fBvHt.d.ts:47-65,374-393,1044-1055`;
+the build-hash filename is installation evidence, not a stable API name.
+
+The actual installed execution order is also decisive:
+
+1. `attempt.prompt-helpers-sRduNeAq.js:126-156` runs
+   `before_prompt_build` and collects `prependContext`.
+2. `selection-s2CqWVmM.js:13878-13898` merges that result into
+   `effectivePrompt`, and lines 14051-14082 derive the model prompt.
+3. Only then, at `selection-s2CqWVmM.js:14112-14124`, OpenClaw invokes
+   `before_agent_run` with `senderIsOwner`; its result is a gate decision at
+   lines 14143-14157.
+
+Therefore the D.3-D.2 `OWNER_SELF` attestation proves an exact Owner assertion
+about a Canonical source and projection, but it does not authenticate the
+audience of the current prompt. A positive production decision requires the
+exact active attestation, same-run host-authenticated
+`senderIsOwner === true`, projection validation, and all lifecycle/scope/risk
+hard-deny checks. Missing audience proof must produce
+`safe_to_disclose=false/absent`, `RETRIEVAL_ONLY`, and `WITHHOLD`.
+
+The plugin must not reinterpret `senderId`, agent/session/channel identity,
+DM type, configuration allowlists, candidate fields, telemetry, prompt text,
+model output, or a prior-run value as `OWNER_SELF`. An always-`WITHHOLD`
+production wiring would not establish a valid positive boundary and therefore
+does not constitute migration completion.
+
+The minimum host contract required to remove this blocker is:
+
+> OpenClaw must expose a host-authenticated OWNER_SELF audience proof before
+> any prompt mutation that could contain disclosure content. The proof must be
+> bound to the same run/request and must not be reconstructed or reused across
+> turns by the plugin.
+
+Host remediation requires a new explicit authorization and is not started.
+OpenSpec 4.2, 4.3, and 4.4 remain unchecked. Full evidence is in
+`docs/direct-card-production-disclosure-boundary-migration-blocker-v1.md`.
 
 ## Risks / trade-offs
 
