@@ -201,6 +201,62 @@ async function evaluate(fixture, {
   });
 }
 
+function canonicalWithConfidence(canonical, confidence, { omitConfidence = false } = {}) {
+  const lifecycle = {
+    ...canonical.lifecycle,
+    management: "external",
+    initial_confidence: null,
+    confidence,
+    last_confidence_update: null,
+    base_tau_days: null,
+    hit_count: null,
+    archived: null,
+    protected: null,
+    conflict: null,
+  };
+  if (omitConfidence) delete lifecycle.confidence;
+  return { ...canonical, lifecycle };
+}
+
+test("unknown disclosure confidence does not coerce to low confidence", () => {
+  const fixture = createFixture();
+  try {
+    const baseCanonical = fixture.canonicalById.get("direct-card-memory-001");
+    for (const scenario of [
+      { label: "null", confidence: null, expected: "CARD_DISCLOSABLE" },
+      { label: "undefined", confidence: undefined, expected: "CARD_DISCLOSABLE" },
+      { label: "missing", omitConfidence: true, expected: "CARD_DISCLOSABLE" },
+      { label: "zero", confidence: 0, expected: "RETRIEVAL_ONLY" },
+      { label: "below threshold", confidence: 0.19, expected: "RETRIEVAL_ONLY" },
+      { label: "at threshold", confidence: 0.2, expected: "CARD_DISCLOSABLE" },
+    ]) {
+      const canonical = canonicalWithConfidence(baseCanonical, scenario.confidence, scenario);
+      const preview = buildOwnerDisclosurePreview(canonical);
+      const result = evaluateDirectCardCapability({
+        event: { senderIsOwner: true },
+        canonicalMemory: canonical,
+        projectionArtifact: preview.artifact,
+        attestationEvidence: {
+          safe_to_disclose: true,
+          authority: preview.binding,
+        },
+        runtimeAgentScope: "edi",
+      });
+
+      assert.equal(result.capability, scenario.expected, scenario.label);
+      assert.equal(
+        result.reason,
+        scenario.expected === "CARD_DISCLOSABLE"
+          ? "all_direct_card_authorities_pass"
+          : "unsafe_risk",
+        scenario.label,
+      );
+    }
+  } finally {
+    fixture.close();
+  }
+});
+
 test("production boundary discloses a bounded card only after the full authority conjunction", async () => {
   const fixture = createFixture();
   try {
