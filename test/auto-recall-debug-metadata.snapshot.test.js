@@ -461,3 +461,66 @@ test("AutoRecall provenance projection completes capture at or below 32 IDs", ()
     ids,
   });
 });
+
+test("DIRECT_CARD diagnostics use an explicit bounded whitelist", () => {
+  const metadata = buildAutoRecallDebugMetadata("query", {
+    results: [],
+    debug: {
+      direct_card_event_sender_is_owner: true,
+      direct_card_owner_audience_authenticated: true,
+      direct_card_selected_count: 2.9,
+      direct_card_capability_results: Array.from({ length: 6 }, (_, index) => ({
+        memory_id: `memory-${index}-full-identity`,
+        capability: "CARD_DISCLOSABLE",
+        reason: "r".repeat(140),
+        card: "CARD_PAYLOAD_SECRET",
+        source: "CANONICAL_SOURCE_SECRET",
+        canonical: { text: "CANONICAL_BODY_SECRET" },
+      })),
+      direct_card_selections: Array.from({ length: 6 }, (_, index) => ({
+        memory_id: `memory-${index}-full-identity`,
+        decision: "DISCLOSE_CARD",
+        reason: "d".repeat(140),
+        card: { summary: "CARD_SUMMARY_SECRET" },
+        source_text: "SOURCE_TEXT_SECRET",
+      })),
+      direct_card_boundary_error: "e".repeat(140),
+      card_payload: "UNDECLARED_CARD_PAYLOAD",
+      canonical_source: "UNDECLARED_SOURCE_TEXT",
+    },
+  });
+
+  assert.equal(metadata.direct_card_event_sender_is_owner, true);
+  assert.equal(metadata.direct_card_owner_audience_authenticated, true);
+  assert.equal(metadata.direct_card_selected_count, 2);
+  assert.equal(metadata.direct_card_capability_results.length, 3);
+  assert.equal(metadata.direct_card_selections.length, 3);
+  assert.equal(metadata.direct_card_capability_results[0].memory_id, "memory-0-full-id");
+  assert.equal(metadata.direct_card_selections[0].memory_id, "memory-0-full-id");
+  assert.equal(metadata.direct_card_capability_results[0].reason.length, 96);
+  assert.equal(metadata.direct_card_selections[0].reason.length, 96);
+  assert.equal(metadata.direct_card_boundary_error.length, 96);
+  assert.deepEqual(Object.keys(metadata.direct_card_capability_results[0]).sort(), [
+    "capability",
+    "memory_id",
+    "reason",
+  ]);
+  assert.deepEqual(Object.keys(metadata.direct_card_selections[0]).sort(), [
+    "decision",
+    "memory_id",
+    "reason",
+  ]);
+
+  const serialized = JSON.stringify(metadata);
+  for (const secret of [
+    "CARD_PAYLOAD_SECRET",
+    "CANONICAL_SOURCE_SECRET",
+    "CANONICAL_BODY_SECRET",
+    "CARD_SUMMARY_SECRET",
+    "SOURCE_TEXT_SECRET",
+    "UNDECLARED_CARD_PAYLOAD",
+    "UNDECLARED_SOURCE_TEXT",
+  ]) assert.equal(serialized.includes(secret), false, secret);
+  assert.equal(Object.hasOwn(metadata, "card_payload"), false);
+  assert.equal(Object.hasOwn(metadata, "canonical_source"), false);
+});

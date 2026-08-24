@@ -141,8 +141,10 @@ function createFixture({
   }
 
   const calls = { scope: 0, core: 0, engine: 0 };
+  let scopeError = null;
   const withHybridDbAccessScope = async run => {
     calls.scope += 1;
+    if (scopeError) throw scopeError;
     return run({
       withCoreDb(callback) {
         calls.core += 1;
@@ -161,6 +163,9 @@ function createFixture({
     calls,
     canonicalById,
     withHybridDbAccessScope,
+    setScopeError(error) {
+      scopeError = error;
+    },
     candidateFor(record, index = 0) {
       return {
         id: record.id.slice(0, 16),
@@ -504,6 +509,25 @@ test("card mode uses actual selections for prependContext and injection telemetr
     assert.doesNotMatch(result.prependContext, new RegExp(SAFE_SENTINEL, "u"));
     assert.doesNotMatch(result.prependContext, /get_token|full_content|source_text/u);
 
+    const firstDebug = events.find(event => event.event_type === "auto_recall_debug");
+    assert.equal(firstDebug.metadata_json.direct_card_event_sender_is_owner, true);
+    assert.equal(firstDebug.metadata_json.direct_card_owner_audience_authenticated, true);
+    assert.equal(firstDebug.metadata_json.direct_card_selected_count, 1);
+    assert.equal(firstDebug.metadata_json.direct_card_boundary_error, null);
+    assert.deepEqual(firstDebug.metadata_json.direct_card_capability_results[0], {
+      memory_id: "direct-card-life",
+      capability: "CARD_DISCLOSABLE",
+      reason: "all_direct_card_authorities_pass",
+    });
+    assert.deepEqual(firstDebug.metadata_json.direct_card_selections[0], {
+      memory_id: "direct-card-life",
+      decision: "DISCLOSE_CARD",
+      reason: "card_capability_and_retrieval_evidence_pass",
+    });
+    assert.doesNotMatch(JSON.stringify(firstDebug.metadata_json), new RegExp(SAFE_SENTINEL, "u"));
+    assert.equal(Object.hasOwn(firstDebug.metadata_json, "card"), false);
+    assert.equal(Object.hasOwn(firstDebug.metadata_json, "canonical"), false);
+
     const injected = events.filter(event => event.event_type === "memory_injected");
     assert.equal(injected.length, 1);
     assert.equal(injected[0].memory_id, "direct-card-life");
@@ -532,6 +556,55 @@ test("card mode uses actual selections for prependContext and injection telemetr
     const secondState = lifecycle.turnState.getTurnState("direct-card-run-002");
     assert.deepEqual(secondState.injectedIds, []);
     assert.deepEqual(secondState.reinforcementAllowedIds, []);
+
+    const secondDebug = events.filter(event => event.event_type === "auto_recall_debug").at(-1);
+    assert.equal(secondDebug.metadata_json.direct_card_event_sender_is_owner, true);
+    assert.equal(secondDebug.metadata_json.direct_card_owner_audience_authenticated, true);
+    assert.equal(secondDebug.metadata_json.direct_card_selected_count, 0);
+    assert.equal(secondDebug.metadata_json.direct_card_capability_results[0].reason, "attestation_missing");
+    assert.equal(secondDebug.metadata_json.direct_card_selections[0].decision, "WITHHOLD");
+    assert.equal(secondDebug.metadata_json.direct_card_boundary_error, null);
+
+    const nonOwner = await beforePrompt({
+      prompt: "5.20+ memory-engine compatibility",
+      senderIsOwner: false,
+      runId: "direct-card-run-003",
+      sessionId: "direct-card-session-003",
+    }, {
+      agentId: "edi",
+      trigger: "user",
+      runId: "direct-card-run-003",
+      sessionId: "direct-card-session-003",
+    });
+    assert.equal(nonOwner?.prependContext, undefined);
+    const nonOwnerDebug = events.filter(event => event.event_type === "auto_recall_debug").at(-1);
+    assert.equal(nonOwnerDebug.metadata_json.direct_card_event_sender_is_owner, false);
+    assert.equal(nonOwnerDebug.metadata_json.direct_card_owner_audience_authenticated, false);
+    assert.equal(nonOwnerDebug.metadata_json.direct_card_selected_count, 0);
+    assert.equal(nonOwnerDebug.metadata_json.direct_card_capability_results[0].reason, "owner_audience_not_authenticated");
+    assert.equal(nonOwnerDebug.metadata_json.direct_card_selections[0].reason, "owner_audience_not_authenticated");
+    assert.equal(nonOwnerDebug.metadata_json.direct_card_boundary_error, null);
+
+    fixture.setScopeError(new Error(`boundary failure ${SAFE_SENTINEL}`));
+    const boundaryFailure = await beforePrompt({
+      prompt: "5.20+ memory-engine compatibility",
+      senderIsOwner: true,
+      runId: "direct-card-run-004",
+      sessionId: "direct-card-session-004",
+    }, {
+      agentId: "edi",
+      trigger: "user",
+      runId: "direct-card-run-004",
+      sessionId: "direct-card-session-004",
+    });
+    assert.equal(boundaryFailure?.prependContext, undefined);
+    const boundaryDebug = events.filter(event => event.event_type === "auto_recall_debug").at(-1);
+    assert.equal(boundaryDebug.metadata_json.direct_card_selected_count, 0);
+    assert.equal(boundaryDebug.metadata_json.direct_card_boundary_error, "direct_card_boundary_error");
+    assert.equal(boundaryDebug.metadata_json.injected_count, 0);
+    assert.equal(events.filter(event => event.event_type === "memory_injected").length, 1);
+    assert.doesNotMatch(JSON.stringify(boundaryDebug.metadata_json), new RegExp(SAFE_SENTINEL, "u"));
+    assert.doesNotMatch(JSON.stringify(boundaryDebug.metadata_json), /stack|source_text|canonical_source/u);
   } finally {
     fixture.close();
   }
