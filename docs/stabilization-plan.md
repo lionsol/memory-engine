@@ -42,10 +42,13 @@ raw disclosure remains out of scope.
 
 The D.3-D.2 `PRODUCTION_DISCLOSURE_ATTESTATION_PROVIDER_NOT_IMPLEMENTED`
 wording above records the historical blocker at that decision point. D.3-D.3
-subsequently implements the repository source provider and Owner boundary, but
-the provider is not wired into production AutoRecall. The current source
-migration remains `HOLD` because of the D.3-D.4 audience-boundary blocker; the
-D.3-D.4 pre-implementation review is complete and is not pending.
+subsequently implemented the repository source provider and Owner boundary.
+The statement that the provider was not wired into production AutoRecall and
+that source migration remained `HOLD` is a historical pre-H2-E status snapshot.
+H2-E later supplied the consumer source path, and the 2026-08-24 runtime
+qualification superseded that source-stage state: D.3-D.4 / OpenSpec 4.3 is
+now **`PASS / RUNTIME QUALIFIED / CLOSED`**. The D.3-D.4 pre-implementation
+review remains a historical record and is not pending.
 
 The D.3-D.3 status includes same-stage corrective closure of the obsolete
 two-argument command registration and the placeholder Owner preview. The
@@ -57,9 +60,12 @@ selected event-local, same-run, host-authenticated `before_prompt_build`
 `senderIsOwner?: boolean` contract. The installed OpenClaw `2026.6.9` package
 was inspected for design evidence, but no authoritative upstream checkout was
 available locally; finding: **`OPENCLAW_AUTHORITATIVE_SOURCE_CHECKOUT_NOT_PRESENT_LOCALLY`**.
-No OpenClaw or memory-engine source implementation was authorized. H2 remains
-`CANDIDATE / NOT AUTHORIZED` and D.3-D.4 remains blocked on the audience
-boundary.
+At the H1 design-freeze point, no OpenClaw or memory-engine source
+implementation was authorized; H2 was **`CANDIDATE / NOT AUTHORIZED`** and
+D.3-D.4 was blocked on the audience boundary. Later H2, H2-E, and the
+2026-08-24 runtime qualification superseded that design-freeze state; the
+current D.3-D.4 / OpenSpec 4.3 state is **`PASS / RUNTIME QUALIFIED /
+CLOSED`**.
 
 The later authorized D.3-D.4-H2-E consumer stage is **`PASS / SOURCE
 IMPLEMENTED / REPOSITORY-TESTED`**. It consumes the verified host event-local
@@ -111,7 +117,7 @@ After the canonical semantic contract is stable, advance Intelligent Recall in t
 5. **D.3-D.2 DIRECT_CARD Safe-to-Disclose Authority Decision** — `PASS / DECISION CLOSED`; v1 positive authority is `OWNER_EXPLICIT_ATTESTATION` bound to surface `DISCLOSURE_CARD` and actual artifact kind `legacy_memory_card_v1`. At that historical decision point the provider was not implemented, with historical blocker `PRODUCTION_DISCLOSURE_ATTESTATION_PROVIDER_NOT_IMPLEMENTED`; D.3-D.3 subsequently implemented the repository source boundary. The source-stage `HOLD` under the D.3-D.4 audience-boundary blocker is historical; D.3-D.4 pre-implementation review is complete, and the current runtime qualification is closed.
 6. **D.3-D.3 DIRECT_CARD Owner-Attested Authority Source Implementation** — `IMPLEMENTED / REPOSITORY-TESTED`; the same-stage corrective patch closes the command-object registration and meaningful-preview findings. The Engine-owned store, exact validator/provider, Canonical-source-derived Owner projection, and host-authenticated management command are implemented, but no AutoRecall wiring or runtime deployment occurred.
 7. **D.3-D.4 DIRECT_CARD Production Disclosure Boundary Migration** — the historical pre-H2-E review was `AUTHORIZED / PRE-IMPLEMENTATION BLOCKED` under `PRODUCTION_OWNER_SELF_AUDIENCE_AUTHORITY_UNAVAILABLE_AT_PROMPT_INJECTION_BOUNDARY`; H2-E is the separately authorized source consumer stage and does not authorize runtime activation or host remediation.
-7.1. **D.3-D.4-H1 OpenClaw Pre-Prompt Owner Audience Contract Design** — `PASS_WITH_FINDINGS / CONTRACT DESIGN FROZEN`; selected event-local contract is design-only, finding `OPENCLAW_AUTHORITATIVE_SOURCE_CHECKOUT_NOT_PRESENT_LOCALLY`, and H2 remains `CANDIDATE / NOT AUTHORIZED`.
+7.1. **D.3-D.4-H1 OpenClaw Pre-Prompt Owner Audience Contract Design** — `PASS_WITH_FINDINGS / CONTRACT DESIGN FROZEN`; at the H1 design-freeze point the selected event-local contract was design-only, finding `OPENCLAW_AUTHORITATIVE_SOURCE_CHECKOUT_NOT_PRESENT_LOCALLY`, and H2 was `CANDIDATE / NOT AUTHORIZED`. Later H2, H2-E, and runtime qualification superseded that historical state; current D.3-D.4 / OpenSpec 4.3 is `PASS / RUNTIME QUALIFIED / CLOSED`.
 7.2. **D.3-D.4-H2-E DIRECT_CARD Pre-Prompt Owner Audience Consumer** — `PASS / SOURCE IMPLEMENTED / REPOSITORY-TESTED`; host H2 commit `2e67ab06b6f7f1cf7655d0a8d508fc2a2ad78176` was verified read-only, and the implementation uses exact current Canonical reads, Owner projection/attestation, hard-deny capability checks, selection-only cards, no-fallback card mode, and selection-derived telemetry. At this source-stage closeout OpenSpec 4.3 and 4.4 were outside scope; 4.3 is now `PASS / RUNTIME QUALIFIED / CLOSED`, while 4.4 remains unchecked. Record: `docs/direct-card-pre-prompt-owner-audience-consumer-implementation-v1.md`.
 8. **Learned/statistical recall policy** — `LATER / NOT STARTED`; requires sufficient real labeled traffic and a separate Planner decision.
 9. **Recall Hint**.
