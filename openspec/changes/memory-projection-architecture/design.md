@@ -755,9 +755,9 @@ decision record above.
 
 OpenSpec D.3-D task 4.1 is complete: **`[x]` separate Planner/Owner product
 decision accepted; entry approved for `DIRECT_CARD` source migration only**.
-The separately authorized D.3-D.4-H2-E stage now completes task 4.2 at source
-level; task 4.3 runtime/deployment/config/DB/data operations and task 4.4 raw
-enablement remain unchecked.
+The separately authorized D.3-D.4-H2-E stage completed task 4.2 at source
+level. The source-stage status of tasks 4.3 and 4.4 was then unchecked; the
+later runtime qualification and current task state are recorded below.
 
 Before H2-E, the inspected production path was the legacy card-first flow:
 
@@ -816,7 +816,9 @@ The migration must fail closed on canonical read failure, invalid projection,
 missing capability evidence, capability other than `CARD_DISCLOSABLE`, or
 selector `WITHHOLD`; no legacy card, raw text/content, or get-token fallback is
 permitted. These were the source-migration requirements implemented by H2-E;
-task 4.2 is now checked, while 4.3 and 4.4 remain unchecked.
+task 4.2 is now checked. At that source-stage closeout, 4.3 and 4.4 were
+outside scope; the later 4.3 runtime qualification is recorded below and 4.4
+remains unchecked.
 
 D.3-D.1 is recorded below as a docs/OpenSpec-only historical design decision
 with `PASS_WITH_FINDINGS`; at that decision point, direct-card source migration
@@ -1002,9 +1004,10 @@ boundary may inspect the exact current `DISCLOSURE_CARD` binding, assert that
 exact binding, or revoke it, but may not authorize all current or future
 memory.
 
-The D.3-D.3 implementation result is recorded below. OpenSpec 4.2 remains
-unchecked; deployment, Gateway, AutoRecall, configuration, DB/data, runtime
-qualification, and `RAW_REFERENCE`/`RAW_DISCLOSABLE` remain outside scope.
+The D.3-D.3 implementation result is recorded below. At that source-only stage,
+deployment, Gateway, AutoRecall, configuration, DB/data, runtime
+qualification, and `RAW_REFERENCE`/`RAW_DISCLOSABLE` remained outside scope;
+the later H2-E and runtime closeout records supersede that stage status.
 
 #### D.3-D.3 — DIRECT_CARD Owner-Attested Authority Source Implementation
 
@@ -1213,9 +1216,36 @@ runtime retains the existing legacy raw-text path. Direct-card tests use only
 temporary/in-memory databases and cover positive conjunction, false/missing
 audience, exact attestation/projection/source invalidation, unsafe lifecycle/
 risk/scope, selector insufficiency, no fallback, and selection-derived
-telemetry. OpenSpec 4.2 is checked; 4.3 deployment/runtime authority and 4.4
-raw disclosure remain unchecked. The concise implementation record is
+telemetry. OpenSpec 4.2 is checked. At the H2-E source-stage closeout, 4.3
+deployment/runtime qualification and 4.4 raw disclosure were outside scope;
+the later 4.3 qualification is recorded below, while 4.4 remains unchecked.
+The concise implementation record is
 `docs/direct-card-pre-prompt-owner-audience-consumer-implementation-v1.md`.
+
+#### D.3-D.4 runtime/deployment qualification closeout (current fact)
+
+As of 2026-08-24, D.3-D.4 / OpenSpec 4.3 is **`PASS / RUNTIME QUALIFIED /
+CLOSED`**. The complete bounded evidence record is
+`docs/direct-card-runtime-qualification-v1.md`.
+
+The qualification used memory-engine source
+`ae95fa25fed03c4fb414d38db9e010c0157c0a15` and the deployed OpenClaw H2
+correction `755ff5d396102c5a93baacf2d3bf6187a4fea713` on OpenClaw `2026.6.9`.
+The same Owner WebChat session, memory, and natural query proved the causal
+chain `attestation absent -> RETRIEVAL_ONLY/WITHHOLD/injected=0`, exact active
+`OWNER_EXPLICIT_ATTESTATION` plus `OWNER_SELF` ->
+`CARD_DISCLOSABLE/DISCLOSE_CARD/injected=1`, and the same attestation revoked ->
+`RETRIEVAL_ONLY/WITHHOLD/injected=0`. The qualification query mismatch between
+the full memory ID and the 16-character event ID is recorded as an evidence
+query-shape finding, not a product failure.
+
+The final cleanup baseline is `autoRecall.enabled=false`,
+`cardFirstRuntime.enabled=false`, `topK=3`, `timeoutMs=8000`,
+`sessionAllowlist=[]`, `agentAllowlist=["main"]`,
+`triggerAllowlist=["user"]`, `chatTypeAllowlist=["interactive_user_chat"]`,
+`messageRoleAllowlist=["user"]`, active attestations `0`, and Gateway
+`READY`. OpenSpec 4.4 remains unchecked; `RAW_DISCLOSABLE` and raw-reference
+work remain out of scope.
 
 ## Risks / trade-offs
 
