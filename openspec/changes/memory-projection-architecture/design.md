@@ -1119,8 +1119,8 @@ The minimum host contract required to remove this blocker is:
 
 Host remediation requires a new explicit authorization and is not started.
 At that pre-H2-E decision point, OpenSpec 4.2, 4.3, and 4.4 remained
-unchecked. H2-E source closeout is recorded below; 4.3 and 4.4 remain
-unchecked. Full historical evidence is in
+unchecked. H2-E source closeout is recorded below; the later 4.3 runtime qualification
+is recorded separately, while 4.4 remains unchecked. Full historical evidence is in
 `docs/direct-card-production-disclosure-boundary-migration-blocker-v1.md`.
 
 #### D.3-D.4-H1 — OpenClaw Pre-Prompt Owner Audience Contract Design
