@@ -105,8 +105,8 @@ test("plugin register keeps product tools and hooks without governance gateway m
         gatewayMethods.set(name, { handler, options });
       },
       registerMemoryPromptSupplement() {},
-      registerTool(tool) {
-        tools.push(tool.name);
+      registerTool(tool, options) {
+        tools.push(options?.name || tool.name);
       },
       registerCommand(command) {
         assert.equal(arguments.length, 1);

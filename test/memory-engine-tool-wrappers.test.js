@@ -55,8 +55,8 @@ test("manifest advertises the three memory-engine tools and no standard memory t
 test("runtime tool registration matches the manifest tool contract exactly", () => {
   const seen = [];
   const api = {
-    registerTool(tool) {
-      seen.push(tool.name);
+    registerTool(tool, options) {
+      seen.push(options?.name || tool.name);
     },
   };
 
@@ -69,6 +69,69 @@ test("runtime tool registration matches the manifest tool contract exactly", () 
   const manifest = JSON.parse(readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"));
   assert.deepEqual(seen, MEMORY_ENGINE_TOOL_NAMES);
   assert.deepEqual(seen, manifest.contracts.tools);
+});
+
+test("registered memory_engine_get requires exact Owner context before lookup", async () => {
+  const registrations = [];
+  const executorCalls = [];
+  const ownerResult = {
+    found: true,
+    memory: {
+      id: "existing-memory",
+      text: "owner-visible content",
+      source: "memory/owner.md",
+    },
+  };
+  const api = {
+    registerTool(tool, options) {
+      registrations.push({ tool, options });
+    },
+  };
+
+  registerMemoryEngineTools(api, {
+    memoryEngine: async () => ({}),
+    memoryEngineSearch: async () => ({}),
+    memoryEngineGet: async (...args) => {
+      executorCalls.push(args);
+      return ownerResult;
+    },
+  });
+
+  const getRegistration = registrations.find(
+    registration => registration.options?.name === "memory_engine_get",
+  );
+  assert.ok(getRegistration);
+  assert.equal(typeof getRegistration.tool, "function");
+
+  const authorizedTool = getRegistration.tool({ senderIsOwner: true });
+  const authorizedResult = await authorizedTool.execute("owner-call", { id: "existing-memory" });
+  assert.deepEqual(authorizedResult, ownerResult);
+  assert.equal(executorCalls.length, 1);
+
+  const unauthorizedContexts = [
+    { senderIsOwner: false },
+    {},
+    {
+      agentId: "main",
+      messageChannel: "webchat",
+      requesterSenderId: "owner-like",
+      sessionKey: "owner-like-session",
+      deliveryContext: { channel: "webchat" },
+    },
+  ];
+  for (const context of unauthorizedContexts) {
+    const unauthorizedTool = getRegistration.tool(context);
+    const existingResult = await unauthorizedTool.execute("denied-existing", { id: "existing-memory" });
+    const missingResult = await unauthorizedTool.execute("denied-missing", { id: "missing-memory" });
+    const expected = {
+      found: false,
+      error: "owner_authorization_required",
+      code: "MEMORY_GET_OWNER_AUTH_REQUIRED",
+    };
+    assert.deepEqual(existingResult, expected);
+    assert.deepEqual(missingResult, expected);
+  }
+  assert.equal(executorCalls.length, 1);
 });
 
 test("memory_engine_search returns the same top results as memory_engine action=search", async () => {
@@ -153,7 +216,7 @@ test("memory_engine_get handles missing ids cleanly", async () => {
   assert.deepEqual(seen, []);
 });
 
-test("manual memory_engine_get can still return suspected_tool_output memory", async () => {
+test("memory_engine_get executor can still return suspected_tool_output memory", async () => {
   const seen = [];
   const runtime = createBaseRuntime({
     onMemoryEngineGetSuccess: (id) => seen.push(id),
