@@ -157,11 +157,98 @@ test("memory_engine_search returns the same top results as memory_engine action=
   const fromWrapper = await executeSearch("tool-2", { query: "alpha", top_k: 3 });
 
   assert.deepEqual(fromWrapper.results.map((item) => item.id), fromAction.results.map((item) => item.id));
-  assert.deepEqual(fromWrapper, fromAction);
+  assert.deepEqual(Object.keys(fromAction).sort(), ["channel_sizes", "channels", "debug", "pool", "results"]);
+  assert.deepEqual(fromWrapper, {
+    results: [
+      { id: "mem-1", text: "first" },
+      { id: "mem-2", text: "second" },
+    ],
+  });
   assert.deepEqual(hybridSearchCalls, [
     { text: "alpha", options: { topK: 3 } },
     { text: "alpha", options: { topK: 3 } },
   ]);
+});
+
+test("memory_engine_search returns a bounded whitelist projection", async () => {
+  const longText = "x".repeat(300);
+  const runtime = createBaseRuntime({
+    hybridSearch: async () => ({
+      pool: ["fts"],
+      channels: { fts: [{ id: "internal-channel-id", text: longText }] },
+      channel_sizes: { fts: 1 },
+      debug: { preview: longText, secret_debug_field: "must not leak" },
+      results: [{
+        id: "event-id",
+        memory_id: "full-memory-id",
+        canonical_id: "cmem:core:full-memory-id",
+        text: longText,
+        path: "memory/example.md",
+        category: "preference",
+        kind: "fact",
+        category_authority: "managed",
+        confidence_mode: "managed",
+        source_type: "memory-engine-managed",
+        external_badge: false,
+        semantic_score: 0.91,
+        rrf_score: 0.82,
+        final_score: 0.8,
+        sources: ["fts", "vector", { internal: "must not leak" }],
+        similarity: 0.93,
+        confidence: 0.77,
+        created_at: 1710000000,
+        secret_internal_field: "must not leak",
+        source_text: "must not leak",
+        canonical_memory: { source: { text: "must not leak" } },
+        raw_payload: { text: "must not leak" },
+        lifecycle: { management: "managed" },
+        classification: { risk: "must not leak" },
+      }],
+    }),
+  });
+  const executeSearch = createMemoryEngineSearchExecute(runtime);
+
+  const result = await executeSearch("tool-bounded-search", { query: "bounded", top_k: 1 });
+  const projected = result.results[0];
+
+  assert.equal(projected.text, longText.slice(0, 240));
+  assert.equal(projected.text.length, 240);
+  assert.deepEqual(projected.sources, ["fts", "vector"]);
+  assert.deepEqual(projected, {
+    id: "event-id",
+    memory_id: "full-memory-id",
+    canonical_id: "cmem:core:full-memory-id",
+    text: longText.slice(0, 240),
+    path: "memory/example.md",
+    category: "preference",
+    kind: "fact",
+    category_authority: "managed",
+    confidence_mode: "managed",
+    source_type: "memory-engine-managed",
+    external_badge: false,
+    semantic_score: 0.91,
+    rrf_score: 0.82,
+    final_score: 0.8,
+    sources: ["fts", "vector"],
+    similarity: 0.93,
+    confidence: 0.77,
+    created_at: 1710000000,
+  });
+  for (const field of [
+    "pool",
+    "channels",
+    "channel_sizes",
+    "debug",
+    "secret_internal_field",
+    "source_text",
+    "canonical_memory",
+    "raw_payload",
+    "lifecycle",
+    "classification",
+  ]) {
+    assert.equal(field in result, false);
+    assert.equal(field in projected, false);
+  }
 });
 
 test("manual memory_engine_search is not filtered by autoRecall hard deny policy", async () => {
@@ -183,7 +270,9 @@ test("manual memory_engine_search is not filtered by autoRecall hard deny policy
 
   assert.equal(result.results.length, 1);
   assert.equal(result.results[0].id, "suspected-tool-output-1");
-  assert.equal(result.results[0].primary_bucket, "suspected_tool_output");
+  assert.equal(result.results[0].text, "tool transcript residue");
+  assert.equal("primary_bucket" in result.results[0], false);
+  assert.equal("sample_buckets" in result.results[0], false);
 });
 
 test("memory_engine_get handles missing ids cleanly", async () => {
