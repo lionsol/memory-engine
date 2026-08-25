@@ -1,3 +1,15 @@
+## 2026-08-25
+
+### Explicit memory-tool disclosure boundary runtime closure
+
+- Closed `EXPLICIT_MEMORY_TOOL_DISCLOSURE_BOUNDARY_NOT_UNIFIED` as `PASS / RUNTIME QUALIFIED / CLOSED`.
+- OpenClaw H3 corrective authority split landed at `ba0edf98d1617b92296e7b834ee7a5a82cc2a18e`: generic Gateway/core `senderIsOwner` remains available for existing host policy, while plugin conversational Owner authority is carried only through the internal `pluginToolSenderIsOwner` construction seam. Focused independent verification passed `408/408` before commit; the final committed build-info is bound to the same HEAD.
+- memory-engine explicit-tool source is `cd80a25f089a7eb7b5e0d89c476fb4dc86b0e4cb`. `memory_engine_get` is Owner-only explicit full-content retrieval; `memory_engine_search` returns bounded untrusted `{ results }` output with a 240-character text bound and whitelisted metadata.
+- The separately authorized coordinated deployment synchronized OpenClaw `dist/` plus exactly `lib/tools/register-memory-engine-tools.js` and `lib/tools/memory-engine-actions.js`, then restored Gateway readiness. Active runtime parity matched the reviewed source hashes.
+- Direct Gateway/operator `tools.invoke memory_engine_get` returned fixed `MEMORY_GET_OWNER_AUTH_REQUIRED` with no memory payload. A normal WebChat Owner turn using a guaranteed-missing ID reached the ordinary get executor and returned `not found`, proving positive conversational authority without successful-get bookkeeping. The deployed search artifact passed a non-live bounded-output smoke without querying the real memory DB.
+- Final baseline remained conservative: Gateway `READY`, `AutoRecall=false`, `cardFirstRuntime=false`, main-only interactive user scope unchanged. DIRECT_CARD / OpenSpec 4.3 remains closed; OpenSpec 4.4 remains unchecked; `INTERNAL_AGENT_CONTEXT` remains `HOLD / RESEARCH_ONLY`.
+- Runtime record: `docs/explicit-memory-tool-runtime-qualification-v1.md`.
+
 ## 2026-08-06
 
 ### Candidate-Builder Harness implementation freeze, plan reconciliation, and session handoff

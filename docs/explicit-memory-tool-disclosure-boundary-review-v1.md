@@ -1,6 +1,6 @@
 # Explicit Memory Tool Disclosure Boundary Review v1
 
-Status: `INVESTIGATION / RECOMMENDATION ONLY`
+Status: `HISTORICAL REVIEW / FINDING CLOSED BY RUNTIME QUALIFICATION`
 Date: 2026-08-25
 memory-engine review HEAD: `34c07856da3a0b001ab776b744452f6881d32020`
 OpenClaw H2 read-only HEAD: `755ff5d396102c5a93baacf2d3bf6187a4fea713`
@@ -12,9 +12,9 @@ OpenSpec stage.
 
 ## Executive decision
 
-### current_fact
+### historical_record — review-time facts
 
-The explicit tools are a separate retrieval capability from the D.3
+At the review point, the explicit tools were a separate retrieval capability from the D.3
 `DIRECT_CARD` AutoRecall path:
 
 - `memory_engine_search` returns Hybrid retrieval output, including bounded
@@ -33,9 +33,9 @@ The explicit tools are a separate retrieval capability from the D.3
 - OpenSpec 4.3 remains `PASS / RUNTIME QUALIFIED / CLOSED`. OpenSpec 4.4
   remains unchecked and raw disclosure remains out of scope.
 
-### classification
+### historical_record — review-time classification
 
-Overall classification: **MIXED**.
+Overall review-time classification: **MIXED**.
 
 - `memory_engine_search`: **ACCEPTED_SEPARATE_CAPABILITY**, meaning the
   shipped explicit retrieval behavior remains in place and is not asserted to
@@ -70,10 +70,36 @@ projection through that surface.
 
 The follow-up finding `EXPLICIT_MEMORY_TOOL_DISCLOSURE_BOUNDARY_NOT_UNIFIED`
 was recorded after 4.3 qualification as a future tool-authority review. This
-document supplies that review; it does not rewrite the historical D.3 source
-or runtime qualification records.
+document supplied that review and remains the historical decision record; the
+later implementation and runtime qualification below supersede its
+pre-implementation current-state claims without rewriting the historical D.3
+source or DIRECT_CARD runtime qualification records.
 
-## 1. Current memory-engine tool behavior
+## Current closure addendum — 2026-08-25
+
+The mixed B+D recommendation was subsequently implemented, deployed, and runtime-qualified:
+
+- OpenClaw host authority source and active deployed build: `ba0edf98d1617b92296e7b834ee7a5a82cc2a18e`;
+- memory-engine explicit-tool source: `cd80a25f089a7eb7b5e0d89c476fb4dc86b0e4cb`;
+- `memory_engine_search` now returns a stable bounded `{ results }` projection with `text <= 240`, whitelisted retrieval metadata, string-only `sources`, and no top-level Hybrid diagnostic envelope or arbitrary internal candidate fields;
+- `memory_engine_get` is registered as a context-bound Owner-only full-content tool; only exact plugin factory `context.senderIsOwner === true` authorizes the real get executor;
+- OpenClaw separates generic Gateway/core `senderIsOwner` authority from the plugin conversational Owner seam using internal `pluginToolSenderIsOwner`, so direct Gateway/operator `tools.invoke` remains non-authoritative for explicit full-content get;
+- real direct Gateway invocation returned fixed `MEMORY_GET_OWNER_AUTH_REQUIRED` with no memory payload;
+- a normal WebChat Owner turn reached the ordinary get executor and returned a normal `not found` result for a guaranteed-missing qualification ID;
+- the deployed active search artifact passed bounded-output qualification without a real memory DB query.
+
+Final finding state:
+
+```text
+EXPLICIT_MEMORY_TOOL_DISCLOSURE_BOUNDARY_NOT_UNIFIED
+= CLOSED / RUNTIME QUALIFIED / PASS
+```
+
+Full evidence: `docs/explicit-memory-tool-runtime-qualification-v1.md`.
+
+DIRECT_CARD / OpenSpec 4.3 remains `PASS / RUNTIME QUALIFIED / CLOSED`; OpenSpec 4.4 remains unchecked; `INTERNAL_AGENT_CONTEXT` remains `HOLD / RESEARCH_ONLY`.
+
+## 1. Historical memory-engine tool behavior at review time
 
 ### Registration and effective exposure
 
@@ -259,7 +285,7 @@ the qualified `DIRECT_CARD` path.
 | E. Remove/disable memory_engine_get from the effective model tool set | Immediately removes the highest-risk model surface. | Significant compatibility loss; conflicts with the shipped/manual-tool contract. | Low source cost, but requires a deliberate host policy/config decision. | Does not reopen 4.4, but should be a product mitigation decision, not an incidental docs change. |
 | F. Project tool output through INTERNAL_AGENT_CONTEXT | Could provide a bounded representation only if that representation and authority are independently designed. | Changes tool semantics and model behavior. | High; new projection/authority integration and host work. | Explicitly out of scope while INTERNAL_AGENT_CONTEXT is HOLD / RESEARCH_ONLY; not recommended in this review. |
 
-## 5. Planner-facing recommendation
+## 5. Historical Planner-facing recommendation
 
 Adopt a **mixed B+D direction**, without changing source in this review:
 

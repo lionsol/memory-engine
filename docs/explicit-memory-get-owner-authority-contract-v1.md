@@ -1,6 +1,6 @@
 # Explicit Memory Get Owner Authority Contract v1
 
-Status: `accepted_design` for a future source stage; source implementation and deployment are not authorized by this document.
+Status: `accepted_design / IMPLEMENTED / DEPLOYED / RUNTIME QUALIFIED`; this document remains the historical authority-contract freeze, while current implementation evidence is recorded separately.
 
 Date: 2026-08-25
 
@@ -10,16 +10,18 @@ Repository facts:
 - OpenClaw H2 source baseline: `755ff5d396102c5a93baacf2d3bf6187a4fea713`
 - OpenClaw version: `2026.6.9`
 
-This record freezes the explicit retrieval authority for `memory_engine_get`. It does not implement the contract, reopen DIRECT_CARD qualification, or start OpenSpec 4.4.
+This record freezes the explicit retrieval authority for `memory_engine_get`. As a design record it did not itself implement or authorize the later source/deployment stages; those separately authorized stages are now complete. It does not reopen DIRECT_CARD qualification or start OpenSpec 4.4.
 
 ## Decision summary
 
-### current_fact
+### historical_record — design-freeze facts
 
-- `memory_engine_search` and `memory_engine_get` are currently model-callable separate tools exposed by the main-agent tool allowlist.
-- The current `memory_engine_get` path can return full memory content and source-location information without the D.3 `OWNER_EXPLICIT_ATTESTATION` authority boundary.
-- OpenClaw H2 already carries a trusted `senderIsOwner` fact through the embedded agent run and into prompt-hook execution, but the plugin tool context does not currently expose that fact.
-- DIRECT_CARD / OpenSpec 4.3 is closed. AutoRecall remains disabled, card-first remains disabled, and no active disclosure attestations are required by the current production baseline.
+At the 2026-08-25 contract-freeze point:
+
+- `memory_engine_search` and `memory_engine_get` were model-callable separate tools exposed by the main-agent tool allowlist;
+- `memory_engine_get` could return full memory content and source-location information without the separate explicit-get Owner authority boundary;
+- OpenClaw H2 carried a trusted `senderIsOwner` fact through the embedded agent run and prompt-hook execution, but the plugin tool factory context did not yet expose the required conversational Owner fact;
+- DIRECT_CARD / OpenSpec 4.3 was already closed, with AutoRecall and card-first disabled in the conservative production baseline.
 
 ### accepted_design
 
@@ -32,7 +34,21 @@ This record freezes the explicit retrieval authority for `memory_engine_get`. It
 
 ### historical_record
 
-The preceding explicit-tool review classified the surfaces as mixed: search could remain a separate untrusted retrieval capability, while get had an authority-architecture gap. This document freezes the follow-up direction without rewriting that historical finding or claiming that the source migration has happened.
+The preceding explicit-tool review classified the surfaces as mixed: search could remain a separate untrusted retrieval capability, while get had an authority-architecture gap. This document froze the follow-up direction. At the time of freeze, the source migration had not happened; the current closure below supersedes that historical implementation state.
+
+### current_closure — 2026-08-25
+
+The frozen contract has now been implemented, deployed, and runtime-qualified:
+
+- OpenClaw active source/build: `ba0edf98d1617b92296e7b834ee7a5a82cc2a18e`;
+- memory-engine source: `cd80a25f089a7eb7b5e0d89c476fb4dc86b0e4cb`;
+- `memory_engine_get` is a context-bound plugin tool whose real executor is selected only when plugin factory `context.senderIsOwner === true`;
+- OpenClaw preserves generic Gateway/core `senderIsOwner` semantics but exposes conversational plugin Owner authority only through the separate internal `pluginToolSenderIsOwner` construction seam;
+- direct Gateway/operator `tools.invoke` therefore fails closed with `MEMORY_GET_OWNER_AUTH_REQUIRED` and no memory payload;
+- a normal WebChat Owner turn reaches the ordinary get executor;
+- `memory_engine_search` has also completed its separate bounded-output source migration and deployed qualification.
+
+The accepted qualification record is `docs/explicit-memory-tool-runtime-qualification-v1.md`. This does not change the original DIRECT_CARD attestation semantics and does not start OpenSpec 4.4.
 
 ## 1. Explicit retrieval contract
 
@@ -180,15 +196,17 @@ An Owner-only get gate closes the audience gap for the explicit full-content sur
 
 The resulting classification is **MIXED**: search is an accepted separate capability with a bounded-output follow-up, while get is an authority-architecture gap that requires the Owner-only source migration before its current broad behavior can be treated as the accepted contract.
 
-## 6. Compatibility and rollout boundary
+## 6. Historical compatibility and rollout boundary
 
-The current shipped `memory_engine_get` behavior is broader than this contract. Changing it to Owner-only is a compatibility change for non-owner model turns and therefore requires a separately authorized source implementation stage and a separate deployment/reload decision.
+At design-freeze time, the shipped `memory_engine_get` behavior was broader than this contract, so changing it to Owner-only required a separately authorized source implementation stage and a separate deployment/reload decision. Those stages have now completed.
 
-The future qualification should be narrow and does not require another DIRECT_CARD `0 → 1 → 0` qualification:
+The frozen qualification contract was intentionally narrow and did not require another DIRECT_CARD `0 → 1 → 0` qualification:
 
-- Owner-authenticated get returns the requested full content;
+- Owner-authenticated get reaches the requested full-content executor;
 - false, missing, non-owner, cron, heartbeat, subagent, synthetic, and direct Gateway/HTTP contexts return the fixed no-content authorization result;
 - no unauthorized response contains content, source location, or existence-sensitive metadata.
+
+The 2026-08-25 runtime qualification satisfied the decision-critical positive and negative authority paths while avoiding qualification-only memory-event mutation: direct Gateway get was denied, and the conversational Owner path used a guaranteed-missing ID to prove executor reachability without successful-get bookkeeping. Existing repository tests cover successful full-content executor behavior.
 
 The following remain unchanged by this design:
 
@@ -198,15 +216,15 @@ The following remain unchanged by this design:
 - `INTERNAL_AGENT_CONTEXT` remains `HOLD / RESEARCH_ONLY`;
 - no new attestation, cache, database schema, Gateway scope, or protocol version is proposed.
 
-No current-state or stabilization-plan edit is required: those documents can continue to record the current broad shipped tool behavior, 4.3 closed status, 4.4 unchecked status, and the explicit-tool follow-up. This record is the accepted design for a future source stage, not evidence that that stage has run.
+`docs/current-state.md` and `docs/stabilization-plan.md` now record the completed explicit-tool source/deployment state. This contract remains the accepted design authority; runtime evidence belongs in `docs/explicit-memory-tool-runtime-qualification-v1.md`.
 
 ## 7. Decision matrix
 
 | Surface | Product direction | Source implementation | Deployment |
 | --- | --- | --- | --- |
-| `memory_engine_search` | Bounded separate retrieval | Not started | Not authorized by this document |
-| `memory_engine_get` | Owner-only explicit full-content retrieval | Not started | Not authorized by this document |
-| H3 host contract | H3-C plugin context field, bound per run using H3-B | Not implemented in either repository | Not authorized |
+| `memory_engine_search` | Bounded separate retrieval | `PASS / SOURCE IMPLEMENTED / TESTED` at `cd80a25...` | `PASS / RUNTIME QUALIFIED` |
+| `memory_engine_get` | Owner-only explicit full-content retrieval | `PASS / SOURCE IMPLEMENTED / TESTED` at `43bfe858...`, included in `cd80a25...` | `PASS / RUNTIME QUALIFIED` |
+| H3 host contract | Plugin conversational Owner authority separated from Gateway/core Owner authority | `PASS / SOURCE IMPLEMENTED / TESTED` at `ba0edf98...` | `PASS / RUNTIME QUALIFIED` |
 | DIRECT_CARD / OpenSpec 4.3 | Closed | Existing implementation remains unchanged | Existing qualification remains valid |
 | RAW_DISCLOSABLE / OpenSpec 4.4 | Not started | Not started | Not authorized |
 | `INTERNAL_AGENT_CONTEXT` | Hold / research-only | Not productionized | Not authorized |
@@ -215,4 +233,4 @@ No current-state or stabilization-plan edit is required: those documents can con
 
 This design record does not modify source or tests, change OpenClaw, alter Gateway or configuration, read or write runtime databases/data, create attestations, enable AutoRecall, or authorize deployment. It does not add Owner inference, session state, cross-turn caching, or a generic authentication mechanism.
 
-The next source stage must re-check the host contract against the exact H2 source commit before implementation. Until then, the current shipped get behavior remains a historical/current compatibility fact, not proof of compliance with this accepted future authority contract.
+The original design-only non-actions remain historical facts about this document's creation. The later source and runtime stages are separately authorized records and do not retroactively turn this design document into execution authority. Current compliance is established by the committed source and `docs/explicit-memory-tool-runtime-qualification-v1.md`, not by this design record alone.
