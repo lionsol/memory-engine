@@ -22,7 +22,7 @@ function unpublishedHashes() {
 
 test("public current-state authority exists and states public safety contracts", () => {
   assert.equal(existsSync(currentStatePath), true);
-  assert.match(currentState, /This public document does not assert the state of any private OpenClaw deployment\./);
+  assert.match(currentState, /does not[\s>]+generalize them to unrelated private deployments\./);
   assert.match(currentState, /AutoRecall is disabled by default\./);
   assert.match(currentState, /Core storage is read-only from memory-engine/);
   assert.match(currentState, /writes to Core-owned data are prohibited/);

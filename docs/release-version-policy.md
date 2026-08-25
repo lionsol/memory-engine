@@ -97,10 +97,11 @@ Unreleased commits and a dirty working tree are reported but do not fail the che
 
 1. Confirm the intended next semantic version.
 2. Update `package.json.version` and both root `package-lock.json` version fields.
-3. Run targeted tests, `npm test`, `npm run check`, and `npm run version:check`.
-4. Commit the release change.
-5. Create a tag beginning with the same semantic version.
-6. Push the commit and tag.
-7. Verify that `npm run version:status` reports zero commits after the new tag on the released commit.
+3. Run targeted non-version checks, `npm run check`, and `git diff --check` before committing. The current release-version tests intentionally require the nearest reachable tag to match the manifests, so they cannot pass after a version bump but before the new tag exists.
+4. Commit the release change locally.
+5. Create the intended release tag locally, beginning with the same semantic version.
+6. Run the full `npm test`, `npm run check`, `npm run version:check`, and `npm run version:status` against the tagged commit. If any release-critical check fails, do not push the tag; delete the local tag, fix the release commit, and repeat the local verification.
+7. Push the verified release commit and tag.
+8. Verify that `npm run version:status` reports zero commits after the new tag on the released commit.
 
 Do not create a new version number merely because local development has advanced beyond the latest tag.

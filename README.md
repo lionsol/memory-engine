@@ -226,9 +226,17 @@ npm run smoke:console-annotation-handoff
 | `docs/` | 当前契约、ADR、runbook、audit、plan 和历史设计 |
 | `test/` | 单元、契约、静态文档和 smoke 回归测试 |
 
+## 1.0 稳定版边界
+
+`1.0.0` 定义 memory-engine 的 L2 稳定生产基线：Core / Engine 存储所有权、Canonical Memory 语义边界、canonical writer path、`memory_engine_search` bounded untrusted retrieval、`memory_engine_get` Owner-only explicit full-content retrieval，以及 DIRECT_CARD 的受控披露边界均属于 1.0 稳定契约。
+
+1.0 不表示 Learned/statistical recall、Recall Hint、Statistical LTR、Multi-agent memory、RAW_DISCLOSABLE、REDACTED_CARD production integration 或 broad AutoRecall rollout 已完成。AutoRecall 与 card-first runtime 仍保持默认禁用；这些后续能力属于独立的 1.x 产品路线。
+
+完整 Owner audience / explicit-get authority 语义的已验证 host 基线是 OpenClaw `2026.6.9` 的受控 authority-patched build，当前 qualification 对应 OpenClaw commit `ba0edf98d1617b92296e7b834ee7a5a82cc2a18e`。1.0 不声明任意 vanilla 或其他 OpenClaw build 与该 host authority contract 等价。
+
 ## 版本与文档维护规则
 
-- 当前 manifest release version 为 `0.8.22`，对应当前主线最近可达的正式标签；其后的本地或未推送提交属于 unreleased changes。
+- 当前 manifest release version 为 `1.0.0`；正式 release identity 由当前提交可达的最近 release tag 确定。由于仓库保留了非当前祖先历史上的旧 `v1.0.0` / `v1.0.1` / `v1.0.2` 标签，当前 1.0 release line 使用描述性标签 `v1.0.0-l2-stable`，其 semantic release version 仍为 `1.0.0`。标签发布前的 release commit / working tree 仍按 unreleased build 处理。
 - 运行 `npm run version:status` 查看发布标签、manifest version、距发布提交数、dirty 状态和完整 build identity。
 - 运行 `npm run version:check` 校验 `package.json`、`package-lock.json` 与当前提交可达的最近发布标签是否一致。
 - 完整规则见 [`docs/release-version-policy.md`](docs/release-version-policy.md)。README 标题不硬编码版本号，且不得按全仓库最大 SemVer 选择发布身份。

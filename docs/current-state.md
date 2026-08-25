@@ -15,13 +15,13 @@
 - External candidates are distinct from managed candidates and do not inherit managed-confidence semantics.
 - AutoRecall is disabled by default.
 - Retrieval and runtime changes require explicit testing and deployment authorization.
+- `accepted_design`: the memory-engine `1.0.0` product boundary is the L2 stable production baseline: Core/Engine storage ownership, the Canonical Memory semantic boundary and canonical writer path, bounded `memory_engine_search`, Owner-only explicit full-content `memory_engine_get`, and the qualified DIRECT_CARD disclosure boundary. Learned/statistical recall, Recall Hint, Statistical LTR, Multi-agent memory, `RAW_DISCLOSABLE`, REDACTED_CARD production integration, and broad AutoRecall rollout remain separate 1.x product decisions rather than 1.0 completion requirements. AutoRecall and card-first runtime remain disabled by default. Official release identity is still determined by the nearest reachable release tag rather than by this document.
 
 ## Current product-source baseline
 
 - `current_fact`: the latest product-source change in the Candidate-Builder line is `97454ee70f47f8fd4421806f4a10100b78e27186` (`fix(runtime): bound npm ci sandbox timeout`). Later commits through the 2026-08-08 governance closeout are documentation/runtime-gate records, not additional Candidate-Builder product-source changes.
 - `current_fact`: `npm.ci_candidate` uses the closed inner `300000ms` / outer `330000ms` timeout policy. Ordinary registered sandbox operations remain `120000ms` / `120000ms`; the capability probe keeps its separate `120000ms` inner / `30000ms` outer bounds.
 - `current_fact`: post-timeout-fix verification recorded focused timeout/prepare tests `20/20`, production E2E `17/17`, runtime-authority tests `79/79`, static check over `614` files, and the Node 24 / Asia-Shanghai full suite `1832` passed / `0` failed / `8` skipped.
-- `current_fact`: local `main` is ahead of `origin/main`; push is not implied. Exact current refs must be read from Git rather than copied into this file.
 - `current_fact`: the session-flush reconciliation product-source line is implemented at `ac0e5f054551847e724be504bae80947abd7d675` (`feat(recall): reconcile session-flush managed memory`), including the dedicated `lib/checkpoint/session-flush-reconciliation.js` path and its focused regression coverage.
 
 ## Current product decisions

@@ -49,6 +49,8 @@ function createHybridSearchStub(record) {
       scope: runtime.recentCanaryContext,
       provider: runtime.recentCanaryProvider,
     });
+    record.decisions ??= [];
+    record.decisions.push(decision);
     if (typeof runtime.recentCanaryProvider === "function") {
       record.providerCalls += 1;
     }
@@ -97,9 +99,10 @@ test("default trustedRuntimeContext is null and provider is not injected from pa
   assert.equal(record.providerCalls, 0);
   assert.equal(record.runtimes[0].recentCanaryContext, null);
   assert.equal(record.runtimes[0].recentCanaryProvider, null);
-  assert.equal(result.debug.recent_canary_mode, "off");
-  assert.equal(result.debug.recent_canary_shadow_executed, false);
-  assert.deepEqual(result.results, [{ id: "legacy-1", score: 0.9, text: "legacy-result" }]);
+  assert.equal(record.decisions[0].mode, "off");
+  assert.equal(record.decisions[0].mode === "shadow", false);
+  assert.deepEqual(Object.keys(result), ["results"]);
+  assert.deepEqual(result.results, [{ id: "legacy-1", text: "legacy-result" }]);
   assert.equal(JSON.stringify(result).includes("fake-session"), false);
   assert.equal(JSON.stringify(result).includes("\"edi\""), false);
 });
@@ -186,10 +189,11 @@ test("resolver errors fail closed without changing served legacy result", async 
 
   const result = await executeSearch("tool-2", { query: "alpha", top_k: 4 });
 
-  assert.equal(result.debug.recent_canary_mode, "off");
-  assert.equal(result.debug.recent_canary_policy_error, true);
-  assert.equal(result.debug.recent_canary_shadow_executed, false);
-  assert.deepEqual(result.results, [{ id: "legacy-1", score: 0.9, text: "legacy-result" }]);
+  assert.equal(record.decisions[0].mode, "off");
+  assert.equal(record.decisions[0].policy_error, true);
+  assert.equal(record.decisions[0].mode === "shadow", false);
+  assert.deepEqual(Object.keys(result), ["results"]);
+  assert.deepEqual(result.results, [{ id: "legacy-1", text: "legacy-result" }]);
 });
 
 test("resolver illegal returns stay off and do not leak identities", async () => {
@@ -220,8 +224,9 @@ test("resolver illegal returns stay off and do not leak identities", async () =>
 
     const result = await executeSearch("tool-3", { query: "edi in query should not matter", top_k: 1 });
 
-    assert.equal(result.debug.recent_canary_mode, "off");
-    assert.equal(result.debug.recent_canary_shadow_executed, false);
+    assert.equal(record.decisions[0].mode, "off");
+    assert.equal(record.decisions[0].mode === "shadow", false);
+    assert.deepEqual(Object.keys(result), ["results"]);
     assert.equal(JSON.stringify(result).includes("secret-sample"), false);
     assert.equal(JSON.stringify(result).includes("\"edi\""), false);
   }
