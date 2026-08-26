@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `B1 LONGMEMEVAL DATASET ADAPTER IMPLEMENTED / OFFLINE ONLY`
+> Status: `B2 LONGMEMEVAL ISOLATED RETRIEVAL RUNNER IMPLEMENTED / OFFLINE ONLY`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -65,6 +65,38 @@ QA answer correctness is deliberately not implemented in B1. LongMemEval's
 official answer evaluator may be used later on hypotheses produced under a
 separately frozen answering-model contract.
 
+## B2 — isolated LongMemEval retrieval runner
+
+Implemented by:
+
+- `lib/benchmark/longmemeval-retrieval-runner-v1.js`
+- `bin/run-longmemeval-retrieval-v1.js`
+- `test/benchmark-longmemeval-retrieval-runner-v1.test.js`
+
+The first retrieval profile is `production_hybrid_lexical_session_v1`. For each
+non-abstention question it creates a fresh temporary Core SQLite database, a
+fresh temporary Engine SQLite database, and a benchmark-only FTS index, then
+calls the production `hybridSearch()` implementation through its isolated DB
+boundary. No active OpenClaw or memory-engine path is reused.
+
+For comparability with LongMemEval's built-in session-granularity retrieval,
+each indexed document is one history session containing the concatenated user
+turns only. The original session timestamp is retained as ranking metadata by
+mapping its offset from `question_date` onto the benchmark run clock. Lifecycle
+confidence is neutral and equal across sessions so B2 measures retrieval and
+ranking rather than memory-decay policy.
+
+B2 deliberately does **not** fabricate a semantic embedding backend. Vector is
+represented by a deterministic empty backend; the profile therefore measures
+memory-engine's production lexical/fusion/canonical-result path, not full hybrid
+semantic quality. A real embedding profile is a later benchmark step and must
+be reported under a different profile identity.
+
+LongMemEval's `_abs` questions are skipped from retrieval aggregates, matching
+the official retrieval evaluation policy. Standard metrics above the actual
+retrieval depth are reported as `null`, never silently copied from a shallower
+cutoff.
+
 ## CLI
 
 Validate and summarize a downloaded LongMemEval dataset without writing any
@@ -80,8 +112,22 @@ Machine-readable output:
 node bin/benchmark-longmemeval-v1.js --input /path/to/longmemeval_s_cleaned.json --json
 ```
 
-The CLI reports case/session/turn/evidence counts and normalized question-type
-composition. It does not run retrieval yet.
+The validation CLI reports case/session/turn/evidence counts and normalized
+question-type composition.
+
+Run the B2 isolated retrieval profile:
+
+```bash
+node bin/run-longmemeval-retrieval-v1.js \
+  --input /path/to/longmemeval_s_cleaned.json \
+  --top-k 50 \
+  --output /tmp/memory-engine-longmemeval-s-v1.json
+```
+
+A bounded smoke can use `--limit N`. Without `--json`, stdout contains dataset
+provenance, run parameters, and the aggregate summary; `--output` stores the
+full per-case result. Every file-backed run records the input filename and
+SHA-256.
 
 ## Dataset provenance
 
@@ -91,22 +137,21 @@ reasoning, knowledge updates, temporal reasoning, and abstention. Benchmark v1
 must record the exact input-file SHA-256 for every scored run; dataset contents
 must not be vendored into this repository by default.
 
-## Next implementation boundary — B2
+## Next benchmark boundary — first scored LongMemEval run
 
-B2 should add an **isolated temporary memory-engine data plane** that:
+B2 source is implemented, but no official LongMemEval score is claimed until a
+released cleaned dataset file is supplied and its exact SHA-256 is recorded.
+The first scored run should use `longmemeval_s_cleaned.json`, `top_k=50`, and
+this B2 profile. `longmemeval_oracle.json` is not a retrieval-quality benchmark
+because it contains only evidence sessions; LongMemEval_M is a later scale run.
 
-1. converts B1 Add envelopes into benchmark-only Core/Engine/index state;
-2. reuses production retrieval semantics rather than a benchmark-specific
-   ranking heuristic;
-3. maps retrieved memory ids back to source session ids for B1 metrics.
+After the lexical session baseline is recorded, the next source decision is whether
+to add a **real semantic/vector profile** using memory-engine's actual embedding
+backend. It must have a distinct profile identity so lexical-only and full-hybrid
+scores are never conflated.
 
-B2 must use temporary benchmark-owned paths and must not reuse the active
-`~/.openclaw/memory/main.sqlite`, Engine DB, LanceDB, smart-add files, or active
-OpenClaw Gateway runtime.
-
-The first B2 score should report retrieval metrics only. Answer-generation and
-LLM-judge quality are a separate measurement layer so retrieval changes are not
-confounded with answering-model changes.
+Answer-generation and LLM-judge quality remain a separate measurement layer so
+retrieval changes are not confounded with answering-model changes.
 
 ## Later compatibility target — AML
 

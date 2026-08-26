@@ -19,6 +19,16 @@
 - Added the read-only dataset summary CLI `bin/benchmark-longmemeval-v1.js`, package script `benchmark:longmemeval:validate`, focused tests, and `docs/memory-engine-benchmark-v1.md`.
 - B1 performs no active runtime/config/DB/LanceDB/smart-add mutation. Next bounded source work is B2: a benchmark-owned temporary Core/Engine/index data plane that reuses production retrieval semantics and maps retrieved ids back to source sessions.
 
+### memory-engine Benchmark v1 — LongMemEval B2
+
+- Implemented `production_hybrid_lexical_session_v1` in `lib/benchmark/longmemeval-retrieval-runner-v1.js`. Each non-abstention question receives fresh temporary Core and Engine SQLite files plus a benchmark-only FTS index; retrieval calls production `hybridSearch()` through isolated Core/Engine capabilities and canonical-result projection, then maps exact memory ids back to LongMemEval session ids.
+- The first profile mirrors LongMemEval session granularity by indexing one document per history session from concatenated user turns only. Session timestamps are mapped relative to `question_date` onto the benchmark run clock; lifecycle confidence is neutral/equal so B2 measures retrieval/ranking rather than decay policy.
+- B2 deliberately has no semantic model. It uses an explicit deterministic empty vector backend to avoid fallback-warning noise without producing vector candidates, so its scores must be labeled lexical-session rather than full-hybrid memory-engine quality.
+- Official `_abs` retrieval cases are skipped from aggregate metrics; standard metric cutoffs deeper than the configured retrieval depth are emitted as null. Aggregate output reports LongMemEval-compatible `recall_any@k`, `recall_all@k`, and `ndcg_any@k`, per-question-type metrics, latency, and corpus size.
+- Added `bin/run-longmemeval-retrieval-v1.js` and package script `benchmark:longmemeval:retrieval`. File-backed CLI runs record the exact input filename and SHA-256; no official benchmark score is claimed before running the released `longmemeval_s_cleaned.json` with `top_k=50`.
+- B2 remains entirely offline and temporary; it does not read or write the active OpenClaw Core DB, memory-engine Engine DB, live LanceDB, smart-add files, Gateway, configuration, or disclosure authority state.
+- Validation: B1/B2 focused plus public-state contract tests passed `18/18`; static check passed `702` files and `git diff --check` passed. A full `npm test` run executed `2186` tests and initially reported `2175` passed / `3` failed / `8` skipped; the one public-current-state privacy-contract failure came from prior runtime-closeout wording and was corrected with a targeted `4/4` pass. The two remaining failures are release-version-policy checks because manifests are `1.0.0` while the nearest reachable release tag is still `v0.8.22-memory-process-boundary-audit`; this is a pre-existing release-tag gap, not a Benchmark B2 failure, and no tag was created under benchmark authority.
+
 ## 2026-08-25
 
 ### Explicit memory-tool disclosure boundary runtime closure
