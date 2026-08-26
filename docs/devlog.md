@@ -11,6 +11,14 @@
 - Cleanup preserved both `openclaw.json` and Engine DB SHA-256 values exactly, retained `2|0` disclosure-attestation state, and left AutoRecall/card-first disabled. No backup was deleted and no product/config/DB mutation was introduced by cleanup.
 - Final adjudication: `OPENCLAW_7_1_COMPATIBILITY_RUNTIME_QUALIFICATION=PASS / CLOSED`; `MEMORY_ENGINE_1.0.0_RUNTIME_DEPLOYMENT=PASS / RUNTIME QUALIFIED / CLOSED`; `MEMORY_ENGINE_1.0.0_POST_DEPLOY_CLEANUP=PASS / CLOSED`.
 
+### memory-engine Benchmark v1 — LongMemEval B1
+
+- Started Benchmark v1 as a version-comparable evaluation surface independent of development fixtures. Tier 1 retains existing internal regression/holdout evidence; Tier 2 starts with LongMemEval; LoCoMo is later; AML remains the external controlled Add/Search target.
+- Implemented `lib/benchmark/longmemeval-v1.js` to validate/normalize the official LongMemEval schema, preserve evaluator-side session/date/evidence provenance, emit neutral per-session Add and query-only Search envelopes with no gold-label leakage, and compute LongMemEval-style `recall_any@k` / `recall_all@k` / `ndcg_any@k` at `k={1,3,5,10,30,50}` plus memory-engine diagnostic recall/precision/MRR metrics.
+- Gold answers and evidence-session labels remain evaluator-only and are not exposed through the Search envelope. Official LongMemEval timestamp strings are normalized deterministically when possible.
+- Added the read-only dataset summary CLI `bin/benchmark-longmemeval-v1.js`, package script `benchmark:longmemeval:validate`, focused tests, and `docs/memory-engine-benchmark-v1.md`.
+- B1 performs no active runtime/config/DB/LanceDB/smart-add mutation. Next bounded source work is B2: a benchmark-owned temporary Core/Engine/index data plane that reuses production retrieval semantics and maps retrieved ids back to source sessions.
+
 ## 2026-08-25
 
 ### Explicit memory-tool disclosure boundary runtime closure
