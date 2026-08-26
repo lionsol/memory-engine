@@ -1,3 +1,16 @@
+## 2026-08-26
+
+### OpenClaw 2026.7.1-2 compatibility and memory-engine 1.0.0 runtime closeout
+
+- Ported and deployed the memory-engine Owner-authority host compatibility patch onto OpenClaw `2026.7.1-2`; the live patched host artifact is bound to `ded67f3cd7fde6ae19798a402c178e2d76fc2c71` while the package/CLI version remains the official `2026.7.1-2` identity.
+- Runtime authority qualification passed both sides of the explicit `memory_engine_get` boundary: direct Gateway `tools.invoke` under admin capability returned `MEMORY_GET_OWNER_AUTH_REQUIRED`, while a real WebChat Owner turn carried `__openclaw.senderIsOwner=true`, invoked the same tool, and reached the ordinary executor miss with `error="not found"` and no authorization error.
+- Deployed repository release `1.0.0` from source HEAD `d201c8e5246773ba5e26dc8a959fa93beec9661d` to the active OpenClaw extension path. Gateway restarted successfully and became READY within the bounded readiness window; the live package reports `1.0.0`.
+- The Engine database SHA-256 remained exactly unchanged across deployment, disclosure attestations remained `2` total / `0` active, and the explicit-tool authority files retained their accepted hashes. The conservative runtime baseline remained `AutoRecall=false`, `cardFirstRuntime=false`, `topK=3`, and the existing main interactive-user allowlists.
+- Post-deploy explicit-tool smoke re-qualified the same authority split on the live `1.0.0` runtime: direct Gateway/admin invocation was denied with `MEMORY_GET_OWNER_AUTH_REQUIRED`, and real WebChat Owner invocation reached ordinary `not found` semantics.
+- OpenClaw 2026.7.1 plugin discovery exposed duplicate-id warnings because two historical `0.8.22` backup trees still lived under `~/.openclaw/extensions/`. Under separate authorization, both backups were moved intact to `~/.openclaw/plugin-backups/` and Gateway was restarted once. The duplicate warning disappeared; `extensions/` now contains only the live `memory-engine` directory.
+- Cleanup preserved both `openclaw.json` and Engine DB SHA-256 values exactly, retained `2|0` disclosure-attestation state, and left AutoRecall/card-first disabled. No backup was deleted and no product/config/DB mutation was introduced by cleanup.
+- Final adjudication: `OPENCLAW_7_1_COMPATIBILITY_RUNTIME_QUALIFICATION=PASS / CLOSED`; `MEMORY_ENGINE_1.0.0_RUNTIME_DEPLOYMENT=PASS / RUNTIME QUALIFIED / CLOSED`; `MEMORY_ENGINE_1.0.0_POST_DEPLOY_CLEANUP=PASS / CLOSED`.
+
 ## 2026-08-25
 
 ### Explicit memory-tool disclosure boundary runtime closure
