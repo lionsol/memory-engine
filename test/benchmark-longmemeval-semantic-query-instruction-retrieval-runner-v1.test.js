@@ -162,12 +162,13 @@ async function expectRh1Stage(record, options, stage) {
   );
 }
 
-test("RH1 has an independent profile and an exact normalized query formatting contract", () => {
-  const formatted = formatSemanticQueryInstructionEmbeddingInput("[Fri 2025/01/10 12:00 UTC] Where was the artifact stored?");
+test("RH1 has an independent profile and preserves the exact production vector query input", async () => {
+  const exactVectorQuery = "Retrieve v2.3.1  with punctuation?!  2025/01/10 12:00  東京 café";
+  const formatted = formatSemanticQueryInstructionEmbeddingInput(exactVectorQuery);
   assert.notEqual(LONGMEMEVAL_SEMANTIC_QUERY_INSTRUCTION_PROFILE, LONGMEMEVAL_SEMANTIC_PROFILE);
   assert.equal(
     formatted,
-    `${SEMANTIC_QUERY_INSTRUCTION_TEXT}\nQuery:Where was the artifact stored`,
+    `${SEMANTIC_QUERY_INSTRUCTION_TEXT}\nQuery:${exactVectorQuery}`,
   );
   assert.equal(
     SEMANTIC_QUERY_INSTRUCTION_SHA256,
@@ -177,8 +178,84 @@ test("RH1 has an independent profile and an exact normalized query formatting co
   assert.equal(SEMANTIC_DOCUMENT_INSTRUCTION, "none");
   assert.equal(
     SEMANTIC_QUERY_FORMATTING_CONTRACT,
-    "query_embedding_input = query_instruction_text + LF + \"Query:\" + normalizeFtsQuery(query); no trailing LF",
+    "query_embedding_input = query_instruction_text + LF + \"Query:\" + exact production vector query input received by generateEmbedding; no trailing LF",
   );
+
+  const b4Seen = [];
+  await runLongMemEvalSemanticRetrievalCase(
+    fixture({ question: exactVectorQuery }),
+    semanticOptions({ seen: b4Seen }),
+  );
+  const b4VectorInput = b4Seen.find(value => value === exactVectorQuery);
+  assert.equal(b4VectorInput, exactVectorQuery);
+
+  const rh1Seen = [];
+  await runLongMemEvalSemanticQueryInstructionRetrievalCase(
+    fixture({ question: exactVectorQuery }),
+    semanticOptions({ seen: rh1Seen }),
+  );
+  const rh1QueryInput = rh1Seen.find(value => value.startsWith(SEMANTIC_QUERY_INSTRUCTION_TEXT));
+  assert.equal(
+    rh1QueryInput,
+    `${SEMANTIC_QUERY_INSTRUCTION_TEXT}\nQuery:${b4VectorInput}`,
+  );
+  assert.deepEqual(
+    rh1Seen.filter(value => !value.startsWith(SEMANTIC_QUERY_INSTRUCTION_TEXT)),
+    b4Seen.filter(value => value !== b4VectorInput),
+  );
+});
+
+test("profileProvenance cannot override reserved core provenance fields", async () => {
+  const reservedFields = [
+    "profile",
+    "repository_commit",
+    "repository_worktree_clean",
+    "repository_provenance_source",
+    "dataset_sha256",
+    "embedding_provider",
+    "embedding_base_url_identity",
+    "embedding_model",
+    "embedding_model_revision",
+    "embedding_dimension",
+    "canonical_vector_projection_version",
+    "canonical_vector_text_max_chars",
+    "lexical_confidence_threshold",
+    "vector_top_k",
+    "provider_call_count",
+    "embedding_cache_hits",
+    "corpus_embedding_count",
+    "query_embedding_count",
+    "corpus_build_latency",
+    "retrieval_latency",
+    "vector_attempted_count",
+    "vector_skipped_count",
+    "vector_error_count",
+  ];
+  const skippedRecord = fixture({ question_id: "rh1_reserved_key", answer_session_ids: [] });
+
+  for (const reservedKey of reservedFields) {
+    await assert.rejects(
+      runLongMemEvalSemanticRetrievalCase(skippedRecord, {
+        ...semanticOptions(),
+        profile: LONGMEMEVAL_SEMANTIC_QUERY_INSTRUCTION_PROFILE,
+        profileProvenance: { [reservedKey]: "attacker-controlled-value" },
+      }),
+      error => {
+        assert.equal(error.stage, "provenance", error.stack);
+        assert.deepEqual(error.details?.reserved_keys, [reservedKey]);
+        assert.match(error.message, /provenance|core/i);
+        return true;
+      },
+    );
+  }
+
+  const allowed = await runLongMemEvalSemanticRetrievalCase(skippedRecord, {
+    ...semanticOptions(),
+    profile: LONGMEMEVAL_SEMANTIC_QUERY_INSTRUCTION_PROFILE,
+    profileProvenance: { experiment: "rh1" },
+  });
+  assert.equal(allowed.provenance.experiment, "rh1");
+  assert.equal(allowed.provenance.profile, LONGMEMEVAL_SEMANTIC_QUERY_INSTRUCTION_PROFILE);
 });
 
 test("RH1 instructs only the vector query, preserves corpus/lexical input, and enters production fusion", async () => {
@@ -429,6 +506,7 @@ test("RH1 source keeps the shared semantic runner and query formatter out of the
   );
   assert.match(source, /runLongMemEvalSemanticRetrievalDataset/);
   assert.match(source, /formatSemanticQueryInstructionEmbeddingInput/);
+  assert.doesNotMatch(source, /normalizeFtsQuery/);
   assert.doesNotMatch(source, /projectCanonicalMemoryToVectorProjection/);
   assert.doesNotMatch(source, /materializeSemanticCorpus/);
 });
