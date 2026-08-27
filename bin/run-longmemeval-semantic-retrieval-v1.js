@@ -99,7 +99,10 @@ function usage() {
 
 async function runLongMemEvalSemanticCli(argv = process.argv.slice(2), deps = {}) {
   const args = parseArgs(argv);
-  if (args.help) return { help: true, usage: usage() };
+  if (args.help) {
+    const renderUsage = typeof deps.usage === "function" ? deps.usage : usage;
+    return { help: true, usage: renderUsage() };
+  }
   if (!args.input) throw new Error("--input is required");
   if (!Number.isFinite(args.topK) || args.topK < 1) throw new Error("--top-k must be a positive number");
   if (args.limit !== null && (!Number.isFinite(args.limit) || args.limit < 0)) {

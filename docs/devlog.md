@@ -1,5 +1,11 @@
 ## 2026-08-27
 
+### Benchmark v1 Retrieval Hypothesis H1 source implementation
+
+- Added the independent `production_hybrid_semantic_query_instruction_session_v1` profile and CLI. The query-side vector embedder formats the production-normalized query with the fixed RH1 instruction; corpus/document embedding and lexical/FTS/KG/recent query inputs remain unchanged, and the shared production `hybridSearch()` path is reused.
+- RH1 provenance records the instruction version/text/hash, query formatting contract, and `document_instruction=none`. Its actual formatted query input is part of the existing benchmark-owned cache identity, so frozen B4 corpus entries can be reused without changing B4 query behavior.
+- RH1 source implementation = `REPO-TESTED`. Real-provider run = `NOT RUN`; adjudication = `OPEN`. B3 and B4 profiles/results remain frozen. No SiliconFlow request, live runtime/data-plane operation, deployment, configuration change, or production tuning occurred.
+
 ### memory-engine Benchmark v1 — B4-S2 semantic full baseline closeout
 
 - B4-S2 execution completed `PASS` in the single authorized full-dataset run. Planner adjudication is `PASS_WITH_FINDINGS`; the final state is `OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED`. The semantic interpretation is `USEFUL BUT INSUFFICIENT`.

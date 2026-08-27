@@ -281,6 +281,19 @@ LongMemEval results development/regression evidence only; product policy still
 requires LoCoMo or other cross-dataset evidence. Benchmark evidence is not
 production authority, and B5 does not authorize production tuning.
 
+## RH1 — query-side embedding instruction profile
+
+RH1 source implementation = `REPO-TESTED` under the independent profile
+`production_hybrid_semantic_query_instruction_session_v1`. Its only experiment
+variable is a fixed instruction on the vector query embedding input; corpus
+embedding, lexical/FTS/KG/recent query inputs, production `hybridSearch()`
+fusion, and the frozen B3/B4 contracts remain unchanged. The B4 profile and
+baseline remain frozen.
+
+Real-provider run = `NOT RUN`. Adjudication = `OPEN`. RH1 is not production
+qualified, runtime qualified, or production-tuning authority; no conclusion is
+drawn here about preference or multi-evidence retrieval.
+
 Answer-generation and LLM-judge quality remain a separate measurement layer so
 retrieval changes are not confounded with answering-model changes.
 
