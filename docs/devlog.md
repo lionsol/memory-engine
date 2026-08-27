@@ -1,3 +1,17 @@
+## 2026-08-27
+
+### memory-engine Benchmark v1 — LongMemEval B3 first official baseline
+
+- Ran the released cleaned LongMemEval-S dataset under `production_hybrid_lexical_session_v1` with `top_k=50`. Input SHA-256: `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`. Validation reports 500 cases, 23,867 session occurrences, 246,750 turns, and 948 evidence-session labels.
+- The first official-file validation exposed an adapter-contract defect: the cleaned dataset contains 12 empty-string turn contents (9 user, 3 assistant), all non-evidence. B1 had incorrectly required non-empty turn text. The validator now accepts string content including `""` while still rejecting non-string content.
+- Upstream retrieval-source review exposed a second scoring-contract gap: official session retrieval joins user-side contents with spaces and aggregate reporting skips both `_abs` instances and instances with no user-side `has_answer=true` target. The corrected runner mirrors this policy. The downloaded S file has 30 abstention cases and 72 no-user-target cases with 21 overlapping, so 419 cases are scored and 81 are skipped (`30` abstention first, then `51` additional no-user-target).
+- The 10-case sanity then exposed duplicate source session ids inside a question. Thirteen dataset cases contain one duplicate-session-id group. Benchmark chunk identity now includes the corpus occurrence index, and ranked source-session ids preserve duplicate occurrences rather than collapsing rank positions. None of the duplicate ids in this cleaned S file are evidence-session ids.
+- Node environment diagnosis during correction found DevSpace's default `/usr/bin/node` at v22.22.2 / ABI 127 while repository native modules are built for Node 24 / ABI 137. No rebuild was performed; verification and benchmark execution were explicitly bound to `/home/lionsol/.local/node24/bin/node` v24.19.0.
+- Corrected focused tests passed `17/17`. Full official validation passed and reports `retrieval_no_user_target_cases=72`, `retrieval_scored_cases=419`. A 10-case real-data sanity passed `10/10` with all first-ten single-session-user evidence sessions at rank 1.
+- The complete 500-case lexical run completed successfully: overall recall-any `@1=0.5107`, `@5=0.7876`, `@10=0.9045`, `@50=0.9952`; recall-all `@1=0.1289`, `@5=0.4821`, `@10=0.6372`, `@50=0.9761`; NDCG-any `@10=0.6256`; mean production `hybridSearch()` latency `9.49 ms` across 419 scored cases. The full per-case output SHA-256 is `c6ee9d9dc5cd366e4e19673f9b2d55603e8fbdb04634f3f918257bf00d97ca27` and is not vendored.
+- Family findings: `knowledge-update` is strongest (`recall_any@1=0.8056`, `ndcg_any@10=0.8191`); `single-session-preference` is weakest (`recall_any@1=0.1000`, `ndcg_any@10=0.3457`). Multi-session and temporal retrieval reach high any-evidence recall by @10 (`0.9174` / `0.8976`) but lower all-evidence recall (`0.4628` / `0.5276`), making multi-evidence coverage a clear lexical limitation.
+- Final B3 adjudication: `PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED`. No live Core/Engine/LanceDB/Gateway/configuration state was touched. The next benchmark boundary is a separately named real semantic/vector profile; the lexical baseline remains fixed comparison evidence.
+
 ## 2026-08-26
 
 ### OpenClaw 2026.7.1-2 compatibility and memory-engine 1.0.0 runtime closeout

@@ -49,7 +49,7 @@ test("official session document uses only user turns and carries no gold labels"
       { role: "user", content: "second user fact", has_answer: false },
     ],
   });
-  assert.equal(text, "user fact\nsecond user fact");
+  assert.equal(text, "user fact second user fact");
   assert.equal(text.includes("assistant secret"), false);
   assert.equal(text.includes("has_answer"), false);
 });
@@ -75,7 +75,7 @@ test("isolated lexical profile runs production hybridSearch and retrieves the ev
   assert.equal(result.diagnostics.canonical_result_projection.resolved_count >= 1, true);
 });
 
-test("assistant-only content is intentionally absent from the official session lexical profile", async () => {
+test("assistant-only evidence is skipped by the official retrieval aggregate policy", async () => {
   const record = fixture({
     question_id: "bench_assistant_only",
     question_type: "assistant_previnfo",
@@ -101,8 +101,22 @@ test("assistant-only content is intentionally absent from the official session l
     topK: 3,
     benchmarkNowSec: 1_800_000_000,
   });
-  assert.equal(result.metrics["recall_any@1"], 0);
-  assert.equal(result.diagnostics.channels.length, 0);
+  assert.equal(result.skipped, true);
+  assert.equal(result.skip_reason, "official_retrieval_no_user_target");
+  assert.equal(result.metrics, null);
+  assert.equal(result.diagnostics, null);
+});
+
+test("duplicate source session ids remain distinct corpus occurrences", async () => {
+  const result = await runLongMemEvalRetrievalCase(fixture({
+    haystack_session_ids: ["s-noise", "s-answer", "s-noise"],
+  }), {
+    topK: 3,
+    benchmarkNowSec: 1_800_000_000,
+  });
+  assert.equal(result.skipped, false);
+  assert.equal(result.corpus_sessions, 3);
+  assert.equal(result.retrieved_session_ids[0], "s-answer");
 });
 
 test("official retrieval abstention cases are skipped without scoring", async () => {
@@ -116,7 +130,7 @@ test("official retrieval abstention cases are skipped without scoring", async ()
   assert.deepEqual(result.retrieved_session_ids, []);
 });
 
-test("aggregate metrics exclude skipped abstention cases", () => {
+test("aggregate metrics exclude official skipped cases and expose skip reasons", () => {
   const summary = aggregateLongMemEvalRetrievalResults([
     {
       question_type: "single-session-user",
@@ -132,14 +146,27 @@ test("aggregate metrics exclude skipped abstention cases", () => {
     {
       question_type: "single-session-user",
       skipped: true,
+      skip_reason: "official_retrieval_abstention",
+      metrics: null,
+      latency_ms: 0,
+      corpus_sessions: 3,
+    },
+    {
+      question_type: "single-session-assistant",
+      skipped: true,
+      skip_reason: "official_retrieval_no_user_target",
       metrics: null,
       latency_ms: 0,
       corpus_sessions: 3,
     },
   ]);
-  assert.equal(summary.cases, 2);
+  assert.equal(summary.cases, 3);
   assert.equal(summary.scored_cases, 1);
-  assert.equal(summary.skipped_cases, 1);
+  assert.equal(summary.skipped_cases, 2);
+  assert.deepEqual(summary.skipped_by_reason, {
+    official_retrieval_abstention: 1,
+    official_retrieval_no_user_target: 1,
+  });
   assert.equal(summary.metrics["recall_any@1"], 1);
   assert.equal(summary.by_question_type["single-session-user"].cases, 1);
 });

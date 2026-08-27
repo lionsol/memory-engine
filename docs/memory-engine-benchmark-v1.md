@@ -80,11 +80,16 @@ calls the production `hybridSearch()` implementation through its isolated DB
 boundary. No active OpenClaw or memory-engine path is reused.
 
 For comparability with LongMemEval's built-in session-granularity retrieval,
-each indexed document is one history session containing the concatenated user
-turns only. The original session timestamp is retained as ranking metadata by
-mapping its offset from `question_date` onto the benchmark run clock. Lifecycle
-confidence is neutral and equal across sessions so B2 measures retrieval and
-ranking rather than memory-decay policy.
+each indexed document is one history-session corpus occurrence containing the
+user-side turn contents joined with spaces, matching upstream `process_item_flat_index()`.
+Official empty-string turn contents are valid and contribute no tokens. Duplicate
+source session ids remain distinct corpus occurrences and may occupy distinct
+ranking positions; benchmark chunk identity therefore includes the occurrence
+index while evaluation maps each result back to its original source session id.
+The original session timestamp is retained as ranking metadata by mapping its
+offset from `question_date` onto the benchmark run clock. Lifecycle confidence
+is neutral and equal across sessions so B2 measures retrieval and ranking rather
+than memory-decay policy.
 
 B2 deliberately does **not** fabricate a semantic embedding backend. Vector is
 represented by a deterministic empty backend; the profile therefore measures
@@ -92,8 +97,9 @@ memory-engine's production lexical/fusion/canonical-result path, not full hybrid
 semantic quality. A real embedding profile is a later benchmark step and must
 be reported under a different profile identity.
 
-LongMemEval's `_abs` questions are skipped from retrieval aggregates, matching
-the official retrieval evaluation policy. Standard metrics above the actual
+The aggregate follows LongMemEval's official retrieval exclusions: `_abs`
+questions are skipped first, and non-abstention instances with no user-side
+`has_answer=true` target are also skipped. Standard metrics above the actual
 retrieval depth are reported as `null`, never silently copied from a shallower
 cutoff.
 
@@ -137,18 +143,52 @@ reasoning, knowledge updates, temporal reasoning, and abstention. Benchmark v1
 must record the exact input-file SHA-256 for every scored run; dataset contents
 must not be vendored into this repository by default.
 
-## Next benchmark boundary — first scored LongMemEval run
+## B3 — first official LongMemEval-S lexical baseline
 
-B2 source is implemented, but no official LongMemEval score is claimed until a
-released cleaned dataset file is supplied and its exact SHA-256 is recorded.
-The first scored run should use `longmemeval_s_cleaned.json`, `top_k=50`, and
-this B2 profile. `longmemeval_oracle.json` is not a retrieval-quality benchmark
-because it contains only evidence sessions; LongMemEval_M is a later scale run.
+B3 is `PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED` on the released cleaned
+LongMemEval-S file with SHA-256
+`d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`,
+`top_k=50`, and profile `production_hybrid_lexical_session_v1`.
 
-After the lexical session baseline is recorded, the next source decision is whether
-to add a **real semantic/vector profile** using memory-engine's actual embedding
-backend. It must have a distinct profile identity so lexical-only and full-hybrid
-scores are never conflated.
+The validated file contains 500 cases, 23,867 session occurrences, 246,750 turns,
+and 948 evidence-session labels. There are 30 abstention cases and 72 cases with
+no user-side retrieval target; because 21 overlap, the official aggregate scores
+419 cases and skips 81 (`30` abstention first, then `51` additional no-user-target).
+
+Overall retrieval baseline:
+
+| Metric | @1 | @5 | @10 | @50 |
+| --- | ---: | ---: | ---: | ---: |
+| Recall-any | 0.5107 | 0.7876 | 0.9045 | 0.9952 |
+| Recall-all | 0.1289 | 0.4821 | 0.6372 | 0.9761 |
+| NDCG-any | 0.5107 | 0.5755 | 0.6256 | 0.6778 |
+
+Mean production-`hybridSearch()` latency inside the benchmark data plane was
+9.49 ms over the 419 scored cases, with a mean 47.57 session occurrences per
+case. This is an offline lexical/fusion baseline, not a full semantic Hybrid
+score; the empty vector backend produced no semantic candidates.
+
+Question-family findings are asymmetric. `knowledge-update` is strongest
+(`recall_any@1=0.8056`, `ndcg_any@10=0.8191`), while
+`single-session-preference` is weakest (`recall_any@1=0.1000`,
+`ndcg_any@10=0.3457`). Multi-session and temporal cases show high any-evidence
+recall by @10 (`0.9174` and `0.8976`) but materially lower all-evidence recall
+(`0.4628` and `0.5276`), identifying multi-evidence coverage as a major lexical
+baseline limitation.
+
+The full per-case output is intentionally not vendored. Its recorded output
+SHA-256 is `c6ee9d9dc5cd366e4e19673f9b2d55603e8fbdb04634f3f918257bf00d97ca27`.
+`longmemeval_oracle.json` remains unsuitable as a retrieval-quality baseline
+because it contains only evidence sessions; LongMemEval-M remains a later scale
+run.
+
+## Next benchmark boundary — semantic/vector profile
+
+The next source decision is whether to add a **real semantic/vector profile**
+using memory-engine's actual embedding backend. It must have a distinct profile
+identity so lexical-only and full-hybrid scores are never conflated. The B3
+lexical baseline is immutable comparison evidence and should not be retuned to
+fit later semantic results.
 
 Answer-generation and LLM-judge quality remain a separate measurement layer so
 retrieval changes are not confounded with answering-model changes.

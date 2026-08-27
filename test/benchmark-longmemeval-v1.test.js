@@ -55,6 +55,28 @@ test("normalizes a LongMemEval case without exposing answer labels in search", (
   assert.equal("evidence_session_ids" in search, false);
 });
 
+test("accepts official empty turn content without weakening role validation", () => {
+  const item = normalizeLongMemEvalCase(fixture({
+    haystack_sessions: [
+      [
+        { role: "user", content: "" },
+        { role: "assistant", content: "Got it." },
+      ],
+      fixture().haystack_sessions[1],
+    ],
+  }));
+  assert.equal(item.sessions[0].turns[0].content, "");
+  assert.throws(
+    () => normalizeLongMemEvalCase(fixture({
+      haystack_sessions: [
+        [{ role: "user", content: null }],
+        fixture().haystack_sessions[1],
+      ],
+    })),
+    /content_must_be_string/,
+  );
+});
+
 test("builds stable per-session Add envelopes", () => {
   const requests = buildLongMemEvalAddRequests(fixture());
   assert.equal(requests.length, 2);
@@ -89,6 +111,16 @@ test("computes LongMemEval-style session metrics at standard k", () => {
   });
 });
 
+test("LongMemEval metrics preserve duplicate corpus occurrences in ranking depth", () => {
+  const score = scoreLongMemEvalSessionMetrics(fixture(), ["s1", "s1", "s2"], { ks: [2, 3] });
+  assert.equal(score.metrics["recall_any@2"], 0);
+  assert.equal(score.metrics["recall_all@2"], 0);
+  assert.equal(score.metrics["ndcg_any@2"], 0);
+  assert.equal(score.metrics["recall_any@3"], 1);
+  assert.equal(score.metrics["recall_all@3"], 1);
+  assert.equal(score.metrics["ndcg_any@3"], 1 / Math.log2(3));
+});
+
 test("normalizes upstream task aliases", () => {
   const item = normalizeLongMemEvalCase(fixture({ question_type: "knowledge_update" }));
   assert.equal(item.question_type, "knowledge-update");
@@ -111,6 +143,8 @@ test("summarizes dataset composition", () => {
   assert.equal(summary.turns, 8);
   assert.equal(summary.evidence_sessions, 1);
   assert.equal(summary.abstention_cases, 1);
+  assert.equal(summary.retrieval_no_user_target_cases, 0);
+  assert.equal(summary.retrieval_scored_cases, 1);
   assert.deepEqual(summary.by_question_type, {
     "multi-session": 1,
     "single-session-user": 1,
