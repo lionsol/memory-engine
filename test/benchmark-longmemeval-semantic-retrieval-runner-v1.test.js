@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import Database from "better-sqlite3";
+
 import cli from "../bin/run-longmemeval-semantic-retrieval-v1.js";
 import { MEMORY_ENGINE_DEFAULTS } from "../lib/config/defaults.js";
 import {
@@ -25,7 +27,19 @@ import {
 } from "../lib/benchmark/longmemeval-semantic-retrieval-runner-v1.js";
 import { LONGMEMEVAL_RETRIEVAL_PROFILE } from "../lib/benchmark/longmemeval-retrieval-runner-v1.js";
 
-const { runLongMemEvalSemanticCli, usage } = cli;
+const {
+  resolveRepositoryProvenance,
+  runLongMemEvalSemanticCli,
+  usage,
+  validateRepositoryProvenance,
+} = cli;
+
+const TEST_REPOSITORY_COMMIT = "a".repeat(40);
+const TEST_REPOSITORY_PROVENANCE = {
+  repository_commit: TEST_REPOSITORY_COMMIT,
+  repository_worktree_clean: true,
+  repository_provenance_source: "git",
+};
 
 function fixture(overrides = {}) {
   return {
@@ -237,6 +251,53 @@ test("each semantic case owns an isolated temporary vector data plane", async ()
   assert.equal(output.run.vector_attempted_count, 2);
 });
 
+test("runner closes only cache instances it owns", async () => {
+  let standaloneCloseCount = 0;
+  let standaloneCache;
+  await runLongMemEvalSemanticRetrievalCase(fixture(), semanticOptions({
+    embeddingCacheFactory: () => {
+      standaloneCache = createBenchmarkEmbeddingCache();
+      const close = standaloneCache.close.bind(standaloneCache);
+      standaloneCache.close = () => {
+        standaloneCloseCount += 1;
+        return close();
+      };
+      return standaloneCache;
+    },
+  }));
+  assert.equal(standaloneCloseCount, 1);
+
+  const backingCache = createBenchmarkEmbeddingCache();
+  let externalCloseCount = 0;
+  const externalCache = {
+    get: backingCache.get.bind(backingCache),
+    set: backingCache.set.bind(backingCache),
+    close: () => { externalCloseCount += 1; },
+  };
+  await runLongMemEvalSemanticRetrievalCase(fixture(), semanticOptions({
+    embeddingCache: externalCache,
+  }));
+  assert.equal(externalCloseCount, 0);
+  backingCache.close();
+});
+
+test("dataset closes its shared owned cache after all cases", async () => {
+  let closeCount = 0;
+  await runLongMemEvalSemanticRetrievalDataset([fixture(), fixture({ question_id: "semantic_q2" })], {
+    ...semanticOptions(),
+    embeddingCacheFactory: () => {
+      const cache = createBenchmarkEmbeddingCache();
+      const close = cache.close.bind(cache);
+      cache.close = () => {
+        closeCount += 1;
+        return close();
+      };
+      return cache;
+    },
+  });
+  assert.equal(closeCount, 1);
+});
+
 test("corpus embedding failure is fail-closed before vector write", async () => {
   const stores = [];
   await expectStage(
@@ -373,11 +434,132 @@ test("benchmark-owned embedding cache is reusable and reduces provider calls", a
   assert.equal(output.run.provider_call_count, 4);
   assert.equal(output.run.embedding_cache_hits, 4);
   assert.equal(seen.length, 4);
+  cache.close();
 });
 
-test("cache key and cache provenance contain provider/model/projection/input identity but no gold", () => {
+test("SQLite cache round-trips exact 2560-dimensional Float64 vectors across close and reopen", () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-semantic-cache-roundtrip-"));
+  const vector = new Array(SEMANTIC_EXPECTED_EMBEDDING_DIMENSION).fill(0);
+  vector[0] = Math.PI;
+  vector[1] = Number.MIN_VALUE;
+  vector[2] = -0;
+  vector[3] = Number.MAX_VALUE;
+  const key = buildEmbeddingCacheKey({ input: "exact-roundtrip" });
+  const cachePath = join(root, "embeddings.sqlite");
+  try {
+    const cache = createBenchmarkEmbeddingCache(cachePath);
+    cache.set(key, vector);
+    assert.deepEqual(cache.get(key), vector);
+    cache.close();
+    assert.throws(() => cache.get(key), error => error.stage === "embedding_cache_closed");
+    cache.close();
+
+    const rawDatabase = new Database(cachePath, { readonly: true });
+    assert.equal(rawDatabase.pragma("user_version", { simple: true }), 1);
+    assert.equal(rawDatabase.prepare(
+      "SELECT value FROM embedding_cache_metadata WHERE key = 'schema'",
+    ).get().value, "memory_engine_benchmark_embedding_cache_v1");
+    rawDatabase.close();
+
+    const reopened = createBenchmarkEmbeddingCache(cachePath);
+    const restored = reopened.get(key);
+    assert.equal(restored.length, SEMANTIC_EXPECTED_EMBEDDING_DIMENSION);
+    for (let index = 0; index < vector.length; index += 1) {
+      assert.equal(Object.is(restored[index], vector[index]), true, `vector index ${index}`);
+    }
+    reopened.close();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("SQLite cache rejects wrong dimensions and non-finite vectors", () => {
+  const cache = createBenchmarkEmbeddingCache();
+  const key = buildEmbeddingCacheKey({ input: "invalid-vector" });
   assert.throws(
-    () => createBenchmarkEmbeddingCache(join(tmpdir(), ".openclaw", "memory", "live-cache.json")),
+    () => cache.set(key, new Array(3).fill(0)),
+    error => error.stage === "embedding_cache_write",
+  );
+  const nonFinite = new Array(SEMANTIC_EXPECTED_EMBEDDING_DIMENSION).fill(0);
+  nonFinite[17] = Number.NaN;
+  assert.throws(
+    () => cache.set(key, nonFinite),
+    error => error.stage === "embedding_cache_write",
+  );
+  cache.close();
+});
+
+test("SQLite cache uses complete provider/model/projection/input identity without collisions", () => {
+  const cache = createBenchmarkEmbeddingCache();
+  const base = buildEmbeddingCacheKey({ input: "same text" });
+  const variants = [
+    base,
+    { ...base, provider: "OtherProvider" },
+    { ...base, model: "other-model" },
+    { ...base, projection_version: base.projection_version + 1 },
+    { ...base, input_sha256: "different-input-hash" },
+    { ...base, normalized_input_sha256: "different-normalized-input-hash" },
+  ];
+  for (const [index, key] of variants.entries()) {
+    const vector = new Array(SEMANTIC_EXPECTED_EMBEDDING_DIMENSION).fill(0);
+    vector[0] = index + 0.25;
+    cache.set(key, vector);
+  }
+  for (const [index, key] of variants.entries()) assert.equal(cache.get(key)[0], index + 0.25);
+  assert.equal(cache.snapshot().entries && Object.keys(cache.snapshot().entries).length, variants.length);
+  cache.close();
+});
+
+test("SQLite cache is entry-wise, supports 100 2560-dimensional entries, and has no JSON rewrite path", () => {
+  const cache = createBenchmarkEmbeddingCache();
+  for (let index = 0; index < 100; index += 1) {
+    const key = buildEmbeddingCacheKey({ input: `batch-${index}` });
+    const vector = new Array(SEMANTIC_EXPECTED_EMBEDDING_DIMENSION).fill(0);
+    vector[index % SEMANTIC_EXPECTED_EMBEDDING_DIMENSION] = index + 0.5;
+    cache.set(key, vector);
+  }
+  for (let index = 0; index < 100; index += 1) {
+    const key = buildEmbeddingCacheKey({ input: `batch-${index}` });
+    assert.equal(cache.get(key)[index % SEMANTIC_EXPECTED_EMBEDDING_DIMENSION], index + 0.5);
+  }
+  cache.close();
+
+  const source = readFileSync(
+    new URL("../lib/benchmark/longmemeval-semantic-retrieval-runner-v1.js", import.meta.url),
+    "utf8",
+  );
+  assert.equal(source.includes("JSON.stringify(state"), false);
+  assert.equal(source.includes("writeFileSync"), false);
+  assert.equal(source.includes("CREATE TABLE ${SEMANTIC_EMBEDDING_CACHE_SQLITE_TABLE}"), true);
+  assert.equal(source.includes("PRIMARY KEY"), true);
+});
+
+test("SQLite cache rejects legacy JSON and unsupported SQLite formats", () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-semantic-cache-format-"));
+  const legacyPath = join(root, "legacy.json");
+  const invalidSqlitePath = join(root, "invalid.sqlite");
+  try {
+    writeFileSync(legacyPath, JSON.stringify({ schema: "memory_engine_benchmark_embedding_cache_v1", entries: {} }), "utf8");
+    assert.throws(
+      () => createBenchmarkEmbeddingCache(legacyPath),
+      error => error.stage === "embedding_cache_format",
+    );
+
+    const invalidDb = new Database(invalidSqlitePath);
+    invalidDb.exec("CREATE TABLE unrelated (value TEXT);");
+    invalidDb.close();
+    assert.throws(
+      () => createBenchmarkEmbeddingCache(invalidSqlitePath),
+      error => error.stage === "embedding_cache_format",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("cache identity/provenance has no raw input or gold fields", () => {
+  assert.throws(
+    () => createBenchmarkEmbeddingCache(join(tmpdir(), ".openclaw", "memory", "live-cache.sqlite")),
     error => error.stage === "embedding_cache_path",
   );
   const key = buildEmbeddingCacheKey({
@@ -397,15 +579,23 @@ test("cache key and cache provenance contain provider/model/projection/input ide
 
   const root = mkdtempSync(join(tmpdir(), "memory-engine-semantic-cache-"));
   try {
-    const cachePath = join(root, "cache.json");
+    const cachePath = join(root, "cache.sqlite");
     const cache = createBenchmarkEmbeddingCache(cachePath);
     cache.set(key, new Array(SEMANTIC_EXPECTED_EMBEDDING_DIMENSION).fill(0));
-    const raw = readFileSync(cachePath, "utf8");
-    assert.equal(raw.includes("answer_session_ids"), false);
-    assert.equal(raw.includes("has_answer"), false);
-    assert.equal(raw.includes("gold"), false);
+    const database = new Database(cachePath, { readonly: true });
+    const rows = database.prepare("SELECT * FROM embedding_cache_entries").all();
+    const columns = database.prepare("PRAGMA table_info(embedding_cache_entries)").all().map(row => row.name);
+    assert.equal(rows.length, 1);
+    assert.equal(columns.includes("input"), false);
+    assert.equal(columns.includes("raw_input"), false);
+    assert.equal(JSON.stringify(rows).includes("answer_session_ids"), false);
+    assert.equal(JSON.stringify(rows).includes("has_answer"), false);
+    assert.equal(JSON.stringify(rows).includes("gold"), false);
+    database.close();
+    cache.close();
     const loaded = createBenchmarkEmbeddingCache(cachePath);
     assert.equal(loaded.get(key).length, SEMANTIC_EXPECTED_EMBEDDING_DIMENSION);
+    loaded.close();
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -429,7 +619,7 @@ test("semantic CLI has explicit profile, deterministic injected smoke path, and 
   const root = mkdtempSync(join(tmpdir(), "memory-engine-semantic-cli-"));
   try {
     const inputPath = join(root, "longmemeval-smoke.json");
-    const cachePath = join(root, "benchmark-cache.json");
+    const cachePath = join(root, "benchmark-cache.sqlite");
     const content = `${JSON.stringify([fixture()], null, 2)}\n`;
     writeFileSync(inputPath, content, "utf8");
     const expectedSha = createHash("sha256").update(Buffer.from(content)).digest("hex");
@@ -440,24 +630,32 @@ test("semantic CLI has explicit profile, deterministic injected smoke path, and 
       "--cache-path", cachePath,
     ], {
       embeddingProvider: fakeEmbedder(),
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
       runnerOptions: {
         vectorStoreFactory: fakeVectorStoreFactory(),
         benchmarkNowSec: 1_800_000_000,
       },
     });
     assert.equal(injected.printable.provenance.input_sha256, expectedSha);
+    assert.equal(injected.printable.provenance.repository_commit, TEST_REPOSITORY_COMMIT);
+    assert.equal(injected.printable.provenance.repository_worktree_clean, true);
+    assert.equal(injected.printable.provenance.repository_provenance_source, "git");
     assert.equal(injected.printable.run.profile, LONGMEMEVAL_SEMANTIC_PROFILE);
     assert.equal(injected.printable.summary.scored_cases, 1);
     assert.equal(injected.printable.summary.metrics["recall_any@1"], 1);
-    assert.equal(readFileSync(cachePath, "utf8").includes("answer_session_ids"), false);
+    const cacheDatabase = new Database(cachePath, { readonly: true });
+    assert.equal(cacheDatabase.prepare("SELECT COUNT(*) AS count FROM embedding_cache_entries").get().count, 4);
+    cacheDatabase.close();
 
     const help = await runLongMemEvalSemanticCli(["--help"]);
     assert.equal(help.usage.includes(LONGMEMEVAL_SEMANTIC_PROFILE), true);
+    assert.equal(help.usage.includes("SQLite"), true);
     assert.equal(usage(), help.usage);
 
     const isolatedProviderHome = join(root, "no-provider-home");
     await assert.rejects(
       runLongMemEvalSemanticCli(["--input", inputPath, "--limit", "1"], {
+        repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
         runnerOptions: {
           vectorStoreFactory: fakeVectorStoreFactory(),
           providerEnv: Object.freeze({}),
@@ -476,4 +674,93 @@ test("semantic CLI has explicit profile, deterministic injected smoke path, and 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("semantic CLI binds exact injected repository commit and emits clean git provenance", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-semantic-provenance-"));
+  const inputPath = join(root, "input.json");
+  writeFileSync(inputPath, "[]\n", "utf8");
+  const calls = [];
+  try {
+    const result = await runLongMemEvalSemanticCli(["--input", inputPath], {
+      repositoryProvenance: () => TEST_REPOSITORY_PROVENANCE,
+      execFileSync: () => { throw new Error("real git must not be called"); },
+      runnerOptions: {
+        repositoryCommit: "b".repeat(40),
+        repositoryWorktreeClean: false,
+      },
+      runDataset: async (records, options) => {
+        calls.push({ records, options });
+        return {
+          provenance: {
+            profile: LONGMEMEVAL_SEMANTIC_PROFILE,
+            repository_commit: options.repositoryCommit,
+            repository_worktree_clean: options.repositoryWorktreeClean,
+            repository_provenance_source: options.repositoryProvenanceSource,
+          },
+          run: { profile: LONGMEMEVAL_SEMANTIC_PROFILE },
+          summary: { cases: records.length },
+        };
+      },
+    });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].options.repositoryCommit, TEST_REPOSITORY_COMMIT);
+    assert.equal(calls[0].options.repositoryWorktreeClean, true);
+    assert.equal(calls[0].options.repositoryProvenanceSource, "git");
+    assert.equal(result.output.provenance.repository_commit, TEST_REPOSITORY_COMMIT);
+    assert.equal(result.output.provenance.repository_worktree_clean, true);
+    assert.equal(result.output.provenance.repository_provenance_source, "git");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("semantic CLI rejects dirty worktrees before invoking the runner", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-semantic-dirty-"));
+  const inputPath = join(root, "input.json");
+  writeFileSync(inputPath, "[]\n", "utf8");
+  let runnerCalled = false;
+  try {
+    await assert.rejects(
+      runLongMemEvalSemanticCli(["--input", inputPath], {
+        repositoryProvenance: {
+          ...TEST_REPOSITORY_PROVENANCE,
+          repository_worktree_clean: false,
+        },
+        runDataset: async () => {
+          runnerCalled = true;
+          throw new Error("runner must not be called");
+        },
+      }),
+      error => error.code === "semantic_cli_repository_provenance_dirty_worktree",
+    );
+    assert.equal(runnerCalled, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("semantic CLI fails closed when git provenance cannot be resolved or commit format is invalid", async () => {
+  assert.throws(
+    () => resolveRepositoryProvenance({
+      repositoryRoot: process.cwd(),
+      execFileSync: () => { throw new Error("git unavailable"); },
+    }),
+    error => error.code === "semantic_cli_repository_provenance_unavailable",
+  );
+  assert.throws(
+    () => validateRepositoryProvenance({
+      ...TEST_REPOSITORY_PROVENANCE,
+      repository_commit: "b002d8a",
+    }),
+    error => error.code === "semantic_cli_repository_provenance_invalid_commit",
+  );
+  assert.throws(
+    () => validateRepositoryProvenance({
+      ...TEST_REPOSITORY_PROVENANCE,
+      repository_commit: "A".repeat(40),
+    }),
+    error => error.code === "semantic_cli_repository_provenance_invalid_commit",
+  );
+  assert.deepEqual(validateRepositoryProvenance(TEST_REPOSITORY_PROVENANCE), TEST_REPOSITORY_PROVENANCE);
 });

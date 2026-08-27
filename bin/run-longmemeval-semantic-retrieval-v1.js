@@ -1,8 +1,56 @@
 #!/usr/bin/env node
 
 const { createHash } = require("node:crypto");
+const { execFileSync: defaultExecFileSync } = require("node:child_process");
 const { readFileSync, writeFileSync } = require("node:fs");
 const { basename, resolve } = require("node:path");
+
+const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+
+function provenanceError(reason) {
+  const error = new Error(`semantic_cli_repository_provenance_${reason}`);
+  error.code = `semantic_cli_repository_provenance_${reason}`;
+  return error;
+}
+
+function validateRepositoryProvenance(value) {
+  const commit = String(value?.repository_commit ?? value?.repositoryCommit ?? "").trim();
+  if (!GIT_COMMIT_PATTERN.test(commit)) throw provenanceError("invalid_commit");
+  const clean = value?.repository_worktree_clean ?? value?.repositoryWorktreeClean;
+  if (typeof clean !== "boolean") throw provenanceError("invalid_worktree_state");
+  const source = value?.repository_provenance_source ?? value?.repositoryProvenanceSource;
+  if (source !== "git") throw provenanceError("invalid_source");
+  return {
+    repository_commit: commit,
+    repository_worktree_clean: clean,
+    repository_provenance_source: "git",
+  };
+}
+
+function resolveRepositoryProvenance({
+  repositoryRoot = resolve(__dirname, ".."),
+  execFileSync = defaultExecFileSync,
+} = {}) {
+  let commit;
+  let status;
+  try {
+    commit = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    });
+    status = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    });
+  } catch {
+    throw provenanceError("unavailable");
+  }
+  return validateRepositoryProvenance({
+    repository_commit: String(commit).trim(),
+    repository_worktree_clean: String(status).trim().length === 0,
+    repository_provenance_source: "git",
+  });
+}
 
 function parseArgs(argv) {
   const args = {
@@ -37,7 +85,7 @@ function usage() {
     "Options:",
     "  --limit <n>                 Run only the first n cases",
     "  --top-k <n>                 Retrieval depth (default: 50)",
-    "  --cache-path <path>         Benchmark-owned embedding cache JSON",
+    "  --cache-path <path>         Benchmark-owned SQLite embedding cache",
     "  --embedding-base-url <url>  SiliconFlow base URL identity override",
     "  --output <path>             Write full per-case JSON result to a file",
     "  --json                      Print full per-case JSON to stdout instead of summary only",
@@ -58,6 +106,20 @@ async function runLongMemEvalSemanticCli(argv = process.argv.slice(2), deps = {}
     throw new Error("--limit must be a non-negative number");
   }
 
+  const repositoryRoot = deps.repositoryRoot || resolve(__dirname, "..");
+  const repositoryCandidate = Object.hasOwn(deps, "repositoryProvenance")
+    ? (typeof deps.repositoryProvenance === "function"
+      ? deps.repositoryProvenance({ repositoryRoot })
+      : deps.repositoryProvenance)
+    : (deps.resolveRepositoryProvenance || resolveRepositoryProvenance)({
+      repositoryRoot,
+      execFileSync: deps.execFileSync || defaultExecFileSync,
+    });
+  const repositoryProvenance = validateRepositoryProvenance(repositoryCandidate);
+  if (!repositoryProvenance.repository_worktree_clean) {
+    throw provenanceError("dirty_worktree");
+  }
+
   const inputPath = resolve(args.input);
   const readFile = deps.readFile || readFileSync;
   const inputBytes = readFile(inputPath);
@@ -75,6 +137,9 @@ async function runLongMemEvalSemanticCli(argv = process.argv.slice(2), deps = {}
     cachePath: args.cachePath,
     embeddingBaseUrl: args.embeddingBaseUrl,
     datasetSha256: inputSha256,
+    repositoryCommit: repositoryProvenance.repository_commit,
+    repositoryWorktreeClean: repositoryProvenance.repository_worktree_clean,
+    repositoryProvenanceSource: repositoryProvenance.repository_provenance_source,
   };
   if (Object.hasOwn(deps, "embeddingProvider")) runnerOptions.embeddingProvider = deps.embeddingProvider;
   const output = await runDataset(records, runnerOptions);
@@ -112,7 +177,9 @@ async function main(argv = process.argv.slice(2), deps = {}) {
 module.exports = {
   main,
   parseArgs,
+  resolveRepositoryProvenance,
   runLongMemEvalSemanticCli,
+  validateRepositoryProvenance,
   usage,
 };
 
