@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `B2 LONGMEMEVAL ISOLATED RETRIEVAL RUNNER IMPLEMENTED / OFFLINE ONLY`
+> Status: `B4 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -182,13 +182,104 @@ SHA-256 is `c6ee9d9dc5cd366e4e19673f9b2d55603e8fbdb04634f3f918257bf00d97ca27`.
 because it contains only evidence sessions; LongMemEval-M remains a later scale
 run.
 
-## Next benchmark boundary — semantic/vector profile
+## B4 — real semantic/vector profile and final adjudication
 
-The next source decision is whether to add a **real semantic/vector profile**
-using memory-engine's actual embedding backend. It must have a distinct profile
-identity so lexical-only and full-hybrid scores are never conflated. The B3
-lexical baseline is immutable comparison evidence and should not be retuned to
-fit later semantic results.
+B4-S2 execution is `PASS`. The final quality adjudication is
+`PASS_WITH_FINDINGS`, and the final state is
+`OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED`. The semantic
+interpretation is `USEFUL BUT INSUFFICIENT`: the semantic channel improves
+retrieval evidence overall, but does not establish production or runtime
+qualification and does not resolve the preference or multi-evidence coverage
+gaps.
+
+### B4 provenance
+
+| Field | Recorded value |
+| --- | --- |
+| Profile | `production_hybrid_semantic_session_v1` |
+| Source commit | `b640c3547622a646d8962e27b20f0d5ac5a13cc1` |
+| Dataset SHA-256 | `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442` |
+| Provider / model | `SiliconFlow` / `Qwen/Qwen3-Embedding-4B` |
+| Model revision | `unavailable/unpinned` |
+| Embedding dimension | `2560` |
+| Canonical projection | `v1` / `2000` chars |
+| `top_k` | `50` |
+| `lexicalConfidenceThreshold` | `0.7` |
+| Cases | `500` total / `419` scored / `81` skipped |
+| Output SHA-256 | `de62cf40fe21485bf99a4f17129efa6097938a29ace8e88b78b2c2ca90c86cb8` |
+| Final cache SHA-256 | `c1b8f292e8e2b95581f09b4526e2ce4c38517c9cfc1b93e0ffbde4b261319db2` |
+
+The output and SQLite embedding cache remain in temporary paths outside the
+repository and are not repository authority. Long-term authority is the
+dataset SHA-256, profile identity, source commit, committed metrics, and this
+adjudication record. The full output JSON, SQLite cache, dataset, and temporary
+logs are intentionally not vendored.
+
+Official exclusions skipped 30 `official_retrieval_abstention` cases and 51
+`official_retrieval_no_user_target` cases. B4 recorded 16,319 provider calls
+and 4,033 cache hits, with 419 vector attempts, zero vector skips, and zero
+vector errors. Corpus build latency was 3,056,787.49 ms. Every scored case
+used `lancedb` at `lancedb_search`, entered fusion, and was not vector-skipped.
+
+### B3 → B4 overall comparison
+
+| Metric | B3 lexical | B4 semantic | Delta |
+| --- | ---: | ---: | ---: |
+| Recall-any@1 | 0.5107 | 0.5465 | +0.0358 |
+| Recall-any@5 | 0.7876 | 0.8138 | +0.0263 |
+| Recall-any@10 | 0.9045 | 0.9189 | +0.0143 |
+| Recall-all@5 | 0.4821 | 0.5227 | +0.0406 |
+| Recall-all@10 | 0.6372 | 0.6826 | +0.0453 |
+| NDCG-any@10 | 0.6256 | 0.6552 | +0.0297 |
+| Mean retrieval latency | 9.49 ms | 205.11 ms | +195.62 ms / 21.61× |
+
+B4 additionally recorded Recall-any@50 `1.0000`, Recall-all@50 `0.9976`,
+and NDCG-any@50 `0.7029`. Case-level comparison across first relevant rank,
+Recall-any@5, and Recall-all@10 was `85` improved, `8` regressed, and `326`
+unchanged (`419` scored cases; no mixed cases).
+
+### Family findings
+
+- **`single-session-preference`** (`30` cases): Any@5 `0.4000 → 0.4667`
+  (`+0.0667`), Any@10 `0.5667 → 0.5667` (`+0.0000`), and NDCG@10
+  `0.3457 → 0.3678` (`+0.0221`). First relevant rank was improved in 8
+  cases and regressed in 1. This improves ordering inside the top ten but
+  does not improve top-ten coverage.
+- **`multi-session`** (`121` cases): All@5 improved by `+0.0083`, and All@10
+  `0.4628 → 0.4793` (`+0.0165`). First relevant rank improved in 19 cases
+  and regressed in 0; only 2 cases newly found all evidence by @10. Ranking
+  improves more clearly than multi-evidence coverage.
+- **`temporal-reasoning`** (`127` cases): All@5 improved by `+0.0472`, and
+  All@10 `0.5276 → 0.6220` (`+0.0945`). First relevant rank improved in 38
+  cases and regressed in 6; All@10 improved in 13 and regressed in 1. This
+  is the clearest semantic-channel coverage gain.
+- **`knowledge-update`** (`72` cases): Any@1 `0.8056 → 0.8472` and NDCG@10
+  `0.8191 → 0.8658`.
+
+Across the scored cases, first relevant rank was improved in `73` cases,
+regressed in `8`, and unchanged in `338`; Recall-any@5 improved in `12` and
+regressed in `1`; Recall-all@10 improved in `20` and regressed in `1`. The
+combined strict-dominance result is `85 / 8 / 326` improved/regressed/
+unchanged.
+
+### Next benchmark boundary and route branching
+
+`B5 LoCoMo = LATER / NOT STARTED`. The next decision boundary is
+`retrieval architecture hypothesis review`, not production tuning. Candidate
+directions only (none is an accepted implementation) are:
+
+- query decomposition;
+- multi-query retrieval;
+- temporal query expansion;
+- Recall Hint;
+- entity expansion;
+- iterative/multi-hop retrieval.
+
+Do not directly start LTR. Do not modify production lexical heuristics from
+LongMemEval results. Any proposal designed from B4 failures makes subsequent
+LongMemEval results development/regression evidence only; product policy still
+requires LoCoMo or other cross-dataset evidence. Benchmark evidence is not
+production authority, and B5 does not authorize production tuning.
 
 Answer-generation and LLM-judge quality remain a separate measurement layer so
 retrieval changes are not confounded with answering-model changes.

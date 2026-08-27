@@ -1,5 +1,15 @@
 ## 2026-08-27
 
+### memory-engine Benchmark v1 — B4-S2 semantic full baseline closeout
+
+- B4-S2 execution completed `PASS` in the single authorized full-dataset run. Planner adjudication is `PASS_WITH_FINDINGS`; the final state is `OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED`. The semantic interpretation is `USEFUL BUT INSUFFICIENT`.
+- The frozen profile is `production_hybrid_semantic_session_v1` at source commit `b640c3547622a646d8962e27b20f0d5ac5a13cc1`, dataset SHA-256 `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`, SiliconFlow `Qwen/Qwen3-Embedding-4B`, model revision `unavailable/unpinned`, dimension `2560`, Canonical projection `v1/2000` chars, `top_k=50`, and `lexicalConfidenceThreshold=0.7`.
+- The run scored `419` of `500` cases and skipped `81` under the official exclusion policy. Output SHA-256 is `de62cf40fe21485bf99a4f17129efa6097938a29ace8e88b78b2c2ca90c86cb8`; final SQLite cache SHA-256 is `c1b8f292e8e2b95581f09b4526e2ce4c38517c9cfc1b93e0ffbde4b261319db2`. Both remain temporary artifacts outside repository authority; neither the dataset, output, cache, nor logs are vendored.
+- Embedding instrumentation recorded `16,319` provider calls and `4,033` cache hits, `19,933` corpus embeddings, `419` query embeddings, and vector attempted/skipped/error counts of `419/0/0`. Corpus build latency was `3,056,787.49 ms`; every scored case used LanceDB search and entered fusion.
+- Against frozen B3, B4 improved Recall-any@5 `0.7876 → 0.8138` (`+0.0263`), Recall-all@5 `0.4821 → 0.5227` (`+0.0406`), Recall-all@10 `0.6372 → 0.6826` (`+0.0453`), and NDCG-any@10 `0.6256 → 0.6552` (`+0.0297`). Mean retrieval latency increased from `9.49 ms` to `205.11 ms` (`+195.62 ms / 21.61×`). Combined case-level dominance was `85` improved, `8` regressed, and `326` unchanged.
+- Family findings: semantic gains were clearest for temporal-reasoning (Recall-all@10 `+0.0945`), while single-session-preference improved NDCG@10 without improving Any@10 coverage; multi-session showed ranking improvement but only limited all-evidence coverage improvement. B4 does not claim to solve preference or multi-evidence retrieval.
+- B5 LoCoMo remains `LATER / NOT STARTED`. The next decision boundary is retrieval architecture hypothesis review. Query decomposition, multi-query retrieval, temporal query expansion, Recall Hint, entity expansion, and iterative/multi-hop retrieval are candidates only. LTR must not start directly, LongMemEval must not drive production lexical-heuristic changes, and any B4-derived proposal requires LoCoMo or other cross-dataset evidence before product-policy consideration. No production/runtime/config/DB/Gateway/deployment/tag operation occurred.
+
 ### memory-engine Benchmark v1 — LongMemEval B3 first official baseline
 
 - Ran the released cleaned LongMemEval-S dataset under `production_hybrid_lexical_session_v1` with `top_k=50`. Input SHA-256: `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`. Validation reports 500 cases, 23,867 session occurrences, 246,750 turns, and 948 evidence-session labels.
