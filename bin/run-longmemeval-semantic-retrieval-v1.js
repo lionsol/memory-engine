@@ -57,11 +57,9 @@ function parseArgs(argv) {
     input: null,
     output: null,
     cachePath: null,
-    queryPlanCachePath: null,
     limit: null,
     topK: 50,
     embeddingBaseUrl: null,
-    plannerBaseUrl: null,
     json: false,
     help: false,
   };
@@ -70,11 +68,9 @@ function parseArgs(argv) {
     if (token === "--input") args.input = argv[++i] || null;
     else if (token === "--output") args.output = argv[++i] || null;
     else if (token === "--cache-path") args.cachePath = argv[++i] || null;
-    else if (token === "--query-plan-cache-path") args.queryPlanCachePath = argv[++i] || null;
     else if (token === "--limit") args.limit = Number(argv[++i]);
     else if (token === "--top-k") args.topK = Number(argv[++i]);
     else if (token === "--embedding-base-url") args.embeddingBaseUrl = argv[++i] || null;
-    else if (token === "--planner-base-url") args.plannerBaseUrl = argv[++i] || null;
     else if (token === "--json") args.json = true;
     else if (token === "--help" || token === "-h") args.help = true;
     else throw new Error(`unknown_argument:${token}`);
@@ -148,8 +144,6 @@ async function runLongMemEvalSemanticCli(argv = process.argv.slice(2), deps = {}
     repositoryWorktreeClean: repositoryProvenance.repository_worktree_clean,
     repositoryProvenanceSource: repositoryProvenance.repository_provenance_source,
   };
-  if (args.queryPlanCachePath !== null) runnerOptions.queryPlanCachePath = args.queryPlanCachePath;
-  if (args.plannerBaseUrl !== null) runnerOptions.plannerBaseUrl = args.plannerBaseUrl;
   if (Object.hasOwn(deps, "embeddingProvider")) runnerOptions.embeddingProvider = deps.embeddingProvider;
   const output = await runDataset(records, runnerOptions);
   output.provenance = {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,8 @@ import test from "node:test";
 import Database from "better-sqlite3";
 
 import h2Cli from "../bin/run-longmemeval-semantic-bounded-multi-query-retrieval-v1.js";
+import rh1Cli from "../bin/run-longmemeval-semantic-query-instruction-retrieval-v1.js";
+import semanticCli from "../bin/run-longmemeval-semantic-retrieval-v1.js";
 import { hybridSearch } from "../lib/recall/hybrid-search.js";
 import { stripPromptMetadataPrefix } from "../query-utils.js";
 import {
@@ -19,13 +22,20 @@ import {
   LONGMEMEVAL_SEMANTIC_QUERY_INSTRUCTION_PROFILE,
 } from "../lib/benchmark/longmemeval-semantic-query-instruction-retrieval-runner-v1.js";
 import {
+  H2_QUERY_PLANNER_MAX_RESPONSE_BYTES,
+  H2_QUERY_PLANNER_MAX_TOKENS,
   H2_QUERY_PLANNER_MODEL,
+  H2_QUERY_PLANNER_MODEL_REVISION,
+  H2_QUERY_PLANNER_OUTPUT_SCHEMA_SHA256,
   H2_QUERY_PLANNER_PROMPT_SHA256,
   H2_QUERY_PLANNER_PROMPT_VERSION,
   H2_QUERY_PLANNER_PROVIDER,
   H2_QUERY_PLANNER_QUERY_MAX_CHARS,
   H2_QUERY_PLANNER_TEMPERATURE,
+  H2_QUERY_PLANNER_TIMEOUT_MS,
   buildBoundedMultiQueryPlannerRequest,
+  boundedMultiQueryPlannerProvenance,
+  createSiliconFlowBoundedMultiQueryPlanner,
   parseBoundedMultiQueryPlannerResponse,
 } from "../lib/benchmark/longmemeval-bounded-multi-query-planner-v1.js";
 import {
@@ -133,6 +143,46 @@ function fakeVectorStoreFactory({ stores = [], behavior = {} } = {}) {
   };
 }
 
+function tieBreakVectorStoreFactory({ stores = [], equalSemantic = false } = {}) {
+  return async ({ path }) => {
+    const store = { path, rows: [], searches: [], closed: false };
+    stores.push(store);
+    store.table = {
+      async add(rows) {
+        store.rows.push(...rows.map(row => ({ ...row, vector: [...row.vector] })));
+      },
+      search(query) {
+        const marker = query[0] === 1 ? "question" : query[1] === 1 ? "planner-one" : "planner-two";
+        return {
+          limit(limit) {
+            store.searches.push({ marker, limit });
+            return {
+              async execute() {
+                if (marker === "planner-two") return [];
+                const rows = marker === "question"
+                  ? [store.rows[0], store.rows[1]]
+                  : [store.rows[1], store.rows[0]];
+                return rows.map((row, index) => ({
+                  ...row,
+                  _distance: equalSemantic
+                    ? 0.5
+                    : (row === store.rows[0] ? 0.05 + index * 0.05 : 0.3 + index * 0.05),
+                })).slice(0, limit);
+              },
+            };
+          },
+        };
+      },
+    };
+    return {
+      table: store.table,
+      close() {
+        store.closed = true;
+      },
+    };
+  };
+}
+
 function h2Options(record, overrides = {}) {
   const seen = overrides.seen || [];
   const stores = overrides.stores || [];
@@ -152,17 +202,102 @@ function h2Options(record, overrides = {}) {
   };
 }
 
+function queryPlanKey(overrides = {}) {
+  return buildQueryPlanCacheKey({
+    provider: H2_QUERY_PLANNER_PROVIDER,
+    baseUrlIdentity: "https://planner.example/",
+    model: H2_QUERY_PLANNER_MODEL,
+    modelRevision: H2_QUERY_PLANNER_MODEL_REVISION,
+    promptVersion: H2_QUERY_PLANNER_PROMPT_VERSION,
+    promptSha256: H2_QUERY_PLANNER_PROMPT_SHA256,
+    temperature: H2_QUERY_PLANNER_TEMPERATURE,
+    outputSchemaSha256: H2_QUERY_PLANNER_OUTPUT_SCHEMA_SHA256,
+    question: "question with a hidden answer",
+    ...overrides,
+  });
+}
+
+function queryPlanForKey(key, queries = ["first evidence", "second evidence"]) {
+  return {
+    queries,
+    provenance: {
+      provider: key.provider,
+      base_url_identity: key.base_url_identity,
+      model: key.model,
+      model_revision: key.model_revision,
+      prompt_version: key.prompt_version,
+      prompt_sha256: key.prompt_sha256,
+      temperature: key.temperature,
+      output_schema_sha256: key.output_schema_sha256,
+      question_input_sha256: key.question_input_sha256,
+    },
+  };
+}
+
+function plannerProviderResponseBody(content = JSON.stringify({ queries: ["planner-one", "planner-two"] })) {
+  return JSON.stringify({ choices: [{ message: { content } }] });
+}
+
+function fakePlannerRequest({ mode = "success", statusCode = 200, responseBody = plannerProviderResponseBody(), observed }) {
+  return (url, options, callback) => {
+    observed.url = String(url);
+    observed.options = options;
+    let timeoutHandler = null;
+    const request = new EventEmitter();
+    request.setTimeout = (milliseconds, handler) => {
+      observed.setTimeoutMs = milliseconds;
+      timeoutHandler = handler;
+      return request;
+    };
+    request.write = body => {
+      observed.body = JSON.parse(String(body));
+    };
+    request.end = () => {
+      queueMicrotask(() => {
+        if (mode === "timeout") {
+          timeoutHandler?.();
+          return;
+        }
+        if (mode === "request-error") {
+          request.emit("error", new Error("transport failed test-secret"));
+          return;
+        }
+        const response = new EventEmitter();
+        response.statusCode = statusCode;
+        response.destroy = () => {
+          observed.responseDestroyed = true;
+        };
+        callback(response);
+        if (mode === "oversize") {
+          response.emit("data", Buffer.alloc(H2_QUERY_PLANNER_MAX_RESPONSE_BYTES + 1, 97));
+          return;
+        }
+        response.emit("data", Buffer.from(responseBody));
+        response.emit("end");
+      });
+    };
+    request.destroy = () => {
+      observed.requestDestroyed = true;
+    };
+    return request;
+  };
+}
+
 test("H2 profile is independent and the default B4/RH1 profiles remain distinct", () => {
   assert.notEqual(LONGMEMEVAL_SEMANTIC_BOUNDED_MULTI_QUERY_PROFILE, LONGMEMEVAL_SEMANTIC_PROFILE);
   assert.notEqual(LONGMEMEVAL_SEMANTIC_BOUNDED_MULTI_QUERY_PROFILE, LONGMEMEVAL_SEMANTIC_QUERY_INSTRUCTION_PROFILE);
   const request = buildBoundedMultiQueryPlannerRequest("Question only");
   assert.equal(request.model, H2_QUERY_PLANNER_MODEL);
   assert.equal(request.temperature, H2_QUERY_PLANNER_TEMPERATURE);
+  assert.equal(request.max_tokens, H2_QUERY_PLANNER_MAX_TOKENS);
   assert.equal(request.messages.length, 1);
   assert.equal(request.messages[0].content.endsWith("\nQuestion:Question only"), true);
   assert.equal(request.messages[0].content.includes("answer_session_ids"), false);
   assert.equal(typeof H2_QUERY_PLANNER_PROMPT_SHA256, "string");
   assert.equal(H2_QUERY_PLANNER_PROMPT_SHA256.length, 64);
+  assert.equal(H2_QUERY_PLANNER_OUTPUT_SCHEMA_SHA256.length, 64);
+  assert.equal(H2_QUERY_PLANNER_TIMEOUT_MS, 45_000);
+  assert.equal(H2_QUERY_PLANNER_MAX_RESPONSE_BYTES, 65_536);
   assert.equal(H2_QUERY_PLANNER_PROMPT_VERSION, "bounded_multi_query_planner_prompt_v1");
 });
 
@@ -187,38 +322,74 @@ test("strict planner parser rejects malformed, duplicate, repeated, and over-lim
   for (const value of invalid) assert.throws(() => parseBoundedMultiQueryPlannerResponse(value, { exactProductionQuery: "original" }));
 });
 
+test("planner transport is bounded, sanitized, and sends the frozen request contract", async () => {
+  const observed = {};
+  const planner = createSiliconFlowBoundedMultiQueryPlanner({
+    baseUrl: "https://user:password@example.com/base?token=secret#fragment",
+    providerEnv: { SILICONFLOW_API_KEY: "test-secret" },
+    requestImpl: fakePlannerRequest({ observed }),
+  });
+  assert.deepEqual(await planner("question only"), JSON.stringify({ queries: ["planner-one", "planner-two"] }));
+  assert.equal(observed.url, "https://example.com/base/v1/chat/completions");
+  assert.equal(observed.options.timeout, H2_QUERY_PLANNER_TIMEOUT_MS);
+  assert.equal(observed.setTimeoutMs, H2_QUERY_PLANNER_TIMEOUT_MS);
+  assert.equal(observed.body.model, H2_QUERY_PLANNER_MODEL);
+  assert.equal(observed.body.temperature, 0);
+  assert.equal(observed.body.max_tokens, H2_QUERY_PLANNER_MAX_TOKENS);
+  const provenance = boundedMultiQueryPlannerProvenance("https://user:password@example.com/base?token=secret#fragment");
+  assert.equal(provenance.planner_request_url_identity, observed.url);
+  assert.equal(provenance.planner_api_path, "/base/v1/chat/completions");
+  assert.equal(provenance.planner_max_tokens, H2_QUERY_PLANNER_MAX_TOKENS);
+  assert.equal(provenance.planner_timeout_ms, H2_QUERY_PLANNER_TIMEOUT_MS);
+  assert.equal(provenance.planner_max_response_bytes, H2_QUERY_PLANNER_MAX_RESPONSE_BYTES);
+  assert.equal(JSON.stringify(provenance).includes("user"), false);
+  assert.equal(JSON.stringify(provenance).includes("password"), false);
+  assert.equal(JSON.stringify(provenance).includes("secret"), false);
+});
+
+test("planner transport rejects HTTP, timeout, oversize, malformed, missing-content, and provider failures once", async () => {
+  const cases = [
+    { label: "http", mode: "success", statusCode: 503, responseBody: "{}" },
+    { label: "timeout", mode: "timeout" },
+    { label: "request error", mode: "request-error" },
+    { label: "oversize", mode: "oversize" },
+    { label: "malformed", mode: "success", responseBody: "not-json" },
+    { label: "missing content", mode: "success", responseBody: JSON.stringify({ choices: [{}] }) },
+    {
+      label: "provider error",
+      mode: "success",
+      responseBody: JSON.stringify({ error: { message: "Bearer test-secret" } }),
+    },
+  ];
+  for (const failure of cases) {
+    const observed = {};
+    const planner = createSiliconFlowBoundedMultiQueryPlanner({
+      baseUrl: "https://example.com",
+      providerEnv: { SILICONFLOW_API_KEY: "test-secret" },
+      requestImpl: fakePlannerRequest({ ...failure, observed }),
+    });
+    await assert.rejects(planner("question only"), error => {
+      assert.equal(String(error).includes("test-secret"), false, failure.label);
+      return true;
+    }, failure.label);
+    assert.equal(observed.requestDestroyed || failure.mode === "success", true, failure.label);
+  }
+});
+
 test("query-plan cache is separate, primary-keyed, restart-reusable, and upserts one entry", () => {
   const root = mkdtempSync(join(tmpdir(), "memory-engine-h2-plan-cache-"));
   const path = join(root, "query-plan.sqlite");
-  const key = buildQueryPlanCacheKey({
-    provider: H2_QUERY_PLANNER_PROVIDER,
-    baseUrlIdentity: "https://planner.example/",
-    model: H2_QUERY_PLANNER_MODEL,
-    promptVersion: H2_QUERY_PLANNER_PROMPT_VERSION,
-    question: "question with a hidden answer",
-  });
-  const plan = {
-    queries: ["first evidence", "second evidence"],
-    provenance: {
-      provider: key.provider,
-      base_url_identity: key.base_url_identity,
-      model: key.model,
-      prompt_version: key.prompt_version,
-      question_input_sha256: key.question_input_sha256,
-    },
-  };
+  const key = queryPlanKey();
+  const plan = queryPlanForKey(key);
   try {
     const cache = createBenchmarkQueryPlanCache(path);
     cache.set(key, plan);
     assert.deepEqual(cache.get(key).queries, plan.queries);
-    const differentIdentityKey = buildQueryPlanCacheKey({
+    const differentIdentityKey = queryPlanKey({
       provider: "DifferentProvider",
-      baseUrlIdentity: key.base_url_identity,
       model: "different-model",
-      promptVersion: key.prompt_version,
-      question: "question with a hidden answer",
     });
-    cache.set(differentIdentityKey, plan);
+    cache.set(differentIdentityKey, queryPlanForKey(differentIdentityKey));
     assert.deepEqual(cache.get(differentIdentityKey).queries, plan.queries);
     cache.set(key, { ...plan, queries: ["updated first", "updated second"] });
     cache.close();
@@ -241,13 +412,105 @@ test("query-plan cache is separate, primary-keyed, restart-reusable, and upserts
   }
 });
 
+test("query-plan cache v2 identity changes always miss and cache rows reject tampering", () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-h2-plan-cache-v2-"));
+  const path = join(root, "query-plan.sqlite");
+  const provenancePath = join(root, "provenance-tamper.sqlite");
+  const key = queryPlanKey();
+  try {
+    const cache = createBenchmarkQueryPlanCache(path);
+    cache.set(key, queryPlanForKey(key));
+    const changedIdentities = [
+      ["provider", { provider: "OtherProvider" }],
+      ["base_url_identity", { baseUrlIdentity: "https://other-planner.example/" }],
+      ["model", { model: "other-model" }],
+      ["model_revision", { modelRevision: "revision-2" }],
+      ["prompt_version", { promptVersion: "bounded_multi_query_planner_prompt_v2" }],
+      ["prompt_sha256", { promptSha256: "a".repeat(64) }],
+      ["temperature", { temperature: 1 }],
+      ["output_schema_sha256", { outputSchemaSha256: "c".repeat(64) }],
+      ["question_input_sha256", { question: "a different question" }],
+    ];
+    for (const [field, override] of changedIdentities) {
+      assert.equal(cache.get(queryPlanKey(override)), null, `${field} must be part of cache identity`);
+    }
+    assert.throws(
+      () => cache.set(key, {
+        ...queryPlanForKey(key),
+        provenance: { gold_answer: "must not persist" },
+      }),
+      /forbidden|reserved/i,
+    );
+    cache.close();
+
+    const database = new Database(path);
+    database.prepare("UPDATE query_plan_cache_entries SET model_revision = ?").run("tampered");
+    database.close();
+    const reopened = createBenchmarkQueryPlanCache(path);
+    assert.throws(() => reopened.get(key), /provenance mismatch/i);
+    reopened.close();
+    const consistentDatabase = new Database(path);
+    const consistentRow = consistentDatabase.prepare("SELECT provenance_json FROM query_plan_cache_entries").get();
+    const consistentlyTamperedProvenance = JSON.parse(consistentRow.provenance_json);
+    consistentlyTamperedProvenance.model_revision = "tampered";
+    consistentDatabase.prepare(
+      "UPDATE query_plan_cache_entries SET model_revision = ?, provenance_json = ?",
+    ).run("tampered", JSON.stringify(consistentlyTamperedProvenance));
+    consistentDatabase.close();
+    const reopenedConsistent = createBenchmarkQueryPlanCache(path);
+    assert.throws(() => reopenedConsistent.get(key), /provenance mismatch/i);
+    reopenedConsistent.close();
+
+    const provenanceCache = createBenchmarkQueryPlanCache(provenancePath);
+    provenanceCache.set(key, queryPlanForKey(key));
+    provenanceCache.close();
+    const provenanceDatabase = new Database(provenancePath);
+    const row = provenanceDatabase.prepare("SELECT provenance_json FROM query_plan_cache_entries").get();
+    const tamperedProvenance = JSON.parse(row.provenance_json);
+    tamperedProvenance.temperature = 99;
+    provenanceDatabase.prepare("UPDATE query_plan_cache_entries SET provenance_json = ?").run(
+      JSON.stringify(tamperedProvenance),
+    );
+    provenanceDatabase.close();
+    const reopenedProvenance = createBenchmarkQueryPlanCache(provenancePath);
+    assert.throws(() => reopenedProvenance.get(key), /provenance mismatch/i);
+    reopenedProvenance.close();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("query-plan cache rejects legacy/invalid formats and forbidden identity fields", () => {
   const root = mkdtempSync(join(tmpdir(), "memory-engine-h2-invalid-cache-"));
   const legacy = join(root, "legacy.sqlite");
+  const empty = join(root, "empty.sqlite");
+  const legacyV1 = join(root, "legacy-v1.sqlite");
   const invalid = join(root, "invalid.sqlite");
   try {
     writeFileSync(legacy, "{}", "utf8");
     assert.throws(() => createBenchmarkQueryPlanCache(legacy), /legacy|invalid/i);
+    writeFileSync(empty, "", "utf8");
+    assert.throws(() => createBenchmarkQueryPlanCache(empty), /legacy|invalid/i);
+    const legacyDatabase = new Database(legacyV1);
+    legacyDatabase.exec(`
+      CREATE TABLE query_plan_cache_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO query_plan_cache_metadata (key, value)
+      VALUES ('schema', 'memory_engine_benchmark_query_plan_cache_v1');
+      CREATE TABLE query_plan_cache_entries (
+        cache_key TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        base_url_identity TEXT NOT NULL,
+        model TEXT NOT NULL,
+        prompt_version TEXT NOT NULL,
+        question_input_sha256 TEXT NOT NULL,
+        plan_hash TEXT NOT NULL,
+        queries_json TEXT NOT NULL,
+        provenance_json TEXT NOT NULL
+      );
+      PRAGMA user_version = 1;
+    `);
+    legacyDatabase.close();
+    assert.throws(() => createBenchmarkQueryPlanCache(legacyV1), /unsupported|invalid/i);
     const cache = createBenchmarkQueryPlanCache(invalid);
     cache.close();
     const database = new Database(invalid);
@@ -262,6 +525,13 @@ test("query-plan cache rejects legacy/invalid formats and forbidden identity fie
       question: "raw question",
       questionInputSha256: "raw question",
     }));
+    const validKey = queryPlanKey();
+    const goldCache = createBenchmarkQueryPlanCache(join(root, "gold.sqlite"));
+    assert.throws(() => goldCache.set(validKey, {
+      ...queryPlanForKey(validKey),
+      provenance: { gold_answer: "must not persist" },
+    }), /forbidden|reserved/i);
+    goldCache.close();
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -314,6 +584,31 @@ test("H2 executes exact query plus two planner queries, performs three searches,
   assert.equal(capturedSearch.debug.channel_candidate_provenance.vector.ids.length, 3);
   assert.equal(capturedSearch.debug.post_rerank_top.some(item => item.semantic_score === 0.99), true);
   assert.equal(JSON.stringify(result).includes("answer_session_ids"), false);
+});
+
+test("H2 query-level RRF ties prefer max semantic score, then memory id", async () => {
+  async function runTieCase(equalSemantic) {
+    const record = fixture({ question_id: `h2_rrf_tie_${equalSemantic ? "equal" : "semantic"}` });
+    const stores = [];
+    let capturedSearch = null;
+    await runLongMemEvalSemanticBoundedMultiQueryRetrievalCase(record, h2Options(record, {
+      stores,
+      vectorStoreFactory: tieBreakVectorStoreFactory({ stores, equalSemantic }),
+      hybridSearchFn: async (query, options, runtime) => {
+        capturedSearch = await hybridSearch(query, options, runtime);
+        return capturedSearch;
+      },
+    }));
+    return {
+      ids: capturedSearch.debug.channel_candidate_provenance.vector.ids,
+      rowIds: stores[0].rows.slice(0, 2).map(row => row.id.slice(0, 16)),
+    };
+  }
+
+  const semanticTie = await runTieCase(false);
+  assert.deepEqual(semanticTie.ids.slice(0, 2), [semanticTie.rowIds[0], semanticTie.rowIds[1]]);
+  const equalSemanticTie = await runTieCase(true);
+  assert.deepEqual(equalSemanticTie.ids.slice(0, 2), [...equalSemanticTie.rowIds].sort((a, b) => a.localeCompare(b)));
 });
 
 test("H2 first vector query is the exact production stripped query while lexical input stays original", async () => {
@@ -505,9 +800,17 @@ test("H2 runner-owned query-plan cache closes and CLI exposes an independent det
   assert.equal(output.profile, LONGMEMEVAL_SEMANTIC_BOUNDED_MULTI_QUERY_PROFILE);
   assert.equal(ownedClosed, true);
 
-  const cliOutput = await h2Cli.runLongMemEvalSemanticBoundedMultiQueryCli(["--input", "/tmp/h2-not-read.json"], {
+  const cliOutput = await h2Cli.runLongMemEvalSemanticBoundedMultiQueryCli([
+    "--input", "/tmp/h2-not-read.json",
+    "--query-plan-cache-path", "/tmp/h2-query-plan.sqlite",
+    "--planner-base-url", "https://planner.example/base",
+  ], {
     readFile: () => Buffer.from("[]\n"),
     repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+    runnerOptions: {
+      queryPlanCachePath: "/tmp/caller-forged-plan.sqlite",
+      plannerBaseUrl: "https://caller-forged.example",
+    },
     runDataset: async (records, options) => ({
       records,
       options,
@@ -520,9 +823,28 @@ test("H2 runner-owned query-plan cache closes and CLI exposes an independent det
   assert.equal(cliOutput.printable.run.profile, LONGMEMEVAL_SEMANTIC_BOUNDED_MULTI_QUERY_PROFILE);
   assert.equal(cliOutput.output.records.length, 0);
   assert.equal(cliOutput.output.options.repositoryCommit, TEST_REPOSITORY_COMMIT);
+  assert.equal(cliOutput.output.options.queryPlanCachePath, "/tmp/h2-query-plan.sqlite");
+  assert.equal(cliOutput.output.options.plannerBaseUrl, "https://planner.example/base");
   const help = await h2Cli.runLongMemEvalSemanticBoundedMultiQueryCli(["--help"]);
   assert.equal(help.usage.includes(LONGMEMEVAL_SEMANTIC_BOUNDED_MULTI_QUERY_PROFILE), true);
   assert.equal(help.usage.includes("query-plan-cache-path"), true);
+});
+
+test("H2-only CLI arguments stay isolated from B4 and RH1 shared parsers", async () => {
+  for (const argument of ["--query-plan-cache-path", "--planner-base-url"]) {
+    assert.throws(() => semanticCli.parseArgs([argument, "value"]), /unknown_argument/);
+    await assert.rejects(
+      rh1Cli.runLongMemEvalSemanticQueryInstructionCli(["--input", "/tmp/rh1-not-read.json", argument, "value"], {
+        repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+      }),
+      /unknown_argument/,
+    );
+  }
+  assert.throws(() => h2Cli.parseH2Args(["--query-plan-cache-path"]), /missing_argument_value/);
+  assert.throws(() => h2Cli.parseH2Args(["--planner-base-url"]), /missing_argument_value/);
+  assert.throws(() => h2Cli.parseH2Args(["--query-plan-cache-path", "one", "--query-plan-cache-path", "two"]), /duplicate_argument/);
+  assert.throws(() => h2Cli.parseH2Args(["--planner-base-url", "one", "--planner-base-url", "two"]), /duplicate_argument/);
+  assert.throws(() => h2Cli.parseH2Args(["--unknown-h2-flag"]), /unknown_argument/);
 });
 
 test("H2 dataset aggregates planner/vector provenance and does not introduce evaluator fields", async () => {
@@ -537,7 +859,7 @@ test("H2 dataset aggregates planner/vector provenance and does not introduce eva
   assert.equal(output.provenance.vector_search_count, 3);
   assert.equal(output.provenance.vector_query_fusion, "rrf");
   assert.equal(output.provenance.query_plan_cache_schema, H2_QUERY_PLAN_CACHE_SCHEMA);
-  assert.equal(output.provenance.query_plan_cache_user_version, 1);
+  assert.equal(output.provenance.query_plan_cache_user_version, H2_QUERY_PLAN_CACHE_SQLITE_USER_VERSION);
   assert.equal(JSON.stringify(output).includes("answer_session_ids"), false);
   assert.equal(JSON.stringify(output).includes("question_type"), true);
 });

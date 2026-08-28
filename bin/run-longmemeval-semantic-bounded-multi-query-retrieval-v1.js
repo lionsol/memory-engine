@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-const { runLongMemEvalSemanticCli } = require("./run-longmemeval-semantic-retrieval-v1.js");
+const {
+  parseArgs: parseSemanticArgs,
+  runLongMemEvalSemanticCli,
+} = require("./run-longmemeval-semantic-retrieval-v1.js");
 
 const LONGMEMEVAL_SEMANTIC_BOUNDED_MULTI_QUERY_PROFILE =
   "production_hybrid_semantic_bounded_multi_query_session_v1";
@@ -28,14 +31,51 @@ function usage() {
   ].join("\n");
 }
 
+function parseH2Args(argv = []) {
+  const baseArgv = [];
+  let queryPlanCachePath = null;
+  let plannerBaseUrl = null;
+  let queryPlanSeen = false;
+  let plannerBaseSeen = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token !== "--query-plan-cache-path" && token !== "--planner-base-url") {
+      baseArgv.push(token);
+      continue;
+    }
+    const isQueryPlan = token === "--query-plan-cache-path";
+    if ((isQueryPlan && queryPlanSeen) || (!isQueryPlan && plannerBaseSeen)) {
+      throw new Error(`duplicate_argument:${token}`);
+    }
+    const value = argv[index + 1];
+    if (!value || String(value).startsWith("--")) throw new Error(`missing_argument_value:${token}`);
+    index += 1;
+    if (isQueryPlan) {
+      queryPlanSeen = true;
+      queryPlanCachePath = String(value);
+    } else {
+      plannerBaseSeen = true;
+      plannerBaseUrl = String(value);
+    }
+  }
+  parseSemanticArgs(baseArgv);
+  return { baseArgv, queryPlanCachePath, plannerBaseUrl };
+}
+
 async function runLongMemEvalSemanticBoundedMultiQueryCli(argv = process.argv.slice(2), deps = {}) {
+  const parsed = parseH2Args(argv);
   const runDataset = deps.runDataset || (await import(
     "../lib/benchmark/longmemeval-semantic-bounded-multi-query-retrieval-runner-v1.js"
   )).runLongMemEvalSemanticBoundedMultiQueryRetrievalDataset;
-  return runLongMemEvalSemanticCli(argv, {
+  return runLongMemEvalSemanticCli(parsed.baseArgv, {
     ...deps,
     runDataset,
     usage: deps.usage || usage,
+    runnerOptions: {
+      ...(deps.runnerOptions || {}),
+      queryPlanCachePath: parsed.queryPlanCachePath,
+      plannerBaseUrl: parsed.plannerBaseUrl,
+    },
   });
 }
 
@@ -51,6 +91,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
 module.exports = {
   LONGMEMEVAL_SEMANTIC_BOUNDED_MULTI_QUERY_PROFILE,
   main,
+  parseH2Args,
   runLongMemEvalSemanticBoundedMultiQueryCli,
   usage,
 };
