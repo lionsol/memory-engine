@@ -1,5 +1,74 @@
 ## 2026-08-28
 
+### Benchmark v1 H2-D2 failure closeout
+
+- H2-S1 remains `PASS / REAL-PROVIDER CHAIN QUALIFIED`. H2-S2's initial
+  foreground execution was `EXECUTION_INTERRUPTED / INCOMPLETE`: the
+  terminal/window disappeared, the benchmark process was later absent, and the
+  full output was absent. The single provider-capable execution was consumed
+  (`1/1`), so the resulting cache state is partial-progress evidence only.
+- H2-S2-R1 preflight passed at repository commit
+  `7c404efcf7a02c8867020a3ee8fe4c9fae1d8117` on `main` with a clean worktree
+  and dataset SHA-256
+  `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`.
+  Its provider-capable execution was `1/1 consumed`, command RC was `1`, and
+  the full output was absent. The failure is
+  `FAIL_CLOSED / PLANNER_OUTPUT_CONTRACT_VIOLATION` at stage
+  `semantic_profile_planner_parse`.
+- The exact failure was
+  `bounded_multi_query_planner_parse: planner query duplicates the production
+  query`. It occurred at dataset zero-based index `405` / scored one-based
+  index `382`, question `22d2cb42`, type `knowledge-update`, question-input
+  SHA-256
+  `719823d31f3a2bc71b70ec0380c75b960068cd6e714fc5c69abef8dd71a27e86`.
+  The real planner returned at least one query equal to the exact production
+  query, and the frozen strict parser rejected it. This is a genuine
+  dataset-robustness failure of the frozen planner contract, not an environment
+  failure, repository defect, or metrics regression. Unpersisted exact API call
+  counts are neither recorded nor inferred.
+- Initial interruption partial-progress evidence: embedding cache
+  `/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-embedding-cache.sqlite`,
+  SHA-256 `97d12935a8789ff01df87eedde935541a14c2e0335cc1587b4e5230b2b462eae`,
+  size `367063040 bytes`, `16761` entries, dimension `2560`, integrity `ok`;
+  query-plan cache
+  `/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-query-plan-cache.sqlite`,
+  SHA-256 `93e82555355a25e4662acefca7215fde4272f9dd80c087bfa1102760c009519a`,
+  size `921600 bytes`, `194` entries, schema
+  `memory_engine_benchmark_query_plan_cache_v2`, `user_version=2`, integrity
+  `ok`.
+- R1 final artifacts: sanitized log
+  `/tmp/memory-engine-benchmark-v1/h2-s2-r1-7c404ef.log`, SHA-256
+  `e1bf1cb8042738e204905f1862e8cdcb7ca5c9aab8c50186cfc8d51e78d5083f`, size
+  `1301 bytes`; RC record
+  `/tmp/memory-engine-benchmark-v1/h2-s2-r1-7c404ef.rc`, value `1`; final
+  embedding cache SHA-256
+  `50e9f830d93e07b3b5d53d19c267af90ff4f55c3ed7b503e4d27f645fe3ba170`, size
+  `374845440 bytes`, `17118` entries, dimension `2560`, integrity `ok`; final
+  query-plan cache SHA-256
+  `5ae8f0de090cb826f09778d4f363b3004d3b0fcf0be2ae9e78942ba37a91ab3c`, size
+  `1810432 bytes`, `381` entries, schema
+  `memory_engine_benchmark_query_plan_cache_v2`, `user_version=2`, integrity
+  `ok`. R1 persisted `187` new query plans (`194 → 381`) and `357` new
+  embeddings (`16761 → 17118`). These counts are only persisted partial
+  progress and do not imply complete provider-call totals.
+- H2 final adjudication is **`INSUFFICIENT / FULL EVALUATION NOT COMPLETED /
+  PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED`**.
+  The six H2-S2 numerical gate conditions are `NOT EVALUABLE`: absent complete
+  output means there are no legal H2 overall, family, or case-level metrics.
+  The insufficiency comes from incomplete full evaluation plus the real failure
+  of the frozen planner contract on the official dataset, not from a computed
+  numerical threshold pass/fail. H2-S2-R2 is `DO NOT RUN / NOT AUTHORIZED`.
+- Anti-drift decision: do not loosen duplicate rejection, add planner retries,
+  hand-fill the failed case, or modify the H2 prompt/parser/profile and call it
+  the same H2. B4 `production_hybrid_semantic_session_v1` remains the frozen
+  semantic baseline authority. H2 has no complete result comparable with B4;
+  B5 LoCoMo remains `LATER / NOT STARTED`; no production query shaping, LTR,
+  or lexical tuning follows from this failure. Any future multi-query work
+  requires a new independent hypothesis/profile contract with newly frozen
+  variables and gate; that future profile/H3 is `NOT AUTHORIZED / NOT STARTED`.
+  All artifacts are temporary and not vendored; Benchmark evidence is not
+  production authority.
+
 ### Benchmark v1 H2-D1 documentation and evaluation-gate freeze
 
 - H2-I1 is source commit `d47ef6b0e9f6277a5c4c0e0e9ba8a63f558fc0ee`,

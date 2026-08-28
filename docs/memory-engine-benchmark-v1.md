@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2-S1 PASS / REAL-PROVIDER CHAIN QUALIFIED / H2 QUALITY OPEN / H2-S2 NOT AUTHORIZED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -496,9 +496,98 @@ recorded and compared but has no hard threshold in this gate. Even a
 verification; it cannot directly enter production policy. B3, B4, and RH1
 remain frozen, and Benchmark evidence is not production authority.
 
-The current route is `H2-I1/I2 = REPO-TESTED`, `H2-S1 = PASS`,
-`H2-S2 = NEXT / NOT AUTHORIZED / NOT RUN`, `H2 final quality adjudication =
-OPEN`, and `B5 LoCoMo = LATER / NOT STARTED`.
+### H2 final failure closeout
+
+H2-S2's initial foreground execution was interrupted: the terminal/window
+disappeared, the benchmark process was later absent, and the full output was
+absent. The provider-capable execution count was `1/1 consumed`; the resulting
+cache state is partial-progress evidence, not a baseline. H2-S2-R1 had a
+passing preflight, consumed the single provider-capable execution, and exited
+with `COMMAND_RC=1` and no full output. Its classification is
+`FAIL_CLOSED / PLANNER_OUTPUT_CONTRACT_VIOLATION`.
+
+The H2 final status is **`INSUFFICIENT / FULL EVALUATION NOT COMPLETED /
+PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED`**.
+The six numerical H2-S2 gate conditions are `NOT EVALUABLE`: no complete
+output exists, so there are no valid H2 overall, family, or case-level quality
+metrics. `INSUFFICIENT` follows from the incomplete full evaluation and the
+real failure of the frozen planner contract on the official dataset; it is not
+an after-the-fact numerical threshold adjudication.
+
+### H2-S2 initial interruption evidence
+
+The initial foreground H2-S2 execution consumed `1/1` provider-capable
+execution. Its partial embedding cache was
+`/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-embedding-cache.sqlite`,
+SHA-256
+`97d12935a8789ff01df87eedde935541a14c2e0335cc1587b4e5230b2b462eae`, size
+`367063040 bytes`, with `16761` entries, dimension `2560`, and integrity `ok`.
+Its query-plan cache was
+`/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-query-plan-cache.sqlite`,
+SHA-256
+`93e82555355a25e4662acefca7215fde4272f9dd80c087bfa1102760c009519a`, size
+`921600 bytes`, with `194` entries, schema
+`memory_engine_benchmark_query_plan_cache_v2`, SQLite `user_version=2`, and
+integrity `ok`. These are partial-progress artifacts, not a formal baseline.
+
+### H2-S2-R1 failure evidence
+
+R1 ran at repository commit `7c404efcf7a02c8867020a3ee8fe4c9fae1d8117`, on
+`main` with a clean worktree, against dataset SHA-256
+`d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`. The B4
+comparison output authority has SHA-256
+`de62cf40fe21485bf99a4f17129efa6097938a29ace8e88b78b2c2ca90c86cb8`.
+Preflight passed; the provider-capable execution was `1/1 consumed`; command
+RC was `1`; and the full output was absent.
+
+Failure stage: `semantic_profile_planner_parse`. Exact failure:
+`bounded_multi_query_planner_parse: planner query duplicates the production
+query`. It occurred at dataset zero-based index `405` / scored one-based index
+`382`, question `22d2cb42`, type `knowledge-update`, with question-input
+SHA-256
+`719823d31f3a2bc71b70ec0380c75b960068cd6e714fc5c69abef8dd71a27e86`.
+
+The real planner returned at least one query identical to the exact production
+query, which the frozen strict parser correctly rejected. This demonstrates
+that the planner contract was not robust over the official dataset. It is not
+classified as an environment failure, repository defect, or metrics
+regression. Exact API call counts for requests that were not persisted are not
+recorded or inferred.
+
+### H2-S2-R1 final artifacts
+
+The sanitized R1 log was
+`/tmp/memory-engine-benchmark-v1/h2-s2-r1-7c404ef.log`, SHA-256
+`e1bf1cb8042738e204905f1862e8cdcb7ca5c9aab8c50186cfc8d51e78d5083f`, size
+`1301 bytes`; the RC record was
+`/tmp/memory-engine-benchmark-v1/h2-s2-r1-7c404ef.rc` with value `1`.
+The final embedding cache at the partial-progress path has SHA-256
+`50e9f830d93e07b3b5d53d19c267af90ff4f55c3ed7b503e4d27f645fe3ba170`, size
+`374845440 bytes`, `17118` entries, dimension `2560`, and integrity `ok`.
+The final query-plan cache has SHA-256
+`5ae8f0de090cb826f09778d4f363b3004d3b0fcf0be2ae9e78942ba37a91ab3c`, size
+`1810432 bytes`, `381` entries, schema
+`memory_engine_benchmark_query_plan_cache_v2`, SQLite `user_version=2`, and
+integrity `ok`. R1 persisted `187` new query plans (`194 → 381`) and `357`
+new embeddings (`16761 → 17118`). These counts describe only successful
+persisted partial progress and do not imply complete request or provider-call
+totals.
+
+All output, logs, caches, and temporary data-plane files remain in the
+temporary directory and are not vendored or baseline authority. The frozen B4
+semantic baseline remains the comparison authority.
+
+### H2 anti-drift route decision
+
+H2-S2-R2 is **`DO NOT RUN / NOT AUTHORIZED`**. Do not loosen duplicate
+rejection, add planner retries, hand-fill the failed case, modify the H2
+prompt/parser/profile and call it the same H2, or reopen H2 in place. H2 has
+produced no complete result comparable with B4. B5 LoCoMo remains
+`LATER / NOT STARTED`; H2 failure does not authorize production query
+shaping, LTR, or lexical tuning. If multi-query work is resumed, it requires a
+new independent hypothesis/profile contract with newly frozen variables and
+gate; that future profile/H3 is currently `NOT AUTHORIZED / NOT STARTED`.
+Benchmark evidence is not production authority.
 
 ## Later compatibility target — AML
 
