@@ -1,5 +1,24 @@
 ## 2026-08-28
 
+### Benchmark v1 B5-I2 isolated LoCoMo lexical runner
+
+- Added `lib/benchmark/locomo-retrieval-runner-v1.js`,
+  `bin/run-locomo-retrieval-v1.js`, and focused tests for the independent
+  `production_hybrid_lexical_locomo_dialog_v1` profile. The runner owns one
+  temporary Core/Engine/FTS data plane per conversation, reuses it across QA,
+  maps memory ids back to `{sample_id, dia_id}`, and calls the existing
+  production `hybridSearch()` path.
+- The runner emits dialog-primary strict and canonicalized sensitivity
+  aggregates, first-occurrence session projection diagnostics, exact git/input
+  provenance, and explicit disabled vector/host-manager fallback state. Raw
+  `speaker: text` projection is frozen; BLIP caption materialization is an
+  explicit opt-in.
+- Node 24 focused tests cover isolation/reuse, dynamic mapping, optional
+  captions, gold exclusion, live-path rejection, deterministic CLI seams, and
+  the official `1,972/14` strict and `1,978/8` sensitivity denominators. The
+  official retrieval baseline remains unrun; no provider or runtime state was
+  touched.
+
 ### Benchmark v1 B5-I1 LoCoMo contract implementation
 
 - Added `lib/benchmark/locomo-v1.js`, `bin/benchmark-locomo-v1.js`, and

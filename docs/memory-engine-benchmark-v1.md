@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED / BASELINE NOT RUN`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2 RUNNER REPO-TESTED / BASELINE NOT RUN`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -660,6 +660,40 @@ category, and evaluator labels. Any later retrieval implementation must reuse
 the existing temporary benchmark isolation and production hybridSearch seam;
 this contract commit does not authorize provider, runtime, database, or
 deployment work.
+
+## B5-I2 — Isolated LoCoMo lexical retrieval runner
+
+B5-I2 source implementation is **`REPO-TESTED / BASELINE NOT RUN`** under the
+independent profile `production_hybrid_lexical_locomo_dialog_v1`. It adds an
+independent CLI and runner that materialize one benchmark-owned temporary
+Core/Engine/FTS data plane per conversation, reuse that corpus for all of the
+conversation's QA, and call the existing production `hybridSearch()` adapter.
+The official LoCoMo retrieval baseline has not been executed.
+
+The corpus unit is a raw dialog turn using the frozen `speaker: text`
+projection (`speaker_colon_raw_text_v1`). An optional, explicit
+`[shares ...]` BLIP caption suffix is available under
+`shares_caption_suffix_v1`; it is disabled by default. Each result maps its
+benchmark memory id back to `{sample_id, dia_id, session_id}` before dialog
+and first-occurrence-deduplicated session projection scoring.
+
+The runner emits both frozen evidence views: strict
+`locomo_evidence_strict_v1` (`1,972` scored / `14` skipped on the official
+dataset) and canonicalized sensitivity
+`locomo_evidence_canonicalized_v1` (`1,978` scored / `8` skipped). Dialog
+metrics remain primary; session metrics are compatibility diagnostics. The
+runner uses the existing lexical path and production hybrid fusion with an
+empty benchmark-local vector backend and a disabled host memory-manager
+fallback. Gold answers, evidence labels, and evaluator fields never enter
+Core, Engine, FTS, or Search.
+
+The CLI records exact git provenance, input dataset SHA, profile, corpus
+ownership/reuse, and the two aggregate policies. It rejects dirty or
+unresolvable repository provenance and never resolves live OpenClaw memory
+paths. Focused tests cover ten-conversation corpus isolation/reuse, dynamic
+session mapping, raw/caption projection, gold isolation, fallback disabling,
+and deterministic CLI injection. No provider, live database, runtime, or
+deployment operation is authorized by this source stage.
 
 ## Later compatibility target — AML
 
