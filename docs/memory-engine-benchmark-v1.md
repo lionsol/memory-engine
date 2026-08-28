@@ -389,13 +389,14 @@ adjusted against this LongMemEval result. The B4 profile remains frozen and
 continues to be the semantic baseline authority; RH1 does not replace or alter
 that baseline.
 
-`H2-I1/I2 = REPO-TESTED`, `H2-S1 = PASS`, and `H2-S2 = NEXT / NOT
-AUTHORIZED / NOT RUN`; H2 quality remains `OPEN / NOT ADJUDICATED`. `B5
-LoCoMo = LATER / NOT STARTED`. Do not start LTR directly, do not modify
-production lexical heuristics from LongMemEval, and do not treat Benchmark
-evidence as production authority. Any future retrieval proposal informed by
-B4/RH1 failures requires LoCoMo or other cross-dataset evidence before
-product-policy consideration.
+At the RH1 closeout checkpoint, `H2-I1/I2 = REPO-TESTED`, `H2-S1 = PASS`,
+and `H2-S2 = NEXT / NOT AUTHORIZED / NOT RUN`; H2 quality was then
+`OPEN / NOT ADJUDICATED`. This is a historical checkpoint, superseded by the
+H2 final closeout below. `B5 LoCoMo = LATER / NOT STARTED`. Do not start LTR
+directly, do not modify production lexical heuristics from LongMemEval, and do
+not treat Benchmark evidence as production authority. Any future retrieval
+proposal informed by B4/RH1 failures requires LoCoMo or other cross-dataset
+evidence before product-policy consideration.
 
 Answer-generation and LLM-judge quality remain a separate measurement layer so
 retrieval changes are not confounded with answering-model changes.
@@ -418,8 +419,10 @@ single authorized sanity proves only that real planner → query-plan cache →
 real embeddings → temporary LanceDB → three-query RRF → existing production
 hybrid fusion can run end to end. It is not H2 quality evidence, production or
 runtime qualification, production query-shaping authority, or deployment
-authority. H2 quality remains `OPEN / NOT ADJUDICATED`, and H2-S2 is
-`NEXT / NOT AUTHORIZED / NOT RUN`.
+authority. At the H2-D1 pre-sanity checkpoint, H2 quality was
+`OPEN / NOT ADJUDICATED` and H2-S2 was `NEXT / NOT AUTHORIZED / NOT RUN`;
+that checkpoint is historical and is superseded by the final failure closeout
+below.
 
 The one-case retrieval metrics were all `1` and are not interpreted as quality
 evidence.
