@@ -41,6 +41,14 @@ FROZEN / CLOSED`**. B5 overall remains `OPEN`; the next semantic A/B is source
 inspection/design only and is not authorized to run. Benchmark evidence is not
 production authority.
 
+The current B5 checkpoint also includes **B5-I2c time-frozen lexical v2 source
+= `REPO-TESTED`**. The v1 artifact remains historical lexical evidence with
+`TIME PROVENANCE INCOMPLETE` and is not strict semantic A/B authority. The new
+`production_hybrid_lexical_dialog_locomo_time_frozen_v2` baseline is `NOT RUN`;
+the semantic v2 vector-attempt invariant is pending its confidence
+distribution, the six numerical gates remain frozen but suspended, B5 overall
+remains `OPEN`, and B5-I3 remains `HOLD`.
+
 Intent-aware Recall v2-A is **`SOURCE IMPLEMENTED / VERIFIED`**. Its deterministic task/recall taxonomy is observational only: frozen 12-row replay now enforces both labels, and decision trace/debug metadata expose bounded intent values. Existing recall decisions, focused queries, retrieval policy, ranking, Card/Get behavior, and AutoRecall default-off state remain unchanged. Policy authority remains a separate decision.
 
 Intent-aware Recall v2-B1 remains an **offline-only evaluation**. Its initial 36-row result was V1 `18/5/13/0`, oracle `18/18/0/0`, and runtime candidate `8/18/0/10` for TP/TN/FP/FN, with 4 task and 12 recall mismatches.

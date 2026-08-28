@@ -20,6 +20,7 @@
     "benchmark:longmemeval:validate": "node bin/benchmark-longmemeval-v1.js",
     "benchmark:locomo:validate": "node bin/benchmark-locomo-v1.js",
     "benchmark:locomo:retrieval": "node bin/run-locomo-retrieval-v1.js",
+    "benchmark:locomo:retrieval:time-frozen": "node bin/run-locomo-time-frozen-retrieval-v2.js",
     "benchmark:longmemeval:retrieval": "node bin/run-longmemeval-retrieval-v1.js",
     "benchmark:longmemeval:semantic": "node bin/run-longmemeval-semantic-retrieval-v1.js",
     "smoke:quality-baseline": "node bin/run-memory-quality-baseline-smoke.js",

@@ -743,6 +743,56 @@ not produced. B5-S1-R1 is recorded below as the completed baseline. No
 provider, runtime, live database, or temporary artifact was used or vendored
 in B5-I2b.
 
+### B5-I2c — Search-clock seam and time-frozen lexical v2 source
+
+B5-I2c is **`REPO-TESTED`**. The production `hybridSearch()` boundary now has
+an optional, default-off `runtime.searchNowSec` seam. When absent, the
+existing `Math.floor(Date.now() / 1000)` behavior remains; when present, a
+positive safe integer is used for all ranking-related time calculations in
+the request. Vector latency measurement continues to use its normal elapsed
+clock and is not benchmark-time based.
+
+The historical B5-S1 v1 profile and artifact remain unchanged and retain this
+status:
+
+```text
+HISTORICAL LEXICAL EVIDENCE
+TIME PROVENANCE INCOMPLETE
+NOT STRICT SEMANTIC A/B AUTHORITY
+```
+
+The independent v2 source profile is
+`production_hybrid_lexical_dialog_locomo_time_frozen_v2`, with clock contract
+`locomo_materialization_and_search_fixed_v2`. Its required
+`benchmark_now_sec`, materialization clock, and search/rerank clock are one
+authoritative positive safe integer. Both `provenance` and `run` record the
+three equal clocks, and every scoreable retrieval diagnostic records the exact
+search clock. The v2 profile keeps the v1 corpus, projection, caption/date
+policy, query, evidence policies, metrics, cutoffs, lexical/fusion/rerank
+constants, vector-disabled backend, and host-manager-disabled policy.
+
+The v2 source and focused tests are **`REPO-TESTED`**. The v2 baseline is
+**`NOT RUN`**. The semantic profile reserved for the next stage is
+`production_hybrid_semantic_dialog_locomo_time_frozen_v2`; its vector-attempt
+invariant is **`PENDING LEXICAL V2 CONFIDENCE DISTRIBUTION`**, and the six
+semantic numerical gates are **`FROZEN BUT SUSPENDED UNTIL LEXICAL V2 AUTHORITY
+EXISTS`**. B5 overall remains **`OPEN`** and B5-I3 remains **`HOLD`**.
+
+#### B5-D1 append-only correction
+
+The earlier B5-S1 record's `benchmark_now_sec` proves the materialization and
+runner provenance value, but the v1 output did not record the resolved runtime
+search clock for each `hybridSearch()` call. Existing output, logs, and file
+mtimes cannot reconstruct that per-search wall-clock sequence exactly. The v1
+record is therefore historical lexical evidence with **`TIME PROVENANCE
+INCOMPLETE`**, not strict semantic A/B authority; its execution, metrics,
+profile, source identity, and output SHA-256 remain preserved. Future semantic
+comparison must first establish the independent v2 lexical authority and use
+that authority as its lexical control. Accordingly, the six frozen semantic
+gates are evaluated as **semantic v2 minus the new lexical v2 authority**, not
+against the time-incomplete v1 artifact; their numerical thresholds are not
+changed.
+
 ## B5-S1 — LoCoMo lexical full baseline
 
 ### Execution history and authority
@@ -919,6 +969,14 @@ vector counts must be reported but have no hidden quality threshold. Session
 projection and sensitivity remain diagnostics only. Semantic A/B is
 `NEXT / SOURCE INSPECTION AND DESIGN ONLY / NOT IMPLEMENTED / NOT AUTHORIZED
 TO RUN`; no semantic provider sanity or full run is authorized here.
+
+B5-I2c correction: the time-frozen semantic successor is reserved as
+`production_hybrid_semantic_dialog_locomo_time_frozen_v2`, and its lexical
+control is the independently materialized and searched
+`production_hybrid_lexical_dialog_locomo_time_frozen_v2` profile. This changes
+the future authority pairing, not any frozen numerical threshold or the
+historical B5-S1 record. The v2 lexical baseline and its adjudication remain
+**`NOT RUN` / `PENDING`**.
 
 ## Later compatibility target — AML
 
