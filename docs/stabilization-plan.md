@@ -14,11 +14,21 @@ The memory-engine **`1.0.0` L2 stable runtime baseline is now `PASS / RUNTIME QU
 
 **memory-engine Benchmark v1 B3 is `PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED`**. The official cleaned LongMemEval-S lexical profile (`production_hybrid_lexical_session_v1`, `top_k=50`, dataset SHA-256 `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`) scores 419 cases after upstream-compatible exclusions. Overall recall-any is `0.5107/0.7876/0.9045/0.9952` at `@1/@5/@10/@50`; recall-all is `0.1289/0.4821/0.6372/0.9761`; NDCG-any@10 is `0.6256`; mean search latency is `9.49 ms`. First-loss fixes now accept official empty-string turns, preserve duplicate session-id corpus occurrences, and exclude non-abstention cases with no user-side target exactly as the upstream retrieval aggregate does. This is lexical/fusion evidence only. **B4 is `PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED`**: B4-S2 execution passed and the offline semantic baseline is recorded under `production_hybrid_semantic_session_v1` at source commit `b640c3547622a646d8962e27b20f0d5ac5a13cc1`, with Recall-any@5 `0.8138`, Recall-all@5 `0.5227`, Recall-all@10 `0.6826`, NDCG-any@10 `0.6552`, and mean retrieval latency `205.11 ms`. Its interpretation is `USEFUL BUT INSUFFICIENT`; this remains benchmark evidence, not production/runtime qualification or tuning authority. B5 LoCoMo is `LATER / NOT STARTED`, and benchmark work does not authorize live runtime/config/DB mutation.
 
-Benchmark v1 RH1 query-side embedding instruction source implementation is
-`REPO-TESTED` under the independent profile
-`production_hybrid_semantic_query_instruction_session_v1`. The real-provider
-run is `NOT RUN` and adjudication is `OPEN`; B3/B4 remain frozen. This does
-not qualify production/runtime behavior or authorize production tuning.
+Benchmark v1 RH1 query-side embedding instruction is
+`INSUFFICIENT / OFFLINE EXPERIMENT RECORDED / CLOSED`. RH1-S2 execution passed
+under the independent profile
+`production_hybrid_semantic_query_instruction_session_v1` at source commit
+`d2d2fbd7e8eba77cd416923f44815e1289d4d7df` and dataset SHA-256
+`d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`. Its
+fixed query instruction moved overall Recall-any@5 by `+0.0095`, below the
+pre-frozen `+0.0100` threshold; it did not resolve preference or multi-session
+all-evidence coverage. B4 remains frozen and is still the semantic baseline
+authority. RH1 does not qualify production/runtime behavior, authorize
+instruction-text or production tuning, or change B3/B4.
+
+`H2 bounded multi-query = NEXT / SOURCE INSPECTION AND DESIGN ONLY`; no H2
+implementation has started. `B5 LoCoMo = LATER / NOT STARTED`. Benchmark
+evidence is not production authority.
 
 Intent-aware Recall v2-A is **`SOURCE IMPLEMENTED / VERIFIED`**. Its deterministic task/recall taxonomy is observational only: frozen 12-row replay now enforces both labels, and decision trace/debug metadata expose bounded intent values. Existing recall decisions, focused queries, retrieval policy, ranking, Card/Get behavior, and AutoRecall default-off state remain unchanged. Policy authority remains a separate decision.
 

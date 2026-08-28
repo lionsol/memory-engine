@@ -283,16 +283,118 @@ production authority, and B5 does not authorize production tuning.
 
 ## RH1 — query-side embedding instruction profile
 
-RH1 source implementation = `REPO-TESTED` under the independent profile
-`production_hybrid_semantic_query_instruction_session_v1`. Its only experiment
-variable is a fixed instruction on the vector query embedding input; corpus
-embedding, lexical/FTS/KG/recent query inputs, production `hybridSearch()`
-fusion, and the frozen B3/B4 contracts remain unchanged. The B4 profile and
-baseline remain frozen.
+RH1-S2 execution is `PASS`. The hypothesis adjudication is `INSUFFICIENT`, and
+the final state is `OFFLINE EXPERIMENT RECORDED / CLOSED`. The independent
+profile `production_hybrid_semantic_query_instruction_session_v1` changed only
+the vector query embedding input: the fixed instruction was prepended to the
+exact production vector query input. Corpus/document embedding, lexical/FTS/KG/
+recent query inputs, production `hybridSearch()` fusion, and the frozen B3/B4
+contracts remained unchanged.
 
-Real-provider run = `NOT RUN`. Adjudication = `OPEN`. RH1 is not production
-qualified, runtime qualified, or production-tuning authority; no conclusion is
-drawn here about preference or multi-evidence retrieval.
+### RH1 provenance and execution invariants
+
+| Field | Recorded value |
+| --- | --- |
+| Profile | `production_hybrid_semantic_query_instruction_session_v1` |
+| Source commit | `d2d2fbd7e8eba77cd416923f44815e1289d4d7df` |
+| Dataset SHA-256 | `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442` |
+| Provider / model | `SiliconFlow` / `Qwen/Qwen3-Embedding-4B` |
+| Model revision | `unavailable/unpinned` |
+| Embedding dimension | `2560` |
+| Canonical projection | `v1` / `2000` chars |
+| `top_k` / `lexicalConfidenceThreshold` | `50` / `0.7` |
+| Instruction version | `query_embedding_instruction_v1` |
+| Instruction text | `Instruct: Given a memory retrieval query, retrieve relevant past conversation passages that provide the context needed to answer the query` |
+| Instruction SHA-256 | `e3440313f1178547f222be0bae9e1071cfdabaad86188f8c6af6e94f7b049f41` |
+| Formatting contract | `query_embedding_input = query_instruction_text + LF + "Query:" + exact production vector query input received by generateEmbedding; no trailing LF` |
+| Document instruction | `none` |
+| Cases | `500` total / `419` scored / `81` skipped |
+| Output SHA-256 | `fd102cf0983d0189855496111059158a04db1a7010b8d4f7dbce9294effc3fd6` |
+| Final cache SHA-256 | `ba721b841e3ab71eebba9191e939fab1d23c7f56f74822d8e68c6e4c63e365f6` |
+
+The official exclusions remained `30` `official_retrieval_abstention` cases
+and `51` `official_retrieval_no_user_target` cases. RH1 recorded `19,933`
+corpus embeddings and `419` query embeddings, `418` provider calls and
+`19,934` cache hits (`20,352` total embedding operations), and vector
+attempted/skipped/error counts of `419/0/0`. Every scored case used LanceDB
+`lancedb_search`, entered fusion, and was not vector-skipped. The RH1-owned
+SQLite cache ended with `16,792` entries: the frozen B4 cache's `16,373`
+entries plus `419` instruction-formatted query embeddings.
+
+The output JSON and SQLite cache remain in a temporary directory outside the
+repository and are not vendored. Long-term authority is the dataset SHA-256,
+profile identity, source commit, committed metrics, and this adjudication; the
+temporary artifacts are not repository authority.
+
+### B4 → RH1 overall comparison
+
+| Metric | B4 semantic | RH1 query-instruction | Delta |
+| --- | ---: | ---: | ---: |
+| Recall-any@1 | 0.5465 | 0.5489 | +0.0024 |
+| Recall-any@5 | 0.8138 | 0.8234 | +0.0095 |
+| Recall-any@10 | 0.9189 | 0.9260 | +0.0072 |
+| Recall-any@50 | 1.0000 | 1.0000 | +0.0000 |
+| Recall-all@5 | 0.5227 | 0.5298 | +0.0072 |
+| Recall-all@10 | 0.6826 | 0.6897 | +0.0072 |
+| Recall-all@50 | 0.9976 | 0.9976 | +0.0000 |
+| NDCG-any@10 | 0.6552 | 0.6625 | +0.0073 |
+| NDCG-any@50 | 0.7029 | 0.7084 | +0.0055 |
+| Mean retrieval latency | 205.1074 ms | 270.0795 ms | +64.9720 ms / 1.3168× |
+
+The primary Recall-any@5 delta is `+0.0095`, below the pre-frozen overall
+threshold of `+0.0100`; therefore RH1 is `INSUFFICIENT`. The direction is
+small and positive overall, but it is not a production-quality or production
+policy result.
+
+### RH1 family findings
+
+- **`single-session-preference`** (`30` cases): Any@5 `0.4667 → 0.4333`
+  (`-0.0333`), Any@10 `0.5667 → 0.5667` (`+0.0000`), and NDCG@10
+  `0.3678 → 0.3640` (`-0.0038`). First relevant rank improved in 2 cases
+  and regressed in 2. No top-ten coverage problem was resolved.
+- **`multi-session`** (`121` cases): Any@10 improved `0.9174 → 0.9256`
+  (`+0.0083`), while All@5 and All@10 were unchanged at `0.2893` and
+  `0.4793`; NDCG@10 moved `0.5503 → 0.5518` (`+0.0015`). First relevant
+  rank improved in 11 cases and regressed in 2; no additional case found
+  all evidence by @10. Multi-session all-evidence coverage remains unresolved.
+- **`temporal-reasoning`** (`127` cases): All@5 `0.3858 → 0.4016`
+  (`+0.0157`), All@10 `0.6220 → 0.6457` (`+0.0236`), and NDCG@10
+  `0.5868 → 0.6029` (`+0.0161`). First relevant rank improved in 18 cases
+  and regressed in 1; 3 cases newly found all evidence by @10. This is the
+  clearest RH1 directionally positive family result.
+- **`knowledge-update`** (`72` cases): Any@1 remained `0.8472 → 0.8472`
+  (`+0.0000`), All@5 moved `0.8333 → 0.8611` (`+0.0278`), and NDCG@10
+  moved `0.8658 → 0.8787` (`+0.0129`). First relevant rank improved in 1
+  case and regressed in 0; All@10 added no newly complete case.
+- **`single-session-user`** (`64` cases): the reported Any/All/NDCG metrics
+  and first relevant rank were unchanged.
+
+Across the `419` scored cases, first relevant rank was improved in `32`,
+regressed in `5`, and unchanged in `382`; Recall-any@5 improved in `5`,
+regressed in `1`, and was unchanged in `413`; Recall-all@10 improved in `3`,
+regressed in `0`, and was unchanged in `416`. Combined strict dominance was
+`34 / 5 / 380` improved/regressed/unchanged, with no mixed cases.
+
+The latency comparison is descriptive only. RH1 reused the warm B4 corpus
+cache (`19,934` hits versus B4's `4,033`) and made `418` instruction-query
+provider calls, while B4 paid most corpus embedding calls. RH1 total corpus
+build/retrieval latency was `20,558.4162 ms` / `113,163.2925 ms`, versus B4's
+`3,056,787.4867 ms` / `85,940.0080 ms`; provider response variance and cache
+state prevent treating the mean-latency delta as a causal performance result.
+
+### RH1 route decision
+
+`RH1 = CLOSED / INSUFFICIENT`. Query-side instruction wording will not be
+adjusted against this LongMemEval result. The B4 profile remains frozen and
+continues to be the semantic baseline authority; RH1 does not replace or alter
+that baseline.
+
+`H2 bounded multi-query = NEXT / SOURCE INSPECTION AND DESIGN ONLY`. No H2
+implementation has started. `B5 LoCoMo = LATER / NOT STARTED`. Do not start
+LTR directly, do not modify production lexical heuristics from LongMemEval,
+and do not treat Benchmark evidence as production authority. Any future
+retrieval proposal informed by B4/RH1 failures requires LoCoMo or other
+cross-dataset evidence before product-policy consideration.
 
 Answer-generation and LLM-judge quality remain a separate measurement layer so
 retrieval changes are not confounded with answering-model changes.

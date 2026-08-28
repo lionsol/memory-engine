@@ -1,10 +1,60 @@
+## 2026-08-28
+
+### Benchmark v1 Retrieval Hypothesis H1 closeout
+
+- RH1-S2 execution = `PASS`; RH1 hypothesis = `INSUFFICIENT`; final state =
+  `OFFLINE EXPERIMENT RECORDED / CLOSED`. The independent profile was
+  `production_hybrid_semantic_query_instruction_session_v1` at source commit
+  `d2d2fbd7e8eba77cd416923f44815e1289d4d7df`, using dataset SHA-256
+  `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`,
+  SiliconFlow `Qwen/Qwen3-Embedding-4B`, revision `unavailable/unpinned`,
+  dimension `2560`, Canonical projection `v1/2000`, `top_k=50`, and
+  `lexicalConfidenceThreshold=0.7`.
+- The only experiment variable was the vector query instruction. It used
+  version `query_embedding_instruction_v1`, text `Instruct: Given a memory
+  retrieval query, retrieve relevant past conversation passages that provide
+  the context needed to answer the query`, SHA-256
+  `e3440313f1178547f222be0bae9e1071cfdabaad86188f8c6af6e94f7b049f41`, and
+  the exact-input contract `query_embedding_input = query_instruction_text +
+  LF + "Query:" + exact production vector query input received by
+  generateEmbedding; no trailing LF`; `document_instruction=none`. Corpus,
+  lexical, fusion, and B4 behavior remained frozen.
+- The run recorded `500/419/81` total/scored/skipped cases, `19,933` corpus
+  embeddings, `419` query embeddings, `418` provider calls, `19,934` cache
+  hits, and vector attempted/skipped/error `419/0/0`. Output SHA-256 is
+  `fd102cf0983d0189855496111059158a04db1a7010b8d4f7dbce9294effc3fd6`; final
+  cache SHA-256 is
+  `ba721b841e3ab71eebba9191e939fab1d23c7f56f74822d8e68c6e4c63e365f6`.
+- Against the frozen B4 semantic baseline, Recall-any@5 moved
+  `0.8138 → 0.8234` (`+0.0095`), below the pre-frozen `+0.0100` threshold;
+  Recall-all@10 moved `0.6826 → 0.6897` (`+0.0072`) and NDCG-any@10 moved
+  `0.6552 → 0.6625` (`+0.0073`). Temporal-reasoning All@10 improved by
+  `+0.0236`, preference Any@5 regressed by `-0.0333`, and multi-session
+  All@10 was unchanged. Case-level first-rank comparison was `32/5/382`
+  improved/regressed/unchanged; combined strict dominance was `34/5/380`.
+- Mean retrieval latency was `205.1074 ms → 270.0795 ms`, but RH1 reused a
+  warm B4 corpus cache and made a different provider-call mix. Total corpus
+  build/retrieval latency was `20,558.4162/113,163.2925 ms` for RH1 versus
+  `3,056,787.4867/85,940.0080 ms` for B4, so this is descriptive rather than
+  causal performance evidence.
+- RH1 remains `CLOSED / INSUFFICIENT`: it does not solve preference or
+  multi-session all-evidence coverage, does not authorize instruction-text
+  tuning, and does not enter production. B4 remains the frozen semantic
+  baseline authority. RH1 output/cache are temporary artifacts and are not
+  vendored or repository authority; Benchmark evidence is not production
+  authority. H2 bounded multi-query is `NEXT / SOURCE INSPECTION AND DESIGN
+  ONLY`; B5 LoCoMo remains `LATER / NOT STARTED`.
+
 ## 2026-08-27
 
 ### Benchmark v1 Retrieval Hypothesis H1 source implementation
 
 - Added the independent `production_hybrid_semantic_query_instruction_session_v1` profile and CLI. The query-side vector embedder formats the exact production vector query input with the fixed RH1 instruction; corpus/document embedding and lexical/FTS/KG/recent query inputs remain unchanged, and the shared production `hybridSearch()` path is reused.
 - RH1 provenance records the instruction version/text/hash, query formatting contract, and `document_instruction=none`. Its actual formatted query input is part of the existing benchmark-owned cache identity, so frozen B4 corpus entries can be reused without changing B4 query behavior.
-- RH1 source implementation = `REPO-TESTED`. Real-provider run = `NOT RUN`; adjudication = `OPEN`. B3 and B4 profiles/results remain frozen. No SiliconFlow request, live runtime/data-plane operation, deployment, configuration change, or production tuning occurred.
+- RH1 source implementation = `REPO-TESTED` was the implementation-stage
+  status; the later RH1-S2 closeout above records the authorized offline
+  experiment. B3 and B4 profiles/results remain frozen. No production/runtime
+  qualification or production tuning was authorized.
 
 ### memory-engine Benchmark v1 — B4-S2 semantic full baseline closeout
 
