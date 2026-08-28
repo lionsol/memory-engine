@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED / BASELINE NOT RUN`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -264,7 +264,9 @@ unchanged.
 
 ### Next benchmark boundary and route branching
 
-`B5 LoCoMo = LATER / NOT STARTED`. The next decision boundary is
+At the B4 closeout checkpoint, `B5 LoCoMo = LATER / NOT STARTED`. B5-I1 has
+since completed the dataset/metric contract; the retrieval baseline remains
+not run. The next decision boundary is
 `retrieval architecture hypothesis review`, not production tuning. Candidate
 directions only (none is an accepted implementation) are:
 
@@ -392,7 +394,9 @@ that baseline.
 At the RH1 closeout checkpoint, `H2-I1/I2 = REPO-TESTED`, `H2-S1 = PASS`,
 and `H2-S2 = NEXT / NOT AUTHORIZED / NOT RUN`; H2 quality was then
 `OPEN / NOT ADJUDICATED`. This is a historical checkpoint, superseded by the
-H2 final closeout below. `B5 LoCoMo = LATER / NOT STARTED`. Do not start LTR
+H2 final closeout below. At that checkpoint `B5 LoCoMo = LATER / NOT STARTED`;
+B5-I1 has since completed the dataset/metric contract, while retrieval remains
+unrun. Do not start LTR
 directly, do not modify production lexical heuristics from LongMemEval, and do
 not treat Benchmark evidence as production authority. Any future retrieval
 proposal informed by B4/RH1 failures requires LoCoMo or other cross-dataset
@@ -585,12 +589,77 @@ semantic baseline remains the comparison authority.
 H2-S2-R2 is **`DO NOT RUN / NOT AUTHORIZED`**. Do not loosen duplicate
 rejection, add planner retries, hand-fill the failed case, modify the H2
 prompt/parser/profile and call it the same H2, or reopen H2 in place. H2 has
-produced no complete result comparable with B4. B5 LoCoMo remains
-`LATER / NOT STARTED`; H2 failure does not authorize production query
+produced no complete result comparable with B4. B5-I1 is now
+`REPO-TESTED / CONTRACT FROZEN`; its retrieval baseline remains `NOT RUN`.
+H2 failure does not authorize production query
 shaping, LTR, or lexical tuning. If multi-query work is resumed, it requires a
 new independent hypothesis/profile contract with newly frozen variables and
 gate; that future profile/H3 is currently `NOT AUTHORIZED / NOT STARTED`.
 Benchmark evidence is not production authority.
+
+## B5-I1 — LoCoMo dataset / metric contract
+
+B5-I1 source implementation is **`REPO-TESTED / CONTRACT FROZEN`**. This
+stage implements only the LoCoMo dataset normalizer, evidence policies,
+dialog/session metric contract, validation CLI, and focused tests. It does not
+implement a temporary Core/Engine or hybridSearch runner, call a provider, or
+run a retrieval baseline. B5 quality adjudication is therefore **`OPEN / NOT
+RUN`**.
+
+### Dataset authority and composition
+
+| Field | Frozen value |
+| --- | --- |
+| Upstream repository | `https://github.com/snap-research/locomo` |
+| Upstream repository commit | `3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376` |
+| Dataset file commit | `cbfbc1dba6bc53d00625212a0f22d55ffee7c1fc` |
+| Dataset path | `data/locomo10.json` |
+| Dataset SHA-256 | `79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4` |
+| License identity | `CC BY-NC 4.0 International` |
+| Contract profile | `locomo_dialog_retrieval_contract_v1` |
+
+The pinned dataset validates to `10` conversations, `272` sessions, `5,882`
+turns, and `1,986` QA. Category totals are `1=282` multi-hop,
+`2=321` temporal, `3=96` open-domain, `4=841` single-hop, and `5=446`
+adversarial. All `5,882/5,882` turn identities match their containing
+`session_<n>` and one-based turn position. Turn identity is scoped by
+`{sample_id, dia_id}`; `dia_id` is not globally unique across conversations.
+
+### Evidence policies and scoring units
+
+The strict authority is `locomo_evidence_strict_v1`: empty, composite,
+non-canonical, duplicate, malformed, and unmapped evidence are not silently
+repaired. It records `1,972` scored and `14` skipped QA (`empty_evidence=4`,
+format/mapping anomalies `10`). The separately named
+`locomo_evidence_canonicalized_v1` sensitivity view performs only deterministic
+composite expansion, numeric canonicalization, and set de-duplication; it
+records `1,978` scored and `8` skipped QA. Its result is not interchangeable
+with the strict authority.
+
+The frozen skip-reason precedence is:
+`evidence_missing` → `evidence_not_array` → `empty_evidence` →
+`malformed_evidence` → `unmapped_evidence` → `composite_evidence` →
+`noncanonical_evidence` → `duplicate_evidence`.
+
+Evidence audit counts are: missing/null/non-array `0/0/0`, empty arrays `4`,
+semicolon composites `1`, whitespace composites `3`, malformed items `2`,
+non-canonical items `1`, unmapped items `2`, and one QA with one duplicate
+evidence occurrence. Empty evidence is skipped, never treated as a retrieval
+hit.
+
+Dialog-level metrics are the primary contract: ranked targets are exact
+`{sample_id, dia_id}` turns and use Recall-any/all and NDCG at
+`@1/@3/@5/@10/@30/@50`. Session-level metrics are a separately labeled
+compatibility projection. Dialog ranks project to sessions by preserving the
+first occurrence and de-duplicating later turns from the same session. The
+two ranking units and denominators must not be mixed.
+
+The B5 adapter must enumerate actual `session_<n>` keys rather than assuming
+the legacy `1..19` range. Corpus/search envelopes exclude answer, evidence,
+category, and evaluator labels. Any later retrieval implementation must reuse
+the existing temporary benchmark isolation and production hybridSearch seam;
+this contract commit does not authorize provider, runtime, database, or
+deployment work.
 
 ## Later compatibility target — AML
 

@@ -1,5 +1,25 @@
 ## 2026-08-28
 
+### Benchmark v1 B5-I1 LoCoMo contract implementation
+
+- Added `lib/benchmark/locomo-v1.js`, `bin/benchmark-locomo-v1.js`, and
+  focused tests for the pinned LoCoMo dataset/metric contract. The source
+  status is `REPO-TESTED / CONTRACT FROZEN`; no retrieval runner, provider,
+  baseline, or runtime data plane was added.
+- Frozen authority is upstream repository commit
+  `3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376`, dataset SHA-256
+  `79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4`,
+  dataset file commit `cbfbc1dba6bc53d00625212a0f22d55ffee7c1fc`, and
+  license identity `CC BY-NC 4.0 International`.
+- Official validation reproduced `10` conversations, `272` sessions,
+  `5,882` turns, `1,986` QA, exact category totals, and `5,882/5,882` turn
+  identity validation. The strict policy records `1,972/14` scored/skipped;
+  the separately named canonicalized sensitivity policy records `1,978/8`.
+- Dialog-level metrics are primary; session projection preserves ranked first
+  occurrence and de-duplicates later turns from the same session. Search and
+  corpus envelopes keep answer/evidence/category/evaluator fields out of the
+  retrieval path. B5 retrieval quality remains unrun and unadjudicated.
+
 ### Benchmark v1 H2-D2 failure closeout
 
 - H2-S1 remains `PASS / REAL-PROVIDER CHAIN QUALIFIED`. H2-S2's initial
