@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a PROJECTION REPO-TESTED; B5-I2b TIME PROVENANCE REPO-TESTED; B5-S1 PREFLIGHT STOP / EXECUTION 0/1 / NOT RUN; B5 QUALITY OPEN`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 OVERALL OPEN; SEMANTIC A/B NEXT / DESIGN ONLY`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -668,9 +668,9 @@ hardening is **`REPO-TESTED`** under the independent profile
 `production_hybrid_lexical_dialog_locomo_v1`. The runner and CLI materialize
 one benchmark-owned temporary Core/Engine/FTS data plane per conversation,
 reuse that corpus for all of the conversation's QA, and call the existing
-production `hybridSearch()` adapter. The official LoCoMo retrieval baseline
-has not been executed; **B5-S1 remains `NOT RUN` and B5 quality adjudication is
-`OPEN`**.
+production `hybridSearch()` adapter. The official LoCoMo retrieval baseline is
+recorded below as **`B5-S1 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED`**;
+B5 overall quality remains **`OPEN`** pending the semantic comparison.
 
 The frozen dialog corpus projection is `locomo_dialog_projection_v1`:
 `(<session_date_time>) <speaker>: <raw text>` is always the first line, and a
@@ -721,8 +721,9 @@ caption-only `24`, both `9`, and neither `1,476`. These counts support the
 fixed projection contract only; they do not create an answer-dependent
 retrieval heuristic.
 
-The official retrieval baseline is **`NOT RUN`** and B5 quality adjudication
-is **`OPEN`**. No dataset, output, or temporary audit artifact is vendored;
+At the B5-I2a pre-baseline checkpoint the official retrieval baseline was
+**`NOT RUN`** and quality adjudication was **`OPEN`**. B5-S1 is recorded in the
+next section; no dataset, output, or temporary audit artifact is vendored, and
 benchmark evidence is not production authority.
 
 ### B5-I2b — Benchmark time provenance hardening
@@ -736,12 +737,188 @@ passed unchanged to every conversation materializer and retrieval case. Both
 `provenance.benchmark_now_sec` and `run.benchmark_now_sec` are authoritative
 numeric fields and cannot be replaced by caller or profile provenance.
 
-The prior B5-S1 preflight stopped before starting the full CLI with
-`PREFLIGHT=STOP`, `EXECUTION_COUNT=0/1`, and `BASELINE=NOT RUN` because the
-internal benchmark time had reached the temporary materializer but was absent
-from output provenance. B5-S1 remains **`NOT RUN`** and requires fresh Owner
-authorization after this new source HEAD. No provider, baseline, runtime,
-live database, or temporary artifact was used or vendored in B5-I2b.
+The initial B5-S1 attempt stopped before corpus materialization with
+`ENVIRONMENT_FAILURE` at repository provenance resolution; its baseline was
+not produced. B5-S1-R1 is recorded below as the completed baseline. No
+provider, runtime, live database, or temporary artifact was used or vendored
+in B5-I2b.
+
+## B5-S1 — LoCoMo lexical full baseline
+
+### Execution history and authority
+
+The initial B5-S1 execution was **`ENVIRONMENT_FAILURE`** at repository
+provenance resolution. It did not enter corpus materialization or retrieval,
+produced no baseline, and is not quality evidence. B5-S1-R1 was the authorized
+single corrective execution: `execution=PASS`, `command_rc=0`, `retry=1/1`,
+and no further retry.
+
+The frozen B5-S1 authority is:
+
+| Field | Value |
+| --- | --- |
+| profile | `production_hybrid_lexical_dialog_locomo_v1` |
+| source commit | `d45ea0de2b9b33a222118ed312c1ff74ca4e84d6` |
+| repository provenance | `git`, clean |
+| dataset | `/tmp/locomo10-pinned.json` |
+| dataset SHA-256 | `79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4` |
+| upstream commit | `3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376` |
+| dataset file commit | `cbfbc1dba6bc53d00625212a0f22d55ffee7c1fc` |
+| benchmark_now_sec | `1705066861` |
+| top_k | `50` |
+| output SHA-256 | `92248dc1d9134130904098491d93daabffda2cc40b66fbd26057705dfbe41d91` |
+| output size | `31,205,211 bytes` |
+| temporary output | `/tmp/memory-engine-benchmark-v1/b5-s1-r1-d45ea0de-locomo-lexical-output.json` |
+
+The output is temporary evidence, not repository authority. Long-term
+authority is the dataset SHA, upstream pin, profile, source commit, fixed
+benchmark time, committed metrics, and adjudication.
+
+### Frozen lexical profile and run shape
+
+The profile uses `locomo_dialog_projection_v1` with the fixed document format
+`(<session_date_time>) <speaker>: <raw text>` and an optional second line
+`[shares <blip_caption>]` when the caption is non-empty. Session datetime is
+included, caption policy is `include_when_present`, vector mode is
+`disabled_empty_backend`, host-manager mode is `disabled`, and
+`lexical_confidence_threshold=0`.
+
+The run built one conversation-owned temporary Core/Engine/FTS corpus for each
+of `10` conversations (`10` corpora), reused each corpus for its
+conversation's QA, and recorded `1,986` cases / `1,978` retrieval cases with
+`1,978` corpus-reuse searches. Dialog identity is `{sample_id, dia_id}`;
+session results are first-occurrence-deduplicated diagnostics. Gold and other
+evaluator-only fields did not enter corpus materialization, FTS, or Search.
+
+Evidence policies remain:
+
+- strict `locomo_evidence_strict_v1`: `1,972` scored / `14` skipped;
+- sensitivity `locomo_evidence_canonicalized_v1`: `1,978` scored / `8` skipped.
+
+Dialog is the primary metric level. Session projection is compatibility
+diagnostic only.
+
+### Strict primary dialog metrics
+
+| Metric | @1 | @3 | @5 | @10 | @30 | @50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Recall-any | 0.152637 | 0.229716 | 0.271805 | 0.321501 | 0.395030 | 0.423935 |
+| Recall-all | 0.130832 | 0.190669 | 0.226166 | 0.261156 | 0.314909 | 0.330629 |
+| NDCG-any | 0.152637 | 0.183247 | 0.198344 | 0.211939 | 0.228017 | 0.232523 |
+
+Additional strict diagnostics:
+
+- MRR is `0.207487`, derived from `first_relevant_rank` with zero for
+  zero-hit cases; MRR is not emitted by the existing evaluator schema.
+- mean first relevant rank is `7.986842` over the evaluator's scored hit
+  ranks; it is not an average rank for cases with no hit.
+- zero-hit cases: `1,136 / 1,972`;
+- All@10 failures: `1,457 / 1,972`;
+- mean retrieval latency: `14.504059 ms`;
+- total corpus build latency: `719.309045 ms`;
+- total retrieval latency: `28,689.028318 ms`;
+- mean corpus dialogs: `588.2`;
+- retrieval latency distribution: min `4.197203 ms`, p50 `14.284229 ms`,
+  p95 `18.781005 ms`, max `53.328561 ms`.
+
+### Strict category findings at @10
+
+| Category | Cases | Scored | Skipped | Recall-any@10 | Recall-all@10 | NDCG-any@10 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Multi-hop | 282 | 277 | 5 | 0.296029 | 0.014440 | 0.093270 |
+| Temporal | 321 | 320 | 1 | 0.446875 | 0.403125 | 0.328383 |
+| Open-domain | 96 | 89 | 7 | 0.269663 | 0.123596 | 0.133507 |
+| Single-hop | 841 | 840 | 1 | 0.305952 | 0.292857 | 0.223366 |
+| Adversarial | 446 | 446 | 0 | 0.286996 | 0.280269 | 0.196224 |
+
+Multi-hop @50 remains weak: Recall-any `0.472924`, Recall-all `0.043321`.
+
+### Session compatibility diagnostic
+
+The dialog ranking projected to sessions by first occurrence and deduplicated
+in rank order gives Recall-any@10 `0.744929`, Recall-all@10 `0.639452`, and
+NDCG-any@10 `0.477762`. This is not an independent session retriever. The top
+10 unique sessions can consume more than 10 dialog ranks, and these values
+must not be compared directly with LongMemEval session-level metrics.
+
+### Sensitivity finding
+
+Canonicalized sensitivity dialog metrics are Recall-any@10 `0.321031`,
+Recall-all@10 `0.260870`, NDCG-any@10 `0.211802`, Recall-any@50 `0.423155`,
+and Recall-all@50 `0.330131`. Derived MRR is `0.207363`, zero-hit cases are
+`1,141 / 1,978`, and All@10 failures are `1,462 / 1,978`. Relative to strict,
+the @10 deltas are `-0.000470` / `-0.000287` / `-0.000137` for any/all/NDCG,
+and the @50 Recall-any/Recall-all deltas are `-0.000780` / `-0.000497`.
+All differences are below `0.001` in magnitude; the low score is not caused
+by evidence canonicalization.
+
+### B5-S1 adjudication
+
+The execution and evidence state is frozen as:
+
+```text
+B5-S1 execution = PASS
+B5-S1 quality = PASS_WITH_FINDINGS
+B5-S1 final = OFFLINE LEXICAL BASELINE RECORDED / BASELINE FROZEN / CLOSED
+B5 overall = OPEN
+```
+
+The findings are that dialog-level lexical retrieval is weak overall, Top 50
+still has substantial zero-hit coverage loss, and multi-hop is the clearest
+weak category. Temporal is strongest and the session datetime projection has
+practical value, but multi-evidence coverage and dialog ranking remain
+unsolved. These results are benchmark evidence only and do not authorize
+production lexical-heuristic changes or runtime policy.
+
+## B5 semantic A/B gate — frozen, not authorized
+
+The next profile is `production_hybrid_semantic_dialog_locomo_v1`. It must
+hold the B5-S1 authority fixed: upstream and dataset pins, question set,
+strict/sensitivity policies and denominators, dialog corpus unit and
+conversation isolation, `locomo_dialog_projection_v1`, session datetime and
+caption policy, exact question text, `top_k=50`, `benchmark_now_sec=1705066861`,
+metric implementation and cutoffs `1,3,5,10,30,50`, category mapping,
+lexical/FTS path, production channel fusion/ranking, and the gold-leakage
+boundary.
+
+The only permitted semantic variables are a real embedding/vector channel, a
+temporary conversation-owned LanceDB, and the production semantic activation
+gate. The pre-frozen contract is SiliconFlow / `Qwen/Qwen3-Embedding-4B`,
+revision `unavailable/unpinned`, dimension `2560`, Canonical vector projection
+v1 with max `2000` chars, `lexicalConfidenceThreshold=0.7`, `vectorTopK=50`,
+and forbidden host-manager fallback. Query instruction, rewriting,
+multi-query, planner, LTR, lexical tuning, and benchmark-only ranking are
+excluded.
+
+Primary gates use strict dialog metrics and compare semantic minus this frozen
+B5-S1 lexical baseline:
+
+| Gate | Required delta |
+| --- | ---: |
+| Overall Recall-any@10 | ≥ +0.0200 |
+| Overall Recall-all@10 | ≥ +0.0200 |
+| Overall NDCG-any@10 | ≥ +0.0200 |
+| Overall Recall-any@50 | ≥ +0.0300 |
+| Multi-hop Recall-any@10 | ≥ +0.0300 |
+| Multi-hop Recall-all@10 | ≥ +0.0200 |
+
+Regression guards: no overall strict dialog @5/@10/@50 metric may regress by
+more than `0.0050`; temporal NDCG-any@10 and single-hop NDCG-any@10 may each
+regress by no more than `0.0200`. Case-level comparison must report first
+relevant rank, Recall-any@10, and Recall-all@10 with improved/regressed/
+unchanged counts. A valid execution requires exact provenance, expected
+denominators, vector attempted on every retrieval case, zero vector skips and
+errors, LanceDB results entering production fusion, and no host fallback.
+
+`USEFUL / PASS_WITH_FINDINGS` requires a valid execution, all regression
+guards, at least four of six gates, at least two of the three overall @10
+gates, and at least one multi-hop gate. Otherwise a valid execution is
+`INSUFFICIENT`; any provenance, isolation, vector, or scoring invariant
+failure is `INVALID / NOT ADJUDICABLE`. Latency, provider/cache counts, and
+vector counts must be reported but have no hidden quality threshold. Session
+projection and sensitivity remain diagnostics only. Semantic A/B is
+`NEXT / SOURCE INSPECTION AND DESIGN ONLY / NOT IMPLEMENTED / NOT AUTHORIZED
+TO RUN`; no semantic provider sanity or full run is authorized here.
 
 ## Later compatibility target — AML
 

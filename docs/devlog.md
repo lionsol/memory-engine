@@ -1,5 +1,23 @@
 ## 2026-08-28
 
+### Benchmark v1 B5-S1 LoCoMo lexical full baseline
+
+- The initial B5-S1 attempt was an `ENVIRONMENT_FAILURE` during repository
+  provenance resolution and did not enter corpus materialization or retrieval;
+  no baseline was produced. The authorized B5-S1-R1 execution completed with
+  `PASS`, `command_rc=0`, `retry=1/1`, and no further retry.
+- The frozen authority is profile
+  `production_hybrid_lexical_dialog_locomo_v1`, source commit
+  `d45ea0de2b9b33a222118ed312c1ff74ca4e84d6`, dataset SHA-256
+  `79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4`, and
+  `benchmark_now_sec=1705066861`. The temporary output SHA-256 is
+  `92248dc1d9134130904098491d93daabffda2cc40b66fbd26057705dfbe41d91`.
+- Strict dialog primary Recall-any@10 / Recall-all@10 / NDCG-any@10 are
+  `0.321501 / 0.261156 / 0.211939`; multi-hop is the clearest weak category,
+  while temporal is strongest. B5-S1 is `PASS_WITH_FINDINGS / BASELINE
+  FROZEN / CLOSED`; B5 overall remains `OPEN`, and semantic A/B is design-only
+  and not authorized to run.
+
 ### Benchmark v1 B5-I2b benchmark time provenance hardening
 
 - Added the LoCoMo lexical CLI `--benchmark-now-sec` contract for exactly one
