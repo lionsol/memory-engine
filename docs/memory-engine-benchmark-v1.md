@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `B4 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED`
+> Status: `H2-S1 PASS / REAL-PROVIDER CHAIN QUALIFIED / H2 QUALITY OPEN / H2-S2 NOT AUTHORIZED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -389,15 +389,116 @@ adjusted against this LongMemEval result. The B4 profile remains frozen and
 continues to be the semantic baseline authority; RH1 does not replace or alter
 that baseline.
 
-`H2 bounded multi-query = NEXT / SOURCE INSPECTION AND DESIGN ONLY`. No H2
-implementation has started. `B5 LoCoMo = LATER / NOT STARTED`. Do not start
-LTR directly, do not modify production lexical heuristics from LongMemEval,
-and do not treat Benchmark evidence as production authority. Any future
-retrieval proposal informed by B4/RH1 failures requires LoCoMo or other
-cross-dataset evidence before product-policy consideration.
+`H2-I1/I2 = REPO-TESTED`, `H2-S1 = PASS`, and `H2-S2 = NEXT / NOT
+AUTHORIZED / NOT RUN`; H2 quality remains `OPEN / NOT ADJUDICATED`. `B5
+LoCoMo = LATER / NOT STARTED`. Do not start LTR directly, do not modify
+production lexical heuristics from LongMemEval, and do not treat Benchmark
+evidence as production authority. Any future retrieval proposal informed by
+B4/RH1 failures requires LoCoMo or other cross-dataset evidence before
+product-policy consideration.
 
 Answer-generation and LLM-judge quality remain a separate measurement layer so
 retrieval changes are not confounded with answering-model changes.
+
+## H2 — bounded multi-query semantic profile
+
+H2-I1 is the source implementation authority at commit
+`d47ef6b0e9f6277a5c4c0e0e9ba8a63f558fc0ee`
+(`feat(benchmark): add bounded multi-query semantic profile`). H2-I2 is the
+pre-sanity hardening authority at commit
+`219dd4f335ac6cf4a481cdf422ff949e7a531fe6`
+(`fix(benchmark): harden bounded multi-query sanity path`). The profile is
+`production_hybrid_semantic_bounded_multi_query_session_v1` and its source
+status is `REPO-TESTED / PRE-SANITY HARDENED`.
+
+### H2-S1 execution and adjudication boundary
+
+H2-S1 execution is `PASS` and the real-provider chain is `QUALIFIED`. The
+single authorized sanity proves only that real planner → query-plan cache →
+real embeddings → temporary LanceDB → three-query RRF → existing production
+hybrid fusion can run end to end. It is not H2 quality evidence, production or
+runtime qualification, production query-shaping authority, or deployment
+authority. H2 quality remains `OPEN / NOT ADJUDICATED`, and H2-S2 is
+`NEXT / NOT AUTHORIZED / NOT RUN`.
+
+The one-case retrieval metrics were all `1` and are not interpreted as quality
+evidence.
+
+### H2-S1 provenance and invariants
+
+| Field | Recorded value |
+| --- | --- |
+| Repository commit | `219dd4f335ac6cf4a481cdf422ff949e7a531fe6` |
+| Dataset SHA-256 | `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442` |
+| Profile | `production_hybrid_semantic_bounded_multi_query_session_v1` |
+| Embedding provider / model | `SiliconFlow` / `Qwen/Qwen3-Embedding-4B` |
+| Embedding revision / dimension | `unavailable/unpinned` / `2560` |
+| Planner provider / model | `SiliconFlow` / `deepseek-ai/DeepSeek-V3.2` |
+| Planner revision / temperature | `unavailable/unpinned` / `0` |
+| Planner API path | `/v1/chat/completions` |
+| Planner max tokens / timeout | `256` / `45000 ms` |
+| Planner max response | `65536 bytes` |
+| Planner prompt SHA-256 | `31b521f7d91b444f9dab3f67870a39b68ffc0adbae7ec5c6cbd45c7642c7a726` |
+| Planner output schema SHA-256 | `ed0c250ed9b31c61e8e2683c541f9d31a0eee8bcb10a76dd103cda6ddd828ca1` |
+| Query-plan cache | `memory_engine_benchmark_query_plan_cache_v2`, SQLite `user_version=2` |
+| Vector query contract | exact production query + exactly 2 planner queries |
+| Query-level fusion | RRF `k=60`, `memory_id` dedup, max semantic/similarity, then existing channel fusion |
+| Cases | `1` total / `1` scored / `0` skipped |
+| Question | `e47becba` / `single-session-user` |
+| Corpus/query embeddings | `53` / `3` |
+| Embedding provider calls/cache hits | `2` / `54` (`2 + 54 = 53 + 3 = 56`) |
+| Planner provider calls/cache hits | `1` / `0` |
+| Vector attempted/skipped/errors | `1 / 0 / 0` |
+| Vector queries/searches | `3 / 3` |
+| Vector raw/unique candidates | `150 / 50` |
+| Per-query candidate counts | `50 / 50 / 50` |
+| Vector backend/stage/in fusion | `lancedb` / `lancedb_search` / `true` |
+| Planner latency | `2999.30 ms` |
+| Corpus build/retrieval latency | `344.06 ms` / `737.76 ms` |
+
+The output artifact is `/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-output.json`,
+SHA-256 `37eaeaccf1be6548194921347db86ff1f7908db6bd49f4fe3383cb9aa0af8006`,
+size `15824 bytes`. The H2 embedding cache is
+`/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-embedding-cache.sqlite`,
+SHA-256 `f5b7dff17e68aad70a560bd1dfac7efffe9e57b9069d6b428f616bfc075b0a96`,
+with `16375` entries, dimension `2560`, and integrity `ok`. The H2 query-plan
+cache is
+`/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-query-plan-cache.sqlite`,
+SHA-256 `1e1b2784f5a099932bc2c02dfce5a2558a5a3fdff1648f6abf2794e68ccdc5b3`,
+with `1` entry, SQLite `user_version=2`, and integrity `ok`. The frozen B4
+source cache remained unchanged at SHA-256
+`c1b8f292e8e2b95581f09b4526e2ce4c38517c9cfc1b93e0ffbde4b261319db2`.
+
+All output, cache, and temporary data-plane files remain in a temporary
+directory and are not vendored. They are not repository authority; long-term
+authority is the source commit, dataset SHA-256, committed provenance,
+committed metrics, and adjudication.
+
+### H2-S2 frozen evaluation gate
+
+The comparison authority is the frozen B4 profile
+`production_hybrid_semantic_session_v1` at source commit
+`b640c3547622a646d8962e27b20f0d5ac5a13cc1`. H2 can be adjudicated
+`SUFFICIENT` only if every condition below holds on the full run:
+
+| Gate | Required condition |
+| --- | --- |
+| Overall all-evidence recall | Recall-all@10 delta `>= +0.0100` |
+| Family all-evidence recall | At least one of `multi-session` or `temporal-reasoning` Recall-all@10 delta `>= +0.0150` |
+| Overall any-evidence recall | Recall-any@5 delta `>= -0.0050` |
+| Overall all-evidence recall at five | Recall-all@5 delta `>= -0.0050` |
+| Overall ranking quality | NDCG-any@10 delta `>= -0.0050` |
+| Case-level evidence coverage | Recall-all@10 improved case count `>` regressed case count |
+
+If any condition fails, `H2 hypothesis = INSUFFICIENT`. Latency must be
+recorded and compared but has no hard threshold in this gate. Even a
+`SUFFICIENT` H2 result can only advance to LoCoMo or other cross-dataset
+verification; it cannot directly enter production policy. B3, B4, and RH1
+remain frozen, and Benchmark evidence is not production authority.
+
+The current route is `H2-I1/I2 = REPO-TESTED`, `H2-S1 = PASS`,
+`H2-S2 = NEXT / NOT AUTHORIZED / NOT RUN`, `H2 final quality adjudication =
+OPEN`, and `B5 LoCoMo = LATER / NOT STARTED`.
 
 ## Later compatibility target — AML
 

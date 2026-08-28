@@ -1,5 +1,73 @@
 ## 2026-08-28
 
+### Benchmark v1 H2-D1 documentation and evaluation-gate freeze
+
+- H2-I1 is source commit `d47ef6b0e9f6277a5c4c0e0e9ba8a63f558fc0ee`,
+  `feat(benchmark): add bounded multi-query semantic profile`; H2-I2 is source
+  commit `219dd4f335ac6cf4a481cdf422ff949e7a531fe6`,
+  `fix(benchmark): harden bounded multi-query sanity path`. The implementation
+  status is `REPO-TESTED / PRE-SANITY HARDENED` for profile
+  `production_hybrid_semantic_bounded_multi_query_session_v1`.
+- H2-S1 execution = `PASS`; the real-provider chain is `QUALIFIED`. The
+  one-case run proves only real planner → query-plan cache → real embeddings →
+  temporary LanceDB → three-query RRF → production hybrid fusion. It does not
+  establish H2 quality `PASS`, production/runtime qualification, production
+  query-shaping authority, or deployment authority. H2 quality remains
+  `OPEN / NOT ADJUDICATED`, and H2-S2 is `NEXT / NOT AUTHORIZED / NOT RUN`.
+  The single-case all-1 retrieval result is not quality evidence.
+- H2-S1 provenance: source commit
+  `219dd4f335ac6cf4a481cdf422ff949e7a531fe6`; dataset SHA-256
+  `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`;
+  embedding `SiliconFlow / Qwen/Qwen3-Embedding-4B`, revision
+  `unavailable/unpinned`, dimension `2560`; planner
+  `SiliconFlow / deepseek-ai/DeepSeek-V3.2`, revision
+  `unavailable/unpinned`, temperature `0`, max tokens `256`, timeout `45000 ms`,
+  maximum response `65536 bytes`; prompt SHA-256
+  `31b521f7d91b444f9dab3f67870a39b68ffc0adbae7ec5c6cbd45c7642c7a726`; output
+  schema SHA-256 `ed0c250ed9b31c61e8e2683c541f9d31a0eee8bcb10a76dd103cda6ddd828ca1`.
+  The query-plan cache is `memory_engine_benchmark_query_plan_cache_v2` with
+  SQLite `user_version=2`.
+- The vector contract was exact production query plus exactly two planner
+  queries, query-level RRF `k=60`, memory-id deduplication, maximum semantic
+  score/similarity retention, then existing production channel fusion. The run
+  recorded cases `1/1/0` total/scored/skipped, question `e47becba` of type
+  `single-session-user`, corpus/query embeddings `53/3`, embedding provider
+  calls/cache hits `2/54` (`2 + 54 = 53 + 3 = 56`), planner calls/cache hits
+  `1/0`, planner query count `2`, vector attempted/skipped/errors `1/0/0`,
+  vector queries/searches `3/3`, raw/unique candidates `150/50`, candidate
+  counts `50/50/50`, backend/stage `lancedb/lancedb_search`, and
+  `vector_in_fusion=true`. Latencies were planner `2999.30 ms`, corpus build
+  `344.06 ms`, and retrieval `737.76 ms`.
+- Temporary evidence artifacts (not vendored) were output
+  `/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-output.json`, SHA-256
+  `37eaeaccf1be6548194921347db86ff1f7908db6bd49f4fe3383cb9aa0af8006`, size
+  `15824` bytes; H2 embedding cache
+  `/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-embedding-cache.sqlite`,
+  SHA-256 `f5b7dff17e68aad70a560bd1dfac7efffe9e57b9069d6b428f616bfc075b0a96`,
+  `16375` entries, dimension `2560`, integrity `ok`; and query-plan cache
+  `/tmp/memory-engine-benchmark-v1/h2-s1-219dd4f-limit1-query-plan-cache.sqlite`,
+  SHA-256 `1e1b2784f5a099932bc2c02dfce5a2558a5a3fdff1648f6abf2794e68ccdc5b3`,
+  `1` entry, `user_version=2`, integrity `ok`. The frozen B4 source cache
+  remained unchanged at SHA-256
+  `c1b8f292e8e2b95581f09b4526e2ce4c38517c9cfc1b93e0ffbde4b261319db2`.
+  Long-term authority is the source commit, dataset SHA, committed
+  provenance, metrics, and adjudication, not these temporary files.
+- H2-S2 evaluation is frozen against B4 profile
+  `production_hybrid_semantic_session_v1` at source commit
+  `b640c3547622a646d8962e27b20f0d5ac5a13cc1`. H2 is `SUFFICIENT` only if all
+  of these hold: overall Recall-all@10 delta `>= +0.0100`; multi-session or
+  temporal-reasoning Recall-all@10 delta `>= +0.0150`; overall Recall-any@5,
+  Recall-all@5, and NDCG-any@10 deltas each `>= -0.0050`; and case-level
+  Recall-all@10 improved cases exceed regressed cases. Any unmet condition
+  means `INSUFFICIENT`. Latency is recorded and compared without a hard
+  threshold. Even `SUFFICIENT` would authorize only LoCoMo/cross-dataset
+  verification, never direct production policy.
+- Route state: B3 and B4 are `BASELINE FROZEN / CLOSED`; RH1 is
+  `INSUFFICIENT / CLOSED`; H2-I1/I2 are `REPO-TESTED`; H2-S1 is `PASS`;
+  H2-S2 is `NEXT / NOT AUTHORIZED / NOT RUN`; H2 final quality adjudication is
+  `OPEN`; and B5 LoCoMo is `LATER / NOT STARTED`. Benchmark evidence is not
+  production authority.
+
 ### Benchmark v1 Retrieval Hypothesis H1 closeout
 
 - RH1-S2 execution = `PASS`; RH1 hypothesis = `INSUFFICIENT`; final state =
