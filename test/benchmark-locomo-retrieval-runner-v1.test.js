@@ -8,9 +8,12 @@ import Database from "better-sqlite3";
 
 import {
   LOCOMO_BLIP_CAPTION_PROJECTION,
+  LOCOMO_BLIP_CAPTION_POLICY,
   LOCOMO_DIALOG_TEXT_PROJECTION,
+  LOCOMO_DIALOG_PROJECTION_VERSION,
   LOCOMO_EVIDENCE_CANONICALIZED_V1,
   LOCOMO_EVIDENCE_STRICT_V1,
+  LOCOMO_INCLUDE_SESSION_DATETIME,
   buildLocomoConversationDialogDocuments,
   buildLocomoDialogText,
   normalizeLocomoCase,
@@ -51,12 +54,23 @@ function rawCase({
   }
   return {
     sample_id: sampleId,
+    observation: "PRIVATE OBSERVATION",
+    session_summary: "PRIVATE SESSION SUMMARY",
+    event_summary: "PRIVATE EVENT SUMMARY",
     conversation: {
       speaker_a: "Alice",
       speaker_b: "Bob",
       session_1_date_time: "1:00 pm on 1 May, 2023",
       session_1: [
-        firstTurn,
+        {
+          ...firstTurn,
+          img_url: "PRIVATE IMAGE URL",
+          image_search_query: "PRIVATE IMAGE SEARCH QUERY",
+          answer: "PRIVATE TURN ANSWER",
+          adversarial_answer: "PRIVATE ADVERSARIAL ANSWER",
+          evidence: ["D1:1"],
+          category: 5,
+        },
         { speaker: "Bob", dia_id: "D1:2", text: "They discussed Osaka." },
       ],
       session_2_date_time: "2:00 pm on 2 May, 2023",
@@ -72,13 +86,15 @@ function rawCase({
 }
 
 function importCli() {
-  return import("../bin/run-locomo-retrieval-v1.js").then(module => (
-    module.runLocomoRetrievalCli || module.default.runLocomoRetrievalCli
-  ));
+  return importCliModule().then(module => module.runLocomoRetrievalCli);
 }
 
-test("B5-I2 profile is independent and preserves the raw dialog/caption contracts", () => {
-  assert.equal(LOCOMO_LEXICAL_RETRIEVAL_PROFILE, "production_hybrid_lexical_locomo_dialog_v1");
+function importCliModule() {
+  return import("../bin/run-locomo-retrieval-v1.js").then(module => module.default || module);
+}
+
+test("B5-I2a freezes the independent dialog projection contract", () => {
+  assert.equal(LOCOMO_LEXICAL_RETRIEVAL_PROFILE, "production_hybrid_lexical_dialog_locomo_v1");
   const item = normalizeLocomoCase(rawCase({ includeCaption: true }));
   const turn = item.sessions[0].turns[0];
   assert.equal(LOCOMO_DIALOG_TEXT_PROJECTION, "speaker_colon_raw_text_v1");
@@ -89,10 +105,36 @@ test("B5-I2 profile is independent and preserves the raw dialog/caption contract
     "Alice: Alice visited Kyoto.\n[shares a Kyoto street at dusk]",
   );
   const docs = buildLocomoConversationDialogDocuments(item);
-  assert.equal(docs[0].content, "Alice: Alice visited Kyoto.");
+  assert.equal(docs[0].content, "(1:00 pm on 1 May, 2023) Alice: Alice visited Kyoto.\n[shares a Kyoto street at dusk]");
+  assert.equal(docs[1].content, "(1:00 pm on 1 May, 2023) Bob: They discussed Osaka.");
+  assert.equal(docs[2].content, "(2:00 pm on 2 May, 2023) Alice: Alice returned later.");
+  assert.equal(LOCOMO_DIALOG_PROJECTION_VERSION, "locomo_dialog_projection_v1");
+  assert.equal(LOCOMO_INCLUDE_SESSION_DATETIME, true);
+  assert.equal(LOCOMO_BLIP_CAPTION_POLICY, "include_when_present");
   assert.equal(docs[0].memory_id.length, 64);
   assert.equal("answer" in docs[0], false);
   assert.equal("evidence" in docs[0], false);
+  const changedQuestion = normalizeLocomoCase(rawCase({
+    includeCaption: true,
+    questions: [{ question: "unrelated", answer: "DIFFERENT GOLD", evidence: ["D2:1"], category: 1 }],
+  }));
+  assert.deepEqual(
+    buildLocomoConversationDialogDocuments(changedQuestion).map(document => document.content),
+    docs.map(document => document.content),
+  );
+});
+
+test("projection uses exact speaker/raw text and omits missing or blank captions", () => {
+  const item = normalizeLocomoCase(rawCase({ includeCaption: true }));
+  delete item.sessions[0].turns[0].img_file;
+  item.sessions[0].turns[1].blip_caption = "   ";
+  const docs = buildLocomoConversationDialogDocuments(item);
+  assert.equal(docs[0].content.startsWith("(1:00 pm on 1 May, 2023) Alice: Alice visited Kyoto."), true);
+  assert.equal(docs[0].content.includes("[shares a Kyoto street at dusk]"), true);
+  assert.equal(docs[1].content, "(1:00 pm on 1 May, 2023) Bob: They discussed Osaka.");
+  assert.equal(docs[2].content, "(2:00 pm on 2 May, 2023) Alice: Alice returned later.");
+  assert.equal(docs[0].content.includes("clean_text"), false);
+  assert.equal(docs[0].content.includes("compressed_text"), false);
 });
 
 test("conversation materializer owns one isolated corpus and maps memory ids round-trip", () => {
@@ -102,6 +144,9 @@ test("conversation materializer owns one isolated corpus and maps memory ids rou
   }), { benchmarkNowSec: 1_800_000_000 });
   try {
     assert.equal(plane.owner, "runner");
+    assert.equal(plane.dialog_projection_version, LOCOMO_DIALOG_PROJECTION_VERSION);
+    assert.equal(plane.include_session_datetime, true);
+    assert.equal(plane.blip_caption_policy, LOCOMO_BLIP_CAPTION_POLICY);
     assert.equal(plane.session_count, 2);
     assert.equal(plane.document_count, 3);
     assert.equal(plane.memoryToDialog.size, 3);
@@ -114,7 +159,16 @@ test("conversation materializer owns one isolated corpus and maps memory ids rou
       const engineRows = engine.prepare("SELECT chunk_id, category, kg_data FROM memory_confidence").all();
       const serialized = JSON.stringify({ coreRows, ftsRows, engineRows });
       assert.equal(serialized.includes("PRIVATE GOLD"), false);
+      assert.equal(serialized.includes("PRIVATE OBSERVATION"), false);
+      assert.equal(serialized.includes("PRIVATE SESSION SUMMARY"), false);
+      assert.equal(serialized.includes("PRIVATE EVENT SUMMARY"), false);
+      assert.equal(serialized.includes("PRIVATE IMAGE URL"), false);
+      assert.equal(serialized.includes("PRIVATE IMAGE SEARCH QUERY"), false);
+      assert.equal(serialized.includes("PRIVATE TURN ANSWER"), false);
+      assert.equal(serialized.includes("PRIVATE ADVERSARIAL ANSWER"), false);
       assert.equal(serialized.includes("answer"), false);
+      assert.equal(serialized.includes("adversarial_answer"), false);
+      assert.equal(serialized.includes('"category":5'), false);
       assert.equal(coreRows.length, 3);
       assert.equal(ftsRows.length, 3);
       assert.equal(engineRows.length, 3);
@@ -125,6 +179,8 @@ test("conversation materializer owns one isolated corpus and maps memory ids rou
         assert.equal(["session_1", "session_2"].includes(identity.session_id), true);
         assert.equal(identity.sample_id, "conv-owned");
       }
+      assert.equal(coreRows.some(row => row.text === "(1:00 pm on 1 May, 2023) Alice: Alice visited Kyoto."), true);
+      assert.equal(ftsRows.some(row => row.text === "(1:00 pm on 1 May, 2023) Alice: Alice visited Kyoto."), true);
     } finally {
       core.close();
       engine.close();
@@ -143,6 +199,29 @@ test("materializer rejects live memory roots without touching them", () => {
       temporaryParent: join(homedir(), ".openclaw", "memory"),
     }),
     /locomo_live_memory_path_rejected/,
+  );
+});
+
+test("main profile rejects projection overrides instead of creating a second corpus variant", async () => {
+  assert.throws(
+    () => materializeLocomoConversationDataPlane(rawCase({ includeCaption: true }), {
+      includeBlipCaption: false,
+    }),
+    /locomo_projection_option_reserved:includeBlipCaption/,
+  );
+  await assert.rejects(
+    () => runLocomoLexicalRetrievalDataset([rawCase()], {
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+      includeSessionDatetime: false,
+    }),
+    /locomo_projection_option_reserved:includeSessionDatetime/,
+  );
+  await assert.rejects(
+    () => runLocomoLexicalRetrievalDataset([rawCase()], {
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+      blipCaptionPolicy: "none",
+    }),
+    /locomo_projection_option_reserved:blipCaptionPolicy/,
   );
 });
 
@@ -178,6 +257,7 @@ test("runner builds one corpus per conversation and reuses it for every question
   });
   try {
     assert.equal(output.schema, LOCOMO_RETRIEVAL_RUNNER_SCHEMA);
+    assert.equal(output.profile, LOCOMO_LEXICAL_RETRIEVAL_PROFILE);
     assert.equal(output.summary.conversations, 10);
     assert.equal(output.summary.corpora_built, 10);
     assert.equal(output.summary.corpus_reuse_searches, 20);
@@ -194,6 +274,12 @@ test("runner builds one corpus per conversation and reuses it for every question
     assert.equal(output.summary.sensitivity.scored_cases, 20);
     assert.equal(output.provenance.vector_mode, LOCOMO_VECTOR_MODE);
     assert.equal(output.provenance.host_manager_mode, LOCOMO_HOST_MANAGER_MODE);
+    assert.equal(output.provenance.dialog_projection_version, LOCOMO_DIALOG_PROJECTION_VERSION);
+    assert.equal(output.provenance.include_session_datetime, true);
+    assert.equal(output.provenance.blip_caption_policy, LOCOMO_BLIP_CAPTION_POLICY);
+    assert.equal(output.run.dialog_projection_version, LOCOMO_DIALOG_PROJECTION_VERSION);
+    assert.equal(output.run.include_session_datetime, true);
+    assert.equal(output.run.blip_caption_policy, LOCOMO_BLIP_CAPTION_POLICY);
   } finally {
     for (const plane of planes) plane.close();
   }
@@ -334,8 +420,41 @@ test("CLI smoke uses deterministic provenance and passes authoritative runner op
     assert.equal(runnerOptions.limit, 1);
     assert.equal(runnerOptions.datasetSha256.length, 64);
     assert.equal(runnerOptions.repositoryProvenance.repository_commit, TEST_REPOSITORY_PROVENANCE.repository_commit);
+    assert.equal(runnerOptions.dialogProjectionVersion, LOCOMO_DIALOG_PROJECTION_VERSION);
+    assert.equal(runnerOptions.includeSessionDatetime, true);
+    assert.equal(runnerOptions.blipCaptionPolicy, LOCOMO_BLIP_CAPTION_POLICY);
+    assert.equal(result.output.profile, LOCOMO_LEXICAL_RETRIEVAL_PROFILE);
+    assert.equal(result.output.run.dialog_projection_version, LOCOMO_DIALOG_PROJECTION_VERSION);
+    assert.equal(result.output.provenance.blip_caption_policy, LOCOMO_BLIP_CAPTION_POLICY);
     assert.equal(existsSync(outputPath), true);
     assert.equal(JSON.parse(readFileSync(outputPath)).provenance.input_file, "fixture.json");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI removes the legacy caption opt-in and rejects it explicitly", async () => {
+  const cli = await importCliModule();
+  assert.throws(
+    () => cli.parseArgs(["--include-blip-caption"]),
+    /unknown_argument:--include-blip-caption/,
+  );
+});
+
+test("CLI rejects caller projection overrides before running", async () => {
+  const runCli = await importCli();
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-locomo-retrieval-override-"));
+  const input = join(root, "fixture.json");
+  writeFileSync(input, JSON.stringify([rawCase()]));
+  try {
+    await assert.rejects(
+      () => runCli(["--input", input], {
+        repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+        runnerOptions: { blipCaptionPolicy: "none" },
+        runDataset: async () => { throw new Error("runner_must_not_run"); },
+      }),
+      /locomo_projection_option_reserved:blipCaptionPolicy/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

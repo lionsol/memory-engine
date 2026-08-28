@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2 RUNNER REPO-TESTED / BASELINE NOT RUN`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a PROJECTION REPO-TESTED; B5-S1 NOT RUN; B5 QUALITY OPEN`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -663,19 +663,24 @@ deployment work.
 
 ## B5-I2 — Isolated LoCoMo lexical retrieval runner
 
-B5-I2 source implementation is **`REPO-TESTED / BASELINE NOT RUN`** under the
-independent profile `production_hybrid_lexical_locomo_dialog_v1`. It adds an
-independent CLI and runner that materialize one benchmark-owned temporary
-Core/Engine/FTS data plane per conversation, reuse that corpus for all of the
-conversation's QA, and call the existing production `hybridSearch()` adapter.
-The official LoCoMo retrieval baseline has not been executed.
+B5-I2 source implementation is **`REPO-TESTED`** and B5-I2a projection
+hardening is **`REPO-TESTED`** under the independent profile
+`production_hybrid_lexical_dialog_locomo_v1`. The runner and CLI materialize
+one benchmark-owned temporary Core/Engine/FTS data plane per conversation,
+reuse that corpus for all of the conversation's QA, and call the existing
+production `hybridSearch()` adapter. The official LoCoMo retrieval baseline
+has not been executed; **B5-S1 remains `NOT RUN` and B5 quality adjudication is
+`OPEN`**.
 
-The corpus unit is a raw dialog turn using the frozen `speaker: text`
-projection (`speaker_colon_raw_text_v1`). An optional, explicit
-`[shares ...]` BLIP caption suffix is available under
-`shares_caption_suffix_v1`; it is disabled by default. Each result maps its
-benchmark memory id back to `{sample_id, dia_id, session_id}` before dialog
-and first-occurrence-deduplicated session projection scoring.
+The frozen dialog corpus projection is `locomo_dialog_projection_v1`:
+`(<session_date_time>) <speaker>: <raw text>` is always the first line, and a
+non-empty raw `blip_caption` adds a deterministic second line
+`[shares <blip_caption>]`. `include_session_datetime=true` and
+`blip_caption_policy=include_when_present` are profile identity fields, not
+CLI or caller options. The source preserves raw speaker/text/date values and
+never uses clean/compressed/generated text. Each result maps its benchmark
+memory id back to `{sample_id, dia_id, session_id}` before dialog and
+first-occurrence-deduplicated session projection scoring.
 
 The runner emits both frozen evidence views: strict
 `locomo_evidence_strict_v1` (`1,972` scored / `14` skipped on the official
@@ -691,9 +696,34 @@ The CLI records exact git provenance, input dataset SHA, profile, corpus
 ownership/reuse, and the two aggregate policies. It rejects dirty or
 unresolvable repository provenance and never resolves live OpenClaw memory
 paths. Focused tests cover ten-conversation corpus isolation/reuse, dynamic
-session mapping, raw/caption projection, gold isolation, fallback disabling,
+session mapping, date/caption projection, gold isolation, fallback disabling,
 and deterministic CLI injection. No provider, live database, runtime, or
 deployment operation is authorized by this source stage.
+
+### B5-I2a — Pre-baseline dialog projection hardening
+
+B5-I2a is **`REPO-TESTED`**. The primary profile has no mutable corpus
+variant: session date is always included and captions are included whenever a
+non-empty `blip_caption` is present. The projection is independent of the
+question, category, evidence, or evaluator labels. `answer`,
+`adversarial_answer`, `evidence`, `category`, `img_url`, image-search query,
+`observation`, `session_summary`, `event_summary`, and other evaluator-only
+fields are excluded from Core, Engine, FTS, Search, and document metadata.
+
+The pinned official dataset remains upstream commit
+`3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376`, dataset SHA-256
+`79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4`, and
+license `CC BY-NC 4.0 International`. Its readonly caption audit found
+`1,226` non-empty caption-bearing turns, `861` QA with evidence pointing to a
+caption-bearing turn (`854` strict-scored and `858` sensitivity-scored), and
+answer information in evidence turns classified as raw-only `477`,
+caption-only `24`, both `9`, and neither `1,476`. These counts support the
+fixed projection contract only; they do not create an answer-dependent
+retrieval heuristic.
+
+The official retrieval baseline is **`NOT RUN`** and B5 quality adjudication
+is **`OPEN`**. No dataset, output, or temporary audit artifact is vendored;
+benchmark evidence is not production authority.
 
 ## Later compatibility target — AML
 

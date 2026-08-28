@@ -6,6 +6,10 @@ const { readFileSync, writeFileSync } = require("node:fs");
 const { basename, resolve } = require("node:path");
 
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+const LOCOMO_PROFILE = "production_hybrid_lexical_dialog_locomo_v1";
+const LOCOMO_DIALOG_PROJECTION_VERSION = "locomo_dialog_projection_v1";
+const LOCOMO_INCLUDE_SESSION_DATETIME = true;
+const LOCOMO_BLIP_CAPTION_POLICY = "include_when_present";
 
 function requireValue(argv, index, option) {
   const value = argv[index + 1];
@@ -19,7 +23,6 @@ function parseArgs(argv) {
     output: null,
     limit: null,
     topK: 50,
-    includeBlipCaption: false,
     requireOfficial: false,
     json: false,
     help: false,
@@ -39,7 +42,7 @@ function parseArgs(argv) {
       args.topK = Number(requireValue(argv, index, token));
       index += 1;
     } else if (token === "--include-blip-caption") {
-      args.includeBlipCaption = true;
+      throw new Error(`unknown_argument:${token}`);
     } else if (token === "--require-official") {
       args.requireOfficial = true;
     } else if (token === "--json") {
@@ -60,13 +63,13 @@ function usage() {
     "Options:",
     "  --limit <n>              Run only the first n conversations",
     "  --top-k <n>              Retrieval depth (default: 50)",
-    "  --include-blip-caption   Opt into the bounded BLIP caption suffix",
     "  --require-official       Require the pinned official dataset SHA and shape",
     "  --output <path>          Write full per-question JSON result to a file",
     "  --json                   Print full per-question JSON to stdout",
     "  --help                   Show this help",
     "",
-    "B5-I2 profile: production_hybrid_lexical_locomo_dialog_v1",
+    `B5-I2 profile: ${LOCOMO_PROFILE}`,
+    `Dialog projection: ${LOCOMO_DIALOG_PROJECTION_VERSION}; session date is required; BLIP policy is ${LOCOMO_BLIP_CAPTION_POLICY}`,
     "Uses one benchmark-owned temporary Core/Engine/FTS corpus per conversation.",
     "Vector and host memory-manager fallbacks are disabled; no provider is used.",
   ].join("\n");
@@ -148,20 +151,46 @@ async function runLocomoRetrievalCli(argv = process.argv.slice(2), deps = {}) {
 
   const runner = deps.runDataset
     || (await import("../lib/benchmark/locomo-retrieval-runner-v1.js")).runLocomoLexicalRetrievalDataset;
+  const callerRunnerOptions = deps.runnerOptions || {};
+  if (Object.hasOwn(callerRunnerOptions, "includeBlipCaption")) {
+    throw new Error("locomo_projection_option_reserved:includeBlipCaption");
+  }
+  for (const [key, expected] of [
+    ["dialogProjectionVersion", LOCOMO_DIALOG_PROJECTION_VERSION],
+    ["includeSessionDatetime", LOCOMO_INCLUDE_SESSION_DATETIME],
+    ["blipCaptionPolicy", LOCOMO_BLIP_CAPTION_POLICY],
+  ]) {
+    if (Object.hasOwn(callerRunnerOptions, key) && callerRunnerOptions[key] !== expected) {
+      throw new Error(`locomo_projection_option_reserved:${key}`);
+    }
+  }
   const runnerOptions = {
-    ...(deps.runnerOptions || {}),
+    ...callerRunnerOptions,
     limit: args.limit,
     topK: args.topK,
-    includeBlipCaption: args.includeBlipCaption,
+    dialogProjectionVersion: LOCOMO_DIALOG_PROJECTION_VERSION,
+    includeSessionDatetime: LOCOMO_INCLUDE_SESSION_DATETIME,
+    blipCaptionPolicy: LOCOMO_BLIP_CAPTION_POLICY,
     datasetSha256: inputSha256,
     repositoryProvenance,
   };
   const output = await runner(records, runnerOptions);
   output.provenance = {
     ...(output.provenance || {}),
+    dialog_projection_version: LOCOMO_DIALOG_PROJECTION_VERSION,
+    include_session_datetime: LOCOMO_INCLUDE_SESSION_DATETIME,
+    blip_caption_policy: LOCOMO_BLIP_CAPTION_POLICY,
     input_file: basename(inputPath),
     input_sha256: inputSha256,
     official_shape_matches: validation.official_shape_matches,
+  };
+  output.profile = LOCOMO_PROFILE;
+  output.run = {
+    ...(output.run || {}),
+    profile: LOCOMO_PROFILE,
+    dialog_projection_version: LOCOMO_DIALOG_PROJECTION_VERSION,
+    include_session_datetime: LOCOMO_INCLUDE_SESSION_DATETIME,
+    blip_caption_policy: LOCOMO_BLIP_CAPTION_POLICY,
   };
 
   if (args.output) {

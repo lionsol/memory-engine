@@ -1,18 +1,35 @@
 ## 2026-08-28
 
-### Benchmark v1 B5-I2 isolated LoCoMo lexical runner
+### Benchmark v1 B5-I2a LoCoMo dialog projection hardening
 
-- Added `lib/benchmark/locomo-retrieval-runner-v1.js`,
+- Hardened the main `production_hybrid_lexical_dialog_locomo_v1` profile to
+  one fixed `locomo_dialog_projection_v1` corpus contract:
+  `(<session_date_time>) <speaker>: <raw text>` plus
+  `[shares <blip_caption>]` only for a non-empty caption. Session date and
+  caption policy are always on; the previous caption opt-in is rejected.
+- The pinned official readonly audit found `1,226` non-empty caption-bearing
+  turns and `861` evidence-linked QA (`854` strict-scored / `858`
+  sensitivity-scored). Evidence-turn answer presence was raw-only `477`,
+  caption-only `24`, both `9`, and neither `1,476`; this did not enter the
+  projection or retrieval path.
+- Source status is `REPO-TESTED`; B5-S1 lexical full baseline remains
+  `NOT RUN` and B5 quality adjudication remains `OPEN`. No provider, live
+  runtime, or dataset/output vendoring occurred.
+
+### Benchmark v1 B5-I2 isolated LoCoMo lexical runner (superseded by B5-I2a)
+
+- The initial implementation added `lib/benchmark/locomo-retrieval-runner-v1.js`,
   `bin/run-locomo-retrieval-v1.js`, and focused tests for the independent
   `production_hybrid_lexical_locomo_dialog_v1` profile. The runner owns one
   temporary Core/Engine/FTS data plane per conversation, reuses it across QA,
   maps memory ids back to `{sample_id, dia_id}`, and calls the existing
   production `hybridSearch()` path.
-- The runner emits dialog-primary strict and canonicalized sensitivity
+- At that historical checkpoint the runner emitted dialog-primary strict and canonicalized sensitivity
   aggregates, first-occurrence session projection diagnostics, exact git/input
   provenance, and explicit disabled vector/host-manager fallback state. Raw
-  `speaker: text` projection is frozen; BLIP caption materialization is an
-  explicit opt-in.
+  `speaker: text` projection was used; BLIP caption materialization was an
+  explicit opt-in. B5-I2a supersedes this projection behavior with the fixed
+  date-plus-caption contract recorded above.
 - Node 24 focused tests cover isolation/reuse, dynamic mapping, optional
   captions, gold exclusion, live-path rejection, deterministic CLI seams, and
   the official `1,972/14` strict and `1,978/8` sensitivity denominators. The
