@@ -29,7 +29,9 @@ import {
   mapLocomoSearchResultsToDialogs,
   materializeLocomoConversationDataPlane,
   resolveLocomoRepositoryProvenance,
+  resolveBenchmarkNowSec,
   runLocomoLexicalRetrievalDataset,
+  validateBenchmarkNowSec,
 } from "../lib/benchmark/locomo-retrieval-runner-v1.js";
 
 const TEST_REPOSITORY_PROVENANCE = {
@@ -37,6 +39,7 @@ const TEST_REPOSITORY_PROVENANCE = {
   repository_worktree_clean: true,
   repository_provenance_source: "git",
 };
+const TEST_BENCHMARK_NOW_SEC = 1_800_000_000;
 
 function rawCase({
   sampleId = "conv-test",
@@ -196,6 +199,7 @@ test("conversation materializer owns one isolated corpus and maps memory ids rou
 test("materializer rejects live memory roots without touching them", () => {
   assert.throws(
     () => materializeLocomoConversationDataPlane(rawCase(), {
+      benchmarkNowSec: TEST_BENCHMARK_NOW_SEC,
       temporaryParent: join(homedir(), ".openclaw", "memory"),
     }),
     /locomo_live_memory_path_rejected/,
@@ -205,6 +209,7 @@ test("materializer rejects live memory roots without touching them", () => {
 test("main profile rejects projection overrides instead of creating a second corpus variant", async () => {
   assert.throws(
     () => materializeLocomoConversationDataPlane(rawCase({ includeCaption: true }), {
+      benchmarkNowSec: TEST_BENCHMARK_NOW_SEC,
       includeBlipCaption: false,
     }),
     /locomo_projection_option_reserved:includeBlipCaption/,
@@ -234,12 +239,15 @@ test("runner builds one corpus per conversation and reuses it for every question
     ],
   }));
   const planes = [];
+  const benchmarkTimes = [];
   const runtimes = [];
   const searches = [];
   const output = await runLocomoLexicalRetrievalDataset(records, {
     topK: 2,
+    benchmarkNowSec: TEST_BENCHMARK_NOW_SEC,
     repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
     materialize(record, options) {
+      benchmarkTimes.push(options.benchmarkNowSec);
       const plane = materializeLocomoConversationDataPlane(record, options);
       planes.push(plane);
       return plane;
@@ -277,13 +285,89 @@ test("runner builds one corpus per conversation and reuses it for every question
     assert.equal(output.provenance.dialog_projection_version, LOCOMO_DIALOG_PROJECTION_VERSION);
     assert.equal(output.provenance.include_session_datetime, true);
     assert.equal(output.provenance.blip_caption_policy, LOCOMO_BLIP_CAPTION_POLICY);
+    assert.equal(output.provenance.benchmark_now_sec, TEST_BENCHMARK_NOW_SEC);
     assert.equal(output.run.dialog_projection_version, LOCOMO_DIALOG_PROJECTION_VERSION);
     assert.equal(output.run.include_session_datetime, true);
     assert.equal(output.run.blip_caption_policy, LOCOMO_BLIP_CAPTION_POLICY);
+    assert.equal(output.run.benchmark_now_sec, TEST_BENCHMARK_NOW_SEC);
+    assert.deepEqual(benchmarkTimes, Array(10).fill(TEST_BENCHMARK_NOW_SEC));
   } finally {
     for (const plane of planes) plane.close();
   }
   assert.equal(planes.every(plane => plane.closed && !existsSync(plane.root)), true);
+});
+
+test("runner resolves the default benchmark time exactly once before materialization", async () => {
+  const originalDateNow = Date.now;
+  let clockCalls = 0;
+  const materializerTimes = [];
+  Date.now = () => {
+    clockCalls += 1;
+    return 1_800_000_123_456;
+  };
+  try {
+    const output = await runLocomoLexicalRetrievalDataset([rawCase({
+      questions: [{ question: "Where?", answer: "GOLD", evidence: ["D1:1"], category: 4 }],
+    })], {
+      topK: 1,
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+      materialize(record, options) {
+        materializerTimes.push(options.benchmarkNowSec);
+        return materializeLocomoConversationDataPlane(record, options);
+      },
+      createRuntime() {
+        return { runtime: {}, close() {} };
+      },
+      async search() {
+        return { results: [], debug: {}, channels: [], channel_sizes: {} };
+      },
+    });
+    assert.equal(clockCalls, 1);
+    assert.deepEqual(materializerTimes, [1_800_000_123]);
+    assert.equal(output.provenance.benchmark_now_sec, 1_800_000_123);
+    assert.equal(output.run.benchmark_now_sec, 1_800_000_123);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
+
+test("benchmark time validation is positive, safe, integer-only, and fail-closed", async () => {
+  assert.equal(validateBenchmarkNowSec(TEST_BENCHMARK_NOW_SEC), TEST_BENCHMARK_NOW_SEC);
+  assert.equal(resolveBenchmarkNowSec(undefined, () => 1_800_000_123_456), 1_800_000_123);
+  for (const value of [0, -1, 1.5, "1800000000", Number.NaN, Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1, null, undefined]) {
+    assert.throws(
+      () => validateBenchmarkNowSec(value),
+      /locomo_benchmark_now_sec_must_be_positive_safe_integer/,
+    );
+  }
+  await assert.rejects(
+    () => runLocomoLexicalRetrievalDataset([], {
+      benchmarkNowSec: 0,
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+    }),
+    /locomo_benchmark_now_sec_must_be_positive_safe_integer/,
+  );
+});
+
+test("benchmark time is an authoritative provenance field and profile extensions cannot collide", async () => {
+  await assert.rejects(
+    () => runLocomoLexicalRetrievalDataset([], {
+      benchmarkNowSec: TEST_BENCHMARK_NOW_SEC,
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+      profileProvenance: { benchmark_now_sec: 1 },
+    }),
+    /locomo_provenance_reserved:benchmark_now_sec/,
+  );
+  const output = await runLocomoLexicalRetrievalDataset([], {
+    benchmarkNowSec: TEST_BENCHMARK_NOW_SEC,
+    benchmark_now_sec: 1,
+    repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+    profileProvenance: { test_extension: "safe" },
+  });
+  assert.equal(output.provenance.benchmark_now_sec, TEST_BENCHMARK_NOW_SEC);
+  assert.equal(output.run.benchmark_now_sec, TEST_BENCHMARK_NOW_SEC);
+  assert.equal(output.provenance.test_extension, "safe");
 });
 
 test("runner performs both evidence aggregates without retrieving skipped sensitivity cases", async () => {
@@ -314,7 +398,7 @@ test("runner performs both evidence aggregates without retrieving skipped sensit
 test("production hybridSearch adapter stays isolated and does not invoke a live host manager", async () => {
   const plane = materializeLocomoConversationDataPlane(rawCase({
     questions: [{ question: "Where did Alice visit?", answer: "GOLD", evidence: ["D1:1"], category: 4 }],
-  }));
+  }), { benchmarkNowSec: TEST_BENCHMARK_NOW_SEC });
   const adapter = createLocomoProductionHybridRuntime(plane, { topK: 3 });
   try {
     assert.equal(adapter.vector_mode, LOCOMO_VECTOR_MODE);
@@ -340,7 +424,9 @@ test("production hybridSearch adapter stays isolated and does not invoke a live 
 });
 
 test("unknown memory ids cannot cross a conversation boundary", () => {
-  const plane = materializeLocomoConversationDataPlane(rawCase());
+  const plane = materializeLocomoConversationDataPlane(rawCase(), {
+    benchmarkNowSec: TEST_BENCHMARK_NOW_SEC,
+  });
   try {
     assert.throws(
       () => mapLocomoSearchResultsToDialogs([{ memory_id: "not-this-corpus" }], plane.memoryToDialog),
@@ -401,7 +487,7 @@ test("CLI smoke uses deterministic provenance and passes authoritative runner op
   })]));
   let runnerOptions;
   try {
-    const result = await runCli(["--input", input, "--output", outputPath, "--limit", "1", "--top-k", "7"], {
+    const result = await runCli(["--input", input, "--output", outputPath, "--limit", "1", "--top-k", "7", "--benchmark-now-sec", "1800000000"], {
       repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
       runDataset: async (_records, options) => {
         runnerOptions = options;
@@ -418,6 +504,7 @@ test("CLI smoke uses deterministic provenance and passes authoritative runner op
     assert.equal(result.output.provenance.repository_provenance_source, "git");
     assert.equal(runnerOptions.topK, 7);
     assert.equal(runnerOptions.limit, 1);
+    assert.equal(runnerOptions.benchmarkNowSec, TEST_BENCHMARK_NOW_SEC);
     assert.equal(runnerOptions.datasetSha256.length, 64);
     assert.equal(runnerOptions.repositoryProvenance.repository_commit, TEST_REPOSITORY_PROVENANCE.repository_commit);
     assert.equal(runnerOptions.dialogProjectionVersion, LOCOMO_DIALOG_PROJECTION_VERSION);
@@ -426,6 +513,8 @@ test("CLI smoke uses deterministic provenance and passes authoritative runner op
     assert.equal(result.output.profile, LOCOMO_LEXICAL_RETRIEVAL_PROFILE);
     assert.equal(result.output.run.dialog_projection_version, LOCOMO_DIALOG_PROJECTION_VERSION);
     assert.equal(result.output.provenance.blip_caption_policy, LOCOMO_BLIP_CAPTION_POLICY);
+    assert.equal(result.output.provenance.benchmark_now_sec, TEST_BENCHMARK_NOW_SEC);
+    assert.equal(result.output.run.benchmark_now_sec, TEST_BENCHMARK_NOW_SEC);
     assert.equal(existsSync(outputPath), true);
     assert.equal(JSON.parse(readFileSync(outputPath)).provenance.input_file, "fixture.json");
   } finally {
@@ -439,6 +528,83 @@ test("CLI removes the legacy caption opt-in and rejects it explicitly", async ()
     () => cli.parseArgs(["--include-blip-caption"]),
     /unknown_argument:--include-blip-caption/,
   );
+});
+
+test("CLI resolves the default benchmark time once and passes it to the runner", async () => {
+  const runCli = await importCli();
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-locomo-retrieval-time-"));
+  const input = join(root, "fixture.json");
+  writeFileSync(input, JSON.stringify([rawCase()]));
+  let clockCalls = 0;
+  let runnerOptions;
+  try {
+    const result = await runCli(["--input", input], {
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+      nowMs: () => {
+        clockCalls += 1;
+        return 1_800_000_456_789;
+      },
+      runDataset: async (_records, options) => {
+        runnerOptions = options;
+        return { provenance: {}, run: {}, summary: {}, results: [] };
+      },
+    });
+    assert.equal(clockCalls, 1);
+    assert.equal(runnerOptions.benchmarkNowSec, 1_800_000_456);
+    assert.equal(result.output.provenance.benchmark_now_sec, 1_800_000_456);
+    assert.equal(result.output.run.benchmark_now_sec, 1_800_000_456);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI rejects malformed or duplicate benchmark time before starting the runner", async () => {
+  const cli = await importCliModule();
+  for (const value of ["-1", "1.5", "1e3", "NaN", "Infinity", String(Number.MAX_SAFE_INTEGER + 1)]) {
+    assert.throws(
+      () => cli.parseArgs(["--benchmark-now-sec", value]),
+      /benchmark_now_sec_must_be_positive_safe_integer/,
+    );
+  }
+  assert.throws(
+    () => cli.parseArgs(["--benchmark-now-sec", ""]),
+    /missing_argument_value:--benchmark-now-sec/,
+  );
+  assert.throws(
+    () => cli.parseArgs(["--benchmark-now-sec", "1800000000", "--benchmark-now-sec", "1800000001"]),
+    /duplicate_argument:--benchmark-now-sec/,
+  );
+});
+
+test("CLI does not start the runner for invalid benchmark time and protects caller provenance", async () => {
+  const runCli = await importCli();
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-locomo-retrieval-time-invalid-"));
+  const input = join(root, "fixture.json");
+  writeFileSync(input, JSON.stringify([rawCase()]));
+  let runnerCalled = false;
+  try {
+    await assert.rejects(
+      () => runCli(["--input", input, "--benchmark-now-sec", "1.25"], {
+        repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+        runDataset: async () => {
+          runnerCalled = true;
+          throw new Error("runner_must_not_run");
+        },
+      }),
+      /benchmark_now_sec_must_be_positive_safe_integer/,
+    );
+    assert.equal(runnerCalled, false);
+    await assert.rejects(
+      () => runCli(["--input", input, "--benchmark-now-sec", "1800000000"], {
+        repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+        runnerOptions: { profileProvenance: { benchmark_now_sec: 1 } },
+        runDataset: async () => { throw new Error("runner_must_not_run"); },
+      }),
+      /locomo_provenance_reserved:benchmark_now_sec/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("CLI rejects caller projection overrides before running", async () => {

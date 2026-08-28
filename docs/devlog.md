@@ -1,5 +1,18 @@
 ## 2026-08-28
 
+### Benchmark v1 B5-I2b benchmark time provenance hardening
+
+- Added the LoCoMo lexical CLI `--benchmark-now-sec` contract for exactly one
+  positive safe decimal integer, with fail-closed validation for malformed,
+  duplicate, missing, and unsafe values.
+- The dataset runner resolves the default wall-clock time once and carries the
+  trusted `benchmarkNowSec` through every conversation materializer and case;
+  `provenance.benchmark_now_sec` and `run.benchmark_now_sec` are now recorded
+  as protected output fields.
+- The earlier B5-S1 preflight remains `STOP / EXECUTION_COUNT=0/1 / BASELINE
+  NOT RUN`; the full baseline requires fresh Owner authorization after the new
+  source HEAD. B5-I2b is `REPO-TESTED`; no provider or baseline was executed.
+
 ### Benchmark v1 B5-I2a LoCoMo dialog projection hardening
 
 - Hardened the main `production_hybrid_lexical_dialog_locomo_v1` profile to

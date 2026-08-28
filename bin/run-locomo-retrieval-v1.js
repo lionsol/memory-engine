@@ -10,11 +10,37 @@ const LOCOMO_PROFILE = "production_hybrid_lexical_dialog_locomo_v1";
 const LOCOMO_DIALOG_PROJECTION_VERSION = "locomo_dialog_projection_v1";
 const LOCOMO_INCLUDE_SESSION_DATETIME = true;
 const LOCOMO_BLIP_CAPTION_POLICY = "include_when_present";
+const BENCHMARK_NOW_SEC_DECIMAL_PATTERN = /^[0-9]+$/u;
 
 function requireValue(argv, index, option) {
   const value = argv[index + 1];
   if (!value || value.startsWith("--")) throw new Error(`missing_argument_value:${option}`);
   return value;
+}
+
+function parseBenchmarkNowSec(value) {
+  if (typeof value !== "string" || !BENCHMARK_NOW_SEC_DECIMAL_PATTERN.test(value)) {
+    throw new Error("benchmark_now_sec_must_be_positive_safe_integer");
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error("benchmark_now_sec_must_be_positive_safe_integer");
+  }
+  return parsed;
+}
+
+function resolveBenchmarkNowSec(explicitValue, nowMs = Date.now) {
+  if (explicitValue !== null && explicitValue !== undefined) {
+    if (typeof explicitValue !== "number" || !Number.isSafeInteger(explicitValue) || explicitValue < 1) {
+      throw new Error("benchmark_now_sec_must_be_positive_safe_integer");
+    }
+    return explicitValue;
+  }
+  const currentMs = nowMs();
+  if (typeof currentMs !== "number" || !Number.isFinite(currentMs)) {
+    throw new Error("benchmark_clock_unavailable");
+  }
+  return parseBenchmarkNowSec(String(Math.floor(currentMs / 1000)));
 }
 
 function parseArgs(argv) {
@@ -23,6 +49,7 @@ function parseArgs(argv) {
     output: null,
     limit: null,
     topK: 50,
+    benchmarkNowSec: null,
     requireOfficial: false,
     json: false,
     help: false,
@@ -40,6 +67,10 @@ function parseArgs(argv) {
       index += 1;
     } else if (token === "--top-k") {
       args.topK = Number(requireValue(argv, index, token));
+      index += 1;
+    } else if (token === "--benchmark-now-sec") {
+      if (args.benchmarkNowSec !== null) throw new Error(`duplicate_argument:${token}`);
+      args.benchmarkNowSec = parseBenchmarkNowSec(requireValue(argv, index, token));
       index += 1;
     } else if (token === "--include-blip-caption") {
       throw new Error(`unknown_argument:${token}`);
@@ -63,6 +94,7 @@ function usage() {
     "Options:",
     "  --limit <n>              Run only the first n conversations",
     "  --top-k <n>              Retrieval depth (default: 50)",
+    "  --benchmark-now-sec <n>  Positive safe integer time basis for the full dataset run",
     "  --require-official       Require the pinned official dataset SHA and shape",
     "  --output <path>          Write full per-question JSON result to a file",
     "  --json                   Print full per-question JSON to stdout",
@@ -164,10 +196,23 @@ async function runLocomoRetrievalCli(argv = process.argv.slice(2), deps = {}) {
       throw new Error(`locomo_projection_option_reserved:${key}`);
     }
   }
+  if (Object.hasOwn(callerRunnerOptions, "benchmark_now_sec")) {
+    throw new Error("locomo_provenance_reserved:benchmark_now_sec");
+  }
+  if (callerRunnerOptions.profileProvenance
+      && typeof callerRunnerOptions.profileProvenance === "object"
+      && Object.hasOwn(callerRunnerOptions.profileProvenance, "benchmark_now_sec")) {
+    throw new Error("locomo_provenance_reserved:benchmark_now_sec");
+  }
+  const benchmarkNowSec = resolveBenchmarkNowSec(
+    args.benchmarkNowSec,
+    deps.nowMs || Date.now,
+  );
   const runnerOptions = {
     ...callerRunnerOptions,
     limit: args.limit,
     topK: args.topK,
+    benchmarkNowSec,
     dialogProjectionVersion: LOCOMO_DIALOG_PROJECTION_VERSION,
     includeSessionDatetime: LOCOMO_INCLUDE_SESSION_DATETIME,
     blipCaptionPolicy: LOCOMO_BLIP_CAPTION_POLICY,
@@ -180,6 +225,7 @@ async function runLocomoRetrievalCli(argv = process.argv.slice(2), deps = {}) {
     dialog_projection_version: LOCOMO_DIALOG_PROJECTION_VERSION,
     include_session_datetime: LOCOMO_INCLUDE_SESSION_DATETIME,
     blip_caption_policy: LOCOMO_BLIP_CAPTION_POLICY,
+    benchmark_now_sec: benchmarkNowSec,
     input_file: basename(inputPath),
     input_sha256: inputSha256,
     official_shape_matches: validation.official_shape_matches,
@@ -191,6 +237,7 @@ async function runLocomoRetrievalCli(argv = process.argv.slice(2), deps = {}) {
     dialog_projection_version: LOCOMO_DIALOG_PROJECTION_VERSION,
     include_session_datetime: LOCOMO_INCLUDE_SESSION_DATETIME,
     blip_caption_policy: LOCOMO_BLIP_CAPTION_POLICY,
+    benchmark_now_sec: benchmarkNowSec,
   };
 
   if (args.output) {
@@ -220,6 +267,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
 module.exports = {
   main,
   parseArgs,
+  parseBenchmarkNowSec,
   resolveRepositoryProvenance,
   runLocomoRetrievalCli,
   usage,

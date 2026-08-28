@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a PROJECTION REPO-TESTED; B5-S1 NOT RUN; B5 QUALITY OPEN`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a PROJECTION REPO-TESTED; B5-I2b TIME PROVENANCE REPO-TESTED; B5-S1 PREFLIGHT STOP / EXECUTION 0/1 / NOT RUN; B5 QUALITY OPEN`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -724,6 +724,24 @@ retrieval heuristic.
 The official retrieval baseline is **`NOT RUN`** and B5 quality adjudication
 is **`OPEN`**. No dataset, output, or temporary audit artifact is vendored;
 benchmark evidence is not production authority.
+
+### B5-I2b — Benchmark time provenance hardening
+
+B5-I2b is **`REPO-TESTED`**. The LoCoMo lexical CLI now accepts exactly one
+`--benchmark-now-sec <positive-safe-integer>` value, rejects non-decimal,
+non-positive, unsafe, duplicate, and missing values before starting the
+dataset runner, and resolves the wall-clock default once before a dataset run.
+The trusted camel-case `benchmarkNowSec` runner parameter is validated and is
+passed unchanged to every conversation materializer and retrieval case. Both
+`provenance.benchmark_now_sec` and `run.benchmark_now_sec` are authoritative
+numeric fields and cannot be replaced by caller or profile provenance.
+
+The prior B5-S1 preflight stopped before starting the full CLI with
+`PREFLIGHT=STOP`, `EXECUTION_COUNT=0/1`, and `BASELINE=NOT RUN` because the
+internal benchmark time had reached the temporary materializer but was absent
+from output provenance. B5-S1 remains **`NOT RUN`** and requires fresh Owner
+authorization after this new source HEAD. No provider, baseline, runtime,
+live database, or temporary artifact was used or vendored in B5-I2b.
 
 ## Later compatibility target — AML
 
