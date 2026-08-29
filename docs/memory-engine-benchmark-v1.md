@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 OVERALL OPEN; SEMANTIC V2 NEXT / SOURCE IMPLEMENTATION NOT STARTED / PROVIDER RUN NOT AUTHORIZED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 OVERALL OPEN; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; SEMANTIC V2 NEXT / REAL-PROVIDER SANITY NOT RUN / SEMANTIC FULL A/B NOT RUN / NOT AUTHORIZED; B5 QUALITY OPEN`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -773,13 +773,14 @@ search clock. The v2 profile keeps the v1 corpus, projection, caption/date
 policy, query, evidence policies, metrics, cutoffs, lexical/fusion/rerank
 constants, vector-disabled backend, and host-manager-disabled policy.
 
-The v2 source and focused tests are **`REPO-TESTED`**. The completed
+The lexical v2 source and focused tests are **`REPO-TESTED`**. The completed
 B5-S1-v2 execution is **`PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED`**;
 the detailed execution authority, metrics, provenance, and semantic vector
 gate freeze are recorded below. B5 overall remains **`OPEN`**. The semantic
 profile reserved for the next stage is
-`production_hybrid_semantic_dialog_locomo_time_frozen_v2`, with status
-**`NEXT / SOURCE IMPLEMENTATION NOT STARTED / PROVIDER RUN NOT AUTHORIZED`**.
+`production_hybrid_semantic_dialog_locomo_time_frozen_v2`; B5-I3 source
+implementation is **`REPO-TESTED`**, while real-provider sanity and semantic
+full A/B remain **`NOT RUN / NOT AUTHORIZED`**.
 
 #### B5-D1 append-only correction
 
@@ -1026,7 +1027,8 @@ B5 overall = OPEN
 
 The future pair is `production_hybrid_lexical_dialog_locomo_time_frozen_v2`
 and `production_hybrid_semantic_dialog_locomo_time_frozen_v2`. Semantic v2 is
-`NEXT / SOURCE IMPLEMENTATION NOT STARTED / PROVIDER RUN NOT AUTHORIZED`. The
+`NEXT / SOURCE IMPLEMENTATION REPO-TESTED / REAL-PROVIDER SANITY NOT RUN /
+SEMANTIC FULL A/B NOT RUN / NOT AUTHORIZED`. The
 semantic v2 design
 must hold the time-frozen lexical v2 authority fixed: upstream and dataset
 pins, question set, strict/sensitivity policies and denominators, dialog corpus
@@ -1099,8 +1101,9 @@ gates, and at least one multi-hop gate. Otherwise a valid execution is
 failure is `INVALID / NOT ADJUDICABLE`. Latency, provider/cache counts, and
 vector counts must be reported but have no hidden quality threshold. Session
 projection and sensitivity remain diagnostics only. Semantic v2 remains
-`NEXT / SOURCE IMPLEMENTATION NOT STARTED / PROVIDER RUN NOT AUTHORIZED`. No
-semantic provider sanity or full run is authorized here.
+`NEXT / SOURCE IMPLEMENTATION REPO-TESTED / REAL-PROVIDER SANITY NOT RUN /
+SEMANTIC FULL A/B NOT RUN / NOT AUTHORIZED`. No semantic provider sanity or
+full run is authorized here.
 
 B5-I2c-D1 closeout: the time-frozen semantic successor remains reserved as
 `production_hybrid_semantic_dialog_locomo_time_frozen_v2`, and its lexical
@@ -1108,8 +1111,31 @@ control is now the independently materialized and searched
 `production_hybrid_lexical_dialog_locomo_time_frozen_v2` authority recorded in
 B5-S1-v2 above. The prior pre-baseline `NOT RUN` / `PENDING` state is
 superseded; the historical B5-S1 v1 record, metrics, and time-provenance
-limitation remain unchanged. No semantic source implementation or provider
-run is authorized by this closeout.
+limitation remain unchanged. At that historical checkpoint no semantic source
+implementation or provider run was authorized; the current B5-I3 source status
+is recorded below and provider execution remains unauthorized.
+
+### B5-I3 — time-frozen semantic v2 source implementation
+
+B5-I3 source implementation is **`REPO-TESTED`** under the independent profile
+`production_hybrid_semantic_dialog_locomo_time_frozen_v2`. The runner and CLI
+use one conversation-owned temporary Core/Engine/FTS/LanceDB data plane, reuse
+the existing low-level embedding-cache, Canonical vector projection, LanceDB,
+and production `hybridSearch()` seams, and keep the lexical v2 baseline,
+evidence policies, denominators, metrics, ranking, fusion, and projection
+contracts unchanged. The fixed clock is bound equally to benchmark,
+materialization, and search/rerank paths; the frozen vector invariant remains
+attempted/skipped/error `1,978/0/0`, with LanceDB `lancedb_search`,
+`vector_in_fusion=true`, zero host-manager fallback, and no silent
+lexical-only degradation.
+
+The semantic v2 profile has not called a real provider and has not run a
+sanity or full semantic A/B baseline: **`NOT RUN / NOT AUTHORIZED`**. B5
+quality adjudication remains **`OPEN`**. The six numerical gates and
+regression guards remain unchanged and compare semantic v2 against the
+frozen lexical v2 authority. Output, cache, vector, and temporary data-plane
+artifacts are not vendored; committed source, provenance contract, invariants,
+and adjudication are the long-term authority.
 
 ## Later compatibility target — AML
 
