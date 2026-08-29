@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a SOURCE IMPLEMENTATION REPO-TESTED; B6-I2 IN PROGRESS; B6-I2b RETAINED-ROOT RESTART / CROSS-STORE CRASH RECONCILIATION NEXT; B6-I3 HTTP/DOCKER TRANSPORT LATER / NOT STARTED; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED; B6-I3 HTTP/DOCKER TRANSPORT NEXT / SOURCE ONLY; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -1309,12 +1309,12 @@ repository authority; long-term authority is the committed source and dataset
 provenance, metrics, invariants, and this adjudication.
 
 B6-A1 is **`PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE`** and B6-I1 is
-**`CLOSED`**. B6-I2a is now **`SOURCE IMPLEMENTATION REPO-TESTED`**, while the
-larger B6-I2 remains **`IN PROGRESS`** pending retained-root restart and
-cross-store crash reconciliation in I2b. No AML hosted smoke, full evaluation,
-provider run, public endpoint, Docker submission, or leaderboard upload has
-started. B6-I3 HTTP/Docker transport follows after I2b. B6-S2 official smoke
-and B6-S3 full evaluation remain separately unauthorized.
+**`CLOSED`**. B6-I2a is **`CLOSED`** and B6-I2 is now **`SOURCE IMPLEMENTATION
+REPO-TESTED / CLOSED`** after retained-root restart and cross-store crash
+reconciliation. No AML hosted smoke, full evaluation, provider run, public
+endpoint, Docker submission, or leaderboard upload has started. B6-I3
+HTTP/Docker transport is the next source-only stage. B6-S2 official smoke and
+B6-S3 full evaluation remain separately unauthorized.
 
 ## B6 — Agent Memory Leaderboard compatibility
 
@@ -1425,8 +1425,8 @@ repaired deterministically, and all scoped Search results must report
 `vector_backend=lancedb`, `vector_stage=lancedb_search`, and vector participation
 in the existing production channel fusion. Per-user Core, Engine, LanceDB, and
 embedding-cache paths are physically isolated; host memory-manager fallback is
-forbidden. B6-I2b is next for retained-root restart/resume and cross-store crash
-reconciliation. B6-I3 HTTP/Docker transport follows later. No real provider or
+forbidden. At the I2a checkpoint, B6-I2b was next for retained-root
+restart/resume and cross-store crash reconciliation. B6-I3 HTTP/Docker transport follows later. No real provider or
 official AML execution occurred.
 
 AML eligibility confirmation and any hosted execution remain later
@@ -1466,3 +1466,58 @@ an isolated rerun. The focused semantic backend suite passed all eight tests,
 including real temporary LanceDB, cache persistence, per-user isolation, and
 success/error close paths. No provider, AML service, or live runtime/data plane
 was used.
+
+### B6-I2b retained-root restart and cross-store crash reconciliation
+
+B6-I2b is **`SOURCE IMPLEMENTATION REPO-TESTED`**, closing the larger B6-I2
+source stage. AML Add now uses the durable ordering
+`Engine PENDING (confidence=0) → Core/FTS ensure → semantic vector materialization
+when required → Engine READY (production confidence)`. The `aml_add_requests`
+ledger is extended in place with `state`, `vector_required`, and `updated_at`;
+legacy rows without the new fields migrate deterministically to `READY`.
+Same-request `READY` retries deduplicate, while `PENDING` retries reconcile the
+Engine metadata, exact Core/FTS row, and exact vector row before one atomic
+READY promotion. A payload change for an existing request remains fail-closed.
+Ordinary failure cleanup removes a newly created request and its partial data;
+a failed retry of an already durable PENDING request preserves that invisible
+PENDING state for a later reconciliation attempt.
+
+An explicit retained-root mode persists a benchmark-owned registry manifest and
+per-user ownership marker below the operating-system temporary directory.
+Manifest identity binds the AML data-plane schema, semantic backend/vector mode,
+provider/base-URL/model/revision/dimension, Canonical projection, embedding-cache
+schema, and `max_top_k`; corruption or incompatibility fails closed. Existing
+users are lazily reopened after restart, unknown users do not allocate roots,
+and `close()` preserves retained roots while the explicit test cleanup method
+destroys them. LanceDB, SQLite embedding-cache, and Core/Engine handles remain
+operation-scoped rather than retained per registered user.
+
+The test-only stage hook terminates a Node child process after durable PENDING,
+Core, vector, or READY boundaries. Reopen tests prove all four crash cases,
+pending confidence-0 visibility filtering (including mixed READY/PENDING
+search), deterministic Core/FTS repair, vector-row/cache reuse, semantic Search
+after restart, physical cross-user isolation, manifest mismatch/corruption
+fail-closed behavior, and legacy ledger migration. This is benchmark-local
+source evidence: no production Hybrid semantics were changed, no crash journal
+or restart state machine beyond this bounded reconciliation contract was added,
+and no real provider or official AML execution occurred.
+
+Repository verification at B6-I2b source state:
+
+```text
+B6-I2b retained-root/reconciliation focused tests = 9/9 PASS
+B6-I1 adapter focused tests = 15/15 PASS
+B6-I2a semantic backend focused tests = 8/8 PASS
+complete Benchmark v1 family = 162 PASS / 4 SKIP / 0 FAIL
+documentation/current-state focused validation = 2/2 PASS
+static check = PASS / 731 files
+Node = v24.19.0
+real provider = NOT CALLED
+official AML execution = NOT RUN
+```
+
+The aggregate benchmark launcher continues to expose the known intermittent
+nested LongMemEval CLI subprocess environment failure; the exact CLI file
+passed in isolation, and the family total above is the fresh file-by-file
+Node 24 result. No temporary retained root, SQLite/LanceDB data, cache, log, or
+provider artifact is part of repository authority.
