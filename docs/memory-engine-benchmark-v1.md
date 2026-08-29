@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED; B6-I3 HTTP/DOCKER TRANSPORT NEXT / SOURCE ONLY; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I3 HTTP/DOCKER TRANSPORT SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-S1 LOCAL SYNTHETIC HTTP/DOCKER QUALIFICATION NEXT / NO REAL PROVIDER; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -1521,3 +1521,47 @@ nested LongMemEval CLI subprocess environment failure; the exact CLI file
 passed in isolation, and the family total above is the fresh file-by-file
 Node 24 result. No temporary retained root, SQLite/LanceDB data, cache, log, or
 provider artifact is part of repository authority.
+
+### B6-I3 AML HTTP and Docker transport
+
+B6-I3 is **`SOURCE IMPLEMENTATION REPO-TESTED / CLOSED`**. The benchmark-local
+transport exposes only the frozen canonical paths `GET /health`, `POST /add`,
+and `POST /search`, and delegates Add/Search validation, idempotency,
+PENDING→READY ordering, isolation, and production `hybridSearch()` behavior to
+the existing AML adapter. Health is an unauthenticated minimal `{"status":"ok"}`
+response; Add and Search return only their canonical AML envelopes. HTTP body
+size is bounded at 2 MiB, `top_k<=100` remains adapter-owned, authentication
+supports the official Bearer/Token/X-Api-Key schemes with constant-time key
+comparison, and stable errors never return request bodies, stacks, filesystem
+paths, provider details, or credentials.
+
+The service runtime uses an env-only `SILICONFLOW_API_KEY` boundary for the
+frozen semantic identity (`SiliconFlow` / `Qwen/Qwen3-Embedding-4B` / 2,560
+dimensions). Provider requests are injectable for tests and the source contains
+no credential discovery from host configuration. Retained state remains under
+the benchmark-owned `/tmp/memory-engine-aml-data` volume; graceful SIGTERM or
+SIGINT shutdown stops acceptance, drains in-flight operations, closes the
+adapter, and preserves the retained root for restart. The Docker image is
+Node 24, runs as non-root `node`, exposes port 8080, mounts the retained root,
+and includes a minimal `/health` HEALTHCHECK without copying tests, datasets,
+reports, credentials, or database artifacts.
+
+Focused transport coverage uses localhost, temporary retained roots, the actual
+installed LanceDB package, and deterministic fake 2,560-dimensional embeddings.
+It proves auth/error/output contracts, in-flight shutdown, HTTP idempotency,
+restart-over-HTTP Search, unknown-user no-allocation, per-user isolation,
+provider-wrapper fail-closed behavior, and Docker packaging invariants. The
+transport source stage did not call a real provider, AML service, public
+endpoint, official AML smoke/full evaluation, or live OpenClaw data plane.
+B6-S1 remains **`NEXT / LOCAL SYNTHETIC HTTP/DOCKER QUALIFICATION / NO REAL
+PROVIDER`**; B6-S2 official smoke and B6-S3 full evaluation remain
+`NOT AUTHORIZED`. Benchmark evidence is not production or runtime authority.
+
+Fresh source-stage verification recorded `9/9 PASS` for the HTTP transport,
+`6/6 PASS` for service/provider runtime, `2/2 PASS` for Docker contracts, and
+`179 PASS / 4 SKIP / 0 FAIL` for the complete Benchmark v1 family. Documentation
+and current-state validation was `7/7 PASS`; the Node 24 static check passed
+`737` files. The permitted local Docker build qualification was attempted once
+but was blocked by the environment's inability to fetch
+`node:24-bookworm-slim` metadata from Docker Hub; no container was started and
+the failure did not qualify source or provider behavior.

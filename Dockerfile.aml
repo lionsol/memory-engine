@@ -1,0 +1,31 @@
+FROM node:24-bookworm-slim AS dependencies
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+FROM node:24-bookworm-slim
+
+ENV NODE_ENV=production
+ENV AML_HOST=0.0.0.0
+ENV AML_PORT=8080
+ENV AML_RETAINED_ROOT=/tmp/memory-engine-aml-data
+ENV AML_AUTH_MODE=auto
+
+WORKDIR /app
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+COPY bin/ ./bin/
+COPY lib/ ./lib/
+
+RUN mkdir -p /tmp/memory-engine-aml-data \
+  && chown -R node:node /app /tmp/memory-engine-aml-data
+
+USER node
+EXPOSE 8080
+VOLUME ["/tmp/memory-engine-aml-data"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD node -e "const http=require('node:http'); const req=http.get('http://127.0.0.1:8080/health',res=>{res.resume(); process.exit(res.statusCode===200?0:1)}); req.on('error',()=>process.exit(1)); req.setTimeout(4000,()=>{req.destroy(); process.exit(1)});"
+
+CMD ["node", "bin/serve-aml-benchmark-v1.js"]
