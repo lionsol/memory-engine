@@ -18,11 +18,15 @@ import {
   CANONICAL_VECTOR_PROJECTION_VERSION,
   CANONICAL_VECTOR_TEXT_MAX_CHARS,
 } from "../lib/canonical/vector-projection.js";
+import { stripPromptMetadataPrefix } from "../query-utils.js";
 import {
+  buildLocomoConversationDialogDocuments,
   LOCOMO_BLIP_CAPTION_POLICY,
   LOCOMO_DIALOG_PROJECTION_VERSION,
+  LOCOMO_DATASET_SHA256,
   LOCOMO_EVIDENCE_CANONICALIZED_V1,
   LOCOMO_EVIDENCE_STRICT_V1,
+  normalizeLocomoDataset,
 } from "../lib/benchmark/locomo-v1.js";
 import {
   LOCOMO_LEXICAL_RETRIEVAL_PROFILE,
@@ -167,6 +171,133 @@ function fakeVectorStoreFactory(stores = [], behavior = {}) {
       },
     };
     return { table: store.table };
+  };
+}
+
+function officialFakeEmbeddingFromDigest(digestHex) {
+  const digest = Buffer.from(String(digestHex), "hex");
+  const vector = new Array(LOCOMO_SEMANTIC_EXPECTED_EMBEDDING_DIMENSION).fill(0);
+  for (let index = 0; index < digest.length; index += 1) vector[index] = digest[index] / 255;
+  return vector;
+}
+
+function officialFakeEmbedding(text) {
+  return officialFakeEmbeddingFromDigest(createHash("sha256").update(String(text)).digest("hex"));
+}
+
+function officialInputWitness(records) {
+  const items = normalizeLocomoDataset(records, {
+    evidencePolicy: LOCOMO_EVIDENCE_CANONICALIZED_V1,
+  });
+  const corpusInputs = new Set();
+  const queryInputs = new Set();
+  for (const item of items) {
+    for (const document of buildLocomoConversationDialogDocuments(item, {
+      evidencePolicy: item.evidence_policy,
+    })) {
+      corpusInputs.add(document.content.slice(0, CANONICAL_VECTOR_TEXT_MAX_CHARS));
+    }
+    for (const question of item.questions) {
+      if (question.scoreable) queryInputs.add(stripPromptMetadataPrefix(question.question));
+    }
+  }
+  return {
+    corpusInputs,
+    queryInputs,
+    allInputs: new Set([...corpusInputs, ...queryInputs]),
+    corpusHashes: new Set([...corpusInputs].map(value => createHash("sha256").update(value).digest("hex"))),
+    queryHashes: new Set([...queryInputs].map(value => createHash("sha256").update(value).digest("hex"))),
+  };
+}
+
+function officialFakeEmbeddingCache() {
+  const entries = new Set();
+  const operations = [];
+  let closeCount = 0;
+  return {
+    operations,
+    get(key) {
+      operations.push({ operation: "get", key: { ...key } });
+      const serialized = JSON.stringify(key);
+      if (!entries.has(serialized)) return null;
+      return officialFakeEmbeddingFromDigest(key.input_sha256);
+    },
+    set(key, vector) {
+      assert.equal(vector.length, LOCOMO_SEMANTIC_EXPECTED_EMBEDDING_DIMENSION);
+      operations.push({ operation: "set", key: { ...key } });
+      entries.add(JSON.stringify(key));
+    },
+    close() {
+      closeCount += 1;
+    },
+    get closeCount() {
+      return closeCount;
+    },
+  };
+}
+
+function officialFakeVectorStoreFactory(stores = []) {
+  return async ({ path, sampleId }) => {
+    const store = {
+      path,
+      sampleId,
+      rows: [],
+      addCalls: 0,
+      vectorSearchCount: 0,
+      queryVectorDimensions: [],
+      errors: [],
+      closed: false,
+      closeCount: 0,
+    };
+    const table = {
+      async add(nextRows) {
+        store.addCalls += 1;
+        for (const row of nextRows) {
+          assert.deepEqual(Object.keys(row).sort(), ["id", "text", "timestamp", "vector"]);
+          assert.equal(row.vector.length, LOCOMO_SEMANTIC_EXPECTED_EMBEDDING_DIMENSION);
+          store.rows.push({ id: row.id, text: row.text, timestamp: row.timestamp });
+        }
+      },
+      async countRows() {
+        return store.rows.length;
+      },
+      search(query) {
+        try {
+          assert.equal(query.length, LOCOMO_SEMANTIC_EXPECTED_EMBEDDING_DIMENSION);
+          store.vectorSearchCount += 1;
+          store.queryVectorDimensions.push(query.length);
+          return {
+            limit(limit) {
+              return {
+                async execute() {
+                  try {
+                    return store.rows.slice(0, limit).map(row => ({
+                      ...row,
+                      _distance: 0.01,
+                    }));
+                  } catch (error) {
+                    store.errors.push(String(error?.stack || error));
+                    throw error;
+                  }
+                },
+              };
+            },
+          };
+        } catch (error) {
+          store.errors.push(String(error?.stack || error));
+          throw error;
+        }
+      },
+    };
+    store.table = table;
+    stores.push(store);
+    return {
+      table,
+      close() {
+        store.closeCount += 1;
+        store.closed = true;
+      },
+    };
   };
 }
 
@@ -492,6 +623,148 @@ test("semantic CLI rejects missing clock, caller clock/provenance spoofing, and 
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("official LoCoMo semantic v2 contract runs through production hybridSearch offline", async t => {
+  const datasetPath = process.env.LOCOMO_DATASET_PATH;
+  if (!datasetPath || !existsSync(datasetPath)) {
+    t.skip("LOCOMO_DATASET_PATH is not set to an available pinned dataset");
+    return;
+  }
+
+  const datasetBytes = readFileSync(datasetPath);
+  const datasetSha256 = createHash("sha256").update(datasetBytes).digest("hex");
+  assert.equal(datasetSha256, LOCOMO_DATASET_SHA256);
+  const records = JSON.parse(datasetBytes.toString("utf8"));
+  assert.ok(Array.isArray(records));
+
+  const witness = officialInputWitness(records);
+  const cache = officialFakeEmbeddingCache();
+  const stores = [];
+  const providerInputs = [];
+  const embeddingProvider = async text => {
+    const input = String(text);
+    assert.equal(witness.allInputs.has(input), true, "only projected corpus text or exact questions may be embedded");
+    providerInputs.push(input);
+    return officialFakeEmbedding(input);
+  };
+  let output;
+  try {
+    output = await runLocomoSemanticRetrievalDataset(records, {
+      benchmarkNowSec: 1_705_066_861,
+      datasetSha256,
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+      embeddingBaseUrl: "https://fake.invalid/v1",
+      embeddingProvider,
+      embeddingCache: cache,
+      vectorStoreFactory: officialFakeVectorStoreFactory(stores),
+    });
+  } catch (error) {
+    error.message = `${error.message}; fake_vector_state=${JSON.stringify(stores.map(store => ({
+      sampleId: store.sampleId,
+      rows: store.rows.length,
+      searches: store.vectorSearchCount,
+      errors: store.errors,
+    })))}`;
+    throw error;
+  }
+
+  assert.equal(output.profile, LOCOMO_SEMANTIC_PROFILE);
+  assert.equal(output.provenance.profile, LOCOMO_SEMANTIC_PROFILE);
+  assert.equal(output.summary.cases, 1_986);
+  assert.equal(output.summary.retrieval_cases, 1_978);
+  assert.equal(output.summary.strict.scored_cases, 1_972);
+  assert.equal(output.summary.strict.skipped_cases, 14);
+  assert.equal(output.summary.sensitivity.scored_cases, 1_978);
+  assert.equal(output.summary.sensitivity.skipped_cases, 8);
+  assert.equal(output.summary.conversations, 10);
+  assert.equal(output.summary.corpora_built, 10);
+  assert.equal(output.summary.corpus_embedding_count, 5_882);
+  assert.equal(output.summary.query_embedding_count, 1_978);
+  assert.equal(output.summary.total_embedding_lookups, 7_860);
+  assert.equal(output.summary.corpus_lancedb_row_count, 5_882);
+  assert.equal(output.summary.vector_attempted_count, 1_978);
+  assert.equal(output.summary.vector_skipped_count, 0);
+  assert.equal(output.summary.vector_error_count, 0);
+  assert.equal(output.summary.host_manager_fallback_count, 0);
+
+  for (const scope of [output.provenance, output.run]) {
+    assert.equal(scope.benchmark_now_sec, 1_705_066_861);
+    assert.equal(scope.materialization_now_sec, 1_705_066_861);
+    assert.equal(scope.search_now_sec, 1_705_066_861);
+  }
+
+  const scoreableResults = output.results.filter(result => result.sensitivity.scoreable);
+  const skippedResults = output.results.filter(result => !result.sensitivity.scoreable);
+  assert.equal(scoreableResults.length, 1_978);
+  assert.equal(skippedResults.length, 8);
+  for (const result of scoreableResults) {
+    const diagnostics = result.diagnostics;
+    assert.ok(diagnostics);
+    assert.equal(diagnostics.vector_backend, "lancedb");
+    assert.equal(diagnostics.vector_stage, "lancedb_search");
+    assert.equal(diagnostics.vector_skipped, false);
+    assert.equal(diagnostics.vector_in_fusion, true);
+    assert.equal(diagnostics.channels.includes("vector"), true);
+    assert.equal(diagnostics.search_now_sec, 1_705_066_861);
+    assert.equal(diagnostics.query_embedding_count, 1);
+    assert.equal(diagnostics.corpus_embedding_count, 0);
+    assert.equal(diagnostics.vector_attempted_count, 1);
+    assert.equal(diagnostics.vector_skipped_count, 0);
+    assert.equal(diagnostics.vector_error_count, 0);
+    assert.equal(diagnostics.host_manager_fallback_count, 0);
+  }
+  for (const result of skippedResults) {
+    assert.equal(result.diagnostics, null);
+    assert.deepEqual(result.retrieved_memory_ids, []);
+    assert.deepEqual(result.retrieved_dialog_ids, []);
+  }
+
+  const expectedRowsByConversation = new Map(
+    output.summary.corpus_lancedb_row_counts.map(row => [row.sample_id, row]),
+  );
+  assert.equal(expectedRowsByConversation.size, 10);
+  assert.equal(stores.length, 10);
+  for (const store of stores) {
+    const expected = expectedRowsByConversation.get(store.sampleId);
+    assert.ok(expected, `missing corpus row count for ${store.sampleId}`);
+    assert.equal(store.rows.length, expected.dialog_count);
+    assert.equal(store.rows.length, expected.lancedb_row_count);
+    assert.equal(store.addCalls, 1);
+    assert.equal(store.closed, true);
+    assert.equal(store.closeCount, 1);
+    assert.equal(store.vectorSearchCount, store.queryVectorDimensions.length);
+    assert.equal(store.queryVectorDimensions.every(
+      dimension => dimension === LOCOMO_SEMANTIC_EXPECTED_EMBEDDING_DIMENSION,
+    ), true);
+    assert.equal(store.rows.every(row => witness.corpusInputs.has(row.text)), true);
+  }
+  assert.equal(stores.reduce((sum, store) => sum + store.vectorSearchCount, 0), 1_978);
+
+  assert.equal(output.provenance.provider_call_count + output.provenance.embedding_cache_hits, 7_860);
+  assert.equal(providerInputs.length, output.provenance.provider_call_count);
+  assert.equal(cache.operations.filter(operation => operation.operation === "get").length, 7_860);
+  assert.equal(cache.closeCount, 0, "runner must not close an injected external cache");
+  const cacheKeyFields = [
+    "base_url_identity",
+    "input_sha256",
+    "model",
+    "normalized_input_sha256",
+    "projection_version",
+    "provider",
+  ];
+  for (const operation of cache.operations) {
+    assert.deepEqual(Object.keys(operation.key).sort(), [...cacheKeyFields].sort());
+    assert.equal(Object.hasOwn(operation.key, "input"), false);
+    assert.equal(Object.hasOwn(operation.key, "answer"), false);
+    assert.equal(Object.hasOwn(operation.key, "evidence"), false);
+    assert.equal(Object.hasOwn(operation.key, "category"), false);
+    assert.equal(
+      witness.corpusHashes.has(operation.key.input_sha256)
+        || witness.queryHashes.has(operation.key.input_sha256),
+      true,
+    );
   }
 });
 
