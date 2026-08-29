@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 OVERALL OPEN; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; SEMANTIC V2 NEXT / REAL-PROVIDER SANITY NOT RUN / SEMANTIC FULL A/B NOT RUN / NOT AUTHORIZED; B5 QUALITY OPEN`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6 NEXT / SOURCE INSPECTION AND DESIGN ONLY / NOT STARTED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -603,8 +603,9 @@ B5-I1 source implementation is **`REPO-TESTED / CONTRACT FROZEN`**. This
 stage implements only the LoCoMo dataset normalizer, evidence policies,
 dialog/session metric contract, validation CLI, and focused tests. It does not
 implement a temporary Core/Engine or hybridSearch runner, call a provider, or
-run a retrieval baseline. B5 quality adjudication is therefore **`OPEN / NOT
-RUN`**.
+run a retrieval baseline. At that historical source-stage checkpoint B5 quality
+adjudication was **`OPEN / NOT RUN`**; the completed B5 adjudication is recorded
+below.
 
 ### Dataset authority and composition
 
@@ -671,8 +672,9 @@ reuse that corpus for all of the conversation's QA, and call the existing
 production `hybridSearch()` adapter. The historical official LoCoMo retrieval
 checkpoint recorded below is **`B5-S1 PASS_WITH_FINDINGS / BASELINE FROZEN /
 CLOSED`**; its clock provenance is incomplete, so it is not strict semantic
-A/B authority. B5 overall remains **`OPEN`** pending the time-frozen v2
-authority and later semantic comparison.
+A/B authority. At that historical checkpoint B5 overall was **`OPEN`** pending
+the time-frozen v2 authority and later semantic comparison; the current B5
+status is recorded in the B5-S3 closeout below.
 
 The frozen dialog corpus projection is `locomo_dialog_projection_v1`:
 `(<session_date_time>) <speaker>: <raw text>` is always the first line, and a
@@ -776,11 +778,11 @@ constants, vector-disabled backend, and host-manager-disabled policy.
 The lexical v2 source and focused tests are **`REPO-TESTED`**. The completed
 B5-S1-v2 execution is **`PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED`**;
 the detailed execution authority, metrics, provenance, and semantic vector
-gate freeze are recorded below. B5 overall remains **`OPEN`**. The semantic
-profile reserved for the next stage is
+gate freeze are recorded below. At that historical pre-S3 checkpoint B5
+overall was **`OPEN`**. The semantic profile reserved for that next stage was
 `production_hybrid_semantic_dialog_locomo_time_frozen_v2`; B5-I3 source
-implementation is **`REPO-TESTED`**, while real-provider sanity and semantic
-full A/B remain **`NOT RUN / NOT AUTHORIZED`**.
+implementation is **`REPO-TESTED`**. The current semantic execution and B5
+status are recorded in the B5-S3 closeout below.
 
 #### B5-D1 append-only correction
 
@@ -919,7 +921,7 @@ The historical execution and evidence state is preserved as:
 B5-S1 execution = PASS
 B5-S1 quality = PASS_WITH_FINDINGS
 B5-S1 final = OFFLINE LEXICAL BASELINE RECORDED / BASELINE FROZEN / CLOSED
-B5 overall = OPEN
+B5 overall = OPEN (at this historical checkpoint; superseded by B5-S3)
 ```
 
 The findings are that dialog-level lexical retrieval is weak overall, Top 50
@@ -1020,16 +1022,17 @@ not constitute retrieval-heuristic tuning or authorize production changes.
 B5-S1-v2 execution = PASS
 B5-S1-v2 quality = PASS_WITH_FINDINGS
 B5-S1-v2 final = OFFLINE LEXICAL BASELINE RECORDED / BASELINE FROZEN / CLOSED
-B5 overall = OPEN
+B5 overall = OPEN (at this historical checkpoint; superseded by B5-S3)
 ```
 
-## B5 semantic A/B gate — frozen, not authorized
+## B5 semantic A/B gate — frozen contract and completed evaluation
 
 The future pair is `production_hybrid_lexical_dialog_locomo_time_frozen_v2`
-and `production_hybrid_semantic_dialog_locomo_time_frozen_v2`. Semantic v2 is
+and `production_hybrid_semantic_dialog_locomo_time_frozen_v2`. At the pre-run
+design checkpoint, semantic v2 was recorded as
 `NEXT / SOURCE IMPLEMENTATION REPO-TESTED / REAL-PROVIDER SANITY NOT RUN /
-SEMANTIC FULL A/B NOT RUN / NOT AUTHORIZED`. The
-semantic v2 design
+SEMANTIC FULL A/B NOT RUN / NOT AUTHORIZED`; that historical checkpoint is
+superseded by the completed B5-S3 record below. The semantic v2 design
 must hold the time-frozen lexical v2 authority fixed: upstream and dataset
 pins, question set, strict/sensitivity policies and denominators, dialog corpus
 unit and conversation isolation, `locomo_dialog_projection_v1`, session
@@ -1100,20 +1103,20 @@ gates, and at least one multi-hop gate. Otherwise a valid execution is
 `INSUFFICIENT`; any provenance, isolation, vector, or scoring invariant
 failure is `INVALID / NOT ADJUDICABLE`. Latency, provider/cache counts, and
 vector counts must be reported but have no hidden quality threshold. Session
-projection and sensitivity remain diagnostics only. Semantic v2 remains
-`NEXT / SOURCE IMPLEMENTATION REPO-TESTED / REAL-PROVIDER SANITY NOT RUN /
-SEMANTIC FULL A/B NOT RUN / NOT AUTHORIZED`. No semantic provider sanity or
-full run is authorized here.
+projection and sensitivity remain diagnostics only. At that pre-run checkpoint
+the semantic provider sanity and full run were not authorized; B5-S3 now
+records the completed execution and adjudication below.
 
-B5-I2c-D1 closeout: the time-frozen semantic successor remains reserved as
+B5-I2c-D1 closeout: the time-frozen semantic successor was reserved at that
+historical checkpoint as
 `production_hybrid_semantic_dialog_locomo_time_frozen_v2`, and its lexical
 control is now the independently materialized and searched
 `production_hybrid_lexical_dialog_locomo_time_frozen_v2` authority recorded in
 B5-S1-v2 above. The prior pre-baseline `NOT RUN` / `PENDING` state is
 superseded; the historical B5-S1 v1 record, metrics, and time-provenance
-limitation remain unchanged. At that historical checkpoint no semantic source
-implementation or provider run was authorized; the current B5-I3 source status
-is recorded below and provider execution remains unauthorized.
+limitation remain unchanged. The historical statement that no semantic source
+implementation or provider run was authorized is superseded by the B5-I3 source
+record and B5-S3 execution below.
 
 ### B5-I3 — time-frozen semantic v2 source implementation
 
@@ -1129,13 +1132,179 @@ attempted/skipped/error `1,978/0/0`, with LanceDB `lancedb_search`,
 `vector_in_fusion=true`, zero host-manager fallback, and no silent
 lexical-only degradation.
 
-The semantic v2 profile has not called a real provider and has not run a
-sanity or full semantic A/B baseline: **`NOT RUN / NOT AUTHORIZED`**. B5
-quality adjudication remains **`OPEN`**. The six numerical gates and
-regression guards remain unchanged and compare semantic v2 against the
-frozen lexical v2 authority. Output, cache, vector, and temporary data-plane
-artifacts are not vendored; committed source, provenance contract, invariants,
-and adjudication are the long-term authority.
+This source-stage record predates the completed real-provider run. The six
+numerical gates and regression guards remain unchanged and compare semantic v2
+against the frozen lexical v2 authority. Output, cache, vector, and temporary
+data-plane artifacts are not vendored; committed source, provenance contract,
+invariants, metrics, and adjudication are the long-term authority.
+
+## B5-S3 — LoCoMo semantic v2 full baseline and closeout
+
+### Execution authority and temporary artifacts
+
+B5-S3 execution is **`PASS`** with `COMMAND_RC=0` under the independent
+profile `production_hybrid_semantic_dialog_locomo_time_frozen_v2`, source commit
+`dfb41ea866646cbe556e3e6c3c03782da52de216`, repository provenance `git`, and a
+clean worktree. The pinned LoCoMo source is upstream commit
+`3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376`; the dataset file commit is
+`cbfbc1dba6bc53d00625212a0f22d55ffee7c1fc`; the license identity is
+`CC BY-NC 4.0 International`; and the dataset SHA-256 is
+`79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4`.
+
+The run used `benchmark_now_sec = materialization_now_sec = search_now_sec =
+1705066861`, `top_k=50`, and `vector_top_k=50`. Projection remained
+`locomo_dialog_projection_v1` with session datetime included and
+`include_when_present` captions. Embedding provenance was SiliconFlow /
+`Qwen/Qwen3-Embedding-4B`, revision `unavailable/unpinned`, dimension `2560`,
+Canonical vector projection v1 with a 2,000-character limit, and production
+`lexicalConfidenceThreshold=0.7`. The vector data plane was temporary LanceDB;
+host-manager fallback was forbidden.
+
+All output, cache, log, and RC markers are temporary artifacts under
+`/tmp/memory-engine-benchmark-v1/`; none is vendored. Their hashes and sizes
+are:
+
+| Artifact | Path | SHA-256 | Size / value |
+| --- | --- | --- | ---: |
+| output | `b5-s3-dfb41ea8-full-semantic-output.json` | `eb4b29c56435297f7a376f18647ca44cce4659b38a8b3fa1e980c853082b1829` | 32,273,813 bytes |
+| embedding cache | `b5-s2-dfb41ea8-limit1-embedding-cache.sqlite` | `2d447d76585a3749955ba017f2a0e63468b643c561cabef3d46be8caa225c458` | 171,872,256 bytes |
+| execution log | `b5-s3-dfb41ea8-full.log` | `65eade5b211693585624025dd737b33793adeae800971adecfe73e0d21ffaa59` | 39,194 bytes |
+| RC marker | `b5-s3-dfb41ea8-full.rc` | `9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa` | `0` |
+
+The final embedding cache passed SQLite `integrity_check=ok`,
+`user_version=1`, and contained `7,848` entries with dimensions `2560/2560`.
+The run performed `5,882` corpus and `1,978` query embedding lookups
+(`7,860` total), with `7,232` provider calls and `628` cache hits.
+
+### Run shape and vector invariants
+
+The run covered `1,986` cases and `1,978` retrieval cases across `10`
+conversations, building exactly `10` conversation-owned temporary corpora with
+`5,882` dialog rows. Same-conversation QA reused its corpus for `1,978`
+searches; the mean corpus size was `588.2` dialogs. The strict evidence view
+scored `1,972` and skipped `14`; the canonicalized sensitivity view scored
+`1,978` and skipped `8`. Strict skipped reasons were `empty_evidence=4`,
+`composite_evidence=4`, `unmapped_evidence=2`, `malformed_evidence=2`,
+`duplicate_evidence=1`, and `noncanonical_evidence=1`. Sensitivity skipped
+reasons were `empty_evidence=4`, `unmapped_evidence=2`, and
+`malformed_evidence=2`.
+
+The official vector invariant held for every retrieval case: attempted /
+skipped / error = `1,978 / 0 / 0`; every case used
+`vector_backend=lancedb`, `vector_stage=lancedb_search`, and
+`vector_in_fusion=true`; host-manager fallback was `0`. No case silently
+degraded to lexical-only retrieval. The dialog ranking remained primary;
+session results were only first-occurrence-deduplicated compatibility
+diagnostics.
+
+### Strict primary dialog metrics
+
+| Metric | @1 | @3 | @5 | @10 | @30 | @50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Recall-any | 0.2089249493 | 0.3012170385 | 0.3382352941 | 0.3919878296 | 0.5167342799 | 0.6435091278 |
+| Recall-all | 0.1749492901 | 0.2510141988 | 0.2789046653 | 0.3174442191 | 0.4224137931 | 0.5289046653 |
+| NDCG-any | 0.2089249493 | 0.2450006908 | 0.2574948831 | 0.2726391074 | 0.3009152306 | 0.3240737005 |
+
+Additional strict dialog diagnostics are MRR `0.2762670443`, mean first
+relevant rank `13.5200945626`, zero-hit@50 `703/1,972`, and All@10 failures
+`1,346/1,972`. Sensitivity dialog metrics are:
+
+| Metric | @1 | @3 | @5 | @10 | @30 | @50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Recall-any | 0.2087967644 | 0.3013144590 | 0.3382204247 | 0.3918099090 | 0.5166835187 | 0.6430738119 |
+| Recall-all | 0.1749241658 | 0.2507583418 | 0.2785642063 | 0.3169868554 | 0.4216380182 | 0.5278058645 |
+| NDCG-any | 0.2087967644 | 0.2449586527 | 0.2574149455 | 0.2725132318 | 0.3007741572 | 0.3238623789 |
+
+Sensitivity MRR is `0.2762126448`, mean first relevant rank is
+`13.5062893082`, zero-hit@50 is `706/1,978`, and All@10 failures are
+`1,351/1,978`. Sensitivity minus strict deltas at @10 are
+`-0.0001779206/-0.0004573637/-0.0001258755` for any/all/NDCG, and at @50
+are `-0.0004353159/-0.0010988008/-0.0002113215` for any/all/NDCG.
+
+The strict session compatibility diagnostic is Recall-any@10 `0.8017241379`,
+Recall-all@10 `0.7008113590`, and NDCG-any@10 `0.5639414101`; it is not an
+independent session retriever and must not be compared directly with
+LongMemEval session-level metrics.
+
+### Category findings
+
+Strict dialog category results are:
+
+| Category | Cases | Scored | Skipped | Recall-any@10 | Recall-all@10 | NDCG-any@10 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Multi-hop | 282 | 277 | 5 | 0.3610108303 | 0.0324909747 | 0.1329048993 |
+| Temporal | 321 | 320 | 1 | 0.5093750000 | 0.4500000000 | 0.3944727750 |
+| Open-domain | 96 | 89 | 7 | 0.3146067416 | 0.1235955056 | 0.1740059440 |
+| Single-hop | 841 | 840 | 1 | 0.3940476190 | 0.3750000000 | 0.2960638561 |
+| Adversarial | 446 | 446 | 0 | 0.3385650224 | 0.3295964126 | 0.2475744541 |
+
+Multi-hop remains the clear multi-evidence weakness: Recall-all@10 is only
+`0.0324909747` (up from lexical v2 `0.0144404332`) and Recall-all@50 is
+`0.1155234657`. Temporal is the strongest semantic improvement at @10, while
+single-hop and adversarial also improve over lexical v2. These are cross-dataset
+retrieval findings, not production query-shaping authority.
+
+### Semantic versus frozen lexical v2
+
+The comparison authority is B5-S1-v2 profile
+`production_hybrid_lexical_dialog_locomo_time_frozen_v2`, source commit
+`b4a53522bba7a1314b2c99f1fd566872e6e5e8d4`, output SHA-256
+`9d6c4c02a5fff3841f98552f5d7ee087c57448bc8a917606a047ac395e222f06`.
+The strict dialog deltas are:
+
+| Gate | Semantic − lexical v2 | Required | Result |
+| --- | ---: | ---: | --- |
+| Overall Recall-any@10 | +0.0699797160 | ≥ +0.0200 | PASS |
+| Overall Recall-all@10 | +0.0552738337 | ≥ +0.0200 | PASS |
+| Overall NDCG-any@10 | +0.0590404816 | ≥ +0.0200 | PASS |
+| Overall Recall-any@50 | +0.2195740365 | ≥ +0.0300 | PASS |
+| Multi-hop Recall-any@10 | +0.0685920578 | ≥ +0.0300 | PASS |
+| Multi-hop Recall-all@10 | +0.0180505415 | ≥ +0.0200 | FAIL |
+
+Thus the six numerical gates are `5/6 PASS`; Multi-hop Recall-all@10 is the
+only unmet threshold. All regression guards pass: every overall strict dialog
+@5/@10/@50 metric improved by more than the `-0.0050` guard, temporal
+NDCG-any@10 improved by `+0.0649723194`, and single-hop NDCG-any@10 improved
+by `+0.0706449149`.
+
+Case-level comparison uses the `1,972` strict scoreable cases matched by
+question identity. Lower finite first-rank is better; a no-hit rank is worse
+than a finite rank. For first relevant rank, semantic improved / regressed /
+unchanged `801 / 46 / 1,125`. For Recall-any@10 the counts are
+`3 / 141 / 1,828`; for Recall-all@10 they are `1 / 110 / 1,861`.
+Three-field strict dominance (all three no worse and at least one better) is
+`659 improved / 46 regressed / 1,122 unchanged`, with `145` mixed cases.
+The retrieved dialog order changed in `1,971/1,972` scoreable cases. The
+latency and ranking changes are recorded as evidence, not tuning authorization.
+
+Semantic mean retrieval latency is `364.761142 ms`, compared with lexical v2
+`15.455937 ms`, approximately `23.60×`. Semantic total corpus-build latency is
+`1,665,244.752032 ms` and total retrieval latency is `721,497.538846 ms`,
+versus lexical v2 corpus-build `754.702548 ms` and retrieval `30,571.843083
+ms`. Provider calls/cache hits were `7,232/628`. The latency increase is a
+material caveat and has no hidden pass threshold in the frozen gate.
+
+### B5 semantic v2 adjudication and route
+
+```text
+B5-S3 execution = PASS
+B5 semantic v2 quality = PASS_WITH_FINDINGS
+B5 semantic v2 = OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED
+B5 overall = PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED
+```
+
+The result records useful semantic cross-dataset evidence while leaving a
+material multi-hop all-evidence gap and a large latency cost. The lexical v2
+baseline remains frozen; lexical v1 remains historical/time-incomplete; B3,
+B4, RH1, and H2 historical decisions remain unchanged. Benchmark evidence is
+not runtime or production authority and does not authorize production tuning,
+query rewriting, multi-query retrieval, LTR, deployment, or configuration
+changes. The output, cache, and log remain temporary artifacts rather than
+repository authority; long-term authority is the committed source and dataset
+provenance, metrics, invariants, and this adjudication.
+
+B6 is now **`NEXT / SOURCE INSPECTION AND DESIGN ONLY / NOT STARTED`**. No B6
+implementation or baseline is started by this closeout.
 
 ## Later compatibility target — AML
 
