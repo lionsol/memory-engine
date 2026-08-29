@@ -1269,9 +1269,14 @@ by `+0.0706449149`.
 
 Case-level comparison uses the `1,972` strict scoreable cases matched by
 question identity. Lower finite first-rank is better; a no-hit rank is worse
-than a finite rank. For first relevant rank, semantic improved / regressed /
-unchanged `801 / 46 / 1,125`. For Recall-any@10 the counts are
-`3 / 141 / 1,828`; for Recall-all@10 they are `1 / 110 / 1,861`.
+than a finite rank. The explicitly labeled semantic improved / regressed /
+unchanged counts are:
+
+- First relevant rank: `801 improved / 46 regressed / 1,125 unchanged`.
+- Recall-any@10: `141 improved / 3 regressed / 1,828 unchanged`.
+- Recall-all@10: `110 improved / 1 regressed / 1,861 unchanged`.
+- Recall-any@50: `436 improved / 3 regressed / 1,533 unchanged`.
+
 Three-field strict dominance (all three no worse and at least one better) is
 `659 improved / 46 regressed / 1,122 unchanged`, with `145` mixed cases.
 The retrieved dialog order changed in `1,971/1,972` scoreable cases. The
