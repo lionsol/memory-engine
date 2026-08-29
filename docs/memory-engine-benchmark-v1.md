@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 OVERALL OPEN; SEMANTIC A/B NEXT / DESIGN ONLY`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-I2c v2 SOURCE REPO-TESTED; LEXICAL V2 BASELINE NOT RUN; B5-I3 HOLD; B5 OVERALL OPEN`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -664,13 +664,15 @@ deployment work.
 ## B5-I2 — Isolated LoCoMo lexical retrieval runner
 
 B5-I2 source implementation is **`REPO-TESTED`** and B5-I2a projection
-hardening is **`REPO-TESTED`** under the independent profile
+hardening is **`REPO-TESTED`** under the historical independent profile
 `production_hybrid_lexical_dialog_locomo_v1`. The runner and CLI materialize
 one benchmark-owned temporary Core/Engine/FTS data plane per conversation,
 reuse that corpus for all of the conversation's QA, and call the existing
-production `hybridSearch()` adapter. The official LoCoMo retrieval baseline is
-recorded below as **`B5-S1 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED`**;
-B5 overall quality remains **`OPEN`** pending the semantic comparison.
+production `hybridSearch()` adapter. The historical official LoCoMo retrieval
+checkpoint recorded below is **`B5-S1 PASS_WITH_FINDINGS / BASELINE FROZEN /
+CLOSED`**; its clock provenance is incomplete, so it is not strict semantic
+A/B authority. B5 overall remains **`OPEN`** pending the time-frozen v2
+authority and later semantic comparison.
 
 The frozen dialog corpus projection is `locomo_dialog_projection_v1`:
 `(<session_date_time>) <speaker>: <raw text>` is always the first line, and a
@@ -793,9 +795,14 @@ gates are evaluated as **semantic v2 minus the new lexical v2 authority**, not
 against the time-incomplete v1 artifact; their numerical thresholds are not
 changed.
 
-## B5-S1 — LoCoMo lexical full baseline
+## B5-S1 — LoCoMo lexical full baseline (historical checkpoint)
 
 ### Execution history and authority
+
+This section preserves the historical v1 execution, metrics, and evidence. It
+is superseded as strict A/B authority because its resolved runtime search-clock
+provenance was not recorded per search; it remains historical lexical evidence
+with `TIME PROVENANCE INCOMPLETE`.
 
 The initial B5-S1 execution was **`ENVIRONMENT_FAILURE`** at repository
 provenance resolution. It did not enter corpus materialization or retrieval,
@@ -803,7 +810,7 @@ produced no baseline, and is not quality evidence. B5-S1-R1 was the authorized
 single corrective execution: `execution=PASS`, `command_rc=0`, `retry=1/1`,
 and no further retry.
 
-The frozen B5-S1 authority is:
+The historical B5-S1 v1 record is:
 
 | Field | Value |
 | --- | --- |
@@ -902,9 +909,9 @@ and the @50 Recall-any/Recall-all deltas are `-0.000780` / `-0.000497`.
 All differences are below `0.001` in magnitude; the low score is not caused
 by evidence canonicalization.
 
-### B5-S1 adjudication
+### B5-S1 adjudication (historical checkpoint)
 
-The execution and evidence state is frozen as:
+The historical execution and evidence state is preserved as:
 
 ```text
 B5-S1 execution = PASS
@@ -922,14 +929,16 @@ production lexical-heuristic changes or runtime policy.
 
 ## B5 semantic A/B gate — frozen, not authorized
 
-The next profile is `production_hybrid_semantic_dialog_locomo_v1`. It must
-hold the B5-S1 authority fixed: upstream and dataset pins, question set,
-strict/sensitivity policies and denominators, dialog corpus unit and
-conversation isolation, `locomo_dialog_projection_v1`, session datetime and
-caption policy, exact question text, `top_k=50`, `benchmark_now_sec=1705066861`,
-metric implementation and cutoffs `1,3,5,10,30,50`, category mapping,
-lexical/FTS path, production channel fusion/ranking, and the gold-leakage
-boundary.
+The future pair is `production_hybrid_lexical_dialog_locomo_time_frozen_v2`
+and `production_hybrid_semantic_dialog_locomo_time_frozen_v2`. Semantic v2 is
+`HOLD` and is not implemented or authorized to run. The semantic v2 design
+must hold the time-frozen lexical v2 authority fixed: upstream and dataset
+pins, question set, strict/sensitivity policies and denominators, dialog corpus
+unit and conversation isolation, `locomo_dialog_projection_v1`, session
+datetime and caption policy, exact question text, `top_k=50`,
+`benchmark_now_sec=1705066861`, metric implementation and cutoffs
+`1,3,5,10,30,50`, category mapping, lexical/FTS path, production channel
+fusion/ranking, and the gold-leakage boundary.
 
 The only permitted semantic variables are a real embedding/vector channel, a
 temporary conversation-owned LanceDB, and the production semantic activation
@@ -940,8 +949,9 @@ and forbidden host-manager fallback. Query instruction, rewriting,
 multi-query, planner, LTR, lexical tuning, and benchmark-only ranking are
 excluded.
 
-Primary gates use strict dialog metrics and compare semantic minus this frozen
-B5-S1 lexical baseline:
+Primary gates use strict dialog metrics and compare semantic v2 minus the
+future frozen lexical v2 authority. The numerical thresholds below remain
+unchanged and are suspended until that lexical v2 authority exists:
 
 | Gate | Required delta |
 | --- | ---: |
@@ -966,9 +976,10 @@ gates, and at least one multi-hop gate. Otherwise a valid execution is
 `INSUFFICIENT`; any provenance, isolation, vector, or scoring invariant
 failure is `INVALID / NOT ADJUDICABLE`. Latency, provider/cache counts, and
 vector counts must be reported but have no hidden quality threshold. Session
-projection and sensitivity remain diagnostics only. Semantic A/B is
-`NEXT / SOURCE INSPECTION AND DESIGN ONLY / NOT IMPLEMENTED / NOT AUTHORIZED
-TO RUN`; no semantic provider sanity or full run is authorized here.
+projection and sensitivity remain diagnostics only. Semantic v2 remains
+`HOLD / SOURCE INSPECTION AND DESIGN ONLY / NOT IMPLEMENTED / NOT AUTHORIZED
+TO RUN`; lexical v2 remains `NEXT / NOT RUN / NOT AUTHORIZED`. No semantic
+provider sanity or full run is authorized here.
 
 B5-I2c correction: the time-frozen semantic successor is reserved as
 `production_hybrid_semantic_dialog_locomo_time_frozen_v2`, and its lexical
