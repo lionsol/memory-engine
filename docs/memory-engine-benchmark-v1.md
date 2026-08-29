@@ -966,9 +966,38 @@ Regression guards: no overall strict dialog @5/@10/@50 metric may regress by
 more than `0.0050`; temporal NDCG-any@10 and single-hop NDCG-any@10 may each
 regress by no more than `0.0200`. Case-level comparison must report first
 relevant rank, Recall-any@10, and Recall-all@10 with improved/regressed/
-unchanged counts. A valid execution requires exact provenance, expected
-denominators, vector attempted on every retrieval case, zero vector skips and
-errors, LanceDB results entering production fusion, and no host fallback.
+unchanged counts.
+
+Before the lexical v2 baseline runs, the effective semantic execution contract
+can freeze only the following:
+
+- exact repository, dataset, profile, and clock provenance;
+- expected strict and sensitivity denominators;
+- `vector_error_count = 0`;
+- host-manager fallback is forbidden;
+- no silent lexical-only degradation.
+
+The vector-attempt/skipped contract remains
+**`PENDING LEXICAL V2 CONFIDENCE DISTRIBUTION`**. After the lexical v2
+baseline completes, and before semantic v2 source implementation or any
+provider run, the expected vector-attempt count, expected lexical-threshold
+skip count, and accepted skip reasons must be frozen.
+
+The future production gate will then require, for the frozen sensitivity
+retrieval denominator (the official dataset shape is `1,978`; the attempted /
+skipped component counts are not frozen here):
+
+- `vector_attempted + vector_skipped = 1,978`;
+- for every attempted case: `vector_backend = lancedb`,
+  `vector_stage = lancedb_search`, and `vector_in_fusion = true`;
+- for every skipped case: `skip_reason = lexical_confidence_threshold_met`
+  and no vector provider/search execution;
+- `vector_error_count = 0`;
+- `host-manager fallback = 0`.
+
+A valid semantic execution must satisfy the frozen provenance, denominator,
+error, fallback, and no-degradation contract, with vector attempt/skip counts
+adjudicated only against the post-lexical-v2 freeze described above.
 
 `USEFUL / PASS_WITH_FINDINGS` requires a valid execution, all regression
 guards, at least four of six gates, at least two of the three overall @10
