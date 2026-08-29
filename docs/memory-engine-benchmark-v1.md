@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 SOURCE IMPLEMENTATION REPO-TESTED; B6-I2 SEMANTIC BACKEND / RESOURCE LIFECYCLE NEXT / NOT STARTED; B6-I3 HTTP/DOCKER TRANSPORT LATER / NOT STARTED; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a SOURCE IMPLEMENTATION REPO-TESTED; B6-I2 IN PROGRESS; B6-I2b RETAINED-ROOT RESTART / CROSS-STORE CRASH RECONCILIATION NEXT; B6-I3 HTTP/DOCKER TRANSPORT LATER / NOT STARTED; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -1309,11 +1309,12 @@ repository authority; long-term authority is the committed source and dataset
 provenance, metrics, invariants, and this adjudication.
 
 B6-A1 is **`PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE`** and B6-I1 is
-**`SOURCE IMPLEMENTATION REPO-TESTED`**. No AML hosted smoke, full evaluation,
+**`CLOSED`**. B6-I2a is now **`SOURCE IMPLEMENTATION REPO-TESTED`**, while the
+larger B6-I2 remains **`IN PROGRESS`** pending retained-root restart and
+cross-store crash reconciliation in I2b. No AML hosted smoke, full evaluation,
 provider run, public endpoint, Docker submission, or leaderboard upload has
-started. B6-I2 semantic backend/resource lifecycle is the next source-only
-implementation boundary; B6-I3 HTTP/Docker transport follows after that. B6-S2
-official smoke and B6-S3 full evaluation remain separately unauthorized.
+started. B6-I3 HTTP/Docker transport follows after I2b. B6-S2 official smoke
+and B6-S3 full evaluation remain separately unauthorized.
 
 ## B6 — Agent Memory Leaderboard compatibility
 
@@ -1403,14 +1404,34 @@ projection would be a separately named hypothesis/profile, not a baseline
 repair.
 
 B6-I1 contains a per-user vector-backend factory seam and Canonical vector
-projection boundary, but no real embedding provider is configured or called by
-this stage. B6-I2 must bind the concrete semantic backend without calling a real
-provider in repository tests, freeze provider/model/revision/dimension and cache
-provenance, ensure LanceDB/provider handles are lazy or bounded rather than
-retained linearly per AML user, and define restart/resume ownership for the
-retained benchmark root. B6-I3 may then add HTTP/Docker transport around that
-frozen data-plane contract. AML eligibility confirmation and any real provider
-or hosted execution remain later authorization boundaries.
+projection boundary. It is now closed after repository testing; no real
+embedding provider was configured or called by that stage.
+
+### B6-I2a concrete semantic backend and bounded resource ownership
+
+B6-I2a is **`SOURCE IMPLEMENTATION REPO-TESTED`**. The benchmark-owned
+`aml-semantic-backend-v1` requires an explicitly injected embedding provider and
+uses the frozen `memory_engine_benchmark_embedding_cache_v1` contract with
+provider/model/base-URL identity, projection version, and input hashes. Each
+Add/Search operation opens and closes its own SQLite cache, LanceDB connection,
+and `chunks` table below the per-user temporary root; no handles are retained
+merely because a user is registered. The installed LanceDB package is exercised
+against the real temporary vector store in focused tests, while the provider is
+always a deterministic 2,560-dimensional fake.
+
+Canonical vector projection v1 remains the only document-to-vector projection.
+Repeated canonical materialization reuses an exact row, inconsistent rows are
+repaired deterministically, and all scoped Search results must report
+`vector_backend=lancedb`, `vector_stage=lancedb_search`, and vector participation
+in the existing production channel fusion. Per-user Core, Engine, LanceDB, and
+embedding-cache paths are physically isolated; host memory-manager fallback is
+forbidden. B6-I2b is next for retained-root restart/resume and cross-store crash
+reconciliation. B6-I3 HTTP/Docker transport follows later. No real provider or
+official AML execution occurred.
+
+AML eligibility confirmation and any hosted execution remain later
+authorization boundaries. The semantic backend is benchmark-only and does not
+change production retrieval semantics.
 
 Repository verification at B6-I1 source state:
 
@@ -1425,3 +1446,23 @@ Node = v24.19.0
 The four skipped benchmark tests are unchanged external/official contract
 conditions. B6-I1 did not call a provider or AML service and did not mutate any
 live runtime/data plane.
+
+Repository verification at B6-I2a source state:
+
+```text
+B6-I2a semantic backend focused tests = 8/8 PASS
+complete Benchmark v1 test family = 153 PASS / 4 SKIP / 0 FAIL
+documentation/current-state focused validation = 2/2 PASS
+static check = PASS / 730 files
+Node = v24.19.0
+real provider = NOT CALLED
+official AML execution = NOT RUN
+```
+
+The complete family was also checked one file at a time under Node 24 because
+the aggregate `node --test` launcher intermittently reports the existing nested
+LongMemEval CLI subprocess as failed without details; that CLI file passed in
+an isolated rerun. The focused semantic backend suite passed all eight tests,
+including real temporary LanceDB, cache persistence, per-user isolation, and
+success/error close paths. No provider, AML service, or live runtime/data plane
+was used.
