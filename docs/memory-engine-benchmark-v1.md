@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6 NEXT / SOURCE INSPECTION AND DESIGN ONLY / NOT STARTED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 SOURCE IMPLEMENTATION REPO-TESTED; B6-I2 SEMANTIC BACKEND / RESOURCE LIFECYCLE NEXT / NOT STARTED; B6-I3 HTTP/DOCKER TRANSPORT LATER / NOT STARTED; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -1308,13 +1308,120 @@ changes. The output, cache, and log remain temporary artifacts rather than
 repository authority; long-term authority is the committed source and dataset
 provenance, metrics, invariants, and this adjudication.
 
-B6 is now **`NEXT / SOURCE INSPECTION AND DESIGN ONLY / NOT STARTED`**. No B6
-implementation or baseline is started by this closeout.
+B6-A1 is **`PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE`** and B6-I1 is
+**`SOURCE IMPLEMENTATION REPO-TESTED`**. No AML hosted smoke, full evaluation,
+provider run, public endpoint, Docker submission, or leaderboard upload has
+started. B6-I2 semantic backend/resource lifecycle is the next source-only
+implementation boundary; B6-I3 HTTP/Docker transport follows after that. B6-S2
+official smoke and B6-S3 full evaluation remain separately unauthorized.
 
-## Later compatibility target — AML
+## B6 — Agent Memory Leaderboard compatibility
 
-AML's public protocol assigns the participant only two operations: Add and
-Search; the platform controls answer generation and scoring. B1's neutral
-Add/Search envelopes intentionally preserve that separation so a later AML
-adapter can reuse the same memory-system boundary without changing core
-benchmark semantics.
+B6 pins the public AML source authority to:
+
+```text
+repository = https://github.com/AML-memory/agent-memory-leaderboard
+commit = 1b8142bfe0f20f1c5218d6b554aa0012de34e504
+public repository license metadata = absent / unresolved
+```
+
+The public protocol assigns the participant only Add and Search; AML controls
+answer generation, held-out evaluation, scoring, and orchestration. The public
+repository does not expose the production benchmark corpus, held-out questions,
+gold answers, private annotations, participant runs, or production service.
+Formal AML evidence therefore remains controlled external evaluation and is not
+a locally reproducible B3/B4/B5-style retrieval baseline.
+
+### B6-I1 protocol and isolation adapter
+
+Implemented by:
+
+- `lib/benchmark/aml-adapter-v1.js`
+- `lib/benchmark/aml-data-plane-v1.js`
+- `test/benchmark-aml-adapter-v1.test.js`
+
+The adapter freezes these boundaries:
+
+```text
+adapter_version = memory_engine_aml_adapter_v1
+protocol_surface = public_add_search_v1
+Add projection = aml_add_projection_v1
+Search evidence surface = production_hybrid_text_240_v1
+Search options policy = accepted_but_not_injected_into_query
+max top_k = 100
+host memory manager fallback = forbidden
+```
+
+B1's neutral Add/Search envelope remains the semantic bridge. AML Add messages
+are deterministically projected in message order as optional millisecond
+`timestamp`, `role`, and raw string `content`; an empty content string remains
+legal rather than being rewritten or rejected, preserving the official
+LongMemEval empty-turn compatibility already established by B1/B3. `request_id`,
+`user_id`, evaluator metadata, answers, and gold are not inserted into searchable
+text. The adapter uses production `autoRouteCategory()` and `catParams()` for
+benchmark-owned Engine metadata while ingestion time and source-event time
+remain distinct.
+
+`request_id` is an Engine-backed idempotency key. An identical retry returns
+success without a second memory; a reused `request_id` with a different
+normalized payload fails closed. The ledger survives reopening the same retained
+temporary user data plane. Add and Search are serialized per `user_id`, so a
+successful Add is immediately searchable before its response is returned.
+
+AML's sole Search isolation key is `user_id`, while production `hybridSearch()`
+has no `user_id` filter. B6 therefore makes isolation a topology invariant:
+
+```text
+one AML user_id
+= one temporary Core SQLite
++ one temporary Engine SQLite
++ one per-user LanceDB path/backend boundary
++ isolated production hybridSearch runtime per Search operation
+```
+
+No AML users share Core, Engine, vector path, or host-manager fallback. SQLite
+writers/readers and Hybrid runtime handles are opened only for the active
+Add/Search operation rather than retained for every registered user; a 120-user
+focused test guards against linear persistent file-descriptor growth. All roots
+must resolve below the operating-system temporary directory; live OpenClaw Core,
+memory-engine Engine, live LanceDB, workspace memory files, and Gateway state
+are outside the B6-I1 data plane.
+
+B6 Search reuses production `hybridSearch()` ranking. The shared benchmark
+runtime helper gained an optional `minConfidence` seam whose default remains
+`0`, preserving B3-B5. B6 alone binds the production defaults
+`confidence.min=0.15` and lexical semantic-activation gate `0.7`. Channel
+candidate limits remain benchmark-owned so AML `top_k<=100` can be served; no
+production lexical heuristic, ranking weight, token rule, vector gate, runtime
+config, or live data is changed.
+
+The first B6 baseline deliberately freezes the existing Hybrid result evidence
+surface: `content` is the current maximum 240-character `result.text`, rank order
+is preserved, and finite `final_score` becomes optional AML `score`. Full
+Canonical source text is not substituted silently. A future full-evidence
+projection would be a separately named hypothesis/profile, not a baseline
+repair.
+
+B6-I1 contains a per-user vector-backend factory seam and Canonical vector
+projection boundary, but no real embedding provider is configured or called by
+this stage. B6-I2 must bind the concrete semantic backend without calling a real
+provider in repository tests, freeze provider/model/revision/dimension and cache
+provenance, ensure LanceDB/provider handles are lazy or bounded rather than
+retained linearly per AML user, and define restart/resume ownership for the
+retained benchmark root. B6-I3 may then add HTTP/Docker transport around that
+frozen data-plane contract. AML eligibility confirmation and any real provider
+or hosted execution remain later authorization boundaries.
+
+Repository verification at B6-I1 source state:
+
+```text
+B6 focused contract tests = 16/16 PASS (15 AML adapter + 1 shared-helper contract)
+complete Benchmark v1 test family = 145 PASS / 4 SKIP / 0 FAIL
+documentation/current-state focused validation = 7/7 PASS
+static check = PASS / 728 files
+Node = v24.19.0
+```
+
+The four skipped benchmark tests are unchanged external/official contract
+conditions. B6-I1 did not call a provider or AML service and did not mutate any
+live runtime/data plane.
