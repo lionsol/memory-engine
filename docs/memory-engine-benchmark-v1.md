@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I3 HTTP/DOCKER TRANSPORT SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-S1 LOCAL SYNTHETIC HTTP/DOCKER QUALIFICATION NEXT / NO REAL PROVIDER; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I3-R2 SOURCE IMPLEMENTATION REPO-TESTED / DOCKER BUILD QUALIFIED; B6-I3 CLOSED; B6-S1 RETRY READY / PHASE B→D REMAINING / NO REAL PROVIDER; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -1311,10 +1311,13 @@ provenance, metrics, invariants, and this adjudication.
 B6-A1 is **`PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE`** and B6-I1 is
 **`CLOSED`**. B6-I2a is **`CLOSED`** and B6-I2 is now **`SOURCE IMPLEMENTATION
 REPO-TESTED / CLOSED`** after retained-root restart and cross-store crash
-reconciliation. No AML hosted smoke, full evaluation, provider run, public
-endpoint, Docker submission, or leaderboard upload has started. B6-I3
-HTTP/Docker transport is the next source-only stage. B6-S2 official smoke and
-B6-S3 full evaluation remain separately unauthorized.
+reconciliation. B6-I3-R2 is **`SOURCE IMPLEMENTATION REPO-TESTED / DOCKER BUILD
+QUALIFIED`** and B6-I3 is **`CLOSED`**. B6-S1 is **`RETRY READY / PHASE B→D
+REMAINING / NO REAL PROVIDER`**; the initial Phase B build finding was the
+missing native toolchain for `better-sqlite3@11.10.0`. No AML hosted smoke,
+full evaluation, provider run, public endpoint, Docker submission, or
+leaderboard upload has started. B6-S2 official smoke and B6-S3 full evaluation
+remain separately unauthorized.
 
 ## B6 — Agent Memory Leaderboard compatibility
 
@@ -1561,10 +1564,12 @@ Fresh source-stage verification recorded `9/9 PASS` for the HTTP transport,
 `6/6 PASS` for service/provider runtime, `2/2 PASS` for Docker contracts, and
 `179 PASS / 4 SKIP / 0 FAIL` for the complete Benchmark v1 family. Documentation
 and current-state validation was `7/7 PASS`; the Node 24 static check passed
-`737` files. The permitted local Docker build qualification was attempted once
-but was blocked by the environment's inability to fetch
+`737` files. The initial permitted local Docker build qualification was
+attempted once but was blocked by the environment's inability to fetch
 `node:24-bookworm-slim` metadata from Docker Hub; no container was started and
-the failure did not qualify source or provider behavior.
+the failure did not qualify source or provider behavior. That historical
+environment finding is separate from the later B6-S1 Phase B native-toolchain
+finding recorded by B6-I3-R2.
 
 ### B6-I3-R1 Search response disclosure boundary
 
@@ -1582,3 +1587,33 @@ is `182 PASS / 4 SKIP / 0 FAIL`. B6-S1 remains
 `NEXT / LOCAL SYNTHETIC HTTP/DOCKER QUALIFICATION / NO REAL PROVIDER`, and
 B6-S2/S3 remain `NOT AUTHORIZED`. No provider, AML official service, Docker
 deployment, runtime/live data operation, or tag operation occurred.
+
+### B6-I3-R2 Docker Native Dependency Builder Hardening
+
+B6-S1 Phase A is **`PASS`**. The initial B6-S1 Phase B build was
+**`FAIL_WITH_FINDINGS`**: the frozen `node:24-bookworm-slim` dependencies stage
+ran `npm ci --omit=dev`, but `better-sqlite3@11.10.0` had no Node 24 prebuilt
+binary and its `node-gyp` fallback could not find Python or the native build
+toolchain. The bounded B6-I3-R2 correction adds `python3`, `make`, and `g++`
+with `--no-install-recommends` before `npm ci`, then removes
+`/var/lib/apt/lists/*`. Node, dependency versions, package-lock, LanceDB,
+AML runtime/service, and production retrieval code remain unchanged.
+
+The final runtime remains an independent `node:24-bookworm-slim` stage and
+copies only the dependencies-stage `node_modules` plus the application files.
+The Docker contract test proves the builder install/cleanup and runtime
+boundary without unrelated-whitespace coupling; the runtime stage contains no
+`apt-get install`. Node 24 verification passed the Docker contract, HTTP
+`12/12`, service/provider runtime `6/6`, full Benchmark family
+`182 PASS / 4 SKIP / 0 FAIL`, static check over `737` files, and
+`git diff --check`. The real build
+`memory-engine-aml:b6-i3-r2` passed; both `better-sqlite3` and
+`@lancedb/lancedb` loaded as `NATIVE_RUNTIME_OK`, default container UID was
+`1000`, and `python3`, `make`, `g++`, and apt-cache entries were absent from
+the final image.
+
+B6-I3-R2 is **`SOURCE IMPLEMENTATION REPO-TESTED / DOCKER BUILD QUALIFIED`**
+and B6-I3 is **`CLOSED`**. B6-S1 is **`RETRY READY / PHASE B→D REMAINING`**;
+this source/image acceptance does not execute or close B6-S1. B6-S2 official
+smoke, B6-S3 full evaluation, real provider access, deployment, live runtime
+data, and tagging/pushing remain out of scope and unauthorized.
