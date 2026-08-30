@@ -1680,3 +1680,70 @@ calls, official AML service/evaluation, public deployment, live OpenClaw
 Core/Engine/LanceDB mutation, Gateway/config/plugin changes, and tag/push
 operations were not performed. B6-I3 remains **`CLOSED`**. B6-S2 official AML
 smoke and B6-S3 full evaluation remain **`NOT AUTHORIZED`**.
+
+## Post-Benchmark product interpretation for memory-engine 1.1
+
+The accepted post-1.0 interpretation is **memory-engine 1.1 — Recall Quality**.
+Benchmark v1 remains offline evaluation evidence; it does not authorize a
+production heuristic, vector gate, ranking weight, runtime configuration,
+provider request, live data mutation, deployment, or tag.
+
+B3 and B4 show that semantic/vector retrieval is useful but insufficient. On
+LongMemEval-S, B3 lexical → B4 semantic moved Recall-any@5
+`0.7876 → 0.8138`, Recall-all@5 `0.4821 → 0.5227`, Recall-all@10
+`0.6372 → 0.6826`, and NDCG-any@10 `0.6256 → 0.6552`, while mean retrieval
+latency moved `9.49 ms → 205.11 ms` (`~21.6×`). Semantic retrieval improves
+some low-overlap queries but does not by itself close preference,
+multi-session, temporal, multi-evidence, or small-topK ranking gaps.
+
+The corrected B5 LoCoMo case-level comparison records:
+
+| Metric | Improved | Regressed | Unchanged |
+|---|---:|---:|---:|
+| First relevant rank | 801 | 46 | 1,125 |
+| Recall-any@10 | 141 | 3 | 1,828 |
+| Recall-all@10 | 110 | 1 | 1,861 |
+| Recall-any@50 | 436 | 3 | 1,533 |
+
+This is broadly non-regressive cross-dataset evidence, but most cases are
+unchanged and the useful gains are concentrated. It supports research into
+selective semantic fallback, not unconditional production vector retrieval.
+B6-S1 independently closes only the local synthetic AML HTTP/Docker data-plane
+contract; B6-S2/S3 remain an optional evaluation branch and do not block 1.1.
+
+### Small-budget product metrics
+
+Future retrieval experiments add Recall-any@3, Recall-all@3, NDCG@3, first
+relevant rank, answer-evidence coverage@3, cross-session complete-evidence
+coverage, stale/conflicting evidence in top 3, unnecessary-recall and
+context-pollution rates, and p50/p95 latency. Recall@50 and large candidate-pool
+coverage remain diagnostics rather than standalone production success gates.
+Gold evidence remains evaluator-only and must not enter memory Add, Search,
+embedding, query planning, ranking, or answer prompts.
+
+### Minimal channel ablation
+
+The bounded matrix is:
+
+| Profile | Decision purpose |
+|---|---|
+| Lexical only | Freeze the low-latency baseline |
+| Vector only | Measure independent semantic capability |
+| Lexical + Vector | Preserve the B4 hybrid comparison |
+| Lexical + Metadata | Measure entity/project/temporal marginal value |
+| Lexical + Session/Episode expansion | Measure multi-evidence recovery |
+| Full candidate fusion | Test channel complementarity |
+| Lexical → selective Vector fallback | Test quality/latency production candidate |
+
+Each profile reports preference, multi-session, temporal, knowledge-update,
+single-session-user, and single-session-preference families, plus @3 metrics,
+first-rank and case-level deltas, p50/p95 latency, vector invocation rate, and
+marginal gain per expensive call. Do not expand the core matrix into all `2^N`
+channel combinations, broad embedding-model comparisons, unconditional
+multi-query, large Recall Hint grids, or Recall@50-only comparisons.
+
+Recall Hint remains a later independent experiment defined only as candidate
+expansion and soft weighting metadata. It cannot grant recall, skip, or hard
+filter authority. The original query is retained and hint failure falls back to
+the original retrieval path. RH1 and H2 remain closed and are not rerun or
+renamed to seek a passing threshold.
