@@ -1565,3 +1565,20 @@ and current-state validation was `7/7 PASS`; the Node 24 static check passed
 but was blocked by the environment's inability to fetch
 `node:24-bookworm-slim` metadata from Docker Hub; no container was started and
 the failure did not qualify source or provider behavior.
+
+### B6-I3-R1 Search response disclosure boundary
+
+B6-I3-R1 hardens the Search response boundary while preserving the existing
+`B6-I3 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED` status. Each Search item now
+has the exact enumerable allowlist `id`, `content`, `score`, and `created_at`;
+`id` and `content` are required, while `score` and `created_at` are optional.
+Unknown fields such as `diagnostics`, `provenance`, `debug`, `metadata`, or
+`path` fail closed as `adapter_search_response_invalid` before HTTP 200 and are
+never silently stripped. `score` and numeric `created_at` values must be finite;
+the existing intentionally supported `created_at=null` shape remains valid.
+
+The fresh HTTP focused suite is `12/12 PASS`; the complete Benchmark v1 family
+is `182 PASS / 4 SKIP / 0 FAIL`. B6-S1 remains
+`NEXT / LOCAL SYNTHETIC HTTP/DOCKER QUALIFICATION / NO REAL PROVIDER`, and
+B6-S2/S3 remain `NOT AUTHORIZED`. No provider, AML official service, Docker
+deployment, runtime/live data operation, or tag operation occurred.

@@ -16,6 +16,8 @@ The memory-engine **`1.0.0` L2 stable runtime baseline is now `PASS / RUNTIME QU
 
 The current Benchmark v1 B6 route is now **B6-I1 `CLOSED`; B6-I2a `CLOSED`; B6-I2b `SOURCE IMPLEMENTATION REPO-TESTED / CLOSED`; B6-I2 `CLOSED`; B6-I3 `SOURCE IMPLEMENTATION REPO-TESTED / CLOSED`; B6-S1 `NEXT / LOCAL SYNTHETIC HTTP/DOCKER QUALIFICATION / NO REAL PROVIDER`; B6-S2 official AML smoke `NOT AUTHORIZED`; B6-S3 full `NOT AUTHORIZED`**. This route records source/package readiness only and does not authorize a public service, provider request, or official AML evaluation.
 
+B6-I3-R1 is **`SEARCH ITEM DISCLOSURE/OUTPUT BOUNDARY HARDENED / REPO-TESTED`**. Search output now has an exact item allowlist, rejects unknown enumerable fields before HTTP 200, and requires finite numeric `score` and `created_at` values; B6-I3 remains closed at source level. This correction does not authorize B6-S1, provider requests, public deployment, or runtime data-plane operations.
+
 Benchmark v1 RH1 query-side embedding instruction is
 `INSUFFICIENT / OFFLINE EXPERIMENT RECORDED / CLOSED`. RH1-S2 execution passed
 under the independent profile

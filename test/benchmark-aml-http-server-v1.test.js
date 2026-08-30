@@ -113,6 +113,24 @@ async function startServer(adapter, options = {}) {
   return server;
 }
 
+async function assertInvalidSearchItem(item, forbiddenText = null) {
+  const server = await startServer(fakeAdapter({
+    search: async () => ({ data: [item] }),
+  }));
+  try {
+    const result = await httpJson(server, {
+      method: "POST",
+      path: "/search",
+      body: searchBody(),
+    });
+    assert.equal(result.status, 500);
+    assert.deepEqual(result.body, { detail: { reason: "adapter_search_response_invalid" } });
+    if (forbiddenText) assert.equal(result.raw.includes(forbiddenText), false);
+  } finally {
+    await server.close();
+  }
+}
+
 test("health is unauthenticated and exposes only the minimal status body", async () => {
   const adapter = fakeAdapter();
   const server = await startServer(adapter, { authMode: "auto", memorySystemKey: "secret-key" });
@@ -311,6 +329,48 @@ test("malformed adapter outputs fail closed before HTTP 200", async () => {
     assert.deepEqual(result.body, { detail: { reason: "adapter_search_response_invalid" } });
   } finally {
     await searchServer.close();
+  }
+});
+
+test("Search rejects unknown item keys instead of disclosing adapter internals", async () => {
+  await assertInvalidSearchItem(
+    { id: "m1", content: "memory", diagnostics: { secret: "do-not-leak" } },
+    "do-not-leak",
+  );
+  await assertInvalidSearchItem(
+    { id: "m1", content: "memory", provenance: { provider: "internal" } },
+    "internal",
+  );
+  await assertInvalidSearchItem({ id: "m1", content: "memory", extra: "unknown" }, "unknown");
+});
+
+test("Search accepts the exact legal item shapes and finite created_at values", async () => {
+  const data = [
+    { id: "bare", content: "bare memory" },
+    { id: "scored", content: "scored memory", score: 0.5 },
+    { id: "text-time", content: "text time", created_at: "2026-08-30T00:00:00Z" },
+    { id: "numeric-time", content: "numeric time", created_at: 1_700_000_000 },
+    { id: "null-time", content: "null time", created_at: null },
+  ];
+  const server = await startServer(fakeAdapter({ search: async () => ({ data }) }));
+  try {
+    const result = await httpJson(server, {
+      method: "POST",
+      path: "/search",
+      body: searchBody({ top_k: data.length }),
+    });
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.body, { data });
+  } finally {
+    await server.close();
+  }
+});
+
+test("Search rejects non-finite score and created_at numbers", async () => {
+  for (const field of ["score", "created_at"]) {
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      await assertInvalidSearchItem({ id: "m1", content: "memory", [field]: value });
+    }
   }
 });
 
