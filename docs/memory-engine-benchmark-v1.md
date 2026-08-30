@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I3-R2 PASS / DOCKER NATIVE DEPENDENCY PACKAGING FIXED; B6-I3-R3 SOURCE IMPLEMENTATION REPO-TESTED / DOCKER RUNTIME CLOSURE QUALIFIED; B6-I3 CLOSED; B6-S1 RETRY READY / PHASE C→D REMAINING / NO REAL PROVIDER; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I3-R2 PASS / DOCKER NATIVE DEPENDENCY PACKAGING FIXED; B6-I3-R3 SOURCE IMPLEMENTATION REPO-TESTED / DOCKER RUNTIME CLOSURE QUALIFIED; B6-I3 CLOSED; B6-S1 PASS / LOCAL SYNTHETIC QUALIFICATION CLOSED / NO REAL PROVIDER; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -1313,13 +1313,13 @@ B6-A1 is **`PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE`** and B6-I1 is
 REPO-TESTED / CLOSED`** after retained-root restart and cross-store crash
 reconciliation. B6-I3-R2 is **`PASS / DOCKER NATIVE DEPENDENCY PACKAGING
 FIXED`**. B6-I3-R3 is **`SOURCE IMPLEMENTATION REPO-TESTED / DOCKER RUNTIME
-CLOSURE QUALIFIED`** and B6-I3 is **`CLOSED`**. B6-S1 is **`RETRY READY / PHASE
-C→D REMAINING / NO REAL PROVIDER`**; its initial Phase B build finding was the
-missing native toolchain for `better-sqlite3@11.10.0`, and its initial Phase C
-attempt found the missing runtime `query-utils.js` closure. No AML hosted smoke,
-full evaluation, provider run, public endpoint, Docker submission, or
-leaderboard upload has started. B6-S2 official smoke and B6-S3 full evaluation
-remain separately unauthorized.
+CLOSURE QUALIFIED`** and B6-I3 is **`CLOSED`**. B6-S1 is **`PASS / LOCAL
+SYNTHETIC QUALIFICATION CLOSED / NO REAL PROVIDER`** at source commit
+`b2063f4531a5b0136de33ffee7e31c5235017028`; its historical Phase B and initial
+Phase C packaging findings were closed by R2/R3 before the successful container
+qualification. No AML hosted smoke, full evaluation, real provider run, public
+endpoint, Docker submission, or leaderboard upload has started. B6-S2 official
+smoke and B6-S3 full evaluation remain separately unauthorized.
 
 ## B6 — Agent Memory Leaderboard compatibility
 
@@ -1642,5 +1642,41 @@ AML execution, deployment, live runtime/data operation, or Gateway/config/plugin
 change occurred.
 
 B6-I3-R3 is **`SOURCE IMPLEMENTATION REPO-TESTED / DOCKER RUNTIME CLOSURE
-QUALIFIED`** and B6-I3 is **`CLOSED`**. B6-S1 is **`RETRY READY / PHASE C→D
-REMAINING`**, not closed.
+QUALIFIED`** and B6-I3 is **`CLOSED`**. At this historical checkpoint B6-S1 was
+**`RETRY READY / PHASE C→D REMAINING`**; the local synthetic qualification below
+supersedes that retry-ready state.
+
+### B6-S1 Local Synthetic HTTP/Docker Qualification
+
+B6-S1 is **`PASS / CLOSED`** at repository source
+`b2063f4531a5b0136de33ffee7e31c5235017028`. Phase A had already qualified the
+host executable with a localhost deterministic fake embedding provider. After
+R2/R3 closed the native dependency and runtime file-closure findings, the Docker
+retry used the real `Dockerfile.aml` image, benchmark HTTP service, actual
+temporary SQLite/LanceDB state, a dedicated local Docker network, a named
+retained-state volume, and a deterministic local 2,560-dimensional fake
+embedding endpoint. No real provider was contacted.
+
+Phase C passed the external service boundary: `GET /health` returned
+`{"status":"ok"}`; unauthenticated Search returned HTTP `401` with
+`authentication_required`; Add succeeded; Search returned the added synthetic
+memory; the deterministic fake provider had exactly `2` calls after Add plus
+Search; retrying the same Add `request_id` returned the same success without a
+third provider call; and Search for an unknown `user_id` returned `{"data":[]}`
+while the retained root remained at exactly one user directory.
+
+Phase D passed restart persistence. The first AML container stopped through
+Docker SIGTERM handling with exit `0`. The named volume retained `manifest.json`,
+per-user Core SQLite, Engine SQLite, `embedding-cache.sqlite`, and the user
+manifest. A fresh second AML container started against the same volume and,
+without re-Add, returned the same memory id/content/score. Fake-provider call
+count remained `2`, proving persistent query-embedding cache reuse across the
+container restart. The second container also stopped with exit `0`; before
+cleanup the manifest and single user root still existed, after which the
+synthetic containers, network, and volume were removed.
+
+This closure is local synthetic qualification only. Real SiliconFlow provider
+calls, official AML service/evaluation, public deployment, live OpenClaw
+Core/Engine/LanceDB mutation, Gateway/config/plugin changes, and tag/push
+operations were not performed. B6-I3 remains **`CLOSED`**. B6-S2 official AML
+smoke and B6-S3 full evaluation remain **`NOT AUTHORIZED`**.
