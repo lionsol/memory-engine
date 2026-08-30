@@ -1,6 +1,6 @@
 # memory-engine Benchmark v1
 
-> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I3-R2 SOURCE IMPLEMENTATION REPO-TESTED / DOCKER BUILD QUALIFIED; B6-I3 CLOSED; B6-S1 RETRY READY / PHASE B→D REMAINING / NO REAL PROVIDER; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
+> Status: `H2 INSUFFICIENT / FULL EVALUATION NOT COMPLETED / PLANNER CONTRACT NOT DATASET-ROBUST / OFFLINE EXPERIMENT RECORDED / CLOSED; B5-I1 CONTRACT REPO-TESTED; B5-I2/I2a/I2b REPO-TESTED; B5-S1 v1 HISTORICAL / TIME PROVENANCE INCOMPLETE / NOT STRICT SEMANTIC A/B AUTHORITY; B5-S1-v2 PASS_WITH_FINDINGS / BASELINE FROZEN / CLOSED; B5 semantic v2 PASS_WITH_FINDINGS / OFFLINE BASELINE RECORDED / BASELINE FROZEN / CLOSED; B5 OVERALL PASS_WITH_FINDINGS / CROSS-DATASET GENERALIZATION RECORDED / CLOSED; B5-I3 SOURCE IMPLEMENTATION REPO-TESTED; B6-A1 PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE; B6-I1 CLOSED; B6-I2a CLOSED; B6-I2 SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I2b SOURCE IMPLEMENTATION REPO-TESTED / CLOSED; B6-I3-R2 PASS / DOCKER NATIVE DEPENDENCY PACKAGING FIXED; B6-I3-R3 SOURCE IMPLEMENTATION REPO-TESTED / DOCKER RUNTIME CLOSURE QUALIFIED; B6-I3 CLOSED; B6-S1 RETRY READY / PHASE C→D REMAINING / NO REAL PROVIDER; B6-S2 OFFICIAL SMOKE NOT AUTHORIZED; B6-S3 FULL NOT AUTHORIZED`
 >
 > Benchmark v1 is an evaluation harness, not a production runtime mode. It must
 > not write the active OpenClaw Core database, memory-engine Engine database,
@@ -1311,10 +1311,12 @@ provenance, metrics, invariants, and this adjudication.
 B6-A1 is **`PASS_WITH_FINDINGS / SOURCE INSPECTION COMPLETE`** and B6-I1 is
 **`CLOSED`**. B6-I2a is **`CLOSED`** and B6-I2 is now **`SOURCE IMPLEMENTATION
 REPO-TESTED / CLOSED`** after retained-root restart and cross-store crash
-reconciliation. B6-I3-R2 is **`SOURCE IMPLEMENTATION REPO-TESTED / DOCKER BUILD
-QUALIFIED`** and B6-I3 is **`CLOSED`**. B6-S1 is **`RETRY READY / PHASE B→D
-REMAINING / NO REAL PROVIDER`**; the initial Phase B build finding was the
-missing native toolchain for `better-sqlite3@11.10.0`. No AML hosted smoke,
+reconciliation. B6-I3-R2 is **`PASS / DOCKER NATIVE DEPENDENCY PACKAGING
+FIXED`**. B6-I3-R3 is **`SOURCE IMPLEMENTATION REPO-TESTED / DOCKER RUNTIME
+CLOSURE QUALIFIED`** and B6-I3 is **`CLOSED`**. B6-S1 is **`RETRY READY / PHASE
+C→D REMAINING / NO REAL PROVIDER`**; its initial Phase B build finding was the
+missing native toolchain for `better-sqlite3@11.10.0`, and its initial Phase C
+attempt found the missing runtime `query-utils.js` closure. No AML hosted smoke,
 full evaluation, provider run, public endpoint, Docker submission, or
 leaderboard upload has started. B6-S2 official smoke and B6-S3 full evaluation
 remain separately unauthorized.
@@ -1617,3 +1619,28 @@ and B6-I3 is **`CLOSED`**. B6-S1 is **`RETRY READY / PHASE B→D REMAINING`**;
 this source/image acceptance does not execute or close B6-S1. B6-S2 official
 smoke, B6-S3 full evaluation, real provider access, deployment, live runtime
 data, and tagging/pushing remain out of scope and unauthorized.
+
+### B6-I3-R3 Docker Runtime Module Closure Hardening
+
+B6-I3-R2 is **`PASS / DOCKER NATIVE DEPENDENCY PACKAGING FIXED`** and
+B6-S1 Phase B is **`PASS`**. The initial B6-S1 Phase C attempt was
+**`FAIL_WITH_FINDINGS`**: the real AML container exited with
+`ERR_MODULE_NOT_FOUND` because the runtime image omitted root `query-utils.js`,
+which `lib/recall/hybrid-search.js` imports as `/app/query-utils.js`.
+
+The bounded R3 correction adds `COPY query-utils.js ./` to the independent
+runtime stage. The Docker contract freezes the complete minimal runtime COPY
+surface as package manifests, `query-utils.js`, `bin/`, `lib/`, and the
+dependencies-stage `node_modules`; `COPY . .` is forbidden. The R2
+dependencies/runtime split and `USER node`, port, retained volume,
+HEALTHCHECK, and CMD contracts remain unchanged.
+
+Node 24 focused and full Benchmark verification passed. The rebuilt image
+`memory-engine-aml:b6-i3-r3` passed `SERVICE_IMPORT_OK`,
+`NATIVE_RUNTIME_OK`, and non-root UID validation. No real provider, official
+AML execution, deployment, live runtime/data operation, or Gateway/config/plugin
+change occurred.
+
+B6-I3-R3 is **`SOURCE IMPLEMENTATION REPO-TESTED / DOCKER RUNTIME CLOSURE
+QUALIFIED`** and B6-I3 is **`CLOSED`**. B6-S1 is **`RETRY READY / PHASE C→D
+REMAINING`**, not closed.

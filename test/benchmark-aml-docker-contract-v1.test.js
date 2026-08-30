@@ -39,8 +39,21 @@ test("AML Docker dependencies build native modules outside the final runtime ima
   assert.match(dependencyCommands, /apt-get update/u);
   assert.match(dependencyCommands, /apt-get install -y --no-install-recommends python3 make g\+\+/u);
   assert.match(dependencyCommands, /rm -rf \/var\/lib\/apt\/lists\/\*/u);
-  assert.match(runtimeCommands, /COPY --from=dependencies \/app\/node_modules \.\/node_modules/u);
+  const runtimeCopyLines = runtime.text
+    .split(/\r?\n/u)
+    .map((line) => line.replace(/\s+/gu, " ").trim())
+    .filter((line) => /^COPY\b/iu.test(line));
+  assert.deepEqual([...runtimeCopyLines].sort(), [
+    "COPY --from=dependencies /app/node_modules ./node_modules",
+    "COPY bin/ ./bin/",
+    "COPY lib/ ./lib/",
+    "COPY package.json package-lock.json ./",
+    "COPY query-utils.js ./",
+  ].sort());
+  assert.match(runtimeCommands, /COPY\s+query-utils\.js\s+\.\//u);
+  assert.doesNotMatch(runtimeCommands, /COPY\s+\.\s+\./u);
   assert.doesNotMatch(runtimeCommands, /apt-get install/u);
+  assert.doesNotMatch(runtimeCommands, /(?:^|\s)(?:python3|make|g\+\+)(?=\s|$)/u);
 
   assert.match(runtimeCommands, /USER\s+node/u);
   assert.match(runtimeCommands, /EXPOSE\s+8080/u);

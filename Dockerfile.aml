@@ -23,6 +23,7 @@ ENV AML_AUTH_MODE=auto
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
+COPY query-utils.js ./
 COPY bin/ ./bin/
 COPY lib/ ./lib/
 
