@@ -1711,6 +1711,26 @@ selective semantic fallback, not unconditional production vector retrieval.
 B6-S1 independently closes only the local synthetic AML HTTP/Docker data-plane
 contract; B6-S2/S3 remain an optional evaluation branch and do not block 1.1.
 
+### Pre-recall correctness gate
+
+The 1.1 sequence now begins with **QA0 Identity & Lifecycle Correctness Gate**
+(`NOW / NOT STARTED`), followed by Q0 production failure review
+(`THEN / NOT STARTED`). QA0 is a bounded source-level gate, not a benchmark or
+runtime stage. It covers exact identity and fail-closed mutation, current-state
+reinforcement without clearing conflicts, exact checkpoint binding, safe
+category routing, explicit Add outcomes, complete vectorization, and Core
+read-only contract consistency.
+
+Structured event-time is part of this gate's boundary review:
+`memory_event_times` is an Engine-owned schema MVP with default
+`denied_by_default_write_guard`; it is not yet integrated with recall,
+checkpoint, or ranking, and exact `event_at` requires trustworthy provenance.
+`updated_at`, file mtime, batch/import time, and smart-add path dates are not
+event-time substitutes; `date_only` and `unknown` are valid. Therefore the
+benchmark's temporal scores do not establish a qualified structured event-time
+channel. No QA0/Q0 item authorizes event-time writes, live data reads or
+mutation, production tuning, or runtime deployment.
+
 ### Small-budget product metrics
 
 Future retrieval experiments add Recall-any@3, Recall-all@3, NDCG@3, first
