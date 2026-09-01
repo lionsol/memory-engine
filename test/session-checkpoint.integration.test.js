@@ -38,7 +38,7 @@ async function withStubbedCheckpointConfidence(writeConfidenceImpl, run) {
 function createFixture({ now = "2026-06-16T17:30:00.000Z" } = {}) {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-checkpoint-"));
   const workspaceDir = resolve(root, "workspace");
-  const memoryDir = resolve(root, "memory-output");
+  const memoryDir = resolve(workspaceDir, "memory");
   const sessionsDir = resolve(root, "sessions");
   const coreDbPath = resolve(root, "core.sqlite");
   const engineDbPath = resolve(root, "memory-engine.sqlite");
@@ -54,14 +54,18 @@ function createFixture({ now = "2026-06-16T17:30:00.000Z" } = {}) {
         id TEXT PRIMARY KEY,
         path TEXT NOT NULL,
         text TEXT,
-        updated_at INTEGER
+        updated_at INTEGER,
+        start_line INTEGER,
+        end_line INTEGER
       )
     `);
-    coreDb.prepare("INSERT INTO chunks (id, path, text, updated_at) VALUES (?, ?, ?, ?)").run(
+    coreDb.prepare("INSERT INTO chunks (id, path, text, updated_at, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?)").run(
       "smartadd-chunk-1",
       smartAddPath,
       "placeholder chunk for checkpoint confidence writes",
       1718587800,
+      3,
+      13,
     );
   } finally {
     coreDb.close();
