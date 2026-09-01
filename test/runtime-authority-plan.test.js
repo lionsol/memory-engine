@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, writeFileSync } from "node:fs";
-import { makeFixture, writePlan } from "./runtime-authority-fixtures.test.js";
+import { makeFixture, writePlan } from "./runtime-authority-fixtures.js";
 import { parseJson, readPlanFile, validatePlanObject } from "../lib/runtime-authority/plan.js";
 
 test("plan accepts exact schema and rejects duplicate keys", () => {

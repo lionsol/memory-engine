@@ -7,7 +7,7 @@ import { runSmoke, assertSmokeResult } from "../lib/runtime-authority/native-smo
 import { assertNativeSmoke } from "../lib/runtime-authority/stage-handlers.js";
 import { prepareRuntimeAuthority } from "../lib/runtime-authority/prepare.js";
 import { claimPath } from "../lib/runtime-authority/evidence.js";
-import { fakeToolInspector, makeFixture, successfulHooks, writePlan } from "./runtime-authority-fixtures.test.js";
+import { fakeToolInspector, makeFixture, successfulHooks, writePlan } from "./runtime-authority-fixtures.js";
 
 function moduleRoot() {
   const root = mkdtempSync(join(tmpdir(), "runtime-authority-native-smoke-"));

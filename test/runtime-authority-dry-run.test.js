@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { dryRun } from "../lib/runtime-authority/dry-run.js";
 import { prepareRuntimeAuthority } from "../lib/runtime-authority/prepare.js";
 import { claimPath } from "../lib/runtime-authority/evidence.js";
-import { fakeToolInspector, makeFixture, writePlan } from "./runtime-authority-fixtures.test.js";
+import { fakeToolInspector, makeFixture, writePlan } from "./runtime-authority-fixtures.js";
 
 test("dry-run is read-only, deterministic, and reports planned operations", () => {
   const fixture = makeFixture();

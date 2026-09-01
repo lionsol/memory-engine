@@ -16,6 +16,7 @@
   "scripts": {
     "check": "node bin/static-check.js",
     "test": "node --test",
+    "test:integrity": "node bin/test-integrity-check.js",
     "memory:quality": "node bin/memory-quality-eval.js",
     "benchmark:longmemeval:validate": "node bin/benchmark-longmemeval-v1.js",
     "benchmark:locomo:validate": "node bin/benchmark-locomo-v1.js",

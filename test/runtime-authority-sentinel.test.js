@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildRuntimeArtifactManifestV2 } from "../bin/runtime-artifact-manifest-v2-lib.cjs";
 import { buildSentinel, validateSentinel } from "../lib/runtime-authority/sentinel.js";
-import { makeFixture } from "./runtime-authority-fixtures.test.js";
+import { makeFixture } from "./runtime-authority-fixtures.js";
 
 test("sentinel identity is canonical and independent of root and checked_at", () => {
   const fixture = makeFixture();

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
-import { makeFixture } from "./runtime-authority-fixtures.test.js";
+import { makeFixture } from "./runtime-authority-fixtures.js";
 import { PathBroker } from "../lib/runtime-authority/path-policy.js";
 import { inspectNodeGyp, inspectTool } from "../lib/runtime-authority/tool-identity.js";
 import { buildRuntimeArtifactManifestV2 } from "../bin/runtime-artifact-manifest-v2-lib.cjs";

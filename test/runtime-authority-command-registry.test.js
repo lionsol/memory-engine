@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { makeFixture } from "./runtime-authority-fixtures.test.js";
+import { makeFixture } from "./runtime-authority-fixtures.js";
 import { CommandRegistry, createRegistry, systemdUserEnv, systemdUserStatusArgs } from "../lib/runtime-authority/command-registry.js";
 import { PathBroker } from "../lib/runtime-authority/path-policy.js";
 import { parseServiceOutput } from "../lib/runtime-authority/preflight.js";

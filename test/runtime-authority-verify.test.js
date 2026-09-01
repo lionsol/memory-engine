@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { prepareRuntimeAuthority } from "../lib/runtime-authority/prepare.js";
 import { verifyAuthority } from "../lib/runtime-authority/verify.js";
 import { claimPath } from "../lib/runtime-authority/evidence.js";
-import { fakeToolInspector, makeFixture, successfulHooks, writePlan } from "./runtime-authority-fixtures.test.js";
+import { fakeToolInspector, makeFixture, successfulHooks, writePlan } from "./runtime-authority-fixtures.js";
 
 test("verify never treats an incomplete injected authority as self-verifying", async () => {
   const fixture = makeFixture();

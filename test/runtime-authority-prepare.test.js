@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { prepareRuntimeAuthority } from "../lib/runtime-authority/prepare.js";
 import { CommandExecutionError } from "../lib/runtime-authority/command-failure.js";
 import { claimPath, updateClaim } from "../lib/runtime-authority/evidence.js";
-import { fakeToolInspector, makeFixture, successfulHooks, writePlan } from "./runtime-authority-fixtures.test.js";
+import { fakeToolInspector, makeFixture, successfulHooks, writePlan } from "./runtime-authority-fixtures.js";
 
 function completeSyntheticHooks() {
   return Object.fromEntries([
