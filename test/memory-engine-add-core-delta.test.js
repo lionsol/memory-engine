@@ -13,6 +13,10 @@ function createDeltaHarness({
   appendResult = null,
   coreReadFailureAt = null,
   engineWriteFailure = false,
+  lanceIds = [],
+  lanceFailIds = [],
+  canonicalFailIds = [],
+  embeddingFailIds = [],
 } = {}) {
   let coreIds = [...beforeIds];
   let coreReadCount = 0;
@@ -23,7 +27,14 @@ function createDeltaHarness({
   const canonicalLookupIds = [];
   const embeddingInputs = [];
   const lanceRows = [];
+  const lanceIdSet = new Set(lanceIds.map(String));
+  const lanceFailureIds = new Set(lanceFailIds.map(String));
+  const canonicalFailureIds = new Set(canonicalFailIds.map(String));
+  const embeddingFailureIds = new Set(embeddingFailIds.map(String));
   const engineInsertedIds = [];
+  const lanceAddAttempts = [];
+  const lanceMembershipQueries = [];
+  const events = [];
   let engineSelectCount = 0;
   let lanceTableCalls = 0;
 
@@ -104,10 +115,47 @@ function createDeltaHarness({
     },
     getLancedbTable: () => {
       lanceTableCalls += 1;
-      return { add: async rows => lanceRows.push(...rows) };
+      const table = {
+        query() {
+          let predicate = "";
+          const query = {
+            where(value) {
+              predicate = String(value);
+              lanceMembershipQueries.push(predicate);
+              return query;
+            },
+            select() {
+              return query;
+            },
+            limit() {
+              return query;
+            },
+            async toArray() {
+              const requestedIds = [...predicate.matchAll(/'((?:''|[^'])*)'/g)]
+                .map(match => match[1].replace(/''/g, "'"));
+              return requestedIds
+                .filter(id => lanceIdSet.has(id))
+                .map(id => ({ id }));
+            },
+          };
+          return query;
+        },
+        add: async rows => {
+          for (const row of rows) {
+            const id = String(row.id);
+            lanceAddAttempts.push(id);
+            if (lanceFailureIds.has(id)) throw new Error("vector offline");
+            if (lanceIdSet.has(id)) throw new Error("duplicate lance id");
+            lanceIdSet.add(id);
+            lanceRows.push(row);
+          }
+        },
+      };
+      return table;
     },
     getCanonicalMemoryById: id => {
       canonicalLookupIds.push(id);
+      if (canonicalFailureIds.has(String(id))) throw new Error("canonical unavailable");
       return {
         ok: true,
         memory: { memory_id: id },
@@ -121,6 +169,8 @@ function createDeltaHarness({
     }),
     generateEmbedding: async input => {
       embeddingInputs.push(input);
+      const id = String(input).replace(/^embedding input for /, "");
+      if (embeddingFailureIds.has(id)) throw new Error("vector offline");
       return [0.11, 0.22];
     },
     materializeCanonicalLanceRow: (projection, { vector, timestamp }) => ({
@@ -130,7 +180,7 @@ function createDeltaHarness({
       timestamp,
     }),
     now: () => 1780000000000,
-    recordMemoryEvent: () => {},
+    recordMemoryEvent: event => events.push(event),
     getMemorySearchManager: async () => ({ manager: null }),
     calcRealtimeConf: () => 0,
     existsSync: () => false,
@@ -155,6 +205,10 @@ function createDeltaHarness({
       embeddingInputs,
       lanceRows,
       engineInsertedIds,
+      lanceAddAttempts,
+      lanceMembershipQueries,
+      events,
+      lanceIdSet,
     },
   };
 }
@@ -173,9 +227,16 @@ test("memory_engine.add uses the exact Core delta even when sync backfilled Engi
   assert.equal(harness.stats.engineInsertedIds.length, 0);
   assert.deepEqual(harness.stats.canonicalLookupIds, ["new-id"]);
   assert.deepEqual(harness.stats.lanceRows.map(row => row.id), ["new-id"]);
+  assert.equal(result.engine_existing, 1);
+  assert.equal(result.engine_written, 0);
+  assert.equal(result.engine_ready, 1);
+  assert.equal(result.engine_pending, 0);
+  assert.equal(result.lance_existing, 0);
   assert.equal(result.lance_written, 1);
+  assert.equal(result.lance_ready, 1);
+  assert.equal(result.lance_pending, 0);
   assert.equal(result.needs_reconcile, false);
-  assert.equal(result.derived_state, "complete");
+  assert.equal(result.derived_state, "committed");
   assert.deepEqual(harness.stats.selectedPaths, [
     "memory/smart-add/2026-08-19.md",
     "memory/smart-add/2026-08-19.md",
@@ -195,7 +256,7 @@ test("memory_engine.add keeps a successful sync pending when Core exact delta is
   assert.equal(result.canonical_written, true);
   assert.equal(result.chunks_added, 0);
   assert.equal(result.lance_written, 0);
-  assert.equal(result.derived_state, "pending_index");
+  assert.equal(result.derived_state, "pending");
   assert.equal(result.needs_reconcile, true);
   assert.equal(result.reconcile_reason, "index_not_observed");
   assert.equal(harness.stats.engineSelectCount, 0);
@@ -217,8 +278,15 @@ test("memory_engine.add inserts missing Engine state for each new Core identity"
   assert.equal(result.chunks_added, 1);
   assert.deepEqual(harness.stats.engineInsertedIds, ["new-id"]);
   assert.deepEqual(harness.stats.canonicalLookupIds, ["new-id"]);
+  assert.equal(result.engine_existing, 0);
+  assert.equal(result.engine_written, 1);
+  assert.equal(result.engine_ready, 1);
+  assert.equal(result.engine_pending, 0);
+  assert.equal(result.lance_existing, 0);
   assert.equal(result.lance_written, 1);
-  assert.equal(result.derived_state, "complete");
+  assert.equal(result.lance_ready, 1);
+  assert.equal(result.lance_pending, 0);
+  assert.equal(result.derived_state, "committed");
 });
 
 test("memory_engine.add keeps observed Core IDs pending when Engine metadata writing fails", async () => {
@@ -234,31 +302,122 @@ test("memory_engine.add keeps observed Core IDs pending when Engine metadata wri
   assert.equal(result.success, true);
   assert.equal(result.canonical_written, true);
   assert.equal(result.chunks_added, 1);
-  assert.equal(result.derived_state, "pending_engine");
+  assert.equal(result.derived_state, "partial");
   assert.equal(result.needs_reconcile, true);
   assert.equal(result.reconcile_reason, "engine_write_failed");
   assert.equal(result.lance_written, 0);
+  assert.equal(result.engine_existing, 0);
+  assert.equal(result.engine_written, 0);
+  assert.equal(result.engine_ready, 0);
+  assert.equal(result.engine_pending, 1);
   assert.match(result.derived_error, /Engine unavailable/);
   assert.deepEqual(harness.stats.canonicalLookupIds, []);
   assert.deepEqual(harness.stats.embeddingInputs, []);
   assert.deepEqual(harness.stats.lanceRows, []);
 });
 
-test("memory_engine.add counts mixed Core deltas while directly writing only the deterministic first id", async () => {
+test("memory_engine.add propagates every exact Core delta chunk independently", async () => {
   const harness = createDeltaHarness({
     beforeIds: ["old-id"],
     afterIds: ["old-id", "new-b", "new-a"],
-    backfilledIds: ["new-a"],
   });
   const execute = createMemoryEngineExecute(harness.runtime);
 
   const result = await execute("core-delta-mixed", { action: "add", text: "mixed add" });
 
   assert.equal(result.chunks_added, 2);
-  assert.deepEqual(harness.stats.engineInsertedIds, ["new-b"]);
-  assert.deepEqual(harness.stats.canonicalLookupIds, ["new-a"]);
-  assert.deepEqual(harness.stats.lanceRows.map(row => row.id), ["new-a"]);
+  assert.deepEqual(harness.stats.engineInsertedIds, ["new-a", "new-b"]);
+  assert.deepEqual(harness.stats.canonicalLookupIds, ["new-a", "new-b"]);
+  assert.deepEqual(harness.stats.embeddingInputs, [
+    "embedding input for new-a",
+    "embedding input for new-b",
+  ]);
+  assert.deepEqual(harness.stats.lanceRows.map(row => row.id), ["new-a", "new-b"]);
+  assert.equal(result.engine_existing, 0);
+  assert.equal(result.engine_written, 2);
+  assert.equal(result.engine_ready, 2);
+  assert.equal(result.engine_pending, 0);
+  assert.equal(result.lance_existing, 0);
+  assert.equal(result.lance_written, 2);
+  assert.equal(result.lance_ready, 2);
+  assert.equal(result.lance_pending, 0);
+  assert.equal(result.derived_state, "committed");
+});
+
+test("memory_engine.add continues sibling vector attempts after one chunk fails", async () => {
+  const harness = createDeltaHarness({
+    beforeIds: [],
+    afterIds: ["new-a", "new-b", "new-c"],
+    embeddingFailIds: ["new-b"],
+  });
+  const execute = createMemoryEngineExecute(harness.runtime);
+
+  const result = await execute("core-delta-vector-partial", { action: "add", text: "partial vectors" });
+
+  assert.deepEqual(harness.stats.canonicalLookupIds, ["new-a", "new-b", "new-c"]);
+  assert.deepEqual(harness.stats.embeddingInputs, [
+    "embedding input for new-a",
+    "embedding input for new-b",
+    "embedding input for new-c",
+  ]);
+  assert.deepEqual(harness.stats.lanceRows.map(row => row.id), ["new-a", "new-c"]);
+  assert.equal(result.lance_written, 2);
+  assert.equal(result.lance_ready, 2);
+  assert.equal(result.lance_pending, 1);
+  assert.equal(result.derived_state, "partial");
+  assert.equal(result.needs_reconcile, true);
+  assert.equal(result.reconcile_reason, "vector_pending");
+  assert.deepEqual(result.vector_errors, [{ id: "new-b", reason: "vector offline" }]);
+
+  const created = harness.stats.events
+    .filter(event => event.event_type === "memory_created")
+    .map(event => [event.memory_id, event.metadata_json.lance_state, event.metadata_json.lance_written]);
+  assert.deepEqual(created, [
+    ["new-a", "written", 1],
+    ["new-b", "failed", 0],
+    ["new-c", "written", 1],
+  ]);
+});
+
+test("memory_engine.add detects existing Lance IDs and only propagates missing chunks", async () => {
+  const harness = createDeltaHarness({
+    beforeIds: [],
+    afterIds: ["new-a", "new-b"],
+    lanceIds: ["new-a"],
+  });
+  const execute = createMemoryEngineExecute(harness.runtime);
+
+  const result = await execute("core-delta-lance-existing", { action: "add", text: "idempotent vectors" });
+
+  assert.deepEqual(harness.stats.canonicalLookupIds, ["new-b"]);
+  assert.deepEqual(harness.stats.embeddingInputs, ["embedding input for new-b"]);
+  assert.deepEqual(harness.stats.lanceAddAttempts, ["new-b"]);
+  assert.equal(result.lance_existing, 1);
   assert.equal(result.lance_written, 1);
+  assert.equal(result.lance_ready, 2);
+  assert.equal(result.lance_pending, 0);
+  assert.equal(result.derived_state, "committed");
+});
+
+test("memory_engine.add vectors the full Core delta when Engine metadata is mixed", async () => {
+  const harness = createDeltaHarness({
+    beforeIds: [],
+    afterIds: ["new-a", "new-b"],
+    engineIds: ["new-a"],
+  });
+  const execute = createMemoryEngineExecute(harness.runtime);
+
+  const result = await execute("core-delta-engine-existing", { action: "add", text: "mixed engine state" });
+
+  assert.deepEqual(harness.stats.engineInsertedIds, ["new-b"]);
+  assert.deepEqual(harness.stats.canonicalLookupIds, ["new-a", "new-b"]);
+  assert.equal(result.engine_existing, 1);
+  assert.equal(result.engine_written, 1);
+  assert.equal(result.engine_ready, 2);
+  assert.equal(result.engine_pending, 0);
+  assert.equal(result.lance_written, 2);
+  assert.equal(result.lance_ready, 2);
+  assert.equal(result.derived_state, "committed");
 });
 
 test("memory_engine.add keeps the dedupe contract without a post Core snapshot", async () => {
@@ -293,6 +452,9 @@ test("memory_engine.add fails closed before append when the Core pre-snapshot fa
 
   assert.equal(result.success, false);
   assert.equal(result.error, "core_pre_snapshot_failed");
+  assert.equal(result.canonical_written, false);
+  assert.equal(result.derived_state, "failed");
+  assert.equal(result.needs_reconcile, false);
   assert.equal(harness.stats.appendCalls, 0);
   assert.equal(harness.stats.syncCalls, 0);
   assert.equal(harness.stats.lanceTableCalls, 0);
@@ -315,7 +477,7 @@ test("memory_engine.add reports index observation failure after source persisten
   assert.equal(result.success, true);
   assert.equal(result.canonical_written, true);
   assert.equal(result.chunks_added, 0);
-  assert.equal(result.derived_state, "pending_index");
+  assert.equal(result.derived_state, "pending");
   assert.equal(result.needs_reconcile, true);
   assert.equal(result.reconcile_reason, "index_observation_failed");
   assert.equal(result.derived_error, "Core snapshot unavailable");

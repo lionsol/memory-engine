@@ -162,6 +162,15 @@ function createActionRuntime(fixture, overrides = {}) {
       return withEngineDbIsolated(fn, { ...accessorOptions, readonly: true });
     },
     getLancedbTable: () => ({
+      query() {
+        const query = {
+          where() { return query; },
+          select() { return query; },
+          limit() { return query; },
+          async toArray() { return []; },
+        };
+        return query;
+      },
       add: async rows => tableRows.push(...rows),
     }),
     generateEmbedding: async text => {
@@ -259,7 +268,7 @@ test("memory_engine.add fails closed on canonical lookup without a Lance fallbac
   }
 });
 
-test("memory_engine.add preserves one-direct-Lance-write behavior for multiple new Core chunks", async () => {
+test("memory_engine.add propagates every new Core chunk through canonical vector projection", async () => {
   const path = "memory/smart-add/2026-08-18.md";
   const fixture = createFixture({
     coreRows: [
@@ -274,8 +283,17 @@ test("memory_engine.add preserves one-direct-Lance-write behavior for multiple n
     const result = await execute("one-direct-write", { action: "add", text: "raw add input" });
 
     assert.equal(result.chunks_added, 2);
-    assert.equal(result.lance_written, 1);
-    assert.deepEqual(harness.tableRows.map(row => row.id), ["first-new-chunk"]);
+    assert.equal(result.lance_written, 2);
+    assert.equal(result.lance_ready, 2);
+    assert.equal(result.derived_state, "committed");
+    assert.deepEqual(harness.embeddingInputs, [
+      "first canonical text",
+      "second canonical text",
+    ]);
+    assert.deepEqual(harness.tableRows.map(row => row.id), [
+      "first-new-chunk",
+      "second-new-chunk",
+    ]);
     assert.equal(readEngineRows(fixture).length, 2);
   } finally {
     fixture.cleanup();

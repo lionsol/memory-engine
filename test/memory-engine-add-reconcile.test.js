@@ -36,6 +36,38 @@ function createBaseRuntime(overrides = {}) {
   };
 }
 
+test("memory_engine.add reports failed when source persistence throws", async () => {
+  let engineCalls = 0;
+  const execute = createMemoryEngineExecute(createBaseRuntime({
+    appendSmartAdd: async () => {
+      throw new Error("source unavailable");
+    },
+    withCoreDb: fn => fn({
+      prepare(sql) {
+        assert.match(String(sql), /SELECT id FROM chunks WHERE path = \? ORDER BY id ASC/);
+        return { all: () => [] };
+      },
+    }),
+    withEngineDb: () => {
+      engineCalls += 1;
+      throw new Error("Engine must not be queried after source failure");
+    },
+  }));
+
+  const result = await execute("add-source-failure", {
+    action: "add",
+    text: "source persistence fails",
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.error, "source_persistence_failed");
+  assert.equal(result.canonical_written, false);
+  assert.equal(result.derived_state, "failed");
+  assert.equal(result.needs_reconcile, false);
+  assert.equal(result.derived_error, "source unavailable");
+  assert.equal(engineCalls, 0);
+});
+
 test("memory_engine.add reports canonical success when sync fails", async () => {
   let dbCalls = 0;
   const execute = createMemoryEngineExecute(createBaseRuntime({
@@ -63,7 +95,7 @@ test("memory_engine.add reports canonical success when sync fails", async () => 
   assert.equal(dbCalls, 0);
   assert.equal(result.success, true);
   assert.equal(result.canonical_written, true);
-  assert.equal(result.derived_state, "pending_sync");
+  assert.equal(result.derived_state, "pending");
   assert.equal(result.needs_reconcile, true);
   assert.equal(result.reconcile_reason, "sync_failed");
   assert.equal(result.sync.error, "sync unavailable");
@@ -120,6 +152,15 @@ test("memory_engine.add keeps Engine metadata and reports partial success when L
     }),
     withEngineDb: fn => fn(db),
     getLancedbTable: () => ({
+      query() {
+        const query = {
+          where() { return query; },
+          select() { return query; },
+          limit() { return query; },
+          async toArray() { return []; },
+        };
+        return query;
+      },
       add: async () => {
         throw new Error("vector offline");
       },

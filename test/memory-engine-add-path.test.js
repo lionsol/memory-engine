@@ -66,6 +66,10 @@ test("memory_engine.add queries chunks.path using stable relative POSIX path", a
   assert.equal(selectedPath, "memory/smart-add/2026-06-08.md");
   assert.equal(result.success, true);
   assert.equal(result.chunks_added, 1);
+  assert.equal(result.derived_state, "partial");
+  assert.equal(result.reconcile_reason, "vector_pending");
+  assert.equal(result.lance_ready, 0);
+  assert.equal(result.lance_pending, 1);
 });
 
 test("memory_engine.add passes async in-process sync runner into appendSmartAdd", async () => {
