@@ -57,7 +57,6 @@ function createLifecycle(options = {}) {
     autoRecallConfig: { enabled: false, topK: 3, timeoutMs: 500, ...(options.autoRecallConfig || {}) },
     recordMemoryEvent: event => events.push(event),
     withDb: fn => fn({}),
-    resolvePrefixes: options.resolvePrefixes || ((_db, ids) => ids),
     batchReinforce: options.batchReinforce || (() => 0),
     now: options.now || (() => 1_700_000_000_000),
     randomUUID: options.randomUUID || (() => "trace-1"),
@@ -216,6 +215,7 @@ test("allowed prompt executes Hybrid and stores injected reinforcement state", a
   });
   const candidate = {
     id: "abcdef1234567890",
+    memory_id: "abcdef1234567890-full",
     path: "memory/smart-add/2026-05-26.md",
     text: "兼容性结论：OpenClaw memory-engine 在 5.20+ 可用",
     category: "episodic",
@@ -253,6 +253,7 @@ test("allowed prompt executes Hybrid and stores injected reinforcement state", a
   const state = fixture.lifecycle.turnState.getTurnState("run-allowed");
   assert.deepEqual(state.injectedIds, ["abcdef1234567890"]);
   assert.deepEqual(state.reinforcementAllowedIds, ["abcdef1234567890"]);
+  assert.deepEqual(state.reinforcementAllowedExactIds, ["abcdef1234567890-full"]);
   assert.equal(fixture.events.some(event => event.event_type === "hybrid_search_observation"), true);
   assert.equal(fixture.events.some(event => event.event_type === "memory_candidate_retrieved"), true);
   assert.equal(fixture.events.some(event => event.event_type === "memory_injected"), true);
@@ -276,7 +277,6 @@ test("finalize reinforces only current-turn allowed ids and always clears state"
   const reinforced = [];
   const fixture = createLifecycle({
     autoRecallConfig: { enabled: true },
-    resolvePrefixes: (_db, ids) => ids.map(id => `${id}-full`),
     batchReinforce: (_db, ids, nowSec) => {
       reinforced.push({ ids, nowSec });
       return ids.length;
@@ -294,6 +294,7 @@ test("finalize reinforces only current-turn allowed ids and always clears state"
     traceId: "trace-2",
     injectedIds: ["abcdef1234567890"],
     reinforcementAllowedIds: ["abcdef1234567890"],
+    reinforcementAllowedExactIds: ["abcdef1234567890-full"],
   });
 
   const finalize = fixture.hooks.find(item => item.name === "before_agent_finalize").handler;

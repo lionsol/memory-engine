@@ -24,7 +24,6 @@ import {
   CATEGORY_MAP,
   catParams,
   inferCategoryFromChunk,
-  resolvePrefixes,
 } from "./lib/memory-confidence.js";
 import { createAutoRecallHookLifecycle } from "./lib/recall/auto-recall-hook-lifecycle.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
@@ -129,7 +128,6 @@ export default definePluginEntry({
       apiConfig: api?.config || null,
       recordMemoryEvent,
       withDb: withEngineDbWritable,
-      resolvePrefixes,
       batchReinforce,
     });
     const hybridRuntimeContext = createHybridRuntimeContext({
@@ -176,7 +174,6 @@ export default definePluginEntry({
         existsSync,
         readFileSync,
         kgPath: paths.kgPath,
-        resolvePrefixes,
         batchReinforce,
         authorizeMemoryEngineCite: autoRecallLifecycle.authorizeMemoryEngineCite,
         calcTau,

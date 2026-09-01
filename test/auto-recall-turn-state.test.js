@@ -171,5 +171,22 @@ test("search bridge stores only bounded served ids on the owning turn", () => {
     [...manager.getTurnState("run-search").memoryEngineSearchIds],
     ["abcdef1234567890", "second-memory-id"],
   );
+  assert.deepEqual(
+    [...manager.getTurnState("run-search").memoryEngineSearchExactIds],
+    ["abcdef1234567890-extra", "second-memory-id"],
+  );
   assert.equal(manager.recordMemoryEngineSearch({ runId: "other-run", memoryIds: ["not-stored"] }), false);
+});
+
+test("get bridge stores exact identity separately from bounded presentation id", () => {
+  const manager = createAutoRecallTurnStateManager({ now: () => 1_000 });
+  manager.createTurnState({ runId: "run-get", sessionId: "session-1" });
+
+  assert.equal(manager.recordMemoryEngineGet({
+    runId: "run-get",
+    memoryId: "abcdef1234567890-full-memory-id",
+  }), true);
+  const state = manager.getTurnState("run-get");
+  assert.deepEqual([...state.memoryEngineGetIds], ["abcdef1234567890"]);
+  assert.deepEqual([...state.memoryEngineGetExactIds], ["abcdef1234567890-full-memory-id"]);
 });

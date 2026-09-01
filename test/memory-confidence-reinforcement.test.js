@@ -14,7 +14,10 @@ import { createMemoryEngineExecute, createMemoryEngineSearchExecute } from "../l
 import { createAutoRecallHookLifecycle } from "../lib/recall/auto-recall-hook-lifecycle.js";
 import { createAutoRecallTurnStateManager } from "../lib/recall/auto-recall-turn-state.js";
 import { createHybridRuntimeContext } from "../lib/recall/hybrid/runtime-context.js";
-import { MEMORY_CITE_NOT_AUTHORIZED } from "../lib/recall/cite-authority.js";
+import {
+  MEMORY_CITE_NOT_AUTHORIZED,
+  resolveAuthorizedMemoryIds,
+} from "../lib/recall/cite-authority.js";
 
 function createDb() {
   const db = new Database(":memory:");
@@ -75,6 +78,28 @@ test("memory identity resolution is exact-or-unique and active-row only", () => 
   }
 });
 
+test("authorized citation prefixes resolve only inside the immutable exact allowlist", () => {
+  const served = "abcdef1234567890AAAAAAAA";
+  const other = "abcdef9999999999BBBBBBBB";
+
+  assert.deepEqual(
+    resolveAuthorizedMemoryIds(["abcdef123"], [served]),
+    { authorized: true, resolved_ids: [served], error: null, code: null },
+  );
+  assert.deepEqual(
+    resolveAuthorizedMemoryIds([served.slice(0, 16), served.slice(0, 16)], [served]),
+    { authorized: true, resolved_ids: [served], error: null, code: null },
+  );
+  assert.deepEqual(
+    resolveAuthorizedMemoryIds(["abcdef"], [served, other]),
+    { authorized: false, resolved_ids: [], error: AMBIGUOUS_MEMORY_ID, code: AMBIGUOUS_MEMORY_ID },
+  );
+  assert.deepEqual(
+    resolveAuthorizedMemoryIds([other], [served]),
+    { authorized: false, resolved_ids: [], error: MEMORY_CITE_NOT_AUTHORIZED, code: MEMORY_CITE_NOT_AUTHORIZED },
+  );
+});
+
 test("reinforcement decays the current base, preserves conflict authority, and skips archived rows", () => {
   const db = createDb();
   const nowSec = 1_800_000_000;
@@ -133,7 +158,11 @@ test("ambiguous cite resolution performs zero reinforcement writes or success ev
       api: { config: {} },
       withDb: fn => fn(db),
       getLancedbTable: () => null,
-      authorizeMemoryEngineCite: () => ({ authorized: true }),
+      authorizeMemoryEngineCite: () => ({
+        authorized: false,
+        error: AMBIGUOUS_MEMORY_ID,
+        code: AMBIGUOUS_MEMORY_ID,
+      }),
       batchReinforce: (...args) => {
         batchCalls += 1;
         return batchReinforce(...args);
@@ -165,6 +194,7 @@ test("ambiguous cite resolution performs zero reinforcement writes or success ev
 function createAuthorityFixture({
   resultIds = ["served-memory-abcdef123456"],
   ttlMs = 60_000,
+  autoRecallConfig = null,
 } = {}) {
   let nowMs = 1_800_000_000_000;
   const db = createDb();
@@ -180,7 +210,7 @@ function createAuthorityFixture({
   };
   const lifecycle = createAutoRecallHookLifecycle({
     api,
-    autoRecallConfig: { enabled: false },
+    autoRecallConfig: { enabled: false, ...(autoRecallConfig || {}) },
     recordMemoryEvent: event => events.push(event),
     withDb: fn => fn(db),
     now: () => nowMs,
@@ -204,7 +234,16 @@ function createAuthorityFixture({
         channels: resultIds.length > 0 ? ["fts"] : [],
         channel_sizes: { fts: resultIds.length },
         debug: {},
-        results: resultIds.map(id => ({ id, text: `served ${id}` })),
+        results: resultIds.map(id => ({
+          id: id.slice(0, 16),
+          memory_id: id,
+          text: `served ${id}`,
+          path: "memory/smart-add/served.md",
+          category: "episodic",
+          confidence: 0.8,
+          final_score: 1,
+          sources: ["fts"],
+        })),
       }),
     },
     telemetry: {
@@ -231,6 +270,8 @@ function createAuthorityFixture({
   return {
     db,
     events,
+    hooks,
+    lifecycle,
     turnState,
     executeAction,
     executeSearch,
@@ -259,13 +300,16 @@ test("broad action Search and dedicated Search both authorize same-turn cite", a
       action: "search",
       text: "question",
     });
-    assert.deepEqual(broad.turnState.getTurnState("run-broad").memoryEngineSearchIds, new Set([broadId]));
+    const broadState = broad.turnState.getTurnState("run-broad");
+    assert.deepEqual(broadState.memoryEngineSearchIds, new Set([broadId]));
+    assert.deepEqual(broadState.memoryEngineSearchExactIds, new Set(broad.resultIds));
     await broad.beforeToolCall("memory_engine", "broad-cite-call", "run-broad");
     const broadCite = await broad.executeAction("broad-cite-call", {
       action: "cite",
       chunk_ids: [broadId],
     });
-    assert.equal(broadSearch.results[0].id, broad.resultIds[0]);
+    assert.equal(broadSearch.results[0].id, broadId);
+    assert.equal(broadSearch.results[0].memory_id, broad.resultIds[0]);
     assert.equal(broadCite.success, true);
     assert.equal(broadCite.reinforced, 1);
 
@@ -276,7 +320,8 @@ test("broad action Search and dedicated Search both authorize same-turn cite", a
       action: "cite",
       chunk_ids: [dedicatedId],
     });
-    assert.equal(dedicatedSearch.results[0].id, dedicated.resultIds[0]);
+    assert.equal(dedicatedSearch.results[0].id, dedicatedId);
+    assert.equal(dedicatedSearch.results[0].memory_id, dedicated.resultIds[0]);
     assert.equal(dedicatedCite.success, true);
     assert.equal(dedicatedCite.reinforced, 1);
     assert.equal(
@@ -290,6 +335,159 @@ test("broad action Search and dedicated Search both authorize same-turn cite", a
   } finally {
     broad.close();
     dedicated.close();
+  }
+});
+
+test("Search authority cannot substitute an unavailable served id with another prefix match", async () => {
+  const servedA = "abcdef1234567890AAAAAAAA";
+  const foreignB = "abcdef1234567890BBBBBBBB";
+  const fixture = createAuthorityFixture({ resultIds: [servedA] });
+  try {
+    insertMemory(fixture.db, servedA);
+    insertMemory(fixture.db, foreignB);
+
+    await fixture.beforeToolCall("memory_engine_search", "search-substitution", "run-substitution");
+    await fixture.executeSearch("search-substitution", { query: "question" });
+    assert.deepEqual(
+      [...fixture.turnState.getTurnState("run-substitution").memoryEngineSearchExactIds],
+      [servedA],
+    );
+
+    fixture.db.prepare("UPDATE memory_confidence SET is_archived = 1 WHERE chunk_id = ?").run(servedA);
+    await fixture.beforeToolCall("memory_engine", "cite-substitution", "run-substitution");
+    const result = await fixture.executeAction("cite-substitution", {
+      action: "cite",
+      chunk_ids: [servedA.slice(0, 16)],
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.reinforced, 0);
+    assert.deepEqual(result.ids, []);
+    assert.equal(fixture.db.prepare("SELECT hit_count FROM memory_confidence WHERE chunk_id = ?").get(foreignB).hit_count, 0);
+    assert.equal(fixture.db.prepare("SELECT is_archived FROM memory_confidence WHERE chunk_id = ?").get(servedA).is_archived, 1);
+    assert.equal(fixture.events.some(event => event.event_type === "memory_cited"), false);
+    assert.equal(fixture.events.some(event => event.event_type === "memory_reinforced"), false);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("ambiguous prefixes inside the served exact-id set fail closed before mutation", async () => {
+  const servedA = "abcdef1234567890AAAAAAAA";
+  const servedB = "abcdef1234567890BBBBBBBB";
+  const fixture = createAuthorityFixture({ resultIds: [servedA, servedB] });
+  try {
+    insertMemory(fixture.db, servedA);
+    insertMemory(fixture.db, servedB);
+    await fixture.beforeToolCall("memory_engine_search", "search-ambiguous", "run-ambiguous");
+    await fixture.executeSearch("search-ambiguous", { query: "question" });
+    await fixture.beforeToolCall("memory_engine", "cite-ambiguous", "run-ambiguous");
+
+    const result = await fixture.executeAction("cite-ambiguous", {
+      action: "cite",
+      chunk_ids: ["abcdef1234567890"],
+    });
+
+    assert.deepEqual(result, { error: AMBIGUOUS_MEMORY_ID, code: AMBIGUOUS_MEMORY_ID });
+    assert.deepEqual(
+      fixture.db.prepare("SELECT chunk_id, hit_count FROM memory_confidence ORDER BY chunk_id").all(),
+      [
+        { chunk_id: servedA, hit_count: 0 },
+        { chunk_id: servedB, hit_count: 0 },
+      ],
+    );
+    assert.equal(fixture.events.some(event => event.event_type === "memory_cited"), false);
+    assert.equal(fixture.events.some(event => event.event_type === "memory_reinforced"), false);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("AutoRecall exact allowlist cannot substitute an unavailable injected id", async () => {
+  const allowedA = "abcdef1234567890AAAAAAAA";
+  const foreignB = "abcdef1234567890BBBBBBBB";
+  const fixture = createAuthorityFixture({
+    resultIds: [allowedA],
+    autoRecallConfig: { enabled: true, sessionAllowlist: ["session-auto"] },
+  });
+  try {
+    insertMemory(fixture.db, allowedA);
+    insertMemory(fixture.db, foreignB);
+    const beforePrompt = fixture.hooks.find(item => item.name === "before_prompt_build").handler;
+    await beforePrompt({
+      prompt: "served memory",
+      runId: "run-auto-substitution",
+      sessionId: "session-auto",
+    }, {
+      agentId: "edi",
+      trigger: "user",
+      runId: "run-auto-substitution",
+      sessionId: "session-auto",
+    });
+    assert.deepEqual(
+      fixture.lifecycle.turnState.getTurnState("run-auto-substitution").reinforcementAllowedExactIds,
+      [allowedA],
+    );
+
+    fixture.db.prepare("UPDATE memory_confidence SET is_archived = 1 WHERE chunk_id = ?").run(allowedA);
+    const finalize = fixture.hooks.find(item => item.name === "before_agent_finalize").handler;
+    await finalize({
+      runId: "run-auto-substitution",
+      sessionId: "session-auto",
+      lastAssistantMessage: `used memory\ncited_memory_ids: ["${allowedA.slice(0, 16)}"]`,
+    }, { runId: "run-auto-substitution", sessionId: "session-auto" });
+
+    assert.equal(fixture.db.prepare("SELECT hit_count FROM memory_confidence WHERE chunk_id = ?").get(foreignB).hit_count, 0);
+    assert.equal(fixture.events.some(event => event.event_type === "memory_cited"), false);
+    assert.equal(fixture.events.some(event => event.event_type === "memory_reinforced"), false);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("current-turn Get authority cannot substitute an unavailable exact id", async () => {
+  const fetchedA = "abcdef1234567890AAAAAAAA";
+  const foreignB = "abcdef1234567890BBBBBBBB";
+  const fixture = createAuthorityFixture({
+    resultIds: [],
+    autoRecallConfig: { enabled: true },
+  });
+  try {
+    insertMemory(fixture.db, fetchedA);
+    insertMemory(fixture.db, foreignB);
+    fixture.lifecycle.turnState.createTurnState({
+      runId: "run-get-substitution",
+      sessionId: "session-get",
+      traceId: "trace-get",
+    });
+    const getScope = fixture.hooks.filter(item => item.name === "before_tool_call")[1].handler;
+    await getScope({
+      toolName: "memory_engine_get",
+      toolCallId: "get-substitution",
+      runId: "run-get-substitution",
+    }, {
+      runId: "run-get-substitution",
+      sessionId: "session-get",
+    });
+    fixture.lifecycle.onMemoryEngineGetSuccess(fetchedA, { _toolCallId: "get-substitution" });
+    assert.deepEqual(
+      [...fixture.lifecycle.turnState.getTurnState("run-get-substitution").memoryEngineGetExactIds],
+      [fetchedA],
+    );
+
+    fixture.db.prepare("UPDATE memory_confidence SET is_archived = 1 WHERE chunk_id = ?").run(fetchedA);
+    const finalize = fixture.hooks.find(item => item.name === "before_agent_finalize").handler;
+    await finalize({
+      runId: "run-get-substitution",
+      sessionId: "session-get",
+      lastAssistantMessage: `used memory\ncited_memory_ids: ["${fetchedA.slice(0, 16)}"]`,
+    }, { runId: "run-get-substitution", sessionId: "session-get" });
+
+    assert.equal(fixture.db.prepare("SELECT hit_count FROM memory_confidence WHERE chunk_id = ?").get(foreignB).hit_count, 0);
+    assert.equal(fixture.events.some(event => event.event_type === "memory_cited"), false);
+    assert.equal(fixture.events.some(event => event.event_type === "memory_reinforced"), false);
+  } finally {
+    fixture.close();
   }
 });
 
