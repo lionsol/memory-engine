@@ -14,6 +14,7 @@ function createCiteRuntime(overrides = {}) {
       withDb: fn => fn(db),
       resolvePrefixes: (_db, prefixes) => prefixes.map(prefix => `${prefix}-full-id`),
       batchReinforce: (_db, ids) => ids.length,
+      authorizeMemoryEngineCite: () => ({ authorized: true }),
       recordMemoryEvent: event => events.push(event),
       ...overrides,
     },
@@ -28,6 +29,24 @@ test("memory_engine cite requires a non-empty chunk_ids array", async () => {
     await execute("cite-1", { action: "cite" }),
     { error: "chunk_ids array required" },
   );
+});
+
+test("memory_engine cite is withheld without a trusted same-turn authorizer", async () => {
+  let dbCalls = 0;
+  const { runtime } = createCiteRuntime({
+    withDb: fn => {
+      dbCalls += 1;
+      return fn({});
+    },
+    authorizeMemoryEngineCite: undefined,
+  });
+  const execute = createMemoryEngineExecute(runtime);
+
+  assert.deepEqual(
+    await execute("unscoped-cite", { action: "cite", chunk_ids: ["alpha"] }),
+    { error: "MEMORY_CITE_NOT_AUTHORIZED", code: "MEMORY_CITE_NOT_AUTHORIZED" },
+  );
+  assert.equal(dbCalls, 0);
 });
 
 test("memory_engine cite resolves prefixes, reinforces matches, and records events", async () => {

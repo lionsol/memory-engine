@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 
 import {
   commandActionParams,
+  createDefaultCliRuntime,
   executeMemoryEngineCommand,
 } from "../lib/services/memory-engine-cli-service.js";
 import { resolveEngineDbPath } from "../lib/db/engine-db.js";
@@ -79,6 +80,22 @@ test("service propagates action failures as structured CLI errors", async () => 
   });
 
   assert.deepEqual(result, { error: "fake service failure" });
+});
+
+test("default CLI action executor withholds cite without a trusted conversational authorizer", async () => {
+  const runtime = createDefaultCliRuntime({
+    dbPath: `/tmp/memory-engine-cli-cite-withheld-${process.pid}.sqlite`,
+  });
+
+  const result = await runtime.executeAction("memory-engine-cli", {
+    action: "cite",
+    chunk_ids: ["historical-memory"],
+  });
+
+  assert.deepEqual(result, {
+    error: "MEMORY_CITE_NOT_AUTHORIZED",
+    code: "MEMORY_CITE_NOT_AUTHORIZED",
+  });
 });
 
 test("status does not initialize LanceDB", async () => {

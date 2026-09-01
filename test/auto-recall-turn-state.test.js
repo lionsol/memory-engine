@@ -158,3 +158,18 @@ test("tool bridge maps toolCallId to runId and expires with TTL", () => {
   assert.equal(cleanup.deletedToolInvocationScopes, 1);
   assert.equal(manager.getToolInvocationScope("tool-123"), null);
 });
+
+test("search bridge stores only bounded served ids on the owning turn", () => {
+  const manager = createAutoRecallTurnStateManager({ now: () => 1_000 });
+  manager.createTurnState({ runId: "run-search", sessionId: "session-1" });
+
+  assert.equal(manager.recordMemoryEngineSearch({
+    runId: "run-search",
+    memoryIds: ["abcdef1234567890-extra", "abcdef1234567890-extra", "second-memory-id"],
+  }), true);
+  assert.deepEqual(
+    [...manager.getTurnState("run-search").memoryEngineSearchIds],
+    ["abcdef1234567890", "second-memory-id"],
+  );
+  assert.equal(manager.recordMemoryEngineSearch({ runId: "other-run", memoryIds: ["not-stored"] }), false);
+});

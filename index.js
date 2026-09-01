@@ -154,6 +154,7 @@ export default definePluginEntry({
       telemetry: {
         recordMemoryEvent,
         resolveTrafficOriginContext: autoRecallLifecycle.resolveTrafficOriginContext,
+        onMemoryEngineSearchSuccess: autoRecallLifecycle.onMemoryEngineSearchSuccess,
       },
     });
     autoRecallLifecycle.register(hybridRuntimeContext);
@@ -177,6 +178,7 @@ export default definePluginEntry({
         kgPath: paths.kgPath,
         resolvePrefixes,
         batchReinforce,
+        authorizeMemoryEngineCite: autoRecallLifecycle.authorizeMemoryEngineCite,
         calcTau,
       },
       hybrid: hybridRuntimeContext,

@@ -28,39 +28,61 @@ test("autoRecall hook does not emit verbose console debug logs by default", () =
   assert.equal(indexSource.includes("[memory-engine] supplement.injected"), false);
 });
 
-test("resolvePrefixes picks a deterministic newest active match per prefix", () => {
+test("resolvePrefixes fails closed when an active prefix is ambiguous", () => {
   const sqlSeen = [];
   const db = {
     prepare(sql) {
       sqlSeen.push(String(sql));
+      if (String(sql).includes("chunk_id = ?")) {
+        return { get: () => null };
+      }
       return {
-        all(prefix) {
+        all(prefix, repeatedPrefix) {
           assert.equal(prefix, "abc");
-          return [{ chunk_id: "abcdef-newest" }];
+          assert.equal(repeatedPrefix, "abc");
+          return [{ chunk_id: "abcdef-first" }, { chunk_id: "abcdef-second" }];
         },
       };
     },
   };
 
-  assert.deepEqual(resolvePrefixes(db, ["abc"]), ["abcdef-newest"]);
-  assert.match(sqlSeen[0], /is_archived\s*=\s*0/);
-  assert.match(sqlSeen[0], /ORDER BY\s+last_confidence_update\s+DESC/i);
+  assert.throws(() => resolvePrefixes(db, ["abc"]), error => error.message === "AMBIGUOUS_MEMORY_ID");
+  assert.match(sqlSeen.join(" "), /is_archived\s*=\s*0/);
+  assert.match(sqlSeen.join(" "), /LIMIT\s+2/i);
+  assert.doesNotMatch(sqlSeen.join(" "), /last_confidence_update\s+DESC/i);
 });
 
-test("batchReinforce only updates active memories and clears stale conflict flags", () => {
+test("batchReinforce only updates active memories and preserves conflict flags", () => {
   let sqlSeen = "";
   const calls = [];
-  const stmt = {
-    changes: 0,
-    run(nowSec, id) {
-      calls.push({ nowSec, id });
-      this.changes = id === "active-id" ? 1 : 0;
-    },
-  };
   const db = {
     prepare(sql) {
       sqlSeen = String(sql);
-      return stmt;
+      if (sqlSeen.includes("SELECT")) {
+        return {
+          get(id) {
+            return id === "active-id"
+              ? {
+                chunk_id: id,
+                confidence: 0.8,
+                last_confidence_update: 1810000000,
+                base_tau: 365,
+                hit_count: 1,
+                is_archived: 0,
+                is_protected: 0,
+                conflict_flag: 1,
+              }
+              : null;
+          },
+        };
+      }
+      return {
+        changes: 0,
+        run(nextConfidence, nowSec, id) {
+          calls.push({ nextConfidence, nowSec, id });
+          this.changes = id === "active-id" ? 1 : 0;
+        },
+      };
     },
     transaction(fn) {
       return fn;
@@ -70,12 +92,12 @@ test("batchReinforce only updates active memories and clears stale conflict flag
   const changed = batchReinforce(db, ["active-id", "archived-id"], 1810000000);
 
   assert.equal(changed, 1);
-  assert.match(sqlSeen, /conflict_flag\s*=\s*0/);
+  assert.doesNotMatch(sqlSeen, /conflict_flag\s*=\s*0/);
   assert.match(sqlSeen, /is_archived\s*=\s*0/);
-  assert.deepEqual(calls, [
+  assert.deepEqual(calls.map(call => ({ nowSec: call.nowSec, id: call.id })), [
     { nowSec: 1810000000, id: "active-id" },
-    { nowSec: 1810000000, id: "archived-id" },
   ]);
+  assert.equal(calls[0].nextConfidence, 0.9);
 });
 
 test("detect-conflicts ignores unrelated memories in the same category", async () => {

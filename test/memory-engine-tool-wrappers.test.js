@@ -71,6 +71,26 @@ test("runtime tool registration matches the manifest tool contract exactly", () 
   assert.deepEqual(seen, manifest.contracts.tools);
 });
 
+test("cite tool contract binds reinforcement to current-turn Search results", () => {
+  const registrations = [];
+  registerMemoryEngineTools({
+    registerTool(tool, options) {
+      registrations.push({ tool, options });
+    },
+  }, {
+    memoryEngine: async () => ({}),
+    memoryEngineSearch: async () => ({}),
+    memoryEngineGet: async () => ({}),
+  });
+
+  const registration = registrations.find(item => item.tool?.name === "memory_engine");
+  assert.match(registration.tool.description, /本轮 Search 返回/);
+  assert.match(
+    registration.tool.parameters.properties.chunk_ids.description,
+    /current turn.*unrestricted historical IDs are rejected/i,
+  );
+});
+
 test("registered memory_engine_get requires exact Owner context before lookup", async () => {
   const registrations = [];
   const executorCalls = [];
