@@ -26,3 +26,8 @@ test("package exposes Console annotation handoff smoke script", () => {
     assert.equal(script.includes(token), true, `missing smoke script token: ${token}`);
   }
 });
+
+test("package exposes the executable review gate", () => {
+  const pkg = packageJson();
+  assert.equal(pkg.scripts?.review, "node bin/review-gate.js");
+});
