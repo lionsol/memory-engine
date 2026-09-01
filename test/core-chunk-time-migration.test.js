@@ -2,19 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import {
   CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
   CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
-  CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE,
   applyCoreChunkTimeMigration,
   extractReliableEventAtFromText,
   inspectCoreChunkTimeMigration,
 } from "../lib/db/core-chunk-time-migration.js";
-import { patchWriteGuards } from "../lib/db/core-write-guard.js";
+import { CORE_WRITE_PROHIBITED, patchWriteGuards } from "../lib/db/core-write-guard.js";
 
 function hash(text) {
   return createHash("sha256").update(String(text)).digest("hex");
@@ -170,7 +169,7 @@ test("core chunk time migration dry-run reports schema/backfill without writing 
   assert.equal(afterColumns.has("created_at"), false);
 });
 
-test("core chunk time migration apply is suspended by provenance audit", () => {
+test("core chunk time migration apply is prohibited by Core ownership", () => {
   const fixture = createFixture();
 
   assert.throws(
@@ -180,7 +179,7 @@ test("core chunk time migration apply is suspended by provenance audit", () => {
       sessionsDir: fixture.sessionsDir,
       backupDir: fixture.backupDir,
     }),
-    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
+    error => error?.code === CORE_WRITE_PROHIBITED,
   );
 
   assert.throws(
@@ -191,7 +190,7 @@ test("core chunk time migration apply is suspended by provenance audit", () => {
       backupDir: fixture.backupDir,
       confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
     }),
-    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
+    error => error?.code === CORE_WRITE_PROHIBITED,
   );
 
   assert.throws(
@@ -203,9 +202,10 @@ test("core chunk time migration apply is suspended by provenance audit", () => {
       confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
       confirmUnrecoverableEventAtNulls: CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
     }),
-    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
+    error => error?.code === CORE_WRITE_PROHIBITED,
   );
   assert.equal(readCoreColumns(fixture.coreDbPath).has("event_at"), false);
+  assert.deepEqual(readdirSync(fixture.backupDir), []);
 });
 
 test("ordinary core write guard still blocks core schema changes outside migration path", () => {
@@ -231,6 +231,6 @@ test("ordinary core write guard still blocks core schema changes outside migrati
       confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
       confirmUnrecoverableEventAtNulls: CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
     }),
-    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
+    error => error?.code === CORE_WRITE_PROHIBITED,
   );
 });

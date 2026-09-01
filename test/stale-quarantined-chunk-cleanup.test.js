@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -15,6 +14,7 @@ import {
   applyStaleQuarantinedChunkCleanup,
   auditStaleQuarantinedChunks,
 } from "../lib/quality/stale-quarantined-chunk-cleanup.js";
+import { CORE_WRITE_PROHIBITED } from "../lib/db/core-write-guard.js";
 
 function createFixture() {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-stale-quarantine-"));
@@ -123,7 +123,7 @@ test("dry-run does not modify DB and confirmed quarantined mirror chunks enter w
   assert.equal(countRows(fixture.coreDbPath, "chunks", confirmedPath), 2);
 });
 
-test("apply deletes confirmed stale chunks but not missing-unlogged or existing root daily", () => {
+test("apply is prohibited and preserves confirmed, missing, and existing Core rows", () => {
   const fixture = createFixture();
   const confirmedPath = "memory/2026-06-20.md";
   const existingPath = "memory/2026-06-23.md";
@@ -147,19 +147,17 @@ test("apply deletes confirmed stale chunks but not missing-unlogged or existing 
   );
   writeFileSync(resolve(fixture.memoryDir, "2026-06-23.md"), "manual daily");
 
-  const result = applyStaleQuarantinedChunkCleanup({
-    rootDir: fixture.root,
-    memoryDir: fixture.memoryDir,
-    coreDbPath: fixture.coreDbPath,
-    confirm: STALE_QUARANTINED_CHUNK_CONFIRM_TOKEN,
-  });
-
-  assert.equal(result.deleted_chunk_count, 2);
-  assert.equal(result.deleted_fts_row_count, 2);
-  assert.deepEqual(result.affected_paths, [confirmedPath]);
-  assert.equal(existsSync(result.backup_path), true);
-  assert.equal(countRows(fixture.coreDbPath, "chunks", confirmedPath), 0);
-  assert.equal(countRows(fixture.coreDbPath, "chunks_fts", confirmedPath), 0);
+  assert.throws(
+    () => applyStaleQuarantinedChunkCleanup({
+      rootDir: fixture.root,
+      memoryDir: fixture.memoryDir,
+      coreDbPath: fixture.coreDbPath,
+      confirm: STALE_QUARANTINED_CHUNK_CONFIRM_TOKEN,
+    }),
+    error => error?.code === CORE_WRITE_PROHIBITED,
+  );
+  assert.equal(countRows(fixture.coreDbPath, "chunks", confirmedPath), 2);
+  assert.equal(countRows(fixture.coreDbPath, "chunks_fts", confirmedPath), 2);
   assert.equal(countRows(fixture.coreDbPath, "chunks", existingPath), 1);
   assert.equal(countRows(fixture.coreDbPath, "chunks", missingUnknownPath), 1);
 });

@@ -22,8 +22,8 @@ Options:
   --out <path>          Also write the selected output to a file
   --path <path>         Target singleton path; defaults to memory/daily.md
   --dry-run             Explicit dry-run mode; this is also the default
-  --apply               Apply exact stale-row deletion after strict preflight
-  --confirm <token>     Required with --apply; use cleanup-confirmed-legacy-singleton-stale
+  --apply               Retired; always refused by Core ownership boundary
+  --confirm <token>     Legacy compatibility option; cannot authorize Core writes
   --backup-dir <path>   Override backup directory for the core DB snapshot
   --sample-limit <n>    Limit listed chunk ids and samples in the review step
 
@@ -32,7 +32,7 @@ Refused:
 
 Notes:
   - Default mode is dry-run and never writes any DB
-  - Apply is confirmed-only and fail-closed
+  - Historical apply mode is retired and prohibited; this command is dry-run/audit only
   - No memory file mutation, archive, quarantine, reinforce, confidence backfill, LLM, or network access
 `);
 }

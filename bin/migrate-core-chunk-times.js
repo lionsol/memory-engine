@@ -7,8 +7,6 @@ const { homedir } = require("node:os");
 const DEFAULT_CORE_DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
 const DEFAULT_ENGINE_DB_PATH = resolve(homedir(), ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_SESSIONS_DIR = resolve(homedir(), ".openclaw/agents/main/sessions");
-const CONFIRM_TOKEN = "MIGRATE_CORE_CHUNK_TIMES";
-const ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN = "ALLOW_UNRECOVERABLE_EVENT_AT_NULLS";
 const FORBIDDEN_FLAGS = new Set(["--force", "--write-db", "--no-backup"]);
 
 function writeStdout(text) {
@@ -33,25 +31,25 @@ Options:
   --sessions-dir <path>          Session transcript dir; default: ${DEFAULT_SESSIONS_DIR}
   --no-session-transcript-recovery
                                  Disable exact chunk-id recovery from session transcripts
-  --backup-dir <path>            Backup directory; default: <core-db-dir>/backups
-  --apply                        Execute migration against core DB
+  --apply                        Retired; always refused by Core ownership boundary
   --confirm-core-time-migration <token>
-                                 Required with --apply; token: ${CONFIRM_TOKEN}
+                                 Legacy compatibility option; cannot authorize Core writes
   --confirm-unrecoverable-event-at-nulls <token>
-                                 Required with --apply when dry-run reports unrecoverable event_at NULL rows;
-                                 token: ${ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN}
+                                 Legacy compatibility option; cannot authorize Core writes
+
+Retired compatibility options:
+  --backup-dir <path>            Historical backup option; cannot authorize Core writes
 
 Refused:
   --force --write-db --no-backup
 
 Notes:
   - Default mode is dry-run and writes no DB files.
-  - Core event_at migration is suspended and must not be applied.
-  - Provenance gate: denied_by_provenance_audit.
-  - Apply adds chunks.event_at and chunks.created_at only after backup.
-  - Apply refuses to proceed when unrecoverable raw_log rows would remain event_at NULL unless the second explicit token is provided.
-  - event_at backfill is conservative: only leading ISO timestamps and exact session transcript chunk-id matches are trusted.
-  - updated_at is never blindly copied into event_at.
+  - Core event_at migration is retired and must not be applied.
+  - --apply and historical confirmation tokens always fail with CORE_WRITE_PROHIBITED.
+  - Default mode is read-only audit; it never changes Core schema, rows, or backup files.
+  - event_at diagnostics are conservative: only leading ISO timestamps and exact session transcript chunk-id matches are reported.
+  - updated_at is never treated as event_at.
 `);
 }
 
@@ -161,10 +159,8 @@ function printHuman(report) {
     writeStdout(`recoverable_event_at_backfill_count: ${report.recoverable_event_at_backfill_count}`);
     writeStdout(`session_transcript_exact_id_backfill_count: ${report.session_transcript_exact_id_backfill_count}`);
     writeStdout(`unrecoverable_event_at_null_count: ${report.unrecoverable_event_at_null_count}`);
-    writeStdout(`confirm_token_required: ${report.confirm_token_required}`);
-    if (report.unrecoverable_event_at_null_confirm_token_required) {
-      writeStdout(`unrecoverable_event_at_null_confirm_token_required: ${report.unrecoverable_event_at_null_confirm_token_required}`);
-    }
+    writeStdout(`apply_prohibited: ${report.apply_prohibited}`);
+    writeStdout(`write_prohibition_code: ${report.write_prohibition_code}`);
     return;
   }
   writeStdout(`backup_paths: ${(report.backup_paths || []).join(", ")}`);
@@ -183,9 +179,6 @@ async function main() {
   const migration = await import("../lib/db/core-chunk-time-migration.js");
   let report;
   if (options.apply) {
-    if (options.confirmToken !== CONFIRM_TOKEN) {
-      throw new Error(`--apply requires --confirm-core-time-migration ${CONFIRM_TOKEN}`);
-    }
     report = migration.applyCoreChunkTimeMigration(toMigrationOptions(options));
   } else {
     report = migration.inspectCoreChunkTimeMigration(toMigrationOptions(options));

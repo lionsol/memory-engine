@@ -17,6 +17,7 @@ import {
   applyConfirmedLegacySingletonStaleCleanup,
   renderConfirmedLegacySingletonStaleCleanupMarkdown,
 } from "../lib/quality/confirmed-legacy-singleton-stale-cleanup.js";
+import { CORE_WRITE_PROHIBITED } from "../lib/db/core-write-guard.js";
 
 const require = createRequire(import.meta.url);
 const cli = require("../bin/cleanup-confirmed-legacy-singleton-stale.js");
@@ -153,18 +154,6 @@ function insertChunk(coreDbPath, { id, path = "memory/daily.md", text = "stale s
   }
 }
 
-function insertExtraFtsRow(coreDbPath, { id, path, text = "other row" } = {}) {
-  const db = new Database(coreDbPath);
-  try {
-    db.prepare(`
-      INSERT INTO chunks_fts (text, id, path, source, model, start_line, end_line)
-      VALUES (?, ?, ?, 'memory', 'mock', 1, 1)
-    `).run(text, id, path);
-  } finally {
-    db.close();
-  }
-}
-
 function insertConfidence(engineDbPath, chunkId) {
   const db = new Database(engineDbPath);
   try {
@@ -263,86 +252,21 @@ test("dry-run reports preflight passed and does not modify DB", () => {
   assert.equal(countRows(fixture.coreDbPath, "chunks_fts"), beforeFts);
 });
 
-test("apply requires confirm token", () => {
+test("apply is prohibited before confirmation, preflight, backup, or mutation", () => {
   const fixture = createFixture();
   insertChunk(fixture.coreDbPath, { id: "chunk-1" });
-  assert.throws(
-    () => applyConfirmedLegacySingletonStaleCleanup(defaultOptions(fixture)),
-    /apply mode requires --confirm cleanup-confirmed-legacy-singleton-stale/,
-  );
-});
-
-test("apply creates backup and deletes only exact stale singleton rows", () => {
-  const fixture = createFixture();
   const backupDir = resolve(fixture.root, "backups");
-  const chunkId = "chunk-1";
-  insertChunk(fixture.coreDbPath, { id: chunkId, path: "memory/daily.md" });
-  insertEvent(fixture.engineDbPath, { eventType: "memory_note", chunkId });
-
-  const result = applyConfirmedLegacySingletonStaleCleanup(defaultOptions(fixture, {
-    confirm: CONFIRMED_LEGACY_SINGLETON_STALE_CLEANUP_CONFIRM_TOKEN,
-    backupDir,
-  }));
-
-  assert.equal(existsSync(result.backup_path), true);
-  assert.deepEqual(result.deleted, {
-    core_chunks: 1,
-    core_chunks_fts: 1,
-    engine_memory_confidence: 0,
-  });
-  assert.equal(result.post_apply.indexed_chunk_count, 0);
-  assert.equal(countRows(fixture.coreDbPath, "chunks"), 0);
-  assert.equal(countRows(fixture.coreDbPath, "chunks_fts"), 0);
-  assert.equal(countRows(fixture.engineDbPath, "memory_confidence"), 0);
-  assert.equal(countRows(fixture.engineDbPath, "memory_events"), 1);
-});
-
-test("apply fails closed when same path has more than one chunk id", () => {
-  const fixture = createFixture();
-  insertChunk(fixture.coreDbPath, { id: "chunk-1" });
-  insertChunk(fixture.coreDbPath, { id: "chunk-2" });
-
   assert.throws(
     () => applyConfirmedLegacySingletonStaleCleanup(defaultOptions(fixture, {
       confirm: CONFIRMED_LEGACY_SINGLETON_STALE_CLEANUP_CONFIRM_TOKEN,
+      backupDir,
     })),
-    /indexed_chunk_count_must_equal_1:2/,
+    error => error?.code === CORE_WRITE_PROHIBITED,
   );
-  assert.equal(countRows(fixture.coreDbPath, "chunks"), 2);
-});
-
-test("apply fails closed when chunks_fts lacks id column", () => {
-  const fixture = createFixture({ ftsHasIdColumn: false });
-  insertChunk(fixture.coreDbPath, { id: "chunk-1" });
-
-  const report = collectConfirmedLegacySingletonStaleCleanupDryRun(defaultOptions(fixture));
-  assert.equal(report.preflight_passed, false);
-  assert.ok(report.preflight_failures.includes("chunks_fts_missing_id_column"));
-  assert.throws(
-    () => applyConfirmedLegacySingletonStaleCleanup(defaultOptions(fixture, {
-      confirm: CONFIRMED_LEGACY_SINGLETON_STALE_CLEANUP_CONFIRM_TOKEN,
-    })),
-    /preflight failed: chunks_fts_missing_id_column/,
-  );
+  assert.equal(existsSync(backupDir), false);
   assert.equal(countRows(fixture.coreDbPath, "chunks"), 1);
-});
-
-test("apply fails closed when same id appears under a mismatched chunks_fts path", () => {
-  const fixture = createFixture();
-  insertChunk(fixture.coreDbPath, { id: "chunk-1" });
-  insertExtraFtsRow(fixture.coreDbPath, { id: "chunk-1", path: "memory/other.md" });
-
-  const report = collectConfirmedLegacySingletonStaleCleanupDryRun(defaultOptions(fixture));
-  assert.equal(report.preflight_passed, false);
-  assert.ok(report.preflight_failures.includes("chunks_fts_id_has_mismatched_paths:1"));
-  assert.throws(
-    () => applyConfirmedLegacySingletonStaleCleanup(defaultOptions(fixture, {
-      confirm: CONFIRMED_LEGACY_SINGLETON_STALE_CLEANUP_CONFIRM_TOKEN,
-    })),
-    /chunks_fts_id_has_mismatched_paths:1/,
-  );
-  assert.equal(countRows(fixture.coreDbPath, "chunks"), 1);
-  assert.equal(countRows(fixture.coreDbPath, "chunks_fts"), 2);
+  assert.equal(countRows(fixture.coreDbPath, "chunks_fts"), 1);
+  assert.equal(countRows(fixture.engineDbPath, "memory_events"), 0);
 });
 
 test("preflight fails when file exists on disk", () => {
@@ -400,46 +324,7 @@ test("path outside memory is rejected", () => {
   );
 });
 
-test("backup creation failure aborts before delete", () => {
-  const fixture = createFixture();
-  insertChunk(fixture.coreDbPath, { id: "chunk-1" });
-
-  assert.throws(
-    () => applyConfirmedLegacySingletonStaleCleanup(defaultOptions(fixture, {
-      confirm: CONFIRMED_LEGACY_SINGLETON_STALE_CLEANUP_CONFIRM_TOKEN,
-      __testDeps: {
-        copyFileSync: () => {
-          throw new Error("backup failed");
-        },
-      },
-    })),
-    /backup failed/,
-  );
-  assert.equal(countRows(fixture.coreDbPath, "chunks"), 1);
-  assert.equal(countRows(fixture.coreDbPath, "chunks_fts"), 1);
-});
-
-test("transaction rollback works if delete phase throws", () => {
-  const fixture = createFixture();
-  insertChunk(fixture.coreDbPath, { id: "chunk-1" });
-
-  assert.throws(
-    () => applyConfirmedLegacySingletonStaleCleanup(defaultOptions(fixture, {
-      confirm: CONFIRMED_LEGACY_SINGLETON_STALE_CLEANUP_CONFIRM_TOKEN,
-      __testDeps: {
-        afterDeleteHook: () => {
-          throw new Error("delete hook boom");
-        },
-      },
-    })),
-    /delete hook boom/,
-  );
-  assert.equal(countRows(fixture.coreDbPath, "chunks"), 1);
-  assert.equal(countRows(fixture.coreDbPath, "chunks_fts"), 1);
-  assert.equal(countRows(fixture.engineDbPath, "memory_confidence"), 0);
-});
-
-test("JSON output is deterministic and markdown includes confirm token and side effects", () => {
+test("JSON output is deterministic and markdown reports the retired apply boundary", () => {
   const fixture = createFixture();
   insertChunk(fixture.coreDbPath, { id: "chunk-1" });
 
@@ -448,7 +333,8 @@ test("JSON output is deterministic and markdown includes confirm token and side 
   assert.equal(JSON.stringify(reportA, null, 2), JSON.stringify(reportB, null, 2));
 
   const markdown = renderConfirmedLegacySingletonStaleCleanupMarkdown(reportA);
-  assert.match(markdown, /confirm_token_required: cleanup-confirmed-legacy-singleton-stale/);
+  assert.match(markdown, /apply_prohibited: true/);
+  assert.match(markdown, /write_prohibition_code: CORE_WRITE_PROHIBITED/);
   assert.match(markdown, /## Preflight Failures/);
   assert.match(markdown, /## Would Delete/);
   assert.match(markdown, /## Side Effects/);

@@ -9,6 +9,7 @@ import {
   migrateLegacyMemoryEventsFromCore,
 } from "../lib/db/schema.js";
 import { applyCoreChunkTimeMigration } from "../lib/db/core-chunk-time-migration.js";
+import { CORE_WRITE_PROHIBITED } from "../lib/db/core-write-guard.js";
 import { applyStaleQuarantinedChunkCleanup } from "../lib/quality/stale-quarantined-chunk-cleanup.js";
 import {
   PRODUCTION_HYBRID_OBSERVATION_SURFACES,
@@ -143,11 +144,11 @@ test("normal production entrypoints cannot reach direct writable Core maintenanc
 
   assert.throws(
     () => applyCoreChunkTimeMigration({}),
-    /suspended and must not be applied/i,
+    error => error?.code === CORE_WRITE_PROHIBITED,
   );
   assert.throws(
     () => applyStaleQuarantinedChunkCleanup({}),
-    /apply mode requires --confirm/i,
+    error => error?.code === CORE_WRITE_PROHIBITED,
   );
 });
 

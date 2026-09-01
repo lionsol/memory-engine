@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import {
+  CORE_WRITE_PROHIBITED,
   isWriteSql,
   patchWriteGuards,
   writeTargetIsCore,
@@ -107,7 +108,7 @@ test("core reads are allowed while core writes are blocked", () => {
 
     assert.throws(
       () => db.prepare("INSERT INTO core.chunks (id, path, text, updated_at) VALUES (?, ?, ?, ?)").run("x", "p", "t", 1),
-      /blocked/i,
+      error => error?.code === CORE_WRITE_PROHIBITED && /blocked/i.test(error.message),
     );
     assert.throws(
       () => db.prepare("UPDATE core.chunks SET text = ? WHERE id = ?").run("changed", "chunk-1"),

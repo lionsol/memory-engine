@@ -14,13 +14,13 @@ Options:
   --core-db <path>            Core DB path; defaults to ~/.openclaw/memory/main.sqlite
   --engine-db <path>          Engine DB path; defaults to ~/.openclaw/memory/memory-engine/memory-engine.sqlite
   --confirmed-path <path>     Explicit confirmed path; current allowlist only permits memory/smart-add/2026-06-24.md
-  --apply                     Delete confirmed stale chunk rows from DBs
-  --confirm <token>           Required with --apply; use cleanup-confirmed-smart-add-propagation-stale-chunks
+  --apply                     Retired; always refused by Core ownership boundary
+  --confirm <token>           Legacy compatibility option; cannot authorize Core writes
 
 Notes:
   - Default mode is dry-run
-  - Cleanup is confirmed-only and never expands to suspected audit hits
-  - Deletion matches chunk ids whose path and content satisfy the confirmed smart-add propagation markers
+  - Historical apply mode is retired and prohibited; this command is dry-run/audit only
+  - Dry-run matches chunk ids whose path and content satisfy the confirmed smart-add propagation markers
 `);
 }
 

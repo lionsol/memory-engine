@@ -5,7 +5,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -205,73 +204,34 @@ test("missing quarantine evidence blocks deletion even when marker exists in DB"
   assert.match(report.blocked_paths[0].reasons.join(","), /missing_quarantine_evidence/);
 });
 
-test("apply deletes only confirmed stale markers and preserves same-path clean OpenCode raw_log chunk", () => {
+test("apply is prohibited and preserves Core and Engine rows", () => {
   const fixture = createFixture();
   insertChunk(fixture.coreDbPath, {
     id: "stale-prefix",
     path: "memory/smart-add/2026-06-24.md",
-    text: "## 2026-06-23_preference_nightly_generated_091523\n错误日期块",
-  });
-  insertChunk(fixture.coreDbPath, {
-    id: "stale-87",
-    path: "memory/smart-add/2026-06-24.md",
-    text: "fingerprint 87c081ed propagated generated block",
-  });
-  insertChunk(fixture.coreDbPath, {
-    id: "stale-3f",
-    path: "memory/smart-add/2026-06-24.md",
-    text: "fingerprint 3f503661 propagated generated block",
-  });
-  insertChunk(fixture.coreDbPath, {
-    id: "clean-opencode",
-    path: "memory/smart-add/2026-06-24.md",
-    text: "clean raw_log transcript mentions OpenCode and OPENCODE_API_KEY but no confirmed stale marker",
+    text: "## 2026-06-23_preference_nightly_generated_091523\nsynthetic stale block",
   });
   insertConfidence(fixture.engineDbPath, "stale-prefix");
-  insertConfidence(fixture.engineDbPath, "stale-87");
-  insertConfidence(fixture.engineDbPath, "stale-3f");
-  insertConfidence(fixture.engineDbPath, "clean-opencode");
 
   writeQuarantineLog(fixture.quarantineDir, [
     {
       source_path: "memory/smart-add/2026-06-24.md",
       block_id: "2026-06-23_preference_nightly_generated_091523",
-      fingerprint: "04b981e98c18a75a0ff42257fd894d959634e57b5c2819b8a92928bc0e842ba9",
-      review_status: "manual_confirmed",
-    },
-    {
-      source_path: "memory/smart-add/2026-06-24.md",
-      block_id: "2026-06-23_episodic_nightly_generated_091523",
       fingerprint: "3f503661019b1bb39b52571773a6e39eed6d77b6e270edefc8500f7d567df567",
-      review_status: "manual_confirmed",
-    },
-    {
-      source_path: "memory/smart-add/2026-06-24.md",
-      block_id: "2026-06-24_episodic_nightly_generated_151036",
-      fingerprint: "87c081eddbd6037e8f19c755ccdcc677c6b214b46092fb668541e58a0dc29a35",
       review_status: "manual_confirmed",
     },
   ]);
 
-  const result = applyConfirmedSmartAddPropagationStaleChunkCleanup({
+  const backupDir = resolve(fixture.root, "backups");
+  assert.throws(() => applyConfirmedSmartAddPropagationStaleChunkCleanup({
     ...defaultOptions(fixture),
     confirm: CONFIRMED_SMART_ADD_PROPAGATION_STALE_CLEANUP_CONFIRM_TOKEN,
-  });
-
-  assert.equal(existsSync(result.backup_path), true);
-  assert.equal(result.deleted_chunk_count, 3);
-  assert.equal(result.deleted_fts_row_count, 3);
-  assert.equal(result.deleted_confidence_row_count, 3);
-  assert.equal(result.post_apply_confirmed_stale_chunk_count, 0);
-  assert.equal(result.post_apply_confirmed_stale_fts_row_count, 0);
-  assert.equal(result.post_apply_marker_residual_counts.chunk_rows, 0);
-  assert.equal(result.post_apply_marker_residual_counts.fts_rows, 0);
-  assert.equal(countById(fixture.coreDbPath, "chunks", "id", "stale-prefix"), 0);
-  assert.equal(countById(fixture.coreDbPath, "chunks_fts", "id", "stale-87"), 0);
-  assert.equal(countById(fixture.engineDbPath, "memory_confidence", "chunk_id", "stale-3f"), 0);
-  assert.equal(countById(fixture.coreDbPath, "chunks", "id", "clean-opencode"), 1);
-  assert.equal(countById(fixture.coreDbPath, "chunks_fts", "id", "clean-opencode"), 1);
-  assert.equal(countById(fixture.engineDbPath, "memory_confidence", "chunk_id", "clean-opencode"), 1);
+    backupDir,
+  }), error => error?.code === "CORE_WRITE_PROHIBITED");
+  assert.equal(existsSync(backupDir), false);
+  assert.equal(countById(fixture.coreDbPath, "chunks", "id", "stale-prefix"), 1);
+  assert.equal(countById(fixture.coreDbPath, "chunks_fts", "id", "stale-prefix"), 1);
+  assert.equal(countById(fixture.engineDbPath, "memory_confidence", "chunk_id", "stale-prefix"), 1);
 });
 
 test("dry-run ignores same-path clean OpenCode raw_log chunk without confirmed marker", () => {
@@ -287,57 +247,4 @@ test("dry-run ignores same-path clean OpenCode raw_log chunk without confirmed m
   assert.equal(report.confirmed_stale_chunk_count, 0);
   assert.equal(report.clean_keyword_residuals_ignored.length, 1);
   assert.equal(report.clean_keyword_residuals_ignored[0].chunk_id, "clean-opencode");
-});
-
-test("apply does not create orphan confidence when memory_confidence table exists", () => {
-  const fixture = createFixture();
-  insertChunk(fixture.coreDbPath, {
-    id: "stale-prefix",
-    path: "memory/smart-add/2026-06-24.md",
-    text: "## 2026-06-23_episodic_nightly_generated_091523\n污染块",
-  });
-  insertConfidence(fixture.engineDbPath, "stale-prefix");
-  writeQuarantineLog(fixture.quarantineDir, [
-    {
-      source_path: "memory/smart-add/2026-06-24.md",
-      block_id: "2026-06-23_episodic_nightly_generated_091523",
-      fingerprint: "3f503661019b1bb39b52571773a6e39eed6d77b6e270edefc8500f7d567df567",
-      review_status: "manual_confirmed",
-    },
-  ]);
-
-  const result = applyConfirmedSmartAddPropagationStaleChunkCleanup({
-    ...defaultOptions(fixture),
-    confirm: CONFIRMED_SMART_ADD_PROPAGATION_STALE_CLEANUP_CONFIRM_TOKEN,
-  });
-
-  assert.equal(result.memory_confidence_cleanup_strategy, "deleted_matching_chunk_ids");
-  assert.equal(countById(fixture.engineDbPath, "memory_confidence", "chunk_id", "stale-prefix"), 0);
-});
-
-test("apply reports confidence cleanup skipped when schema is not applicable", () => {
-  const fixture = createFixture({ withConfidenceTable: false });
-  insertChunk(fixture.coreDbPath, {
-    id: "stale-prefix",
-    path: "memory/smart-add/2026-06-24.md",
-    text: "## 2026-06-23_episodic_nightly_generated_091523\n污染块",
-  });
-  writeQuarantineLog(fixture.quarantineDir, [
-    {
-      source_path: "memory/smart-add/2026-06-24.md",
-      block_id: "2026-06-23_episodic_nightly_generated_091523",
-      fingerprint: "3f503661019b1bb39b52571773a6e39eed6d77b6e270edefc8500f7d567df567",
-      review_status: "manual_confirmed",
-    },
-  ]);
-
-  const result = applyConfirmedSmartAddPropagationStaleChunkCleanup({
-    ...defaultOptions(fixture),
-    confirm: CONFIRMED_SMART_ADD_PROPAGATION_STALE_CLEANUP_CONFIRM_TOKEN,
-  });
-
-  assert.equal(result.deleted_chunk_count, 1);
-  assert.equal(result.deleted_confidence_row_count, 0);
-  assert.equal(result.memory_confidence_cleanup_strategy, "memory_confidence_missing_skip_confidence_cleanup");
-  assert.equal(readFileSync(resolve(fixture.smartAddDir, "2026-06-24.md"), "utf8").includes("OpenCode"), true);
 });

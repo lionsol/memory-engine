@@ -12,13 +12,13 @@ Options:
   --root <path>               Workspace root; defaults to ~/.openclaw/workspace
   --memory-dir <path>         Memory directory; defaults to <root>/memory
   --core-db <path>            Core DB path; defaults to ~/.openclaw/memory/main.sqlite
-  --apply                     Delete confirmed stale chunk rows from core DB
-  --confirm <token>           Required with --apply; use cleanup-stale-quarantined-chunks
+  --apply                     Retired; always refused by Core ownership boundary
+  --confirm <token>           Legacy compatibility option; cannot authorize Core writes
 
 Notes:
   - Default mode is dry-run
   - Only confirmed quarantined legacy mirror root paths are eligible for deletion
-  - Apply mode also deletes matching rows from chunks_fts and creates a core DB backup first
+  - Historical apply mode is retired and prohibited; this command is dry-run/audit only
 `);
 }
 

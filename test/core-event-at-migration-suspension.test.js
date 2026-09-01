@@ -8,18 +8,18 @@ import { spawnSync } from "node:child_process";
 
 import {
   CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
-  CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE,
   applyCoreChunkTimeMigration,
   inspectCoreChunkTimeMigration,
 } from "../lib/db/core-chunk-time-migration.js";
+import { CORE_WRITE_PROHIBITED } from "../lib/db/core-write-guard.js";
 
-test("migration apply is denied by provenance gate even with legacy tokens", () => {
+test("migration apply is denied by Core ownership even with legacy tokens", () => {
   assert.throws(
     () => applyCoreChunkTimeMigration({
       confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
       confirmUnrecoverableEventAtNulls: "ALLOW_UNRECOVERABLE_EVENT_AT_NULLS",
     }),
-    new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE),
+    error => error?.code === CORE_WRITE_PROHIBITED,
   );
 });
 
@@ -40,7 +40,7 @@ test("migration dry-run remains available and writes no DB", () => {
   assert.equal(report.writes_db, false);
 });
 
-test("migration CLI apply is denied by the same provenance gate", () => {
+test("migration CLI apply is denied by the same Core ownership boundary", () => {
   const result = spawnSync(process.execPath, [
     "bin/migrate-core-chunk-times.js",
     "--apply",
@@ -48,5 +48,5 @@ test("migration CLI apply is denied by the same provenance gate", () => {
     CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
   ], { encoding: "utf8" });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, new RegExp(CORE_CHUNK_TIME_MIGRATION_PROVENANCE_GATE));
+  assert.match(result.stderr, /CORE_WRITE_PROHIBITED/);
 });
