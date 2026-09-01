@@ -43,7 +43,9 @@
             "description": "Enable before_prompt_build auto recall injection"
           },
           "topK": {
-            "type": "number",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
             "default": 3,
             "description": "Number of memories to inject before each prompt"
           },

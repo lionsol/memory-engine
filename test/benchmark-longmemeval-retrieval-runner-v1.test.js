@@ -11,6 +11,7 @@ import {
   runLongMemEvalRetrievalCase,
   runLongMemEvalRetrievalDataset,
 } from "../lib/benchmark/longmemeval-retrieval-runner-v1.js";
+import { hybridSearch } from "../lib/recall/hybrid-search.js";
 import { normalizeLongMemEvalCase } from "../lib/benchmark/longmemeval-v1.js";
 
 function fixture(overrides = {}) {
@@ -58,7 +59,7 @@ test("official session document uses only user turns and carries no gold labels"
   assert.equal(text.includes("has_answer"), false);
 });
 
-test("benchmark hybrid runtime keeps neutral confidence by default and accepts B6 binding", () => {
+test("benchmark hybrid runtime keeps neutral confidence by default and accepts B6 binding", async () => {
   const materialized = materializeLongMemEvalCaseDatabases(
     normalizeLongMemEvalCase(fixture()),
     { benchmarkNowSec: 1_800_000_000 },
@@ -75,6 +76,15 @@ test("benchmark hybrid runtime keeps neutral confidence by default and accepts B
     });
     adapters.push(productionAdapter);
     assert.equal(productionAdapter.runtime.cfg.confidence.min, 0.15);
+
+    const amlAdapter = createBenchmarkHybridRuntime(materialized, {
+      topK: 100,
+      topKPolicyMax: 100,
+    });
+    adapters.push(amlAdapter);
+    assert.equal(amlAdapter.runtime.topKPolicy.max, 100);
+    const amlBreadthResult = await hybridSearch("kyotofact", { topK: 100 }, amlAdapter.runtime);
+    assert.equal(Array.isArray(amlBreadthResult.results), true);
   } finally {
     for (const adapter of adapters.reverse()) adapter.close();
     rmSync(materialized.root, { recursive: true, force: true });
