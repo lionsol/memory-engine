@@ -134,6 +134,71 @@ test("production and checkpoint writers render the same canonical entry body", a
   assert.equal(toolEntry.fingerprint, fingerprint);
 });
 
+test("production appendSmartAdd writes one file header before canonical entries", async () => {
+  const root = makeRoot();
+  const fileDir = resolve(root, "tool-header");
+  const filePath = resolve(fileDir, "2026-06-18.md");
+  let syncCalls = 0;
+
+  const firstResult = await appendToolSmartAdd({
+    fileDir,
+    filePath,
+    entryId: "first-entry",
+    category: " Preference ",
+    isProtected: false,
+    text: "first body",
+    provenance: "agent_smart_add",
+    syncCli: false,
+    syncRunner: async () => {
+      syncCalls += 1;
+    },
+  });
+  const secondResult = await appendToolSmartAdd({
+    fileDir,
+    filePath,
+    entryId: "second-entry",
+    category: "episodic",
+    isProtected: false,
+    text: "second body",
+    provenance: "agent_smart_add",
+    syncCli: false,
+    syncRunner: async () => {
+      syncCalls += 1;
+    },
+  });
+
+  assert.equal(firstResult.appended, true);
+  assert.equal(secondResult.appended, true);
+  const content = readFileSync(filePath, "utf8");
+  const header = "# Smart Added Memory\n\n";
+  assert.equal(content.startsWith(header), true);
+  assert.equal((content.match(/^# Smart Added Memory$/gm) || []).length, 1);
+  assert.equal(content.indexOf("## first-entry") >= header.length, true);
+  assert.equal(content.indexOf("## second-entry") > content.indexOf("## first-entry"), true);
+
+  const entries = rawLog.parseSmartAddEntries(content);
+  assert.deepEqual(entries.map(({ entryId, category, provenance, text }) => ({
+    entryId,
+    category,
+    provenance,
+    text,
+  })), [
+    {
+      entryId: "first-entry",
+      category: "preference",
+      provenance: "agent_smart_add",
+      text: "first body",
+    },
+    {
+      entryId: "second-entry",
+      category: "episodic",
+      provenance: "agent_smart_add",
+      text: "second body",
+    },
+  ]);
+  assert.equal(syncCalls, 0);
+});
+
 test("historical fingerprint comments and layouts remain readable and dedupe without rewriting", async () => {
   const root = makeRoot();
   const toolPath = resolve(root, "tool-history.md");

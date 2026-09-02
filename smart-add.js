@@ -168,7 +168,7 @@ export async function appendSmartAdd({
     text: cleanText,
     fingerprint: canonicalFingerprint,
   });
-  appendFileSync(filePath, header ? entry : `\n${entry}`);
+  appendFileSync(filePath, header ? `${header}${entry}` : `\n${entry}`);
   const shouldSync = typeof syncCli === "boolean" ? syncCli : shouldAutoSyncPath(filePath);
   if (!shouldSync) return { appended: true };
   let sync;
