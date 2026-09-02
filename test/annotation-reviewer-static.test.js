@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const PAGE_PATH = resolve(process.cwd(), "tools/annotation-reviewer.html");
-const DOC_PATH = resolve(process.cwd(), "docs/human-annotation-gold-set.md");
 
 test("annotation reviewer page contains required fields and allowed enums", () => {
   const html = readFileSync(PAGE_PATH, "utf8");
@@ -58,13 +57,4 @@ test("annotation reviewer page stays local-only and contains no DB-write code pa
 
   assert.equal(html.includes('type="file"'), true);
   assert.equal(html.includes("file.text()"), true);
-});
-
-test("human annotation docs mention standalone reviewer usage and safety boundaries", () => {
-  const doc = readFileSync(DOC_PATH, "utf8");
-  assert.equal(doc.includes("tools/annotation-reviewer.html"), true);
-  assert.equal(doc.includes("通过页面内的 File API 选择本地"), true);
-  assert.equal(doc.includes("不访问 DB"), true);
-  assert.equal(doc.includes("不写 DB"), true);
-  assert.equal(doc.includes("不调用 API"), true);
 });

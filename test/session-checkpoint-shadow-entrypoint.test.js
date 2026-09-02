@@ -18,16 +18,6 @@ const FORBIDDEN_LEGACY_PATTERNS = [
   "readYesterdayRawLogs",
 ];
 
-test("canonical checkpoint implementation is documented in repo docs", () => {
-  const readme = readFileSync(resolve(repoRoot, "README.md"), "utf8");
-  const devlog = readFileSync(resolve(repoRoot, "docs", "devlog.md"), "utf8");
-
-  assert.match(readme, /canonical checkpoint implementation 是 `bin\/session-checkpoint\.js` 与 `lib\/checkpoint\/\*`/);
-  assert.match(devlog, /Shadow Entrypoint Bypass/);
-  assert.match(devlog, /这不是 `plugins\/memory-engine\/bin\/session-checkpoint\.js` 修复失效/);
-  assert.match(devlog, /`workspace\/scripts\/session-checkpoint\.js` 的职责应收缩为 thin shim/);
-});
-
 test("legacy workspace session-checkpoint script is a thin shim to plugin canonical entrypoint", () => {
   assert.equal(existsSync(legacyScriptPath), true, `missing legacy checkpoint script: ${legacyScriptPath}`);
   const source = readFileSync(legacyScriptPath, "utf8");

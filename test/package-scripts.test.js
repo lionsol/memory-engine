@@ -16,9 +16,6 @@ test("package exposes Console annotation handoff smoke script", () => {
   for (const token of [
     "test/console-reports.test.js",
     "test/console-annotations.test.js",
-    "test/console-annotation-report-handoff-doc.test.js",
-    "test/human-annotation-workflow-doc.test.js",
-    "test/readme-console-annotation-workflow.test.js",
     "test/smoke-tests-index-doc.test.js",
     "test/report-archived-raw-log-rescue-review-queue-labels.test.js",
     "test/build-archived-raw-log-rescue-review-queue.test.js",

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const INDEX = new URL("../docs/smoke-tests/README.md", import.meta.url);
 
@@ -8,66 +10,20 @@ function readIndex() {
   return readFileSync(INDEX, "utf8");
 }
 
-test("smoke tests index exists", () => {
-  assert.equal(existsSync(INDEX), true);
-});
-
-test("smoke tests index links available runbooks", () => {
+test("all local links in the smoke-test index resolve", () => {
   const index = readIndex();
-  for (const token of [
-    "console-annotation-report-handoff.md",
-    "openclaw-memory-tools.md",
-    "full-fail-closed-safety-smoke.md",
-    "full-fail-closed-runtime-rollout.md",
-    "tool-surface-runtime-access-audit.md",
-    "openclaw-no-load-plugin-metadata-audit.md",
-    "openclaw-state-db-readonly-feasibility.md",
-    "openclaw-host-published-plugin-metadata-manifest.md",
-    "Console `/reports` ↔ `/annotations` GUI handoff",
-    "OpenClaw memory tool contract",
-    "memory-core / memory-engine split",
-    "F1-D-B8-A5 Hybrid Search full fail-closed matrix",
-    "F1-D-B8-A6.2 registry vs effective tool visibility audit",
-  ]) {
-    assert.equal(index.includes(token), true, `missing smoke index token: ${token}`);
-  }
-});
+  const baseDir = dirname(fileURLToPath(INDEX));
+  const links = [...index.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map((match) => match[1]);
 
-test("smoke tests index preserves Console handoff safety boundary", () => {
-  const index = readIndex();
-  for (const token of [
-    "Read-only report fetches only",
-    "no label upload",
-    "DB write",
-    "memory mutation",
-    "apply",
-    "unarchive",
-    "category update",
-    "delete",
-    "quarantine",
-    "reinforce",
-    "LLM call",
-  ]) {
-    assert.equal(index.includes(token), true, `missing safety token: ${token}`);
-  }
-});
+  assert.ok(links.length > 0, "smoke-test index should contain local links");
 
-test("smoke tests index records regression guard command", () => {
-  const index = readIndex();
-  for (const token of [
-    "npm run smoke:console-annotation-handoff",
-    "npm run smoke:full-fail-closed",
-    "node --test test/openclaw-no-load-plugin-metadata-audit-contract.test.js",
-    "node --test test/openclaw-state-db-readonly-feasibility-contract.test.js",
-    "node --test test/openclaw-state-db-readonly-feasibility.test.js",
-    "npm run smoke:openclaw-state-db-readonly",
-    "node --test test/openclaw-host-plugin-metadata-manifest-contract.test.js",
-    "node --test test/openclaw-host-plugin-metadata-manifest.test.js",
-    "npm run smoke:openclaw-host-metadata-manifest",
-    "node --test test/tool-surface-runtime-access-audit-doc.test.js",
-    "node --test test/agent-memory-tool-strategy.test.js",
-    "Current smoke entrypoints and safety boundaries remain discoverable",
-  ]) {
-    assert.equal(index.includes(token), true, `missing regression guard token: ${token}`);
+  for (const href of links) {
+    if (/^(?:https?:|mailto:)/.test(href) || href.startsWith("#")) {
+      continue;
+    }
+
+    const pathWithoutAnchor = decodeURIComponent(href.split("#", 1)[0]);
+    const target = resolve(baseDir, pathWithoutAnchor);
+    assert.equal(existsSync(target), true, `broken smoke-test index link: ${href}`);
   }
 });

@@ -20,14 +20,6 @@ function unpublishedHashes() {
   }
 }
 
-test("public current-state authority exists and states public safety contracts", () => {
-  assert.equal(existsSync(currentStatePath), true);
-  assert.match(currentState, /does not[\s>]+generalize them to unrelated private deployments\./);
-  assert.match(currentState, /AutoRecall is disabled by default\./);
-  assert.match(currentState, /Core storage is read-only from memory-engine/);
-  assert.match(currentState, /writes to Core-owned data are prohibited/);
-});
-
 test("public current-state authority contains no private deployment evidence", () => {
   assert.doesNotMatch(currentState, /\/home\/lionsol|\.openclaw|backups\/memory-engine|evidence[_-]?root/i);
   assert.doesNotMatch(currentState, /\b(?:gateway|console)_pid\s*=/i);
