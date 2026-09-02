@@ -5,8 +5,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { collectKgCandidates } from "../lib/recall/hybrid/channels/kg.js";
+import { collectKgCandidates, compareKgCandidateRelevance } from "../lib/recall/hybrid/channels/kg.js";
 import { createCandidateCounts, createHybridDebug, createHybridWarnings } from "../lib/recall/hybrid/debug.js";
+import { fuseChannels } from "../lib/recall/hybrid/fusion.js";
 
 function createFixtureRoot() {
   return mkdtempSync(join(tmpdir(), "memory-engine-kg-deterministic-"));
@@ -57,6 +58,12 @@ function buildCtx(db, {
   rawQuery = "alpha",
   queryTerms = ["alpha"],
   ftsTopK = 10,
+  enrichLexicalCandidate = row => ({
+    ...row,
+    token_coverage: 1,
+    exact_bonus: 0,
+    structured_match_bonus: 0,
+  }),
 } = {}) {
   const candidateCounts = createCandidateCounts();
   const debug = createHybridDebug({
@@ -83,12 +90,7 @@ function buildCtx(db, {
     categoryMap: null,
     normalizeCandidate: row => row,
     filterForRerank: () => true,
-    enrichLexicalCandidate: row => ({
-      ...row,
-      token_coverage: 1,
-      exact_bonus: 0,
-      structured_match_bonus: 0,
-    }),
+    enrichLexicalCandidate,
     inferCategoryFromChunk: () => "raw_log",
     lexicalMatchScore: () => 0,
     toDebugErrorMessage: error => error.message,
@@ -105,34 +107,6 @@ async function collectIds(db, options) {
   };
 }
 
-function controlIds(db, sql, patterns, limit) {
-  return db.prepare(sql).all(...patterns, limit).map(row => row.id);
-}
-
-const BASELINE_SQL = `
-  SELECT c.id
-  FROM memory_confidence mc
-  JOIN chunks c ON c.id = mc.chunk_id
-  WHERE COALESCE(mc.is_archived, 0) = 0
-    AND mc.kg_data IS NOT NULL
-    AND mc.kg_data != ''
-    AND (mc.kg_data LIKE ?)
-  ORDER BY c.updated_at DESC
-  LIMIT ?
-`;
-
-const DETERMINISTIC_SQL = `
-  SELECT c.id
-  FROM memory_confidence mc
-  JOIN chunks c ON c.id = mc.chunk_id
-  WHERE COALESCE(mc.is_archived, 0) = 0
-    AND mc.kg_data IS NOT NULL
-    AND mc.kg_data != ''
-    AND (mc.kg_data LIKE ?)
-  ORDER BY c.updated_at DESC, c.id ASC
-  LIMIT ?
-`;
-
 test("KG deterministic order uses id ASC for equal updated_at with opposite insert orders", async () => {
   const root = createFixtureRoot();
   const db = createDb(root);
@@ -141,7 +115,7 @@ test("KG deterministic order uses id ASC for equal updated_at with opposite inse
     for (const id of ["A", "B", "C"]) insertConfidence(db, id, "alpha match");
     const { ids, ctx } = await collectIds(db, { ftsTopK: 2 });
     assert.deepEqual(ids, ["A", "B"]);
-    assert.equal(ctx.candidateCounts.kg_raw, 2);
+    assert.equal(ctx.candidateCounts.kg_raw, 3);
     assert.equal(ctx.candidateCounts.kg_after_conf_filter, 2);
   } finally {
     db.close();
@@ -196,14 +170,33 @@ test("KG deterministic order does not change non-tie updated_at ordering", async
   }
 });
 
-test("KG deterministic order applies before LIMIT", async () => {
+test("KG relevance ordering happens before ftsTopK truncation and feeds RRF rank", async () => {
   const root = createFixtureRoot();
   const db = createDb(root);
   try {
-    for (const id of ["D", "C", "B", "A"]) insertChunk(db, id, 1000, `alpha text ${id}`);
-    for (const id of ["D", "C", "B", "A"]) insertConfidence(db, id, "alpha match");
-    const { ids } = await collectIds(db, { ftsTopK: 2 });
-    assert.deepEqual(ids, ["A", "B"]);
+    insertChunk(db, "new-low-1", 3000, "alpha low one");
+    insertChunk(db, "new-low-2", 2000, "alpha low two");
+    insertChunk(db, "old-best", 1000, "alpha best");
+    for (const id of ["new-low-1", "new-low-2", "old-best"]) insertConfidence(db, id, "alpha match");
+    const relevance = new Map([
+      ["new-low-1", { lexical_signal_score: 0.2, structured_match_bonus: 0.1, exact_bonus: 0, token_coverage: 0.2, semantic_score: 0.9 }],
+      ["new-low-2", { lexical_signal_score: 0.1, structured_match_bonus: 0.1, exact_bonus: 0, token_coverage: 0.1, semantic_score: 0.9 }],
+      ["old-best", { lexical_signal_score: 0.95, structured_match_bonus: 0, exact_bonus: 0, token_coverage: 0.95, semantic_score: 0.1 }],
+    ]);
+    const { ids, ctx } = await collectIds(db, {
+      ftsTopK: 2,
+      enrichLexicalCandidate: row => ({ ...row, ...relevance.get(row.id) }),
+    });
+    assert.equal(ctx.candidateCounts.kg_raw, 3);
+    assert.equal(ctx.candidateCounts.kg_after_conf_filter, 2);
+    assert.deepEqual(ids, ["old-best", "new-low-1"]);
+
+    const { fused } = fuseChannels({ kg: ctx.channels.kg }, {
+      rrfK: 60,
+      nowSec: 1710000000,
+      rankingConfig: {},
+    });
+    assert.equal(fused.find(item => item.id === "old-best").rrfScore > fused.find(item => item.id === "new-low-1").rrfScore, true);
   } finally {
     db.close();
     rmSync(root, { recursive: true, force: true });
@@ -248,7 +241,7 @@ test("KG deterministic order sorts NULL updated_at after numeric timestamps and 
   }
 });
 
-test("KG deterministic order matches SQLite control ordering for special text ids", async () => {
+test("KG deterministic id tie-break is stable for special text ids", async () => {
   const root = createFixtureRoot();
   const db = createDb(root);
   try {
@@ -256,29 +249,66 @@ test("KG deterministic order matches SQLite control ordering for special text id
       insertChunk(db, id, 1000, `alpha text ${id}`);
       insertConfidence(db, id, "alpha special");
     }
-    const patterns = ["%alpha%"];
-    const expectedIds = controlIds(db, DETERMINISTIC_SQL, patterns, 10);
     const { ids } = await collectIds(db, { ftsTopK: 10 });
-    assert.deepEqual(ids, expectedIds);
+    assert.deepEqual(ids, ["Alpha", "alpha", "quote'", "slash\\", "space id", "雪"]);
   } finally {
     db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("KG deterministic SQL differs from baseline ORDER BY updated_at DESC on a tie fixture", async () => {
+test("KG comparator follows relevance fields before recency and id", () => {
+  const candidate = (overrides = {}) => ({
+    id: "z",
+    lexical_signal_score: 0,
+    structured_match_bonus: 0,
+    exact_bonus: 0,
+    token_coverage: 0,
+    semantic_score: 0,
+    created_at: 100,
+    ...overrides,
+  });
+  const priorityPairs = [
+    [{ lexical_signal_score: 0.9, created_at: 1 }, { lexical_signal_score: 0.8, created_at: 999 }],
+    [{ structured_match_bonus: 0.9 }, { structured_match_bonus: 0.8 }],
+    [{ exact_bonus: 0.9 }, { exact_bonus: 0.8 }],
+    [{ token_coverage: 0.9 }, { token_coverage: 0.8 }],
+    [{ semantic_score: 0.9 }, { semantic_score: 0.8 }],
+    [{ created_at: 200 }, { created_at: 100 }],
+    [{ id: "a" }, { id: "b" }],
+  ];
+  for (const [higher, lower] of priorityPairs) {
+    assert.equal(compareKgCandidateRelevance(candidate(higher), candidate(lower)) < 0, true);
+  }
+  const invalidComparison = compareKgCandidateRelevance(
+    candidate({ lexical_signal_score: Number.NaN, id: "a" }),
+    candidate({ lexical_signal_score: 0, id: "b" }),
+  );
+  assert.equal(Number.isFinite(invalidComparison), true);
+  assert.equal(invalidComparison < 0, true);
+});
+
+test("KG relevance comparator is independent of updated_at row order", async () => {
   const root = createFixtureRoot();
   const db = createDb(root);
   try {
-    for (const id of ["C", "B", "A"]) insertChunk(db, id, 1000, `alpha text ${id}`);
-    for (const id of ["A", "B", "C"]) insertConfidence(db, id, "alpha match");
+    insertChunk(db, "recent-low", 3000, "alpha recent");
+    insertChunk(db, "old-high", 1000, "alpha old");
+    insertConfidence(db, "recent-low", "alpha recent");
+    insertConfidence(db, "old-high", "alpha old");
     db.exec("CREATE INDEX idx_chunks_updated ON chunks(updated_at DESC)");
-    const baselineIds = controlIds(db, BASELINE_SQL, ["%alpha%"], 2);
-    const deterministicIds = controlIds(db, DETERMINISTIC_SQL, ["%alpha%"], 2);
-    assert.deepEqual(deterministicIds, ["A", "B"]);
-    assert.notDeepEqual(baselineIds, deterministicIds);
-    const { ids } = await collectIds(db, { ftsTopK: 2 });
-    assert.deepEqual(ids, deterministicIds);
+    const { ids } = await collectIds(db, {
+      ftsTopK: 2,
+      enrichLexicalCandidate: row => ({
+        ...row,
+        lexical_signal_score: row.id === "old-high" ? 0.9 : 0.1,
+        structured_match_bonus: 0,
+        exact_bonus: 0,
+        token_coverage: row.id === "old-high" ? 0.9 : 0.1,
+        semantic_score: 0,
+      }),
+    });
+    assert.deepEqual(ids, ["old-high", "recent-low"]);
   } finally {
     db.close();
     rmSync(root, { recursive: true, force: true });

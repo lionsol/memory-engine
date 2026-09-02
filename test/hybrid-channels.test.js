@@ -371,10 +371,8 @@ test("KG channel normalizes candidates and updates debug/count fields", async ()
   });
 
   await collectKgCandidates(ctx);
-  assert.match(
-    preparedSql,
-    /ORDER BY\s+c\.updated_at\s+DESC\s*,\s*c\.id\s+ASC\s+LIMIT\s+\?/i,
-  );
+  assert.equal(/ORDER BY\s+c\.updated_at\s+DESC/i.test(preparedSql), false);
+  assert.equal(/LIMIT\s+\?/i.test(preparedSql), false);
   assert.equal(ctx.candidateCounts.kg_raw, 1);
   assert.equal(ctx.candidateCounts.kg_after_conf_filter, 1);
   assert.equal(ctx.channels.kg[0].path, "memory/episodes/session-checkpoint.md");
@@ -448,11 +446,12 @@ test("KG isolated mode uses Engine candidate SQL plus Core JSON JOIN and never l
   assert.equal(coreSql.includes("ATTACH"), false);
   assert.equal(coreSql.includes("TEMP"), false);
   assert.deepEqual(JSON.parse(coreArgs[0]), ["chunk-1"]);
-  assert.equal(coreArgs[1], 20);
+  assert.equal(coreArgs.length, 1);
   assert.equal(legacyCalls, 0);
   assert.equal(ctx.debug.kg_access_mode, "isolated");
   assert.equal(ctx.channels.kg[0].path, "memory/episodes/session-checkpoint.md");
-  assert.equal(CORE_KG_JSON_JOIN_SQL.includes("ORDER BY c.updated_at DESC, c.id ASC"), true);
+  assert.equal(CORE_KG_JSON_JOIN_SQL.includes("ORDER BY c.updated_at DESC"), false);
+  assert.equal(CORE_KG_JSON_JOIN_SQL.includes("LIMIT ?"), false);
 });
 
 test("KG isolated mode fail-closes to legacy when a matching candidate has non-text ID", async () => {

@@ -118,6 +118,12 @@ function buildCtx({
   kgIsolationRequested = false,
   kgIsolationFallbackReason = null,
   legacyFallbackAllowed = true,
+  enrichLexicalCandidate = row => ({
+    ...row,
+    token_coverage: 1,
+    exact_bonus: 0,
+    structured_match_bonus: 0,
+  }),
 }) {
   const candidateCounts = createCandidateCounts();
   const debug = createHybridDebug({
@@ -150,12 +156,7 @@ function buildCtx({
     categoryMap: null,
     normalizeCandidate: row => row,
     filterForRerank: () => true,
-    enrichLexicalCandidate: row => ({
-      ...row,
-      token_coverage: 1,
-      exact_bonus: 0,
-      structured_match_bonus: 0,
-    }),
+    enrichLexicalCandidate,
     inferCategoryFromChunk: () => "raw_log",
     lexicalMatchScore: () => 0,
     toDebugErrorMessage: error => error.message,
@@ -233,6 +234,52 @@ test("isolated KG matches legacy for text IDs, missing core, archived/null-empty
       engineDb.close();
       coreDb.close();
       legacyDb.close();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("isolated KG ranks relevance before ftsTopK truncation", async () => {
+  const root = createFixtureRoot();
+  const core = createCoreDb(root);
+  const engine = createEngineDb(root);
+  try {
+    insertChunk(core, "new-low-1", 3000, "alpha low one");
+    insertChunk(core, "new-low-2", 2000, "alpha low two");
+    insertChunk(core, "old-best", 1000, "alpha best");
+    for (const id of ["new-low-1", "new-low-2", "old-best"]) {
+      insertConfidence(engine, id, { kg_data: `alpha ${id}` });
+    }
+    core.close();
+    engine.close();
+
+    const coreDb = new Database(join(root, "core.sqlite"), { readonly: true, fileMustExist: true });
+    const engineDb = new Database(join(root, "engine.sqlite"), { readonly: true, fileMustExist: true });
+    try {
+      const relevance = new Map([
+        ["new-low-1", { lexical_signal_score: 0.2, structured_match_bonus: 0.1, exact_bonus: 0, token_coverage: 0.2, semantic_score: 0.9 }],
+        ["new-low-2", { lexical_signal_score: 0.1, structured_match_bonus: 0.1, exact_bonus: 0, token_coverage: 0.1, semantic_score: 0.9 }],
+        ["old-best", { lexical_signal_score: 0.95, structured_match_bonus: 0, exact_bonus: 0, token_coverage: 0.95, semantic_score: 0.1 }],
+      ]);
+      const ctx = buildCtx({
+        withDb: () => { throw new Error("legacy KG reader should not run"); },
+        withEngineDb: fn => fn(engineDb),
+        withCoreDb: fn => fn(coreDb),
+        ftsTopK: 2,
+        kgAccessMode: "isolated",
+        kgIsolationRequested: true,
+        enrichLexicalCandidate: row => ({ ...row, ...relevance.get(row.id) }),
+      });
+
+      await collectKgCandidates(ctx);
+
+      assert.equal(ctx.candidateCounts.kg_raw, 3);
+      assert.equal(ctx.candidateCounts.kg_after_conf_filter, 2);
+      assert.deepEqual(ctx.channels.kg.map(row => row.id), ["old-best", "new-low-1"]);
+    } finally {
+      engineDb.close();
+      coreDb.close();
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -528,8 +575,8 @@ test("snapshot invariant fallback uses legacy only when isolated was requested b
 test("Core JSON JOIN SQL stays deterministic and isolated", () => {
   assert.equal(CORE_KG_JSON_JOIN_SQL.includes("json_each(?)"), true);
   assert.equal(CORE_KG_JSON_JOIN_SQL.includes("JOIN chunks c"), true);
-  assert.equal(CORE_KG_JSON_JOIN_SQL.includes("ORDER BY c.updated_at DESC, c.id ASC"), true);
-  assert.equal(CORE_KG_JSON_JOIN_SQL.includes("LIMIT ?"), true);
+  assert.equal(CORE_KG_JSON_JOIN_SQL.includes("ORDER BY c.updated_at DESC"), false);
+  assert.equal(CORE_KG_JSON_JOIN_SQL.includes("LIMIT ?"), false);
   assert.equal(CORE_KG_JSON_JOIN_SQL.includes("ATTACH"), false);
   assert.equal(CORE_KG_JSON_JOIN_SQL.includes("TEMP"), false);
   assert.equal(CORE_KG_JSON_JOIN_SQL.includes("memory_confidence"), false);
