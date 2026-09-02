@@ -11,6 +11,7 @@ const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
 const checkpointEpisodeWriter = require("../lib/checkpoint/episode-writer.js");
 const smartAddWriter = require("../lib/checkpoint/smart-add-writer.js");
+const { parseSmartAddEntries } = require("../lib/smart-add-entry-contract.cjs");
 
 async function importAuditModule(tag = Date.now()) {
   return import(`../lib/quality/timestamp-pollution-audit.js?ts=${tag}`);
@@ -144,8 +145,9 @@ test("smart-add writer keeps clean facts clean but operational timestamps remain
   });
 
   const content = readFileSync(resolve(fixture.generatedSmartAddDir, "2026-06-18.md"), "utf8");
-  const cleanBlock = content.match(/## clean_entry[\s\S]*?(?=\n<!-- smart-add-fingerprint:|\s*$)/)?.[0] || "";
-  const pollutedBlock = content.match(/## polluted_entry[\s\S]*?(?=\n<!-- smart-add-fingerprint:|\s*$)/)?.[0] || "";
+  const entries = parseSmartAddEntries(content);
+  const cleanBlock = entries.find(entry => entry.entryId === "clean_entry")?.raw || "";
+  const pollutedBlock = entries.find(entry => entry.entryId === "polluted_entry")?.raw || "";
 
   assert.equal(detectTimestampPollution(cleanBlock).detected, false);
   assert.equal(detectTimestampPollution(pollutedBlock).detected, true);

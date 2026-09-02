@@ -140,10 +140,15 @@ test("mapToCategory keeps current mapping", () => {
   assert.equal(smartAddWriter.mapToCategory("other"), "raw_log");
 });
 
-test("smartAddFingerprint is stable across CRLF and comments/title normalization", () => {
-  const a = smartAddWriter.smartAddFingerprint({ raw: "## x\r\n<!-- c -->\r\nhello\r\n", category: "raw_log" });
-  const b = smartAddWriter.smartAddFingerprint({ raw: "## y\nhello\n", category: "raw_log" });
+test("smartAddFingerprint uses the shared 16-character canonical identity", () => {
+  const a = smartAddWriter.smartAddFingerprint({
+    raw: "## x\r\nCategory: raw_log\r\nProvenance: agent_smart_add\r\n<!-- smart-add-fingerprint: abcdef12 -->\r\nhello\r\n",
+  });
+  const b = smartAddWriter.smartAddFingerprint({
+    raw: "## y\nCategory: raw_log\nProvenance: agent_smart_add\n<!-- smart-add-fingerprint: ABCDEF12 -->\nhello\n",
+  });
   assert.equal(a, b);
+  assert.match(a, /^[a-f0-9]{16}$/);
 });
 
 test("current OpenClaw Core FTS prevents duplicate smart-add writes", async () => {
@@ -245,10 +250,10 @@ test("appendSmartAdd writes header for new file and keeps entry format", async (
 
   const content = readFileSync(resolve(fixture.generatedSmartAddDir, "2026-06-18.md"), "utf8");
   assert.match(content, /^# Smart Added Memory\n\n/);
-  assert.match(content, /<!-- smart-add-fingerprint: [a-f0-9]{64} -->/);
-  assert.match(content, /## entry_1/);
+  assert.match(content, /## entry_1\n\nCategory: raw_log/);
   assert.match(content, /Category: raw_log/);
   assert.match(content, /Provenance: checkpoint_generated/);
+  assert.match(content, /Provenance: checkpoint_generated\n<!-- smart-add-fingerprint: [a-f0-9]{16} -->/);
   assert.match(content, /kg_data: \{"a":1\}/);
   assert.match(content, /hello world/);
 });
@@ -270,7 +275,7 @@ test("appendSmartAdd does not repeat header for existing file", async () => {
 
   const content = readFileSync(resolve(fixture.generatedSmartAddDir, "2026-06-18.md"), "utf8");
   assert.equal((content.match(/^# Smart Added Memory$/gm) || []).length, 1);
-  assert.match(content, /\n<!-- smart-add-fingerprint: [a-f0-9]{64} -->\n## entry_2/);
+  assert.match(content, /\n## entry_2\n\nCategory: preference/);
 });
 
 test("appendSmartAdd returns null on fingerprint duplicate", async () => {
@@ -654,7 +659,7 @@ test("isDuplicate uses readonlyEngine dual-handle path and no attached schema re
   assert.match(source, /SMART_ADD_DUPLICATE_BATCH_SIZE/);
 });
 
-test("isDuplicate returns false on DB error", async () => {
+test("isDuplicate fails closed on DB error", async () => {
   const fixture = createFixture();
   await checkpoint.withRuntime({
     smartAddDir: fixture.smartAddDir,
@@ -664,7 +669,107 @@ test("isDuplicate returns false on DB error", async () => {
     timeZone: "Asia/Shanghai",
     now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
   }, async () => {
-    assert.equal(smartAddWriter.isDuplicate("hello world", "raw_log"), false);
+    assert.throws(
+      () => smartAddWriter.isDuplicate("hello world", "raw_log"),
+      error => error.code === "SMART_ADD_DUPLICATE_CHECK_FAILED" && Boolean(error.cause),
+    );
+  });
+});
+
+test("isDuplicate fails closed when the smart-add evidence file cannot be read", async () => {
+  const fixture = createFixture();
+  mkdirSync(resolve(fixture.smartAddDir, "2026-06-18.md"));
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.throws(
+      () => smartAddWriter.isDuplicate("smart-add file failure body", "raw_log"),
+      error => error.code === "SMART_ADD_DUPLICATE_CHECK_FAILED"
+        && error.cause?.code === "EISDIR",
+    );
+  });
+});
+
+test("isDuplicate fails closed when Core FTS evidence cannot be queried", async () => {
+  const fixture = createFixture();
+  const coreDb = new Database(fixture.coreDbPath);
+  try {
+    coreDb.exec("DROP TABLE chunks_fts");
+  } finally {
+    coreDb.close();
+  }
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.throws(
+      () => smartAddWriter.isDuplicate("core fts failure body", "raw_log"),
+      error => error.code === "SMART_ADD_DUPLICATE_CHECK_FAILED"
+        && /FTS table not found/.test(error.cause?.message || ""),
+    );
+  });
+});
+
+test("isDuplicate fails closed when Engine eligibility evidence cannot be queried", async () => {
+  const fixture = createFixture();
+  const engineDb = new Database(fixture.engineDbPath);
+  try {
+    engineDb.exec("DROP TABLE memory_confidence");
+  } finally {
+    engineDb.close();
+  }
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.throws(
+      () => smartAddWriter.isDuplicate("engine membership failure body", "raw_log"),
+      error => error.code === "SMART_ADD_DUPLICATE_CHECK_FAILED"
+        && /memory_confidence/.test(error.cause?.message || ""),
+    );
+  });
+});
+
+test("isDuplicate fails closed when Core membership evidence cannot be queried", async () => {
+  const fixture = createFixture();
+  insertEngineConfidence(fixture.engineDbPath, { chunkId: "core-membership-row" });
+  const coreDb = new Database(fixture.coreDbPath);
+  try {
+    coreDb.exec("DROP TABLE chunks");
+    coreDb.exec("CREATE TABLE chunks (id TEXT PRIMARY KEY, path TEXT NOT NULL, updated_at INTEGER)");
+  } finally {
+    coreDb.close();
+  }
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    assert.throws(
+      () => smartAddWriter.isDuplicate("core membership failure body", "raw_log"),
+      error => error.code === "SMART_ADD_DUPLICATE_CHECK_FAILED"
+        && /no such column: text/.test(error.cause?.message || ""),
+    );
   });
 });
 

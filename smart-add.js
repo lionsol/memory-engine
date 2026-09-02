@@ -4,14 +4,19 @@ import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { safeRelativePath } from "./lib/path-utils.js";
 import { WORKSPACE } from "./memory-manager-runtime.js";
+import smartAddEntryContract from "./lib/smart-add-entry-contract.cjs";
 
-const SMART_ADD_FINGERPRINT_RE = /<!--\s*smart-add-fingerprint:\s*([a-f0-9]{8,64})\s*-->/gi;
+const {
+  SMART_ADD_FINGERPRINT_MISMATCH,
+  buildSmartAddFingerprint,
+  extractSmartAddFingerprints,
+  hasSmartAddFingerprintComment,
+  normalizeSmartAddCategory,
+  normalizeSmartAddText,
+  renderSmartAddEntry,
+} = smartAddEntryContract;
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const SYNC_MEMORY_INDEX_SCRIPT = resolve(MODULE_DIR, "bin/sync-memory-index.js");
-
-function normalizeText(value) {
-  return String(value || "").replace(/\r\n/g, "\n").trim();
-}
 
 function shouldAutoSyncPath(filePath) {
   return safeRelativePath(WORKSPACE, filePath) !== null;
@@ -105,20 +110,13 @@ export async function runMemoryIndexSync({
 export function readSmartAddFingerprints(filePath) {
   if (!existsSync(filePath)) return new Set();
   const content = readFileSync(filePath, "utf8");
-  const fingerprints = new Set();
-  let match;
-  while ((match = SMART_ADD_FINGERPRINT_RE.exec(content)) !== null) {
-    if (match[1]) fingerprints.add(match[1].toLowerCase());
-  }
-  return fingerprints;
+  return extractSmartAddFingerprints(content);
 }
 
 function hasLegacyTextDuplicate(content, text) {
-  const normalizedText = normalizeText(text);
+  const normalizedText = normalizeSmartAddText(text);
   if (!normalizedText) return false;
-  const hasFingerprintComment = SMART_ADD_FINGERPRINT_RE.test(content);
-  SMART_ADD_FINGERPRINT_RE.lastIndex = 0;
-  if (hasFingerprintComment) return false;
+  if (hasSmartAddFingerprintComment(content)) return false;
   return content.includes(normalizedText);
 }
 
@@ -137,17 +135,24 @@ export async function appendSmartAdd({
   syncRunner = null,
   syncCliRunner = runMemoryIndexSyncCli,
 }) {
-  const cleanText = normalizeText(text);
-  const cat = String(category || "raw_log");
+  const cleanText = normalizeSmartAddText(text);
+  const cat = normalizeSmartAddCategory(category) || "raw_log";
+  const protectedValue = Boolean(isProtected);
+  const canonicalFingerprint = buildSmartAddFingerprint(cleanText, cat, protectedValue);
+  if (fingerprint !== undefined && fingerprint !== null
+    && String(fingerprint).trim().toLowerCase() !== canonicalFingerprint) {
+    const error = new Error("smart-add fingerprint does not match canonical identity");
+    error.code = SMART_ADD_FINGERPRINT_MISMATCH;
+    throw error;
+  }
+
   mkdirSync(fileDir, { recursive: true });
   const existed = existsSync(filePath);
   const existingContent = existed ? readFileSync(filePath, "utf8") : "";
 
-  if (fingerprint) {
-    const fingerprints = readSmartAddFingerprints(filePath);
-    if (fingerprints.has(String(fingerprint).toLowerCase())) {
-      return { appended: false, reason: "fingerprint" };
-    }
+  const fingerprints = readSmartAddFingerprints(filePath);
+  if (fingerprints.has(canonicalFingerprint)) {
+    return { appended: false, reason: "fingerprint" };
   }
 
   if (hasLegacyTextDuplicate(existingContent, cleanText)) {
@@ -155,7 +160,14 @@ export async function appendSmartAdd({
   }
 
   const header = existed ? "" : "# Smart Added Memory\n\n";
-  const entry = `${header}## ${entryId}\n\nCategory: ${cat}${isProtected ? " | Protected" : ""}\nProvenance: ${String(provenance || "agent_smart_add").trim() || "agent_smart_add"}\n<!-- smart-add-fingerprint: ${fingerprint} -->\n\n${cleanText}\n\n`;
+  const entry = renderSmartAddEntry({
+    entryId,
+    category: cat,
+    isProtected: protectedValue,
+    provenance: String(provenance || "agent_smart_add").trim() || "agent_smart_add",
+    text: cleanText,
+    fingerprint: canonicalFingerprint,
+  });
   appendFileSync(filePath, header ? entry : `\n${entry}`);
   const shouldSync = typeof syncCli === "boolean" ? syncCli : shouldAutoSyncPath(filePath);
   if (!shouldSync) return { appended: true };
@@ -169,9 +181,9 @@ export async function appendSmartAdd({
         filePath,
         entryId,
         category: cat,
-        isProtected: Boolean(isProtected),
+        isProtected: protectedValue,
         text: cleanText,
-        fingerprint,
+        fingerprint: canonicalFingerprint,
       })
       : await runMemoryIndexSync({
         force: syncCliForce,

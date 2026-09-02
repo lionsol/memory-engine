@@ -48,7 +48,7 @@ test("appendSmartAdd dedupes by fingerprint before writing", { skip: SKIP_IF_NO_
     category: "raw_log",
     isProtected: false,
     text: "duplicate text",
-    fingerprint: "1111222233334444",
+    fingerprint: buildSmartAddFingerprint("duplicate text", "raw_log", false),
   };
 
   const first = await appendSmartAdd(payload);
@@ -80,7 +80,7 @@ test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exist
     category: "raw_log",
     isProtected: false,
     text: "legacy body text",
-    fingerprint: "aaaabbbbccccdddd",
+    fingerprint: buildSmartAddFingerprint("legacy body text", "raw_log", false),
   });
 
   assert.equal(result.appended, false);
@@ -102,7 +102,7 @@ test("appendSmartAdd prefers injected async syncRunner over CLI fallback", { ski
     category: "raw_log",
     isProtected: false,
     text: "runner-backed sync",
-    fingerprint: "ddddccccbbbbaaaa",
+    fingerprint: buildSmartAddFingerprint("runner-backed sync", "raw_log", false),
     syncCli: true,
     syncRunner: async ({ force, quiet }) => {
       syncRunnerCalls += 1;

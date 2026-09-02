@@ -35,7 +35,11 @@ async function withStubbedCheckpointConfidence(writeConfidenceImpl, run) {
   }
 }
 
-function createFixture({ now = "2026-06-16T17:30:00.000Z" } = {}) {
+function createFixture({
+  now = "2026-06-16T17:30:00.000Z",
+  includeFts = false,
+  includeEngineSchema = false,
+} = {}) {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-checkpoint-"));
   const workspaceDir = resolve(root, "workspace");
   const memoryDir = resolve(workspaceDir, "memory");
@@ -65,10 +69,24 @@ function createFixture({ now = "2026-06-16T17:30:00.000Z" } = {}) {
       "placeholder chunk for checkpoint confidence writes",
       1718587800,
       3,
-      13,
+      12,
     );
+    if (includeFts) coreDb.exec("CREATE VIRTUAL TABLE chunks_fts USING fts5(text)");
   } finally {
     coreDb.close();
+  }
+  if (includeEngineSchema) {
+    const engineDb = new Database(engineDbPath);
+    try {
+      engineDb.exec(`
+        CREATE TABLE memory_confidence (
+          chunk_id TEXT PRIMARY KEY,
+          is_archived INTEGER NOT NULL DEFAULT 0
+        )
+      `);
+    } finally {
+      engineDb.close();
+    }
   }
 
   return {
@@ -380,7 +398,7 @@ test("session checkpoint records explicit failure when LLM throws and does not w
 });
 
 test("session checkpoint warns and continues when confidence writes fail", async () => {
-  const fixture = createFixture();
+  const fixture = createFixture({ includeFts: true, includeEngineSchema: true });
   const warnings = [];
   const originalWarn = console.warn;
   console.warn = (...args) => warnings.push(args.map(String).join(" "));
