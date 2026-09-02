@@ -104,7 +104,7 @@ test("normalizeExternalMemory keeps external candidate semantics and rerank allo
   assert.equal(isCandidateAllowedForRerank(candidate, 0.95), true);
 });
 
-test("normalizeExternalMemory preserves protected and archived eligibility semantics for managed candidates", () => {
+test("normalizeExternalMemory excludes archived managed candidates while preserving active and external semantics", () => {
   const archived = normalizeExternalMemory({
     id: "managed-archived",
     text: "Archived managed memory",
@@ -112,6 +112,17 @@ test("normalizeExternalMemory preserves protected and archived eligibility seman
     confidence: 0.7,
     is_protected: 0,
     is_archived: 1,
+  }, {
+    nowSec: 1710000000,
+    calcRealtimeConf: row => row.confidence,
+  });
+  const active = normalizeExternalMemory({
+    id: "managed-active",
+    text: "Active managed memory",
+    path: "memory/episodes/e-active.md",
+    confidence: 0.7,
+    is_protected: 0,
+    is_archived: 0,
   }, {
     nowSec: 1710000000,
     calcRealtimeConf: row => row.confidence,
@@ -127,13 +138,28 @@ test("normalizeExternalMemory preserves protected and archived eligibility seman
     nowSec: 1710000000,
     calcRealtimeConf: row => row.confidence,
   });
+  const invalidArchiveState = normalizeExternalMemory({
+    id: "managed-invalid-archive-state",
+    text: "Managed memory with invalid archive state",
+    path: "memory/episodes/e-invalid.md",
+    confidence: 0.7,
+    is_protected: 0,
+    is_archived: "not-a-state",
+  }, {
+    nowSec: 1710000000,
+    calcRealtimeConf: row => row.confidence,
+  });
 
   assert.equal(archived.decay_eligible, false);
   assert.equal(archived.archive_eligible, false);
+  assert.equal(active.decay_eligible, true);
+  assert.equal(active.archive_eligible, true);
   assert.equal(protectedCandidate.decay_eligible, false);
   assert.equal(protectedCandidate.archive_eligible, false);
-  assert.equal(isCandidateAllowedForRerank(archived, 0.6), true);
+  assert.equal(isCandidateAllowedForRerank(archived, 0.6), false);
+  assert.equal(isCandidateAllowedForRerank(active, 0.6), true);
   assert.equal(isCandidateAllowedForRerank(protectedCandidate, 0.6), true);
+  assert.equal(isCandidateAllowedForRerank(invalidArchiveState, 0.6), false);
 });
 
 test("category inference keeps explicit, path, and fallback behavior", () => {

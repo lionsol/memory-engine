@@ -929,6 +929,96 @@ test("vector fallback accepts the official manager array result contract", async
   assert.equal(ctx.warnings.some(warning => warning.message === "search_error"), false);
 });
 
+test("vector Lance single-query excludes archived managed candidates before channel output", async () => {
+  const ctx = makeBaseCtx({
+    confidenceMap: new Map([
+      ["archived-vector", { confidence: 0.99, is_archived: 1 }],
+      ["active-vector", { confidence: 0.72, is_archived: 0 }],
+    ]),
+    chunkMetaMap: new Map([
+      ["archived-vector", { id: "archived-vector", path: "memory/episodes/archived.md", updated_at: 1710000000 }],
+      ["active-vector", { id: "active-vector", path: "memory/episodes/active.md", updated_at: 1710000000 }],
+    ]),
+    getLancedbTableRuntime: () => ({
+      search: () => ({
+        limit() { return this; },
+        execute: async () => [
+          { id: "archived-vector", text: "archived vector result", _distance: 0.01 },
+          { id: "active-vector", text: "active vector result", _distance: 0.4 },
+        ],
+      }),
+    }),
+  });
+
+  await collectVectorCandidates(ctx);
+
+  assert.equal(ctx.candidateCounts.vector_raw, 2);
+  assert.equal(ctx.candidateCounts.vector_after_conf_filter, 1);
+  assert.deepEqual(ctx.channels.vector.map(row => row.id), ["active-vector"]);
+});
+
+test("vector manager fallback excludes archived managed candidates before channel output", async () => {
+  const ctx = makeBaseCtx({
+    confidenceMap: new Map([
+      ["archived-manager", { confidence: 0.99, is_archived: 1 }],
+      ["active-manager", { confidence: 0.72, is_archived: 0 }],
+    ]),
+    chunkMetaMap: new Map([
+      ["archived-manager", { id: "archived-manager", path: "memory/episodes/archived.md", updated_at: 1710000000 }],
+      ["active-manager", { id: "active-manager", path: "memory/episodes/active.md", updated_at: 1710000000 }],
+    ]),
+    getLancedbRuntimeRuntime: async () => ({ table: null, readyState: "disabled" }),
+    getMemorySearchManagerFn: async () => ({
+      manager: {
+        search: async () => [
+          { id: "archived-manager", text: "archived manager result", similarity: 0.99 },
+          { id: "active-manager", text: "active manager result", similarity: 0.72 },
+        ],
+      },
+    }),
+  });
+
+  await collectVectorCandidates(ctx);
+
+  assert.equal(ctx.candidateCounts.vector_raw, 2);
+  assert.equal(ctx.candidateCounts.vector_after_conf_filter, 1);
+  assert.deepEqual(ctx.channels.vector.map(row => row.id), ["active-manager"]);
+});
+
+test("bounded multi-query Lance fusion excludes archived managed candidates before RRF", async () => {
+  let searchCalls = 0;
+  const ctx = makeBaseCtx({
+    vectorQueryPlan: { queries: ["planner query one", "planner query two"] },
+    confidenceMap: new Map([
+      ["archived-multi", { confidence: 0.99, is_archived: 1 }],
+      ["active-multi", { confidence: 0.72, is_archived: 0 }],
+    ]),
+    chunkMetaMap: new Map([
+      ["archived-multi", { id: "archived-multi", path: "memory/episodes/archived.md", updated_at: 1710000000 }],
+      ["active-multi", { id: "active-multi", path: "memory/episodes/active.md", updated_at: 1710000000 }],
+    ]),
+    getLancedbTableRuntime: () => ({
+      search: () => ({
+        limit() { return this; },
+        execute: async () => {
+          searchCalls += 1;
+          return [
+            { id: "archived-multi", text: "archived multi-query result", _distance: 0.01 },
+            { id: "active-multi", text: "active multi-query result", _distance: 0.4 },
+          ];
+        },
+      }),
+    }),
+  });
+
+  await collectVectorCandidates(ctx);
+
+  assert.equal(searchCalls, 3);
+  assert.equal(ctx.candidateCounts.vector_raw, 6);
+  assert.equal(ctx.candidateCounts.vector_after_conf_filter, 1);
+  assert.deepEqual(ctx.channels.vector.map(row => row.id), ["active-multi"]);
+});
+
 test("hybridSearch integration smoke keeps topK order and debug compatibility", async () => {
   const { hybridSearch } = await import(`../lib/recall/hybrid-search.js?ts=${Date.now()}_${Math.random()}`);
   const result = await hybridSearch("memory-engine compatibility", { topK: 3 }, {
