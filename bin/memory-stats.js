@@ -8,28 +8,47 @@
 
 const { homedir } = require("node:os");
 const { dirname, resolve } = require("node:path");
-const { appendFileSync, mkdirSync } = require("node:fs");
+const { appendFileSync, mkdirSync, readFileSync } = require("node:fs");
 const Database = require("better-sqlite3");
+const businessTime = require("../lib/business-time.cjs");
+
+function readRuntimeConfig(configJsonPath) {
+  try {
+    return JSON.parse(readFileSync(configJsonPath, "utf8"));
+  } catch (_) {
+    return {};
+  }
+}
 
 function resolveRuntime(options = {}) {
-  const home = homedir();
+  const env = options.env || process.env;
+  const home = options.homeDir || homedir();
   const workspaceDir = options.workspaceDir
-    || process.env.MEMORY_ENGINE_WORKSPACE
-    || process.env.MEMORY_ENGINE_WORKSPACE_DIR
+    || env.MEMORY_ENGINE_WORKSPACE
+    || env.MEMORY_ENGINE_WORKSPACE_DIR
     || resolve(home, ".openclaw/workspace");
-  return {
+  const runtime = {
     coreDbPath: options.coreDbPath
-      || process.env.MEMORY_ENGINE_CORE_DB
-      || process.env.CORE_DB_PATH
+      || env.MEMORY_ENGINE_CORE_DB
+      || env.CORE_DB_PATH
       || resolve(home, ".openclaw/memory/main.sqlite"),
     engineDbPath: options.engineDbPath
-      || process.env.MEMORY_ENGINE_DB
-      || process.env.ENGINE_DB_PATH
+      || env.MEMORY_ENGINE_DB
+      || env.ENGINE_DB_PATH
       || resolve(home, ".openclaw/memory/memory-engine/memory-engine.sqlite"),
     workspaceDir,
     dailyDir: resolve(workspaceDir, "memory"),
     statsLog: resolve(workspaceDir, "memory/stats-history.md"),
+    configJsonPath: options.configJsonPath
+      || env.OPENCLAW_CONFIG_PATH
+      || resolve(home, ".openclaw/openclaw.json"),
   };
+  runtime.timeZone = businessTime.resolveBusinessTimeZone({
+    explicitTimeZone: options.timeZone,
+    env,
+    config: readRuntimeConfig(runtime.configJsonPath),
+  });
+  return runtime;
 }
 
 function withCoreDb(runtime, fn) {
@@ -51,12 +70,13 @@ function withEngineDb(runtime, fn) {
   }
 }
 
-function todayDateStr() {
-  // Use local timezone (Asia/Shanghai) date.
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  const local = new Date(now.getTime() - offset * 60000);
-  return local.toISOString().slice(0, 10);
+function todayDateStr(now = new Date(), timeZone = businessTime.DEFAULT_BUSINESS_TIME_ZONE) {
+  return businessTime.businessDateFromInstant(now, timeZone);
+}
+
+function previousBusinessDayRange(dateStr, timeZone = businessTime.DEFAULT_BUSINESS_TIME_ZONE) {
+  const previousDate = businessTime.shiftBusinessDate(dateStr, -1);
+  return businessTime.businessDateToUtcRange(previousDate, timeZone);
 }
 
 function classifyTrigger(path) {
@@ -142,13 +162,11 @@ function collectWriteTriggers(dateStr, runtime) {
       byTrigger[trigger] = (byTrigger[trigger] || 0) + 1;
     }
 
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const yesterdayStart = dayStart.getTime() - 86400000;
-    const yesterdayEnd = dayStart.getTime();
+    const { startMs, endMs } = previousBusinessDayRange(dateStr, runtime.timeZone);
     const yesterdayNew = db.prepare(`
-      SELECT COUNT(*) FROM chunks WHERE source = 'memory' AND updated_at BETWEEN ? AND ?
-    `).get(yesterdayStart, yesterdayEnd);
+      SELECT COUNT(*) FROM chunks
+      WHERE source = 'memory' AND updated_at >= ? AND updated_at < ?
+    `).get(startMs, endMs);
 
     return { byTrigger, total: rows.length, yesterdayNew: yesterdayNew["COUNT(*)"] };
   });
@@ -257,7 +275,8 @@ function generateReport(dateStr, runtime) {
 
 async function main(options = {}) {
   const runtime = resolveRuntime(options);
-  const dateStr = options.dateStr || todayDateStr();
+  const now = typeof options.now === "function" ? options.now() : options.now;
+  const dateStr = options.dateStr || todayDateStr(now ?? new Date(), runtime.timeZone);
   console.log(`[stats] === Memory Stats — ${dateStr} ===`);
 
   ensureStatsTable(runtime);
@@ -278,6 +297,7 @@ module.exports = {
   ensureStatsTable,
   generateReport,
   main,
+  previousBusinessDayRange,
   resolveRuntime,
   todayDateStr,
   withCoreDb,
