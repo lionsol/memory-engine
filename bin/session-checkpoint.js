@@ -124,9 +124,10 @@ function runFlushSessionRawlogCheckpoint({
 } = {}) {
   const args = [scriptPath, "--checkpoint"];
   if (targetDate) args.push("--target-date", targetDate);
+  const runtime = getRuntime();
   const result = spawnSyncImpl(nodeExecPath, args, {
     cwd,
-    env,
+    env: { ...env, MEMORY_ENGINE_TIME_ZONE: runtime.timeZone },
     encoding: "utf8",
   });
   const status = Number.isInteger(result?.status) ? result.status : null;

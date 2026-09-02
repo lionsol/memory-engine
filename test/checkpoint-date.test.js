@@ -15,6 +15,13 @@ test("shiftDateString crosses month and year boundaries", () => {
   assert.equal(checkpointDate.shiftDateString("2026-01-01", -1), "2025-12-31");
 });
 
+test("invalid checkpoint dates fail closed instead of becoming the current date", () => {
+  assert.throws(
+    () => checkpointDate.parseDatePartsInTimeZone(new Date("invalid"), "Asia/Shanghai"),
+    error => error?.code === "INVALID_BUSINESS_INSTANT",
+  );
+});
+
 test("buildNightlyEntryId keeps output format unchanged", () => {
   const entryId = checkpointDate.buildNightlyEntryId({
     targetDate: "2026-05-28",

@@ -7,7 +7,7 @@
 
 set -uo pipefail
 
-TIME_ZONE="${MEMORY_ENGINE_TIME_ZONE:-Asia/Shanghai}"
+TIME_ZONE=""
 WORKSPACE="${MEMORY_ENGINE_WORKSPACE_DIR:-$HOME/.openclaw/workspace}"
 NODE_BIN="${MEMORY_ENGINE_NODE_BIN:-$HOME/.local/node24/bin/node}"
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,6 +16,7 @@ CORE_DB_PATH="${MEMORY_ENGINE_CORE_DB_PATH:-$HOME/.openclaw/agents/main/agent/op
 EPISODES_DIR="$MEMORY_DIR/episodes"
 FLUSH_SCRIPT="$PLUGIN_DIR/bin/flush-session-rawlog.js"
 CHECKPOINT_SCRIPT="$PLUGIN_DIR/bin/session-checkpoint.js"
+BUSINESS_TIME_SCRIPT="$PLUGIN_DIR/bin/resolve-business-time.js"
 
 log() {
   printf '[checkpoint-direct] %s\n' "$*"
@@ -23,10 +24,6 @@ log() {
 
 warn() {
   printf '[checkpoint-direct] WARN %s\n' "$*" >&2
-}
-
-compute_target_date() {
-  TZ="$TIME_ZONE" date -d 'yesterday' +%Y-%m-%d
 }
 
 write_fallback_episode() {
@@ -89,18 +86,32 @@ EOF
 main() {
   local target_date episode_file checkpoint_status reason
 
-  target_date="${1:-$(compute_target_date)}"
+  if [ ! -x "$NODE_BIN" ]; then
+    reason="configured Node binary is unavailable or not executable: $NODE_BIN"
+    warn "$reason"
+    exit 1
+  fi
+
+  if ! TIME_ZONE="$("$NODE_BIN" "$BUSINESS_TIME_SCRIPT" --timezone)"; then
+    reason="canonical business timezone resolution failed"
+    warn "$reason"
+    exit 1
+  fi
+  export MEMORY_ENGINE_TIME_ZONE="$TIME_ZONE"
+
+  if [ -n "${1:-}" ]; then
+    target_date="$1"
+  else
+    if ! target_date="$("$NODE_BIN" "$BUSINESS_TIME_SCRIPT" --yesterday)"; then
+      reason="canonical business target-date resolution failed"
+      warn "$reason"
+      exit 1
+    fi
+  fi
   episode_file="$EPISODES_DIR/$target_date.md"
   checkpoint_status=0
 
   log "Start targetDate=$target_date timeZone=$TIME_ZONE workspace=$WORKSPACE"
-
-  if [ ! -x "$NODE_BIN" ]; then
-    reason="configured Node binary is unavailable or not executable: $NODE_BIN"
-    warn "$reason"
-    write_fallback_episode "$target_date" "$reason"
-    exit 0
-  fi
 
   if [ -f "$FLUSH_SCRIPT" ]; then
     log "Running flush-session-rawlog checkpoint mode"

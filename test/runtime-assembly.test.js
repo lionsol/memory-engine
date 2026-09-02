@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createMemoryEngineRuntimeAssembly } from "../lib/runtime/assembly.js";
+import { createMemoryEngineConfigContext } from "../lib/runtime/config-context.js";
 import { createDefaultCliRuntime } from "../lib/services/memory-engine-cli-service.js";
 
 function createCoreDb(path, id = null) {
@@ -85,6 +86,7 @@ test("runtime assembly resolves paths and effective config once per entrypoint",
     assert.equal(Object.isFrozen(assembly.descriptor.db), true);
     assert.equal(assembly.database.coreDbPath, join(root, "core.sqlite"));
     assert.equal(assembly.database.engineDbPath, join(root, "engine", "engine.sqlite"));
+    assert.equal(assembly.paths.timeZone, "Asia/Singapore");
     assert.equal(assembly.config.smartAddTimeZone, "Asia/Singapore");
     assert.equal(assembly.config.effectiveRuntimeConfig.kgFailClosedMode, "full_fail_closed");
     assert.equal(assembly.config.effectiveRuntimeConfig.recentFailClosedMode, "shadow_fail_closed");
@@ -93,6 +95,66 @@ test("runtime assembly resolves paths and effective config once per entrypoint",
   } finally {
     if (previousTimeZone === undefined) delete process.env.MEMORY_ENGINE_TIME_ZONE;
     else process.env.MEMORY_ENGINE_TIME_ZONE = previousTimeZone;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("config context applies explicit, env, config, and default timezone precedence", () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-timezone-precedence-"));
+  const pathOverrides = {
+    homeDir: root,
+    workspaceDir: join(root, "workspace"),
+    coreDbPath: join(root, "core.sqlite"),
+    engineDbPath: join(root, "engine.sqlite"),
+    lancedbDir: join(root, "lancedb"),
+  };
+  const apiConfig = {
+    memoryEngine: {
+      timezone: { business: "Asia/Singapore" },
+    },
+  };
+
+  try {
+    const configOnly = createMemoryEngineConfigContext({
+      apiConfig,
+      pathOverrides,
+      env: {},
+    });
+    assert.equal(configOnly.paths.timeZone, "Asia/Singapore");
+    assert.equal(configOnly.config.smartAddTimeZone, "Asia/Singapore");
+
+    const envOverride = createMemoryEngineConfigContext({
+      apiConfig,
+      pathOverrides,
+      env: { MEMORY_ENGINE_TIME_ZONE: "America/Los_Angeles" },
+    });
+    assert.equal(envOverride.paths.timeZone, "America/Los_Angeles");
+    assert.equal(envOverride.config.smartAddTimeZone, "America/Los_Angeles");
+
+    const explicitOverride = createMemoryEngineConfigContext({
+      apiConfig,
+      pathOverrides: { ...pathOverrides, timeZone: "UTC" },
+      env: { MEMORY_ENGINE_TIME_ZONE: "America/Los_Angeles" },
+    });
+    assert.equal(explicitOverride.paths.timeZone, "UTC");
+    assert.equal(explicitOverride.config.smartAddTimeZone, "UTC");
+
+    const defaulted = createMemoryEngineConfigContext({
+      pathOverrides,
+      env: {},
+    });
+    assert.equal(defaulted.paths.timeZone, "Asia/Shanghai");
+    assert.equal(defaulted.config.smartAddTimeZone, "Asia/Shanghai");
+
+    assert.throws(
+      () => createMemoryEngineConfigContext({
+        apiConfig: { memoryEngine: { timezone: { business: "Not/AZone" } } },
+        pathOverrides,
+        env: {},
+      }),
+      error => error?.code === "INVALID_BUSINESS_TIME_ZONE",
+    );
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });

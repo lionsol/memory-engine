@@ -18,3 +18,13 @@ test("direct checkpoint wrapper uses Node 24 and target-date-bounded commands", 
   assert.match(source, /MEMORY_ENGINE_CORE_DB_PATH:-\$HOME\/\.openclaw\/agents\/main\/agent\/openclaw-agent\.sqlite/);
   assert.doesNotMatch(source, /\.openclaw\/memory\/main\.sqlite/);
 });
+
+test("direct checkpoint wrapper delegates date resolution to the canonical Node resolver", () => {
+  const source = readFileSync(WRAPPER, "utf8");
+
+  assert.match(source, /BUSINESS_TIME_SCRIPT/);
+  assert.match(source, /resolve-business-time\.js/);
+  assert.match(source, /--timezone/);
+  assert.match(source, /export MEMORY_ENGINE_TIME_ZONE=/);
+  assert.doesNotMatch(source, /date\s+-d\s+['\"]yesterday/);
+});

@@ -73,6 +73,52 @@ test("flush-session-rawlog writes canonical session_flush input without creating
   }
 });
 
+test("checkpoint flush groups timestamps by configured business timezone", () => {
+  const home = mkdtempSync(join(tmpdir(), "memory-engine-flush-business-timezone-"));
+  const targetDate = "2026-06-18";
+  try {
+    const sessionPath = join(home, ".openclaw/agents/main/sessions/cross-midnight.jsonl");
+    mkdirSync(dirname(sessionPath), { recursive: true });
+    writeFileSync(sessionPath, `${JSON.stringify({
+      type: "message",
+      timestamp: "2026-06-17T16:30:00.000Z",
+      message: { role: "user", content: "Shanghai business date fixture" },
+    })}\n`);
+    const old = new Date(Date.now() - 10 * 60 * 1000);
+    utimesSync(sessionPath, old, old);
+
+    const result = spawnSync(process.execPath, [
+      FLUSH_SCRIPT.pathname,
+      "--checkpoint",
+      "--target-date",
+      targetDate,
+    ], {
+      cwd: home,
+      env: {
+        ...process.env,
+        HOME: home,
+        TZ: "UTC",
+        MEMORY_ENGINE_TIME_ZONE: "Asia/Shanghai",
+      },
+      encoding: "utf8",
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.targetDateEntriesWritten, 1);
+    assert.equal(
+      existsSync(join(home, `.openclaw/workspace/memory/smart-add/${targetDate}.md`)),
+      true,
+    );
+    assert.equal(
+      existsSync(join(home, ".openclaw/workspace/memory/smart-add/2026-06-17.md")),
+      false,
+    );
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("checkpoint flush writes only the target-date group from a multi-date session", () => {
   const home = mkdtempSync(join(tmpdir(), "memory-engine-flush-target-date-"));
   const targetDate = "2026-06-17";

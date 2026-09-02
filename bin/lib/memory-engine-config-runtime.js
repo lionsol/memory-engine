@@ -1,9 +1,10 @@
 const { resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
+const businessTime = require("../../lib/business-time.cjs");
 
 const FALLBACK_CONFIG = {
   timezone: {
-    business: "Asia/Shanghai",
+    business: businessTime.DEFAULT_BUSINESS_TIME_ZONE,
   },
 };
 
@@ -67,11 +68,11 @@ async function getMemoryEngineRuntimeConfig(cfg = null) {
 }
 
 async function getSmartAddTimeZoneRuntime(cfg = null) {
-  if (process.env.MEMORY_ENGINE_TIME_ZONE) {
-    return process.env.MEMORY_ENGINE_TIME_ZONE;
-  }
   const config = await getMemoryEngineRuntimeConfig(cfg);
-  return config?.timezone?.business || "Asia/Shanghai";
+  return businessTime.resolveBusinessTimeZone({
+    env: process.env,
+    config,
+  });
 }
 
 module.exports = {

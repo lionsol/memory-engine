@@ -126,6 +126,36 @@ function readEngineConfidenceRows(engineDbPath) {
   }
 }
 
+test("flush checkpoint child receives the current canonical business timezone", async () => {
+  const calls = [];
+  await checkpoint.withRuntime({ timeZone: "Asia/Singapore" }, async () => {
+    const result = checkpoint.runFlushSessionRawlogCheckpoint({
+      spawnSyncImpl: (...args) => {
+        calls.push(args);
+        return { status: 0, stdout: "{}\n", stderr: "" };
+      },
+      nodeExecPath: "/fake/node",
+      scriptPath: "/fake/flush-session-rawlog.js",
+      cwd: "/fake/project",
+      env: { MEMORY_ENGINE_TIME_ZONE: "UTC", TEST_ENV: "1" },
+      targetDate: "2026-06-18",
+    });
+
+    assert.equal(result.ok, true);
+  });
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], [
+    "/fake/node",
+    ["/fake/flush-session-rawlog.js", "--checkpoint", "--target-date", "2026-06-18"],
+    {
+      cwd: "/fake/project",
+      env: { MEMORY_ENGINE_TIME_ZONE: "Asia/Singapore", TEST_ENV: "1" },
+      encoding: "utf8",
+    },
+  ]);
+});
+
 test("session checkpoint skips summary on note-only logs and never calls LLM", async () => {
   const fixture = createFixture();
   let llmCalls = 0;

@@ -19,12 +19,8 @@
 const { readFileSync, existsSync, mkdirSync, appendFileSync, statSync, readdirSync } = require("node:fs");
 const { resolve, basename } = require("node:path");
 const { createHash } = require("node:crypto");
-const { homedir } = require("node:os");
-
-const HOME = homedir();
-const WORKSPACE = resolve(HOME, ".openclaw/workspace");
-const SESSIONS_DIR = resolve(HOME, ".openclaw/agents/main/sessions");
-const SMART_ADD_DIR = resolve(WORKSPACE, "memory/smart-add");
+const { resolveMemoryEnginePaths } = require("../lib/runtime/paths.cjs");
+const businessTime = require("../lib/business-time.cjs");
 
 // ── Helpers ──
 
@@ -37,35 +33,46 @@ function hash(text) {
   return createHash("sha256").update(String(text)).digest("hex");
 }
 
-function todayStr() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function todayStr(timeZone) {
+  return businessTime.businessDateFromInstant(new Date(), timeZone);
 }
 
-function dateStrFromTs(tsStr) {
-  const d = new Date(tsStr);
-  if (isNaN(d.getTime())) return null;
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function dateStrFromTs(tsStr, timeZone) {
+  try {
+    return businessTime.businessDateFromInstant(tsStr, timeZone);
+  } catch (error) {
+    if (error?.code === businessTime.INVALID_BUSINESS_INSTANT) return null;
+    throw error;
+  }
+}
+
+function readRuntimeConfig(configJsonPath) {
+  try {
+    return JSON.parse(readFileSync(configJsonPath, "utf8"));
+  } catch (_) {
+    return {};
+  }
+}
+
+function resolveFlushRuntime() {
+  const paths = resolveMemoryEnginePaths({}, process.env);
+  const timeZone = businessTime.resolveBusinessTimeZone({
+    env: process.env,
+    config: readRuntimeConfig(paths.configJsonPath),
+  });
+  return { ...paths, timeZone };
 }
 
 function validateTargetDate(value) {
   const targetDate = String(value || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
-    throw new Error("--target-date must be a valid YYYY-MM-DD date");
+  try {
+    businessTime.validateBusinessDate(targetDate);
+    return targetDate;
+  } catch (cause) {
+    const error = new Error("--target-date must be a valid YYYY-MM-DD date", { cause });
+    error.code = businessTime.INVALID_BUSINESS_DATE;
+    throw error;
   }
-  const [year, month, day] = targetDate.split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (
-    !Number.isFinite(parsed.getTime())
-    || parsed.getUTCFullYear() !== year
-    || parsed.getUTCMonth() !== month - 1
-    || parsed.getUTCDate() !== day
-  ) {
-    throw new Error("--target-date must be a valid YYYY-MM-DD date");
-  }
-  return targetDate;
 }
 
 function tsId() {
@@ -86,14 +93,14 @@ function isCronSession(key) {
 
 // ── Session file discovery ──
 
-function getSessionFiles() {
-  if (!existsSync(SESSIONS_DIR)) return [];
-  return readdirSync(SESSIONS_DIR)
+function getSessionFiles(runtime) {
+  if (!existsSync(runtime.sessionsDir)) return [];
+  return readdirSync(runtime.sessionsDir)
     .filter((f) => (f.endsWith(".jsonl") || f.includes(".jsonl.")) && !f.includes(".deleted.") && !f.includes(".trajectory."))
     .map((f) => ({
-      path: resolve(SESSIONS_DIR, f),
+      path: resolve(runtime.sessionsDir, f),
       name: f,
-      mtime: statSync(resolve(SESSIONS_DIR, f)).mtimeMs,
+      mtime: statSync(resolve(runtime.sessionsDir, f)).mtimeMs,
       key: sessionKeyFromName(f),
       isReset: f.includes(".reset."),
     }))
@@ -140,9 +147,9 @@ function parseSessionMessages(filePath) {
 
 // ── Canonical smart-add file write ──
 
-function writeSmartAddFile(dateStr, messages) {
-  const filePath = resolve(SMART_ADD_DIR, `${dateStr}.md`);
-  mkdirSync(SMART_ADD_DIR, { recursive: true });
+function writeSmartAddFile(dateStr, messages, runtime) {
+  const filePath = resolve(runtime.smartAddDir, `${dateStr}.md`);
+  mkdirSync(runtime.smartAddDir, { recursive: true });
 
   const lines = messages.map((m) => {
     const prefix = m.role === "user" ? "**User:**" : "**Assistant:**";
@@ -171,6 +178,7 @@ function writeSmartAddFile(dateStr, messages) {
 // ── Core flush function ──
 
 function flushSession(filePath, sessionKey, options = {}) {
+  const runtime = options.runtime || resolveFlushRuntime();
   const label = `${sessionKey || basename(filePath)}`;
   const targetDate = options.targetDate || null;
   log(`Flushing: ${label}`);
@@ -187,7 +195,7 @@ function flushSession(filePath, sessionKey, options = {}) {
   // Group by date
   const byDate = {};
   for (const m of messages) {
-    const d = dateStrFromTs(m.ts);
+    const d = dateStrFromTs(m.ts, runtime.timeZone);
     if (d) {
       if (!byDate[d]) byDate[d] = [];
       byDate[d].push(m);
@@ -210,13 +218,13 @@ function flushSession(filePath, sessionKey, options = {}) {
     }
 
     // Skip today's data — it's still streaming, let session-checkpoint handle it
-    if (dateStr === todayStr() && !process.argv.includes("--force-today")) {
+    if (dateStr === todayStr(runtime.timeZone) && !process.argv.includes("--force-today")) {
       log(`  → ${dateStr}: skipped (today, still streaming)`);
       dayResults.push({ date: dateStr, action: "skip", reason: "still_today" });
       continue;
     }
 
-    const fileResult = writeSmartAddFile(dateStr, dateMsgs);
+    const fileResult = writeSmartAddFile(dateStr, dateMsgs, runtime);
     if (fileResult.written) {
       log(`  → ${dateStr}: ${dateMsgs.length} msgs → canonical smart-add`);
     } else {
@@ -263,6 +271,14 @@ function shouldFlush(file) {
 
 function main() {
   const args = process.argv.slice(2);
+  let runtime;
+  try {
+    runtime = resolveFlushRuntime();
+  } catch (error) {
+    log(`ERROR: ${error.code || "BUSINESS_TIME_RESOLUTION_FAILED"}`);
+    process.exitCode = 1;
+    return;
+  }
   const explicitKey = args.includes("--key") && args[args.indexOf("--key") + 1];
   const isAll = args.includes("--all");
   const isCheckpoint = args.includes("--checkpoint");
@@ -288,7 +304,7 @@ function main() {
     }
   }
 
-  const files = getSessionFiles();
+  const files = getSessionFiles(runtime);
   log(`Found ${files.length} session files`);
 
   if (explicitKey) {
@@ -297,13 +313,15 @@ function main() {
       log(`Session not found: ${explicitKey}`);
       process.exit(1);
     }
-    const result = flushSession(match.path, match.key);
+    const result = flushSession(match.path, match.key, { runtime });
     console.log(JSON.stringify(result, null, 2));
     return;
   }
 
   if (isAll) {
-    const results = files.filter(shouldFlush).map((f) => flushSession(f.path, f.key));
+    const results = files
+      .filter(shouldFlush)
+      .map((f) => flushSession(f.path, f.key, { runtime }));
     console.log(JSON.stringify(results, null, 2));
     return;
   }
@@ -315,7 +333,7 @@ function main() {
 
     const results = [];
     for (const f of targets) {
-      const r = flushSession(f.path, f.key, { targetDate });
+      const r = flushSession(f.path, f.key, { targetDate, runtime });
       results.push(r);
     }
     console.log(JSON.stringify({
@@ -336,7 +354,7 @@ function main() {
       log("No current session found");
       process.exit(0);
     }
-    const result = flushSession(current.path, current.key);
+    const result = flushSession(current.path, current.key, { runtime });
     console.log(JSON.stringify(result, null, 2));
     return;
   }
@@ -347,11 +365,11 @@ function main() {
 
   if (resetSessions.length > 0) {
     // Flush only the most recent reset session
-    const result = flushSession(resetSessions[0].path, resetSessions[0].key);
+    const result = flushSession(resetSessions[0].path, resetSessions[0].key, { runtime });
     console.log(JSON.stringify(result, null, 2));
   } else if (targets.length > 0) {
     // Fallback: flush the most recent old session
-    const result = flushSession(targets[0].path, targets[0].key);
+    const result = flushSession(targets[0].path, targets[0].key, { runtime });
     console.log(JSON.stringify(result, null, 2));
   } else {
     log("No sessions need flushing");
@@ -359,4 +377,15 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = {
+  dateStrFromTs,
+  flushSession,
+  getSessionFiles,
+  main,
+  resolveFlushRuntime,
+  todayStr,
+  validateTargetDate,
+  writeSmartAddFile,
+};
