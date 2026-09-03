@@ -3,12 +3,11 @@
  * Export annotation candidates for archived smart-add raw_log rescue.
  *
  * Read-only by design:
- * - reads memory-engine DB and attached OpenClaw core DB
+ * - reads memory-engine DB and OpenClaw core DB through separate readonly handles
  * - writes only reports/ candidate files
  * - performs no unarchive, category update, delete, quarantine, or reinforce
  */
 
-const Database = require('better-sqlite3');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { homedir } = require('node:os');
 const { dirname, resolve } = require('node:path');
@@ -54,10 +53,6 @@ function timestampForFile(now = new Date()) {
 
 function defaultOutPath(format, now = new Date()) {
   return resolve(process.cwd(), 'reports', `archived-raw-log-rescue-candidates-${timestampForFile(now)}.${format}`);
-}
-
-function escapeSqlString(value) {
-  return String(value).replace(/'/g, "''");
 }
 
 function readablePreview(text, maxLength = 900) {
@@ -116,33 +111,49 @@ function buildWhereClause(keywords) {
   };
 }
 
-function queryCandidates({ engineDbPath, coreDbPath, keywords, limit, offset }) {
+async function queryCandidates({ engineDbPath, coreDbPath, keywords, limit, offset }) {
   if (!existsSync(engineDbPath)) throw new Error(`engine DB not found: ${engineDbPath}`);
   if (!existsSync(coreDbPath)) throw new Error(`core DB not found: ${coreDbPath}`);
 
-  const db = new Database(engineDbPath, { readonly: true, fileMustExist: true });
-  db.pragma('busy_timeout = 5000');
-  db.exec(`ATTACH DATABASE '${escapeSqlString(coreDbPath)}' AS core`);
-  try {
+  const isolatedDbs = await import('../lib/db/isolated-dbs.js');
+  return isolatedDbs.withIsolatedDbSession((session) => {
+    const engineRows = isolatedDbs.withEngineDbIsolated((db) => db.prepare(`
+      SELECT
+        chunk_id, category, confidence, last_confidence_update, hit_count,
+        base_tau, conflict_flag, is_archived
+      FROM memory_confidence
+      WHERE is_archived = 1
+        AND category = 'raw_log'
+    `).all(), { session, coreDbPath, engineDbPath, readonly: true });
     const where = buildWhereClause(keywords);
-    return db.prepare([
-      'SELECT',
-      'mc.chunk_id, mc.category, mc.confidence, mc.last_confidence_update, mc.hit_count,',
-      'mc.base_tau, mc.conflict_flag, mc.is_archived,',
-      'c.path, c.updated_at, LENGTH(c.text) AS text_length, c.text',
-      'FROM memory_confidence mc',
-      'JOIN core.chunks c ON c.id = mc.chunk_id',
-      `WHERE ${where.sql}`,
-      'ORDER BY',
-      "CASE WHEN c.text LIKE '%决定%' OR c.text LIKE '%结论%' THEN 0 ELSE 1 END,",
-      "CASE WHEN c.text LIKE '%偏好%' THEN 0 ELSE 1 END,",
-      "CASE WHEN c.text LIKE '%待办%' THEN 0 ELSE 1 END,",
-      'c.path DESC, LENGTH(c.text) DESC, mc.chunk_id ASC',
-      'LIMIT ? OFFSET ?',
-    ].join(' ')).all(...where.params, limit, offset);
-  } finally {
-    db.close();
-  }
+    const coreRows = isolatedDbs.withCoreDbReadonly((db) => db.prepare(`
+      SELECT
+        c.id, c.path, c.updated_at, LENGTH(c.text) AS text_length, c.text
+      FROM chunks c
+      WHERE c.path LIKE 'memory/smart-add/%'
+        AND (${keywords.map(() => 'c.text LIKE ?').join(' OR ') || '1 = 0'})
+    `).all(...where.params), { session, coreDbPath, engineDbPath });
+    const coreById = new Map(coreRows.map(row => [String(row.id), row]));
+    return engineRows
+      .map(engineRow => {
+        const coreRow = coreById.get(String(engineRow.chunk_id));
+        if (!coreRow) return null;
+        return { ...engineRow, ...coreRow };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (
+        Number(Boolean(!(String(a.text || '').includes('决定') || String(a.text || '').includes('结论'))))
+          - Number(Boolean(!(String(b.text || '').includes('决定') || String(b.text || '').includes('结论'))))
+        || Number(Boolean(!String(a.text || '').includes('偏好')))
+          - Number(Boolean(!String(b.text || '').includes('偏好')))
+        || Number(Boolean(!String(a.text || '').includes('待办')))
+          - Number(Boolean(!String(b.text || '').includes('待办')))
+        || String(b.path || '').localeCompare(String(a.path || ''))
+        || Number(b.text_length || 0) - Number(a.text_length || 0)
+        || String(a.chunk_id || '').localeCompare(String(b.chunk_id || ''))
+      ))
+      .slice(offset, offset + limit);
+  }, { coreDbPath, engineDbPath });
 }
 
 function buildSample(row, { keywords, previewChars }) {
@@ -263,7 +274,7 @@ function renderMarkdown(samples, report) {
   return `${lines.join('\n')}\n`;
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   if (hasFlag(argv, '--help') || hasFlag(argv, '-h')) {
     console.log(`Usage:\n  node bin/export-archived-raw-log-rescue-candidates.cjs [options]\n\nOptions:\n  --limit <n>          Number of candidates to export (default: 100)\n  --offset <n>         Offset into ranked candidates (default: 0)\n  --preview-chars <n>  Preview length (default: 900)\n  --keywords <csv>     Keyword filter CSV (default: ${DEFAULT_KEYWORDS.join(',')})\n  --format <jsonl|md>  Output format (default: jsonl)\n  --out <path>         Output path (default: reports/archived-raw-log-rescue-candidates-*.jsonl)\n  --engine-db <path>   Memory-engine DB path\n  --core-db <path>     OpenClaw core DB path\n\nSafety:\n  Read-only. Does not unarchive, update category, delete, quarantine, reinforce, or write DB.`);
@@ -281,7 +292,7 @@ function main() {
   const coreDbPath = resolve(readFlag(argv, '--core-db', process.env.MEMORY_ENGINE_CORE_DB || DEFAULT_CORE_DB));
 
   const candidatePoolLimit = Math.max(limit * 10, limit);
-  const rows = queryCandidates({ engineDbPath, coreDbPath, keywords, limit: candidatePoolLimit, offset });
+  const rows = await queryCandidates({ engineDbPath, coreDbPath, keywords, limit: candidatePoolLimit, offset });
   const candidatePool = rows.map(row => buildSample(row, { keywords, previewChars }));
   const samples = pickStratifiedSamples(candidatePool, limit);
   mkdirSync(dirname(out), { recursive: true });
@@ -312,4 +323,15 @@ function main() {
   }, null, 2));
 }
 
-main();
+if (require.main === module) {
+  main().catch(error => {
+    console.error(String(error?.message || error));
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  buildWhereClause,
+  main,
+  queryCandidates,
+};

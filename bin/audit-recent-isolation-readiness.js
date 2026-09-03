@@ -89,12 +89,12 @@ async function auditRecentIsolationReadiness(argv = process.argv.slice(2), deps 
   const options = parseArgs(argv);
   if (options.help) return { exitCode: 0, output: usage() };
 
-  const engineDbMod = deps.engineDbMod || await import("../lib/db/engine-db.js");
+  const dbPaths = deps.dbPaths || await import("../lib/db/db-paths.js");
   const isolatedDbs = deps.isolatedDbs || await import("../lib/db/isolated-dbs.js");
   const audit = deps.audit || await import("../lib/recall/hybrid/recent-isolation-readiness-audit.js");
 
-  const coreDbPath = options.coreDbPath || engineDbMod.resolveCoreDbPath();
-  const engineDbPath = options.engineDbPath || engineDbMod.resolveEngineDbPath();
+  const coreDbPath = options.coreDbPath || dbPaths.resolveCoreDbPath();
+  const engineDbPath = options.engineDbPath || dbPaths.resolveEngineDbPath();
   assertDbExists(coreDbPath, "Core");
   assertDbExists(engineDbPath, "Engine");
 

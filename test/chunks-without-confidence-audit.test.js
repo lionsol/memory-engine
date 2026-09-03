@@ -226,15 +226,29 @@ test("generated-smart-add stays out of chunks-without-confidence candidates and 
   });
 });
 
-test("openAuditDb installs a no-write guard", async () => {
+test("openAuditDb opens separate readonly Core and Engine handles", async () => {
   const fixture = createAuditFixtureDbs();
   const mod = await importAuditModule();
   await withAuditEnv(fixture, async () => {
     const db = mod.openAuditDb();
     try {
+      assert.ok(db.coreDb);
+      assert.ok(db.engineDb);
+      assert.deepEqual(
+        db.coreDb.prepare("PRAGMA database_list").all().map(row => row.name),
+        ["main"],
+      );
+      assert.deepEqual(
+        db.engineDb.prepare("PRAGMA database_list").all().map(row => row.name),
+        ["main"],
+      );
       assert.throws(
-        () => db.prepare("INSERT INTO memory_confidence (chunk_id) VALUES ('x')"),
-        /read-only audit refused write SQL/i,
+        () => db.engineDb.prepare("INSERT INTO memory_confidence (chunk_id) VALUES ('x')").run(),
+        /readonly|read-only/i,
+      );
+      assert.throws(
+        () => db.engineDb.prepare("SELECT * FROM chunks").all(),
+        /no such table/i,
       );
     } finally {
       db.close();

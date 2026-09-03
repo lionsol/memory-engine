@@ -7,7 +7,6 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 
 import { openCoreDbReadonly, openEngineDbIsolated } from "../lib/db/isolated-dbs.js";
-import { openEngineDb } from "../lib/db/engine-db.js";
 import {
   assertRecentShadowPrivacy,
   compareRecentShadowRuns,
@@ -104,7 +103,12 @@ function insertConfidence(db, id, {
 
 function openHandles(paths) {
   return withDbEnv(paths, () => ({
-    legacyDb: openEngineDb({ readonly: true }),
+    // Synthetic legacy comparator only; production engine-db no longer attaches Core.
+    legacyDb: (() => {
+      const db = new Database(paths.enginePath, { readonly: true, fileMustExist: true });
+      db.exec(`ATTACH DATABASE '${paths.corePath.replaceAll("'", "''")}' AS core`);
+      return db;
+    })(),
     isolatedCoreDb: openCoreDbReadonly({ coreDbPath: paths.corePath, engineDbPath: paths.enginePath }),
     isolatedEngineDb: openEngineDbIsolated({ coreDbPath: paths.corePath, engineDbPath: paths.enginePath, readonly: true }),
   }));

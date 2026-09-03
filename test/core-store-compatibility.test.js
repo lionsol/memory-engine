@@ -10,7 +10,6 @@ import {
   detectCoreStoreDialect,
   getCoreFtsReference,
 } from "../lib/db/core-store.js";
-import { openEngineDb } from "../lib/db/engine-db.js";
 import { withCoreDbReadonly, withEngineDbIsolated } from "../lib/db/isolated-dbs.js";
 import { createBackfillConfidenceForIndexedChunks } from "../lib/index-sync-runtime.js";
 import { buildIsolatedFtsSql } from "../lib/recall/hybrid/channels/fts-query.js";
@@ -60,7 +59,6 @@ test("current OpenClaw Core store exposes canonical readonly chunks and physical
   const coreDbPath = join(root, "openclaw-agent.sqlite");
   const engineDbPath = join(root, "engine.sqlite");
   createCurrentCoreDb(coreDbPath);
-  new Database(engineDbPath).close();
 
   try {
     withCoreDbReadonly((db) => {
@@ -146,37 +144,49 @@ test("current OpenClaw Core chunks backfill into an empty Engine through canonic
   }
 });
 
-test("attached Engine DB maps current Core chunks while preserving the Core write guard", () => {
-  const root = mkdtempSync(join(tmpdir(), "memory-engine-current-attached-"));
+test("Engine compatibility access is isolated from the readonly Core handle", () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-current-isolated-"));
   const coreDbPath = join(root, "openclaw-agent.sqlite");
   const engineDbPath = join(root, "engine.sqlite");
   createCurrentCoreDb(coreDbPath);
+  new Database(engineDbPath).close();
 
-  let db;
   try {
-    db = openEngineDb({ coreDbPath, engineDbPath, engineDbDir: root });
-    assert.equal(db.prepare("SELECT COUNT(*) AS c FROM chunks").get().c, 2);
-    assert.equal(
-      detectCoreStoreDialect(db, { schema: "core" }).dialect,
-      "openclaw_memory_index",
-    );
+    withCoreDbReadonly((coreDb) => {
+      assert.deepEqual(
+        coreDb.prepare("PRAGMA database_list").all().map(row => String(row.name)),
+        ["main", "temp"],
+      );
+      assert.equal(
+        detectCoreStoreDialect(coreDb, { schema: "main" }).dialect,
+        "openclaw_memory_index",
+      );
+      assert.equal(coreDb.prepare("SELECT COUNT(*) AS c FROM chunks").get().c, 2);
+      assert.throws(
+        () => coreDb.prepare(
+          "UPDATE memory_index_chunks SET text = 'blocked' WHERE id = 'current-1'",
+        ).run(),
+        /readonly|read-only/i,
+      );
+    }, { coreDbPath, engineDbPath });
 
-    db.exec("CREATE TABLE engine_probe (id TEXT PRIMARY KEY)");
-    db.prepare("INSERT INTO engine_probe (id) VALUES ('ok')").run();
-    assert.equal(db.prepare("SELECT COUNT(*) AS c FROM engine_probe").get().c, 1);
+    withEngineDbIsolated((engineDb) => {
+      assert.deepEqual(
+        engineDb.prepare("PRAGMA database_list").all().map(row => String(row.name)),
+        ["main"],
+      );
+      assert.throws(
+        () => engineDb.prepare("SELECT COUNT(*) AS c FROM chunks").get(),
+        /no such table/i,
+      );
+    }, { coreDbPath, engineDbPath, engineDbDir: root, readonly: true });
 
-    assert.throws(
-      () => db.prepare(
-        "UPDATE core.memory_index_chunks SET text = 'blocked' WHERE id = 'current-1'",
-      ).run(),
-      /writes to OpenClaw core DB are blocked/i,
-    );
-    assert.equal(
-      db.prepare("SELECT text FROM chunks WHERE id = 'current-1'").get().text,
-      "alpha current memory",
-    );
+    withEngineDbIsolated((engineDb) => {
+      engineDb.exec("CREATE TABLE engine_probe (id TEXT PRIMARY KEY)");
+      engineDb.prepare("INSERT INTO engine_probe (id) VALUES ('ok')").run();
+      assert.equal(engineDb.prepare("SELECT COUNT(*) AS c FROM engine_probe").get().c, 1);
+    }, { coreDbPath, engineDbPath, engineDbDir: root, readonly: false });
   } finally {
-    if (db?.open) db.close();
     rmSync(root, { recursive: true, force: true });
   }
 });

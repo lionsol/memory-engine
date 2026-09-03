@@ -27,7 +27,7 @@ function usage() {
 Notes:
   - Isolated Recent performance probe is read-only.
   - Default mode is synthetic.
-  - Real mode is opt-in and requires explicit Core and Engine DB paths.
+  - Real mode is retired with the legacy attached-Core comparison and fails closed.
   - It never touches production Recent, runtime capability defaults, or opens DBs writable.`;
 }
 

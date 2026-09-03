@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
 import {
   resolveCoreDbPath,
   resolveEngineDbPath,
-} from "../lib/db/engine-db.js";
+} from "../lib/db/db-paths.js";
 
 const require = createRequire(import.meta.url);
 const checkpointRuntime = require("../lib/checkpoint/runtime.js");

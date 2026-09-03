@@ -44,8 +44,8 @@ function usage() {
       [--concurrency-levels 2,4] [--hash-main-files] [--isolated-snapshot]
 
 Notes:
-  - Isolated Recent rollout readiness audit is read-only.
-  - It compares legacy Recent and guarded isolated Recent across repeated scenarios.
+  - This legacy attached-Core rollout comparison tool is retired and fails closed.
+  - Use isolated read-only checks for current diagnostics.
   - It never outputs raw queries, IDs, text, paths, timestamps, archived JSON, or memory content.
   - It rejects mutation flags such as --apply, --force, --write-db, --delete, --update, --insert, --repair, --migrate, --no-backup.`;
 }
@@ -163,111 +163,8 @@ function exitCodeForDecision(decisionClass) {
 async function auditIsolatedRecentRolloutReadiness(argv = process.argv.slice(2), deps = {}) {
   const options = parseArgs(argv);
   if (options.help) return { exitCode: 0, output: usage() };
-
-  const engineDbMod = deps.engineDbMod || await import("../lib/db/engine-db.js");
-  const isolatedDbs = deps.isolatedDbs || await import("../lib/db/isolated-dbs.js");
-  const audit = deps.audit || await import("../lib/recall/hybrid/recent-rollout-readiness-audit.js");
-
-  const defaultCoreDbPath = typeof engineDbMod.resolveCoreDbPath === "function"
-    ? engineDbMod.resolveCoreDbPath()
-    : null;
-  const defaultEngineDbPath = typeof engineDbMod.resolveEngineDbPath === "function"
-    ? engineDbMod.resolveEngineDbPath()
-    : null;
-  const requestedCoreDbPath = options.coreDbPath || defaultCoreDbPath;
-  const requestedEngineDbPath = options.engineDbPath || defaultEngineDbPath;
-  const coreDbPath = requestedCoreDbPath ? resolvePathOrUri(requestedCoreDbPath) : requestedCoreDbPath;
-  const engineDbPath = requestedEngineDbPath ? resolvePathOrUri(requestedEngineDbPath) : requestedEngineDbPath;
-  if (!coreDbPath || !engineDbPath) {
-    throw new Error("Core and Engine DB paths are required");
-  }
-  let snapshotIdentityVerified = false;
-  if (options.isolatedSnapshot === true && defaultCoreDbPath && defaultEngineDbPath) {
-    const { rejectLiveDatabaseSnapshotIdentity } = await import(
-      "../lib/recall/hybrid/recent-rollout-readiness-audit.js"
-    );
-    const coreCheck = rejectLiveDatabaseSnapshotIdentity(requestedCoreDbPath, [defaultCoreDbPath]);
-    const engineCheck = rejectLiveDatabaseSnapshotIdentity(requestedEngineDbPath, [defaultEngineDbPath]);
-    if (!coreCheck.allowed || !engineCheck.allowed) {
-      const reasons = [];
-      if (!coreCheck.allowed) reasons.push(`core: ${coreCheck.reason}`);
-      if (!engineCheck.allowed) reasons.push(`engine: ${engineCheck.reason}`);
-      throw new Error(
-        `--isolated-snapshot rejected: ${reasons.join(", ")}. `
-        + `Isolated snapshot mode only accepts non-live snapshot files that are identity-distinct from the default databases.`
-      );
-    }
-    snapshotIdentityVerified = true;
-  }
-  assertDbExists(coreDbPath, "Core");
-  assertDbExists(engineDbPath, "Engine");
-
-  let legacyDb;
-  let isolatedCoreDb;
-  let isolatedEngineDb;
-  const openHandles = () => {
-    const previous = {
-      CORE_DB_PATH: process.env.CORE_DB_PATH,
-      ENGINE_DB_PATH: process.env.ENGINE_DB_PATH,
-    };
-    process.env.CORE_DB_PATH = coreDbPath;
-    process.env.ENGINE_DB_PATH = engineDbPath;
-    const nextLegacyDb = engineDbMod.openEngineDb({ readonly: true });
-    const nextIsolatedCoreDb = isolatedDbs.openCoreDbReadonly({ coreDbPath, engineDbPath });
-    const nextIsolatedEngineDb = isolatedDbs.openEngineDbIsolated({ coreDbPath, engineDbPath, readonly: true });
-    return {
-      legacyDb: nextLegacyDb,
-      isolatedCoreDb: nextIsolatedCoreDb,
-      isolatedEngineDb: nextIsolatedEngineDb,
-      close() {
-        if (nextLegacyDb?.open) nextLegacyDb.close();
-        if (nextIsolatedCoreDb?.open) nextIsolatedCoreDb.close();
-        if (nextIsolatedEngineDb?.open) nextIsolatedEngineDb.close();
-        if (previous.CORE_DB_PATH == null) delete process.env.CORE_DB_PATH;
-        else process.env.CORE_DB_PATH = previous.CORE_DB_PATH;
-        if (previous.ENGINE_DB_PATH == null) delete process.env.ENGINE_DB_PATH;
-        else process.env.ENGINE_DB_PATH = previous.ENGINE_DB_PATH;
-      },
-    };
-  };
-
-  try {
-    const handles = openHandles();
-    legacyDb = handles.legacyDb;
-    isolatedCoreDb = handles.isolatedCoreDb;
-    isolatedEngineDb = handles.isolatedEngineDb;
-
-    const report = await audit.runRecentRolloutReadinessAudit({
-      legacyDb,
-      isolatedCoreDb,
-      isolatedEngineDb,
-      coreDbPath,
-      engineDbPath,
-      queries: options.queries,
-      queriesFile: options.queriesFile,
-      deriveLimit: options.deriveLimit,
-      includeNoHitControl: options.includeNoHitControl,
-      warmups: options.warmups,
-      repetitions: options.repetitions,
-      concurrencyLevels: options.concurrencyLevels,
-      openHandles,
-      hashMainFiles: options.hashMainFiles,
-      isolatedSnapshot: options.isolatedSnapshot,
-      snapshotIdentityVerified,
-    });
-
-    const output = JSON.stringify(report, null, 2);
-    if (options.out) audit.writeRecentRolloutReadinessReport(output, options.out);
-    return {
-      exitCode: exitCodeForDecision(report.decision.class),
-      output,
-      report,
-    };
-  } finally {
-    if (legacyDb?.open) legacyDb.close();
-    if (isolatedCoreDb?.open) isolatedCoreDb.close();
-    if (isolatedEngineDb?.open) isolatedEngineDb.close();
-  }
+  const { denyLegacyAttachedCore } = await import("../lib/db/legacy-attached-core.js");
+  denyLegacyAttachedCore();
 }
 
 if (require.main === module) {

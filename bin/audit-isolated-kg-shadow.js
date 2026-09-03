@@ -104,8 +104,8 @@ function usage() {
       [--core-db-path <path>] [--engine-db-path <path>]
 
 Notes:
-  - This tool is a read-only audit harness and never enables production isolatedKg.
-  - It compares legacy KG against guarded isolated KG on the same query corpus.
+  - This legacy attached-Core comparison tool is retired and fails closed.
+  - Use the isolated KG read-only audit surfaces for current diagnostics.
   - It never outputs raw query text, chunk text, paths, kg_data, or raw IDs.
   - It rejects mutation flags such as --apply, --force, --write-db, --delete, --update, --insert, --no-backup.`;
 }
@@ -132,54 +132,8 @@ async function auditIsolatedKgShadow(argv = process.argv.slice(2)) {
   if (options.help) {
     return { exitCode: 0, output: usage() };
   }
-
-  const engineDb = await import("../lib/db/engine-db.js");
-  const isolatedDbs = await import("../lib/db/isolated-dbs.js");
-  const audit = await import("../lib/recall/hybrid/kg-shadow-audit.js");
-
-  const coreDbPath = options.coreDbPath || engineDb.resolveCoreDbPath();
-  const engineDbPath = options.engineDbPath || engineDb.resolveEngineDbPath();
-  audit.validateShadowAuditOptions({ ...options, coreDbPath, engineDbPath });
-  audit.assertShadowAuditPathsExist({ coreDbPath, engineDbPath });
-
-  let legacyDb;
-  let isolatedEngineDb;
-  let isolatedCoreDb;
-  try {
-    legacyDb = withEnvOverride({
-      CORE_DB_PATH: coreDbPath,
-      ENGINE_DB_PATH: engineDbPath,
-    }, () => engineDb.openEngineDb({ readonly: true }));
-    isolatedEngineDb = isolatedDbs.openEngineDbIsolated({ readonly: true, engineDbPath, coreDbPath });
-    isolatedCoreDb = isolatedDbs.openCoreDbReadonly({ coreDbPath, engineDbPath });
-
-    const report = await audit.runKgShadowAudit({
-      legacyDb,
-      isolatedEngineDb,
-      isolatedCoreDb,
-      coreDbPath,
-      engineDbPath,
-      queries: options.queries,
-      queriesFile: options.queriesFile,
-      deriveFromKg: options.deriveFromKg,
-      includeNoHitControl: options.includeNoHitControl,
-      topK: options.topK,
-      likePatternTopN: options.likePatternTopN,
-      minConfidence: options.minConfidence,
-    });
-    const output = JSON.stringify(report, null, 2);
-    if (options.out) audit.writeShadowAuditReport(output, options.out);
-
-    let exitCode = 0;
-    if (report.decision.class === "fail") exitCode = 2;
-    else if (report.decision.class === "inconclusive") exitCode = 3;
-
-    return { exitCode, output, report };
-  } finally {
-    if (legacyDb?.open) legacyDb.close();
-    if (isolatedEngineDb?.open) isolatedEngineDb.close();
-    if (isolatedCoreDb?.open) isolatedCoreDb.close();
-  }
+  const { denyLegacyAttachedCore } = await import("../lib/db/legacy-attached-core.js");
+  denyLegacyAttachedCore();
 }
 
 async function main(argv = process.argv.slice(2)) {

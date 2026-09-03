@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { resolveEngineDbPath } from "../lib/db/engine-db.js";
+import { resolveEngineDbPath } from "../lib/db/db-paths.js";
 
 const HOME = homedir();
 const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));

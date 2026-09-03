@@ -10,7 +10,7 @@ import {
   createDefaultCliRuntime,
   executeMemoryEngineCommand,
 } from "../lib/services/memory-engine-cli-service.js";
-import { resolveEngineDbPath } from "../lib/db/engine-db.js";
+import { resolveEngineDbPath } from "../lib/db/db-paths.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = resolve(repoRoot, "bin", "memory-engine-cli.js");

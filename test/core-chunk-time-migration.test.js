@@ -13,7 +13,7 @@ import {
   extractReliableEventAtFromText,
   inspectCoreChunkTimeMigration,
 } from "../lib/db/core-chunk-time-migration.js";
-import { CORE_WRITE_PROHIBITED, patchWriteGuards } from "../lib/db/core-write-guard.js";
+import { CORE_WRITE_PROHIBITED } from "../lib/db/core-write-guard.js";
 
 function hash(text) {
   return createHash("sha256").update(String(text)).digest("hex");
@@ -206,31 +206,4 @@ test("core chunk time migration apply is prohibited by Core ownership", () => {
   );
   assert.equal(readCoreColumns(fixture.coreDbPath).has("event_at"), false);
   assert.deepEqual(readdirSync(fixture.backupDir), []);
-});
-
-test("ordinary core write guard still blocks core schema changes outside migration path", () => {
-  const fixture = createFixture();
-  const db = new Database(resolve(fixture.root, "engine-guard.sqlite"));
-  try {
-    db.exec(`ATTACH DATABASE '${String(fixture.coreDbPath).replace(/'/g, "''")}' AS core`);
-    patchWriteGuards(db, { message: "blocked core writes in test" });
-    assert.throws(
-      () => db.exec("ALTER TABLE core.chunks ADD COLUMN event_at INTEGER"),
-      /blocked core writes/i,
-    );
-  } finally {
-    db.close();
-  }
-
-  assert.throws(
-    () => applyCoreChunkTimeMigration({
-      coreDbPath: fixture.coreDbPath,
-      engineDbPath: fixture.engineDbPath,
-      sessionsDir: fixture.sessionsDir,
-      backupDir: fixture.backupDir,
-      confirmToken: CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
-      confirmUnrecoverableEventAtNulls: CORE_CHUNK_TIME_MIGRATION_ALLOW_UNRECOVERABLE_EVENT_AT_NULLS_TOKEN,
-    }),
-    error => error?.code === CORE_WRITE_PROHIBITED,
-  );
 });

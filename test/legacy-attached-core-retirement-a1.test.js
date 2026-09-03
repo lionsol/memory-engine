@@ -181,16 +181,39 @@ test("production consumers no longer rely on the attached engine-db boundary", (
     "lib/quality/collect-quality-candidates.js",
     "lib/annotation/export-annotation-candidates.js",
     "lib/runtime/db-runtime.js",
+    "lib/quality/chunks-without-confidence-audit.js",
+    "lib/quality/legacy-singleton-review.js",
+    "lib/quality/confirmed-legacy-singleton-stale-cleanup.js",
+    "lib/quality/confirmed-smart-add-propagation-stale-cleanup.js",
+    "lib/recall/hybrid/recent-performance-probe.js",
+    "lib/recall/hybrid/recent-rollout-readiness-audit.js",
+    "bin/export-archived-raw-log-rescue-candidates.cjs",
   ];
   for (const relativePath of consumerFiles) {
     const source = readFileSync(resolve(repoRoot, relativePath), "utf8");
     assert.doesNotMatch(source, /(?:from|import\()\s*["'][^"']*engine-db\.js["']/);
   }
-  for (const relativePath of consumerFiles.slice(0, 3)) {
+  for (const relativePath of consumerFiles) {
     const source = readFileSync(resolve(repoRoot, relativePath), "utf8");
     assert.doesNotMatch(source, /ATTACH\s+DATABASE/i);
-    assert.doesNotMatch(source, /\bcore\.chunks\b/i);
+    if (relativePath !== "lib/recall/hybrid/recent-performance-probe.js") {
+      assert.doesNotMatch(source, /(?:FROM|JOIN|UPDATE|DELETE\s+FROM|INSERT\s+INTO)\s+core\./i);
+    }
   }
+
+  const engineSource = readFileSync(resolve(repoRoot, "lib/db/engine-db.js"), "utf8");
+  assert.doesNotMatch(engineSource, /ATTACH\s+DATABASE/i);
+  assert.doesNotMatch(engineSource, /patchWriteGuards|assertNoCoreWrites/);
+
+  const retiredProbeSource = readFileSync(
+    resolve(repoRoot, "lib/recall/hybrid/recent-performance-probe.js"),
+    "utf8",
+  );
+  assert.match(retiredProbeSource, /denyLegacyAttachedCore/);
+  assert.ok(
+    retiredProbeSource.indexOf("denyLegacyAttachedCore();")
+      < retiredProbeSource.indexOf("validateRealModeOptions(options)"),
+  );
 });
 
 test("independent DB path resolver preserves the legacy resolver contract", async () => {

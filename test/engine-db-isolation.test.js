@@ -27,7 +27,7 @@ function createCoreDb(corePath) {
   }
 }
 
-test("engine DB writes stay in plugin DB while core DB remains readonly", async () => {
+test("engine DB compatibility handle is Engine-only while Core stays independently readonly", async () => {
   const root = mkdtempSync(resolve(tmpdir(), "memory-engine-db-"));
   const corePath = resolve(root, "core.sqlite");
   const engineDir = resolve(root, "engine");
@@ -47,8 +47,14 @@ test("engine DB writes stay in plugin DB while core DB remains readonly", async 
 
     withEngineDb((db) => {
       ensureMemoryEngineTables(db);
-      const coreRow = db.prepare("SELECT id FROM chunks WHERE id = ?").get("chunk-1");
-      assert.equal(coreRow?.id, "chunk-1");
+      assert.deepEqual(
+        db.prepare("PRAGMA database_list").all().map(row => row.name),
+        ["main"],
+      );
+      assert.throws(
+        () => db.prepare("SELECT id FROM core.chunks WHERE id = ?").get("chunk-1"),
+        /no such table/i,
+      );
 
       db.prepare([
         "INSERT INTO memory_events",
@@ -58,7 +64,7 @@ test("engine DB writes stay in plugin DB while core DB remains readonly", async 
 
       assert.throws(
         () => db.prepare("DELETE FROM core.chunks WHERE id = ?").run("chunk-1"),
-        /blocked|readonly|query_only/i,
+        /no such table/i,
       );
     });
 

@@ -28,8 +28,8 @@ function usage() {
       [--query <text>] [--queries-file <path>] [--derive-limit <n>]
 
 Notes:
-  - Isolated Recent shadow audit is read-only.
-  - It compares legacy Recent and guarded isolated Recent on the same DB snapshot.
+  - This legacy attached-Core comparison tool is retired and fails closed.
+  - Use the isolated Recent audit surfaces for current read-only diagnostics.
   - It rejects mutation flags such as --apply, --force, --write-db, --delete, --update, --insert, --repair, --migrate, --no-backup.
   - It never outputs raw queries, IDs, paths, text, timestamps, archived JSON, or memory content.`;
 }
@@ -130,48 +130,8 @@ function withResolvedEnvPaths(coreDbPath, engineDbPath, run) {
 async function auditIsolatedRecentShadow(argv = process.argv.slice(2), deps = {}) {
   const options = parseArgs(argv);
   if (options.help) return { exitCode: 0, output: usage() };
-
-  const engineDbMod = deps.engineDbMod || await import("../lib/db/engine-db.js");
-  const isolatedDbs = deps.isolatedDbs || await import("../lib/db/isolated-dbs.js");
-  const audit = deps.audit || await import("../lib/recall/hybrid/recent-shadow-audit.js");
-
-  const coreDbPath = options.coreDbPath || engineDbMod.resolveCoreDbPath();
-  const engineDbPath = options.engineDbPath || engineDbMod.resolveEngineDbPath();
-  assertDbExists(coreDbPath, "Core");
-  assertDbExists(engineDbPath, "Engine");
-
-  let legacyDb;
-  let isolatedCoreDb;
-  let isolatedEngineDb;
-  try {
-    legacyDb = withResolvedEnvPaths(coreDbPath, engineDbPath, () => engineDbMod.openEngineDb({
-      readonly: true,
-    }));
-    isolatedCoreDb = isolatedDbs.openCoreDbReadonly({ coreDbPath, engineDbPath });
-    isolatedEngineDb = isolatedDbs.openEngineDbIsolated({ coreDbPath, engineDbPath, readonly: true });
-    const report = await audit.runRecentShadowAudit({
-      legacyDb,
-      isolatedCoreDb,
-      isolatedEngineDb,
-      coreDbPath,
-      engineDbPath,
-      queries: options.queries,
-      queriesFile: options.queriesFile,
-      deriveLimit: options.deriveLimit,
-      includeNoHitControl: true,
-    });
-    const output = JSON.stringify(report, null, 2);
-    if (options.out) audit.writeRecentShadowReport(output, options.out);
-    return {
-      exitCode: exitCodeForDecision(report.decision.class),
-      output,
-      report,
-    };
-  } finally {
-    if (legacyDb?.open) legacyDb.close();
-    if (isolatedCoreDb?.open) isolatedCoreDb.close();
-    if (isolatedEngineDb?.open) isolatedEngineDb.close();
-  }
+  const { denyLegacyAttachedCore } = await import("../lib/db/legacy-attached-core.js");
+  denyLegacyAttachedCore();
 }
 
 if (require.main === module) {

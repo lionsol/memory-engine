@@ -73,7 +73,7 @@ test("CLI help, parser, default resolver injection, and mutation flag rejection"
   try {
     const { coreDbPath, engineDbPath } = createFixture(root);
     const result = await auditRecentIsolationReadiness([], {
-      engineDbMod: {
+      dbPaths: {
         resolveCoreDbPath: () => coreDbPath,
         resolveEngineDbPath: () => engineDbPath,
       },

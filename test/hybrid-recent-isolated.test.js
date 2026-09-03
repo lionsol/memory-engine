@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { openCoreDbReadonly, openEngineDbIsolated } from "../lib/db/isolated-dbs.js";
-import { openEngineDb } from "../lib/db/engine-db.js";
 import { collectRecentCandidates } from "../lib/recall/hybrid/channels/recent.js";
 import {
   createCandidateCounts,
@@ -123,7 +122,12 @@ function insertConfidence(db, {
 
 function openHandles(paths) {
   return withDbEnv(paths, () => ({
-    legacyDb: openEngineDb({ readonly: true }),
+    // Synthetic legacy comparison handle; production engine-db is Engine-only.
+    legacyDb: (() => {
+      const db = new Database(paths.enginePath, { readonly: true, fileMustExist: true });
+      db.exec(`ATTACH DATABASE '${paths.corePath.replaceAll("'", "''")}' AS core`);
+      return db;
+    })(),
     isolatedCoreDb: openCoreDbReadonly({ coreDbPath: paths.corePath, engineDbPath: paths.enginePath }),
     isolatedEngineDb: openEngineDbIsolated({ readonly: true, coreDbPath: paths.corePath, engineDbPath: paths.enginePath }),
   }));
