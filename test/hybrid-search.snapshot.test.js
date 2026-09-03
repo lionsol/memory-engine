@@ -144,7 +144,7 @@ const EXPECTED_SNAPSHOT = `{
     "recent_canary_scope_class": null,
     "recent_canary_sampled": false,
     "recent_canary_shadow_executed": false,
-    "recent_canary_served_mode": "legacy",
+    "recent_canary_served_mode": "none",
     "recent_canary_policy_error": false,
     "recent_runtime_mode": "legacy_fallback",
     "recent_rollout_scope": "none",

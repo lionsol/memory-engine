@@ -153,7 +153,9 @@ test("hybrid recent canary defaults off and explicit off matches default behavio
 
   assert.equal(baseResult.debug.recent_canary_mode, "off");
   assert.equal(baseResult.debug.recent_canary_shadow_executed, false);
+  assert.equal(baseResult.debug.recent_canary_served_mode, "isolated");
   assert.equal(offResult.debug.recent_canary_mode, "off");
+  assert.equal(offResult.debug.recent_canary_served_mode, "isolated");
   assert.deepEqual(baseResult.results, offResult.results);
   assert.deepEqual(baseResult.channels, offResult.channels);
   assert.deepEqual(baseResult.channel_sizes, offResult.channel_sizes);
@@ -171,6 +173,7 @@ test("hybrid recent canary provider errors fail closed without shadow queries", 
   assert.equal(result.debug.recent_canary_mode, "off");
   assert.equal(result.debug.recent_canary_policy_error, true);
   assert.equal(result.debug.recent_canary_shadow_executed, false);
+  assert.equal(result.debug.recent_canary_served_mode, "isolated");
   assert.equal(result.debug.recent_canary_isolated_core_query_count ?? 0, 0);
   assert.equal(result.debug.recent_canary_isolated_engine_query_count ?? 0, 0);
 });
@@ -193,9 +196,10 @@ test("hybrid recent canary shadow withholds retired legacy results", async () =>
   const offResult = await hybridSearch("query", { topK: 5 }, offFixture.runtime);
   const shadowResult = await hybridSearch("query", { topK: 5 }, shadowFixture.runtime);
 
+  assert.equal(offResult.debug.recent_canary_served_mode, "none");
   assert.equal(shadowResult.debug.recent_canary_mode, "shadow");
   assert.equal(shadowResult.debug.recent_canary_shadow_executed, true);
-  assert.equal(shadowResult.debug.recent_canary_served_mode, "legacy");
+  assert.equal(shadowResult.debug.recent_canary_served_mode, "none");
   assert.equal(shadowResult.debug.recent_canary_classification, "mismatch_counts");
   assert.deepEqual(shadowResult.results, offResult.results);
   assert.deepEqual(shadowResult.channels, offResult.channels);
@@ -220,7 +224,7 @@ test("hybrid recent canary shadow returns no recent candidates when legacy servi
   const result = await hybridSearch("query", { topK: 5 }, shadowFixture.runtime);
   assert.deepEqual(result.results, []);
   assert.equal(result.pool, 0);
-  assert.equal(result.debug.recent_canary_served_mode, "legacy");
+  assert.equal(result.debug.recent_canary_served_mode, "none");
   assert.equal(result.debug.recent_canary_classification, "mismatch_counts");
 });
 
@@ -236,7 +240,7 @@ test("hybrid recent canary shadow does not serve legacy results after isolated e
   assert.equal(result.results.some(item => item.id === "legacy-1".slice(0, 16)), false);
   assert.equal(result.debug.recent_canary_classification, "isolated_error");
   assert.equal(result.debug.recent_canary_isolated_error, true);
-  assert.equal(result.debug.recent_canary_served_mode, "legacy");
+  assert.equal(result.debug.recent_canary_served_mode, "none");
   assert.equal(result.debug.recent_canary_legacy_core_query_count, 0);
   assert.equal(result.debug.recent_canary_legacy_engine_query_count, 0);
 });

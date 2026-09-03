@@ -84,7 +84,7 @@ test("recent canary shadow comparison classifies mismatches, guarded fallback, a
   }).classification, "isolated_error");
 });
 
-test("recent canary shadow serves legacy state only and keeps isolated-only ids out of live context", async () => {
+test("recent canary shadow keeps legacy comparison state out of production serving", async () => {
   const candidateCounts = createCandidateCounts();
   const debug = createHybridDebug({
     rawQuery: "query",
@@ -105,7 +105,7 @@ test("recent canary shadow serves legacy state only and keeps isolated-only ids 
     warnHybridSearchOnce() {},
   };
 
-  await executeRecentCanaryShadow(liveCtx, {
+  const shadow = await executeRecentCanaryShadow(liveCtx, {
     async collectRecentCandidates(localCtx) {
       localCtx.debug.recent_access_mode = localCtx.recentAccessMode;
       if (localCtx.recentAccessMode === "legacy") {
@@ -132,7 +132,8 @@ test("recent canary shadow serves legacy state only and keeps isolated-only ids 
 
   assert.deepEqual(liveCtx.channels.recent.map(item => item.id), ["legacy-1"]);
   assert.equal(JSON.stringify(liveCtx.channels).includes("isolated-1"), false);
-  assert.equal(liveCtx.debug.recent_canary_served_mode, "legacy");
+  assert.equal(shadow.served_mode, "none");
+  assert.equal(liveCtx.debug.recent_canary_served_mode, "none");
   assert.equal(liveCtx.debug.recent_canary_shadow_executed, true);
   assert.equal(liveCtx.debug.recent_canary_classification, "mismatch_counts");
   assert.equal(liveCtx.debug.recent_canary_legacy_core_query_count, 1);
