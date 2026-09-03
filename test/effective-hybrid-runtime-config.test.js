@@ -135,6 +135,148 @@ test("effective retrieval sections exclude unrelated host configuration", () => 
   assert.equal(Object.hasOwn(config, "unrelatedPlugin"), false);
 });
 
+test("invalid hybrid retrieval limits fail closed and use canonical defaults", () => {
+  const result = resolveEffectiveHybridRuntimeConfig({
+    memoryEngineConfig: {
+      recall: {
+        vectorTopK: "30",
+        ftsTopK: 0,
+        likePatternTopN: 3,
+        likeTopK: Number.NaN,
+        recentTopK: 1.5,
+        recentRerankTopK: null,
+        recentFallbackTopK: {},
+      },
+      ranking: {
+        rrfK: Number.POSITIVE_INFINITY,
+      },
+    },
+  });
+
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.errors, [
+    "invalid_integer:memoryEngineConfig.recall.ftsTopK",
+    "invalid_integer:memoryEngineConfig.recall.likePatternTopN",
+    "invalid_integer:memoryEngineConfig.recall.likeTopK",
+    "invalid_integer:memoryEngineConfig.recall.recentFallbackTopK",
+    "invalid_integer:memoryEngineConfig.recall.recentRerankTopK",
+    "invalid_integer:memoryEngineConfig.recall.recentTopK",
+    "invalid_integer:memoryEngineConfig.recall.vectorTopK",
+    "invalid_number:memoryEngineConfig.ranking.rrfK",
+  ]);
+  assert.deepEqual({
+    vectorTopK: result.hybridRetrieval.recall.vectorTopK,
+    ftsTopK: result.hybridRetrieval.recall.ftsTopK,
+    likePatternTopN: result.hybridRetrieval.recall.likePatternTopN,
+    likeTopK: result.hybridRetrieval.recall.likeTopK,
+    recentTopK: result.hybridRetrieval.recall.recentTopK,
+    recentRerankTopK: result.hybridRetrieval.recall.recentRerankTopK,
+    recentFallbackTopK: result.hybridRetrieval.recall.recentFallbackTopK,
+    rrfK: result.hybridRetrieval.ranking.rrfK,
+  }, {
+    vectorTopK: 30,
+    ftsTopK: 20,
+    likePatternTopN: 8,
+    likeTopK: 30,
+    recentTopK: 120,
+    recentRerankTopK: 20,
+    recentFallbackTopK: 20,
+    rrfK: 60,
+  });
+});
+
+test("valid hybrid retrieval limits preserve explicit numeric values", () => {
+  const result = resolveEffectiveHybridRuntimeConfig({
+    memoryEngineConfig: {
+      recall: {
+        vectorTopK: 1,
+        ftsTopK: 50,
+        likePatternTopN: 4,
+        likeTopK: 2,
+        recentTopK: 3,
+        recentRerankTopK: 4,
+        recentFallbackTopK: 5,
+      },
+      ranking: { rrfK: 0.5 },
+    },
+  });
+
+  assert.equal(result.valid, true, result.errors.join(", "));
+  assert.deepEqual({
+    vectorTopK: result.hybridRetrieval.recall.vectorTopK,
+    ftsTopK: result.hybridRetrieval.recall.ftsTopK,
+    likePatternTopN: result.hybridRetrieval.recall.likePatternTopN,
+    likeTopK: result.hybridRetrieval.recall.likeTopK,
+    recentTopK: result.hybridRetrieval.recall.recentTopK,
+    recentRerankTopK: result.hybridRetrieval.recall.recentRerankTopK,
+    recentFallbackTopK: result.hybridRetrieval.recall.recentFallbackTopK,
+    rrfK: result.hybridRetrieval.ranking.rrfK,
+  }, {
+    vectorTopK: 1,
+    ftsTopK: 50,
+    likePatternTopN: 4,
+    likeTopK: 2,
+    recentTopK: 3,
+    recentRerankTopK: 4,
+    recentFallbackTopK: 5,
+    rrfK: 0.5,
+  });
+});
+
+test("malformed hybrid sections fail closed without coercing their fields", () => {
+  const result = resolveEffectiveHybridRuntimeConfig({
+    memoryEngineConfig: {
+      recall: [],
+      ranking: null,
+    },
+  });
+
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.errors, [
+    "invalid_object:memoryEngineConfig.ranking",
+    "invalid_object:memoryEngineConfig.recall",
+  ]);
+  assert.equal(result.hybridRetrieval.recall.vectorTopK, 30);
+  assert.equal(result.hybridRetrieval.ranking.rrfK, 60);
+});
+
+test("every hybrid breadth field rejects explicit non-contract values", () => {
+  const fields = [
+    ["vectorTopK", 30],
+    ["ftsTopK", 20],
+    ["likePatternTopN", 8],
+    ["likeTopK", 30],
+    ["recentTopK", 120],
+    ["recentRerankTopK", 20],
+    ["recentFallbackTopK", 20],
+  ];
+  const invalidValues = [null, "5", 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, {}, []];
+
+  for (const [field, fallback] of fields) {
+    for (const value of invalidValues) {
+      const result = resolveEffectiveHybridRuntimeConfig({
+        memoryEngineConfig: { recall: { [field]: value } },
+      });
+      assert.equal(result.valid, false, `${field}=${String(value)}`);
+      assert.equal(
+        result.errors.includes(`invalid_integer:memoryEngineConfig.recall.${field}`),
+        true,
+        `${field}=${String(value)}`,
+      );
+      assert.equal(result.hybridRetrieval.recall[field], fallback, `${field}=${String(value)}`);
+    }
+  }
+
+  for (const value of [null, "5", 0, -1, Number.NaN, Number.POSITIVE_INFINITY, {}, []]) {
+    const result = resolveEffectiveHybridRuntimeConfig({
+      memoryEngineConfig: { ranking: { rrfK: value } },
+    });
+    assert.equal(result.valid, false, `rrfK=${String(value)}`);
+    assert.equal(result.errors.includes("invalid_number:memoryEngineConfig.ranking.rrfK"), true);
+    assert.equal(result.hybridRetrieval.ranking.rrfK, 60);
+  }
+});
+
 test("environment retrieval overrides are normalized into the effective config", () => {
   const previousMin = process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
   const previousLexical = process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;

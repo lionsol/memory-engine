@@ -428,6 +428,59 @@ test("hybridSearch minConfidence default and override come from unified config",
   assert.equal(overrideResult.debug.min_confidence, 0.22);
 });
 
+test("hybridSearch consumes normalized candidate limits instead of coercing raw config", async () => {
+  const limits = [];
+  const result = await hybridSearch("x", { topK: 1 }, {
+    withHybridDbAccessScope: withFakeDbScope,
+    calcRealtimeConf: row => row.confidence,
+    cfg: {
+      memoryEngine: {
+        recall: {
+          vectorTopK: "7",
+          ftsTopK: 0,
+          likePatternTopN: 3,
+          likeTopK: 9,
+          recentTopK: 1.5,
+          recentRerankTopK: 4,
+          recentFallbackTopK: 5,
+        },
+        ranking: { rrfK: "2" },
+      },
+    },
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async (_query, options) => {
+          limits.push(options.limit);
+          return { entries: [] };
+        },
+      },
+    }),
+  });
+
+  assert.deepEqual(limits, [30]);
+  assert.equal(result.debug.min_confidence, 0.15);
+
+  const validLimits = [];
+  await hybridSearch("x", { topK: 1 }, {
+    withHybridDbAccessScope: withFakeDbScope,
+    calcRealtimeConf: row => row.confidence,
+    cfg: {
+      memoryEngine: {
+        recall: { vectorTopK: 7 },
+      },
+    },
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async (_query, options) => {
+          validLimits.push(options.limit);
+          return { entries: [] };
+        },
+      },
+    }),
+  });
+  assert.deepEqual(validLimits, [7]);
+});
+
 test("hybridSearch captures bounded channel provenance without changing result order or scores", async () => {
   const ids = Array.from({ length: 33 }, (_, index) => `c${String(index).padStart(15, "0")}`);
   const confidenceRows = ids.map(id => ({

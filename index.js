@@ -152,6 +152,7 @@ export default definePluginEntry({
         kgFailClosedCanary,
         recentFailClosedMode,
         recentFailClosedCanary,
+        hybridRetrieval: effectiveRuntimeConfig.hybridRetrieval,
       },
       telemetry: {
         recordMemoryEvent,

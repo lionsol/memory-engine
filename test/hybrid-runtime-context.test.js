@@ -77,7 +77,13 @@ test("grouped runtime drives both search tool surfaces through one context", asy
       getMemorySearchManager: noop,
     },
     retrievalPolicy: {
-      apiConfig: { marker: true },
+      apiConfig: {
+        marker: true,
+        memoryEngine: {
+          recall: { vectorTopK: 41 },
+          ranking: { rrfK: 2.5 },
+        },
+      },
       calcRealtimeConf: noop,
       syncIndexIfNeeded: noop,
       categoryMap: { raw_log: {} },
@@ -108,6 +114,8 @@ test("grouped runtime drives both search tool surfaces through one context", asy
   assert.equal(calls.length, 2);
   assert.equal(Object.hasOwn(calls[0].runtime, "withDb"), false);
   assert.equal(calls[0].runtime.cfg, context.retrievalPolicy.apiConfig);
+  assert.equal(calls[0].runtime.hybridRetrieval.recall.vectorTopK, 41);
+  assert.equal(calls[0].runtime.hybridRetrieval.ranking.rrfK, 2.5);
 });
 
 test("observation uses telemetry group and resolves tool traffic origin", () => {

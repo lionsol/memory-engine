@@ -10,12 +10,13 @@ import {
 } from "../lib/runtime/config-validation.js";
 import { createMemoryEngineRuntimeAssembly } from "../lib/runtime/assembly.js";
 
-function createAssembly(pluginConfig = {}) {
+function createAssembly(pluginConfig = {}, apiConfig = null) {
   const root = mkdtempSync(join(tmpdir(), "memory-engine-runtime-config-validation-"));
   return {
     root,
     assembly: createMemoryEngineRuntimeAssembly({
       pluginConfig,
+      apiConfig,
       pathOverrides: {
         homeDir: root,
         workspaceDir: join(root, "workspace"),
@@ -87,6 +88,40 @@ test("invalid startup validation emits one bounded logger warning", () => {
     assert.match(warnings[0], /invalid_boolean:autoRecall\.enabled/);
     assert.equal(warnings[0].includes("private-secret-value"), false);
     assert.equal(warnings[0].includes("private-agent"), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("invalid hybrid limits reach the startup warning without raw values", () => {
+  const { root, assembly } = createAssembly({}, {
+    memoryEngine: {
+      recall: {
+        vectorTopK: "private-secret-value",
+        ftsTopK: 0,
+      },
+      ranking: { rrfK: Number.POSITIVE_INFINITY },
+    },
+  });
+  const warnings = [];
+  try {
+    assert.equal(assembly.config.validation.valid, false);
+    assert.deepEqual(assembly.config.validation.errors, [
+      "invalid_integer:memoryEngineConfig.recall.ftsTopK",
+      "invalid_integer:memoryEngineConfig.recall.vectorTopK",
+      "invalid_number:memoryEngineConfig.ranking.rrfK",
+    ]);
+    assert.equal(emitRuntimeConfigValidationWarning(assembly.config.validation, {
+      logger: { warn: message => warnings.push(message) },
+      consoleWarn: () => {
+        throw new Error("console fallback must not be called when logger exists");
+      },
+    }), true);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /invalid_integer:memoryEngineConfig\.recall\.ftsTopK/);
+    assert.match(warnings[0], /invalid_integer:memoryEngineConfig\.recall\.vectorTopK/);
+    assert.match(warnings[0], /invalid_number:memoryEngineConfig\.ranking\.rrfK/);
+    assert.equal(warnings[0].includes("private-secret-value"), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
