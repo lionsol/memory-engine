@@ -651,7 +651,8 @@ test("malformed threshold containers block lower aliases and preserve confidence
       },
     });
     assert.equal(malformedAutoRecall.valid, false);
-    assert.ok(malformedAutoRecall.errors.includes("invalid_object:apiConfig.autoRecall"));
+    assert.ok(malformedAutoRecall.errors.includes("invalid_object:autoRecall"));
+    assert.equal(malformedAutoRecall.errors.includes("invalid_object:apiConfig.autoRecall"), false);
     assert.equal(malformedAutoRecall.hybridRetrieval.effectiveMinConfidence, 0.15);
     assert.equal(malformedAutoRecall.hybridRetrieval.effectiveLexicalConfidenceThreshold, 0.7);
 
@@ -671,6 +672,27 @@ test("malformed threshold containers block lower aliases and preserve confidence
     if (previousLexical === undefined) delete process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;
     else process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = previousLexical;
   }
+});
+
+test("malformed lower-priority AutoRecall remains observable without taking precedence", () => {
+  const lowerMalformed = resolveEffectiveHybridRuntimeConfig({
+    pluginConfig: { autoRecall: { enabled: false } },
+    pluginEntryConfig: { autoRecall: "bad" },
+  });
+  assert.equal(lowerMalformed.valid, false);
+  assert.deepEqual(lowerMalformed.autoRecall.enabled, false);
+  assert.ok(lowerMalformed.errors.includes("invalid_object:autoRecall"));
+  assert.equal(lowerMalformed.errors.includes("invalid_object:apiConfig.autoRecall"), false);
+
+  const higherEnabled = resolveEffectiveHybridRuntimeConfig({
+    pluginConfig: { autoRecall: { enabled: true } },
+    pluginEntryConfig: { autoRecall: "bad" },
+    apiConfig: { autoRecall: { enabled: false } },
+  });
+  assert.equal(higherEnabled.valid, false);
+  assert.equal(higherEnabled.autoRecall.enabled, true);
+  assert.ok(higherEnabled.errors.includes("invalid_object:autoRecall"));
+  assert.equal(higherEnabled.errors.includes("invalid_object:apiConfig.autoRecall"), false);
 });
 
 test("valid higher-priority plugin values survive malformed lower roots", () => {

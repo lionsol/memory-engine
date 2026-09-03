@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { createMemoryEngineRuntimeAssembly } from "../lib/runtime/assembly.js";
 import { createMemoryEngineConfigContext } from "../lib/runtime/config-context.js";
 import { createDefaultCliRuntime } from "../lib/services/memory-engine-cli-service.js";
+import { gateThresholdForCategory } from "../lib/memory-confidence.js";
 
 function createCoreDb(path, id = null) {
   const db = new Database(path);
@@ -164,6 +165,43 @@ test("runtime assembly exposes a frozen valid-config validation status", () => {
     });
     assert.equal(Object.isFrozen(assembly.config.validation), true);
     assert.equal(Object.isFrozen(assembly.config.validation.errors), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runtime assembly gives AutoRecall category gates sanitized confidence defaults", () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-auto-recall-config-safety-"));
+  try {
+    const context = createMemoryEngineConfigContext({
+      apiConfig: {
+        config: {
+          memoryEngine: {
+            confidence: "bad",
+          },
+        },
+      },
+      pathOverrides: {
+        homeDir: root,
+        workspaceDir: join(root, "workspace"),
+        coreDbPath: join(root, "core.sqlite"),
+        engineDbPath: join(root, "engine.sqlite"),
+        lancedbDir: join(root, "lancedb"),
+      },
+      env: {},
+    });
+
+    assert.equal(context.config.effectiveRuntimeConfig.valid, false);
+    assert.equal(context.config.memoryEngineConfig.confidence.min, 0.15);
+    assert.equal(Object.hasOwn(context.config.memoryEngineConfig.confidence, "0"), false);
+    assert.deepEqual(
+      gateThresholdForCategory("raw_log", null, context.config.memoryEngineConfig),
+      { final_score_min: 0.05, min_coverage: null },
+    );
+    assert.deepEqual(
+      gateThresholdForCategory("episodic", null, context.config.memoryEngineConfig),
+      { final_score_min: 0.02, min_coverage: null },
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
