@@ -9,6 +9,7 @@ import { appendSmartAdd } from "./smart-add.js";
 import { getSharedMemoryManager } from "./memory-manager-runtime.js";
 import runtimePaths from "./lib/runtime/paths.cjs";
 import { createMemoryEngineRuntimeAssembly } from "./lib/runtime/assembly.js";
+import { emitRuntimeConfigValidationWarning } from "./lib/runtime/config-validation.js";
 import { insertMemoryEvent } from "./lib/db/events.js";
 import { ensureMemoryEngineTables, migrateLegacyMemoryEventsFromCore } from "./lib/db/schema.js";
 import { getCanonicalMemoryById } from "./lib/canonical/read-adapter.js";
@@ -50,6 +51,9 @@ export default definePluginEntry({
     const assembly = createMemoryEngineRuntimeAssembly({
       apiConfig: api?.config || null,
       pluginConfig: api?.pluginConfig || null,
+    });
+    emitRuntimeConfigValidationWarning(assembly.config.validation, {
+      logger: api?.logger,
     });
     const { paths, config, database, lancedb } = assembly;
     const {

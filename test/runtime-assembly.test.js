@@ -99,6 +99,76 @@ test("runtime assembly resolves paths and effective config once per entrypoint",
   }
 });
 
+test("runtime assembly exposes a frozen invalid-config validation status", () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-validation-status-invalid-"));
+  try {
+    const assembly = createMemoryEngineRuntimeAssembly({
+      pluginConfig: {
+        autoRecall: {
+          enabled: "yes",
+          topK: "not-a-number",
+          agentAllowlist: ["edi", 7],
+        },
+      },
+      pathOverrides: {
+        homeDir: root,
+        workspaceDir: join(root, "workspace"),
+        coreDbPath: join(root, "core.sqlite"),
+        engineDbPath: join(root, "engine.sqlite"),
+        lancedbDir: join(root, "lancedb"),
+      },
+      env: {},
+    });
+
+    const validation = assembly.config.validation;
+    assert.deepEqual(validation, {
+      code: "MEMORY_ENGINE_CONFIG_INVALID",
+      valid: false,
+      fallback_applied: true,
+      error_count: 3,
+      errors: [
+        "invalid_array:autoRecall.agentAllowlist",
+        "invalid_boolean:autoRecall.enabled",
+        "invalid_top_k:autoRecall.topK",
+      ],
+    });
+    assert.equal(Object.isFrozen(validation), true);
+    assert.equal(Object.isFrozen(validation.errors), true);
+    assert.equal(assembly.config.effectiveRuntimeConfig.autoRecall.enabled, false);
+    assert.equal(assembly.config.effectiveRuntimeConfig.autoRecall.topK, 5);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runtime assembly exposes a frozen valid-config validation status", () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-validation-status-valid-"));
+  try {
+    const assembly = createMemoryEngineRuntimeAssembly({
+      pathOverrides: {
+        homeDir: root,
+        workspaceDir: join(root, "workspace"),
+        coreDbPath: join(root, "core.sqlite"),
+        engineDbPath: join(root, "engine.sqlite"),
+        lancedbDir: join(root, "lancedb"),
+      },
+      env: {},
+    });
+
+    assert.deepEqual(assembly.config.validation, {
+      code: "MEMORY_ENGINE_CONFIG_VALID",
+      valid: true,
+      fallback_applied: false,
+      error_count: 0,
+      errors: [],
+    });
+    assert.equal(Object.isFrozen(assembly.config.validation), true);
+    assert.equal(Object.isFrozen(assembly.config.validation.errors), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("config context applies explicit, env, config, and default timezone precedence", () => {
   const root = mkdtempSync(join(tmpdir(), "memory-engine-timezone-precedence-"));
   const pathOverrides = {

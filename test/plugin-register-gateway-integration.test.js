@@ -46,7 +46,7 @@ function createCoreDb(path) {
   }
 }
 
-test("plugin register keeps product tools and hooks without governance gateway methods", async (t) => {
+test("plugin register warns once before registering product surfaces for invalid config", async (t) => {
   if (!existsSync(OPENCLAW_PLUGIN_ENTRY) || !existsSync(OPENCLAW_MEMORY_RUNTIME)) {
     t.skip(`OpenClaw plugin SDK unavailable under ${OPENCLAW_ROOT}`);
     return;
@@ -60,6 +60,8 @@ test("plugin register keeps product tools and hooks without governance gateway m
   };
   const originalLog = console.log;
   const logs = [];
+  const validationWarnings = [];
+  const startupEvents = [];
 
   try {
     process.env.HOME = root;
@@ -95,20 +97,31 @@ test("plugin register keeps product tools and hooks without governance gateway m
     };
     const api = {
       config: apiConfig,
-      pluginConfig: {},
+      pluginConfig: {
+        autoRecall: {
+          enabled: "invalid-config-value",
+        },
+      },
       runtime: {
         version: "test-openclaw-runtime",
         config: { current: () => apiConfig },
       },
-      logger: { warn() {} },
+      logger: {
+        warn(message) {
+          startupEvents.push("logger.warn");
+          validationWarnings.push(message);
+        },
+      },
       registerGatewayMethod(name, handler, options) {
         gatewayMethods.set(name, { handler, options });
       },
       registerMemoryPromptSupplement() {},
       registerTool(tool, options) {
+        startupEvents.push("registerTool");
         tools.push(options?.name || tool.name);
       },
       registerCommand(command) {
+        startupEvents.push("registerCommand");
         assert.equal(arguments.length, 1);
         assert.equal(typeof command, "object");
         assert.notEqual(command, null);
@@ -116,6 +129,7 @@ test("plugin register keeps product tools and hooks without governance gateway m
         commands.push(command);
       },
       on(name) {
+        startupEvents.push(`on:${name}`);
         hooks.push(name);
       },
     };
@@ -123,6 +137,12 @@ test("plugin register keeps product tools and hooks without governance gateway m
     plugin.register(api);
     await new Promise(resolve => setTimeout(resolve, 100));
 
+    assert.equal(validationWarnings.length, 1);
+    assert.match(validationWarnings[0], /MEMORY_ENGINE_CONFIG_INVALID/);
+    assert.match(validationWarnings[0], /fallback_applied=true/);
+    assert.match(validationWarnings[0], /error_count=1/);
+    assert.match(validationWarnings[0], /invalid_boolean:autoRecall\.enabled/);
+    assert.equal(startupEvents[0], "logger.warn");
     assert.deepEqual([...gatewayMethods.keys()], []);
     assert.deepEqual(tools.sort(), ["memory_engine", "memory_engine_get", "memory_engine_search"]);
     assert.deepEqual(hooks, ["before_tool_call"]);
