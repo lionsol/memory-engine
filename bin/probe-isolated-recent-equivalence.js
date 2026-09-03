@@ -893,6 +893,7 @@ async function runRecentChannelCase(deps, { legacyDb }) {
     recentTopK: 120,
     recentRerankTopK: 20,
     recentFallbackTopK: 20,
+    legacyFallbackAllowed: true,
     inferCategoryFromChunk: deps.inferCategoryFromChunk,
     categoryMap: null,
     lexicalMatchScore,

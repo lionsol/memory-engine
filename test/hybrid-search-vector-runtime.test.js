@@ -2,47 +2,75 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 function makeDbForVector({ includeRecentRows = false } = {}) {
+  const confidenceRows = [
+    {
+      chunk_id: "chunk-1234567890abcdef",
+      initial_confidence: 0.82,
+      confidence: 0.82,
+      last_confidence_update: 0,
+      base_tau: 7,
+      hit_count: 3,
+      is_protected: 0,
+      conflict_flag: 0,
+      category: "raw_log",
+      is_archived: 0,
+    },
+    ...(includeRecentRows ? [{
+      chunk_id: "chunk-recent-1",
+      initial_confidence: 0.71,
+      confidence: 0.71,
+      last_confidence_update: 0,
+      base_tau: 7,
+      hit_count: 1,
+      is_protected: 0,
+      conflict_flag: 0,
+      category: "raw_log",
+      is_archived: 0,
+    }] : []),
+  ];
+  const chunkRows = confidenceRows.map(row => ({
+    id: row.chunk_id,
+    source: "openclaw_core",
+    start_line: 1,
+    end_line: 1,
+    hash: null,
+    text: row.chunk_id === "chunk-recent-1" ? "query fallback text" : "vector text",
+    path: "memory/smart-add/2026-05-27.md",
+    updated_at: 1710000000,
+  }));
   return {
+    readonly: true,
+    exec() {},
     prepare(sql) {
       const q = String(sql);
       return {
-        all() {
+        all(...args) {
+          if (q.includes("PRAGMA database_list")) return [{ name: "main" }];
           if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
-            return [{
-              chunk_id: "chunk-1234567890abcdef",
-              confidence: 0.82,
-              last_confidence_update: 0,
-              base_tau: 7,
-              hit_count: 3,
-              is_protected: 0,
-              conflict_flag: 0,
-              category: "raw_log",
-              is_archived: 0,
-            }];
+            if (q.includes("json_each")) {
+              const selectedIds = JSON.parse(String(args[0] || "[]"));
+              return confidenceRows.filter(row => selectedIds.includes(row.chunk_id));
+            }
+            return confidenceRows;
+          }
+          if (q.includes("FROM chunks c")) {
+            if (includeRecentRows && q.includes("ORDER BY c.updated_at DESC")) {
+              return chunkRows.filter(row => row.id === "chunk-recent-1");
+            }
+            return [];
           }
           if (q.includes("SELECT id, path, updated_at FROM chunks")) {
-            return [{
-              id: "chunk-1234567890abcdef",
-              path: "memory/smart-add/2026-05-27.md",
-              updated_at: 1710000000,
-            }];
+            return chunkRows;
           }
-          if (includeRecentRows && q.includes("FROM chunks c") && q.includes("ORDER BY c.updated_at DESC")) {
-            return [{
-              id: "chunk-recent-1",
-              text: "query fallback text",
-              path: "memory/smart-add/2026-05-27.md",
-              updated_at: 1710000000,
-              confidence: 0.71,
-              last_confidence_update: 0,
-              base_tau: 7,
-              hit_count: 1,
-              is_protected: 0,
-              conflict_flag: 0,
-              category: "raw_log",
-            }];
+          if (q.includes("FROM chunks") && !q.includes("chunks_fts")) {
+            return chunkRows;
           }
           return [];
+        },
+        get(name) {
+          return ["chunks", "chunks_fts", "memory_confidence"].includes(String(name))
+            ? { 1: 1 }
+            : undefined;
         },
       };
     },
@@ -70,23 +98,58 @@ function makeDbForTiered({
   }];
   const chunkRows = [{
     id: "chunk-1234567890abcdef",
+    source: "openclaw_core",
+    start_line: 1,
+    end_line: 1,
+    hash: null,
+    text: ftsRows[0]?.text || kgRows[0]?.text || recentRows[0]?.text || "compat memory text",
     path: chunkPath,
     updated_at: 1710000000,
   }];
   return {
+    readonly: true,
+    exec() {},
     prepare(sql) {
       const q = String(sql);
       return {
         all(...args) {
-          if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) return confidenceRows;
+          if (q.includes("PRAGMA database_list")) return [{ name: "main" }];
+          if (q.includes("chunk_id") && q.includes("kg_data") && q.includes("FROM memory_confidence")) {
+            return kgRows.map(row => ({
+              ...row,
+              chunk_id: row.chunk_id || row.id,
+              chunk_id_storage_class: "text",
+              initial_confidence: row.initial_confidence ?? row.confidence,
+            }));
+          }
+          if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
+            return confidenceRows.map(row => ({
+              initial_confidence: row.initial_confidence ?? row.confidence,
+              ...row,
+            }));
+          }
           if (q.includes("SELECT id, path, updated_at FROM chunks")) return chunkRows;
-          if (q.includes("FROM memory_confidence mc") && q.includes("mc.kg_data LIKE")) return kgRows;
           if (q.includes("FROM chunks_fts f")) {
             const query = String(args[0] || "");
             return query.includes(" OR ") ? fallbackFtsRows : ftsRows;
           }
+          if (q.includes("FROM json_each")) {
+            return kgRows.map(row => ({
+              id: row.id,
+              text: row.text,
+              path: row.path,
+              updated_at: row.updated_at,
+            }));
+          }
+          if (q.includes("FROM chunks c")) return recentRows;
+          if (q.includes("FROM chunks") && !q.includes("chunks_fts")) return chunkRows;
           if (q.includes("ORDER BY c.updated_at DESC")) return recentRows;
           return [];
+        },
+        get(name) {
+          return ["chunks", "chunks_fts", "memory_confidence"].includes(String(name))
+            ? { 1: 1 }
+            : undefined;
         },
       };
     },
@@ -95,7 +158,24 @@ function makeDbForTiered({
 
 async function loadHybridSearchFresh() {
   const mod = await import(`../lib/recall/hybrid-search.js?ts=${Date.now()}_${Math.random()}`);
-  return mod.hybridSearch;
+  return (text, options, runtime = {}) => {
+    if (typeof runtime.withHybridDbAccessScope === "function") {
+      return mod.hybridSearch(text, options, runtime);
+    }
+    const { withDb, ...rest } = runtime;
+    return mod.hybridSearch(text, options, {
+      ...rest,
+      withHybridDbAccessScope: async run => run({
+        withCoreDb: withDb,
+        withEngineDb: withDb,
+        capabilities: {
+          isolatedFts: true,
+          isolatedKg: true,
+          isolatedRecent: true,
+        },
+      }),
+    });
+  };
 }
 
 test("hybridSearch passes cfg into getMemorySearchManager", async () => {

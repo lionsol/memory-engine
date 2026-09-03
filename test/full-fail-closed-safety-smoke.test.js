@@ -18,15 +18,15 @@ const {
 
 const REQUIRED_CHECK_IDS = [
   "production_surfaces_observed",
-  "legacy_mode_restores_fallback",
-  "canary_scope_hit_suppresses_fallback",
-  "canary_scope_miss_restores_fallback",
+  "legacy_mode_is_withheld",
+  "canary_scope_hit_remains_withheld",
+  "canary_scope_miss_does_not_restore_legacy",
   "full_mode_suppresses_without_scope",
-  "kg_full_mode_channel_isolation",
-  "recent_full_mode_channel_isolation",
+  "kg_full_mode_cannot_restore_legacy",
+  "recent_full_mode_cannot_restore_legacy",
   "full_mode_observation_markers",
   "full_events_excluded_from_canary_metrics",
-  "dynamic_rollback_restores_fallback",
+  "dynamic_rollback_remains_withheld",
 ];
 
 test("full fail-closed safety smoke script exists and accepts deterministic output flags", () => {

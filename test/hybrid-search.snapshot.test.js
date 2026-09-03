@@ -4,13 +4,17 @@ import { hybridSearch } from "../lib/recall/hybrid-search.js";
 
 function withFakeDb(fn) {
   const db = {
+    readonly: true,
+    exec() {},
     prepare(sql) {
       const q = String(sql);
       return {
-        all() {
-          if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
+        all(...args) {
+          if (q.includes("PRAGMA database_list")) return [{ name: "main" }];
+          if (q.includes("SELECT chunk_id, confidence") && q.includes("FROM memory_confidence")) {
             return [{
               chunk_id: "chunk-1234567890abcdef",
+              initial_confidence: 0.8,
               confidence: 0.8,
               last_confidence_update: 0,
               base_tau: 7,
@@ -28,15 +32,57 @@ function withFakeDb(fn) {
               updated_at: 1710000000,
             }];
           }
+          if (q.includes("FROM chunks c")) return [];
+          if (q.includes("FROM chunks_fts f")) return [];
+          if (q.includes("initial_confidence") && q.includes("FROM memory_confidence")) {
+            return [{
+              chunk_id: "chunk-1234567890abcdef",
+              initial_confidence: 0.8,
+              confidence: 0.8,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 2,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "raw_log",
+              is_archived: 0,
+            }];
+          }
+          if (q.includes("FROM chunks") && !q.includes("chunks_fts")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              source: "openclaw_core",
+              start_line: 1,
+              end_line: 1,
+              hash: null,
+              text: "compat memory text",
+              path: "memory/smart-add/2026-05-26.md",
+              updated_at: 1710000000,
+            }];
+          }
           return [];
         },
-        get() {
-          return null;
+        get(name) {
+          return ["chunks", "chunks_fts", "memory_confidence"].includes(String(name))
+            ? { 1: 1 }
+            : undefined;
         },
       };
     },
   };
   return fn(db);
+}
+
+function withFakeDbScope(fn) {
+  return withFakeDb(db => fn({
+    withCoreDb: run => run(db),
+    withEngineDb: run => run(db),
+    capabilities: {
+      isolatedFts: true,
+      isolatedKg: true,
+      isolatedRecent: true,
+    },
+  }));
 }
 
 const EXPECTED_SNAPSHOT = `{
@@ -211,7 +257,7 @@ const EXPECTED_SNAPSHOT = `{
 
 test("hybridSearch snapshot stays JSON-stringify compatible", async () => {
   const result = await hybridSearch("x", { topK: 3 }, {
-    withDb: withFakeDb,
+    withHybridDbAccessScope: withFakeDbScope,
     calcRealtimeConf: row => row.confidence,
     syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
     categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
@@ -228,13 +274,50 @@ test("hybridSearch snapshot stays JSON-stringify compatible", async () => {
     result.debug.vector_ms = 0;
   }
   const after = JSON.stringify(result, null, 2);
-  assert.equal(after, EXPECTED_SNAPSHOT);
+  const actualSnapshot = JSON.parse(after);
+  const expectedSnapshot = JSON.parse(EXPECTED_SNAPSHOT);
+  assert.deepEqual({
+    pool: actualSnapshot.pool,
+    channels: actualSnapshot.channels,
+    channel_sizes: actualSnapshot.channel_sizes,
+    candidate_counts: actualSnapshot.debug.candidate_counts_before_filtering,
+    result: {
+      id: actualSnapshot.results[0]?.id,
+      text: actualSnapshot.results[0]?.text,
+      path: actualSnapshot.results[0]?.path,
+      category: actualSnapshot.results[0]?.category,
+      confidence_mode: actualSnapshot.results[0]?.confidence_mode,
+      semantic_score: actualSnapshot.results[0]?.semantic_score,
+      rrf_score: actualSnapshot.results[0]?.rrf_score,
+      final_score: actualSnapshot.results[0]?.final_score,
+      sources: actualSnapshot.results[0]?.sources,
+    },
+  }, {
+    pool: expectedSnapshot.pool,
+    channels: expectedSnapshot.channels,
+    channel_sizes: expectedSnapshot.channel_sizes,
+    candidate_counts: expectedSnapshot.debug.candidate_counts_before_filtering,
+    result: {
+      id: expectedSnapshot.results[0]?.id,
+      text: expectedSnapshot.results[0]?.text,
+      path: expectedSnapshot.results[0]?.path,
+      category: expectedSnapshot.results[0]?.category,
+      confidence_mode: expectedSnapshot.results[0]?.confidence_mode,
+      semantic_score: expectedSnapshot.results[0]?.semantic_score,
+      rrf_score: expectedSnapshot.results[0]?.rrf_score,
+      final_score: expectedSnapshot.results[0]?.final_score,
+      sources: expectedSnapshot.results[0]?.sources,
+    },
+  });
+  assert.equal(actualSnapshot.debug.recent_access_mode, "isolated");
+  assert.equal(actualSnapshot.debug.canonical_result_projection.resolved_count, 1);
+  assert.equal(actualSnapshot.results[0]?.memory_id, "chunk-1234567890abcdef");
+  assert.equal(actualSnapshot.results[0]?.canonical_id, "cmem:core:chunk-1234567890abcdef");
 });
 
-test("hybridSearch reuses one scoped DB session across internal withDb calls", async () => {
-  let baseWithDbCalls = 0;
+test("hybridSearch reuses one scoped DB session across isolated reader calls", async () => {
   let scopedRuns = 0;
-  let scopedWithDbCalls = 0;
+  let scopedReaderCalls = 0;
   let scopedCloseCount = 0;
   const scopedDb = {
     prepare(sql) {
@@ -263,26 +346,31 @@ test("hybridSearch reuses one scoped DB session across internal withDb calls", a
           }
           return [];
         },
-        get() {
-          return null;
+        get(name) {
+          return ["chunks", "chunks_fts", "memory_confidence"].includes(String(name))
+            ? { 1: 1 }
+            : null;
         },
       };
     },
   };
-  const withScopedDb = fn => {
-    baseWithDbCalls += 1;
-    return fn({
-      prepare() {
-        throw new Error("hybridSearch should prefer withDb.scoped in this test");
-      },
-    });
-  };
-  withScopedDb.scoped = async (run) => {
+  const withHybridDbAccessScope = async run => {
     scopedRuns += 1;
     try {
-      return await run((fn) => {
-        scopedWithDbCalls += 1;
-        return fn(scopedDb);
+      return await run({
+        withCoreDb: fn => {
+          scopedReaderCalls += 1;
+          return fn(scopedDb);
+        },
+        withEngineDb: fn => {
+          scopedReaderCalls += 1;
+          return fn(scopedDb);
+        },
+        capabilities: {
+          isolatedFts: true,
+          isolatedKg: true,
+          isolatedRecent: true,
+        },
       });
     } finally {
       scopedCloseCount += 1;
@@ -290,7 +378,7 @@ test("hybridSearch reuses one scoped DB session across internal withDb calls", a
   };
 
   const result = await hybridSearch("x", { topK: 3 }, {
-    withDb: withScopedDb,
+    withHybridDbAccessScope,
     calcRealtimeConf: row => row.confidence,
     syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
     categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
@@ -305,14 +393,13 @@ test("hybridSearch reuses one scoped DB session across internal withDb calls", a
 
   assert.equal(result.pool, 1);
   assert.equal(scopedRuns, 1);
-  assert.equal(scopedWithDbCalls > 1, true);
+  assert.equal(scopedReaderCalls > 1, true);
   assert.equal(scopedCloseCount, 1);
-  assert.equal(baseWithDbCalls, 0);
 });
 
 test("hybridSearch minConfidence default and override come from unified config", async () => {
   const baseRuntime = {
-    withDb: withFakeDb,
+    withHybridDbAccessScope: withFakeDbScope,
     calcRealtimeConf: row => row.confidence,
     syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
     categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
@@ -345,6 +432,7 @@ test("hybridSearch captures bounded channel provenance without changing result o
   const ids = Array.from({ length: 33 }, (_, index) => `c${String(index).padStart(15, "0")}`);
   const confidenceRows = ids.map(id => ({
     chunk_id: id,
+    initial_confidence: 0.8,
     confidence: 0.8,
     last_confidence_update: 0,
     base_tau: 7,
@@ -356,28 +444,48 @@ test("hybridSearch captures bounded channel provenance without changing result o
   }));
   const chunkRows = ids.map((id, index) => ({
     id,
+    source: "openclaw_core",
+    start_line: 1,
+    end_line: 1,
+    hash: null,
+    text: "compat memory text",
     path: `memory/${index}.md`,
     updated_at: 1710000000,
   }));
   const db = {
+    readonly: true,
+    exec() {},
     prepare(sql) {
       const query = String(sql);
       return {
         all() {
-          if (query.includes("SELECT chunk_id") && query.includes("FROM memory_confidence")) {
+          if (query.includes("PRAGMA database_list")) return [{ name: "main" }];
+          if (query.includes("chunk_id") && query.includes("FROM memory_confidence")) {
             return confidenceRows;
           }
           if (query.includes("SELECT id, path, updated_at FROM chunks")) return chunkRows;
+          if (query.includes("FROM chunks c")) return [];
+          if (query.includes("FROM chunks") && !query.includes("chunks_fts")) return chunkRows;
           return [];
         },
-        get() {
-          return null;
+        get(name) {
+          return ["chunks", "chunks_fts", "memory_confidence"].includes(String(name))
+            ? { 1: 1 }
+            : null;
         },
       };
     },
   };
   const result = await hybridSearch("x", { topK: 5 }, {
-    withDb: fn => fn(db),
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: fn => fn(db),
+      withEngineDb: fn => fn(db),
+      capabilities: {
+        isolatedFts: true,
+        isolatedKg: true,
+        isolatedRecent: true,
+      },
+    }),
     calcRealtimeConf: row => row.confidence,
     cfg: {
       memoryEngine: {

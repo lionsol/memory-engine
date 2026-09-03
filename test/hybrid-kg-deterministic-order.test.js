@@ -78,6 +78,8 @@ function buildCtx(db, {
   const { warnHybridSearchOnce } = createHybridWarnings();
   return {
     withDb: fn => fn(db),
+    kgAccessMode: "legacy",
+    legacyFallbackAllowed: true,
     channels: {},
     debug,
     candidateCounts,

@@ -158,6 +158,7 @@ function makeBaseCtx(db, records, overrides = {}) {
     },
     uniqueVectorChannels: () => false,
     withDb: fn => fn(recordingDb),
+    legacyFallbackAllowed: true,
     ftsIsEmpty: false,
     minConfidence,
     ...overrides,

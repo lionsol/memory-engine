@@ -61,7 +61,7 @@ test("legacy flat runtime normalizes into dataAccess retrievalPolicy and telemet
   assert.equal(context.retrievalPolicy.apiConfig, runtime.api.config);
   assert.equal(context.retrievalPolicy.categoryMap, runtime.CATEGORY_MAP);
   assert.equal(context.telemetry.hybridObservationSurface, "legacy_surface");
-  assert.equal(flattened.withDb, runtime.withDb);
+  assert.equal(Object.hasOwn(flattened, "withDb"), false);
   assert.notEqual(flattened.withDb, attemptedOverride);
   assert.equal(flattened.categoryMap, runtime.CATEGORY_MAP);
   assert.deepEqual(flattened.trustedRuntimeContext, { source: "test" });
@@ -106,7 +106,7 @@ test("grouped runtime drives both search tool surfaces through one context", asy
 
   assert.deepEqual(fromAction.results, fromTool.results);
   assert.equal(calls.length, 2);
-  assert.equal(calls[0].runtime.withDb, context.dataAccess.withDb);
+  assert.equal(Object.hasOwn(calls[0].runtime, "withDb"), false);
   assert.equal(calls[0].runtime.cfg, context.retrievalPolicy.apiConfig);
 });
 

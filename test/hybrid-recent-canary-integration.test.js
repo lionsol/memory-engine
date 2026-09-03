@@ -107,11 +107,9 @@ function createHybridRuntime({
     };
   }
 
-  const legacyDb = buildDb("legacy");
   const coreDb = buildDb("core");
   const engineDb = buildDb("engine");
   const access = {
-    withLegacyDb: run => run(legacyDb),
     withCoreDb: run => run(coreDb),
     withEngineDb: run => run(engineDb),
     capabilities: { isolatedRecent: isolatedRecentCapability },
@@ -177,7 +175,7 @@ test("hybrid recent canary provider errors fail closed without shadow queries", 
   assert.equal(result.debug.recent_canary_isolated_engine_query_count ?? 0, 0);
 });
 
-test("hybrid recent canary shadow serves legacy results only and keeps isolated-only ids out of final results/debug", async () => {
+test("hybrid recent canary shadow withholds retired legacy results", async () => {
   const offFixture = createHybridRuntime({
     legacyRecentIds: ["legacy-1"],
     isolatedRecentIds: ["legacy-1", "isolated-1"],
@@ -205,13 +203,13 @@ test("hybrid recent canary shadow serves legacy results only and keeps isolated-
   assert.equal(JSON.stringify(shadowResult.results).includes("isolated-1"), false);
   assert.equal(JSON.stringify(shadowResult.debug).includes("isolated-1"), false);
   assert.equal(JSON.stringify(shadowResult.debug).includes("sample-1"), false);
-  assert.equal(shadowResult.debug.recent_canary_legacy_core_query_count >= 1, true);
-  assert.equal(shadowResult.debug.recent_canary_legacy_engine_query_count >= 1, true);
+  assert.equal(shadowResult.debug.recent_canary_legacy_core_query_count, 0);
+  assert.equal(shadowResult.debug.recent_canary_legacy_engine_query_count, 0);
   assert.equal(shadowResult.debug.recent_canary_isolated_core_query_count >= 1, true);
   assert.equal(shadowResult.debug.recent_canary_isolated_engine_query_count >= 1, true);
 });
 
-test("hybrid recent canary shadow returns legacy empty result even when isolated finds candidates", async () => {
+test("hybrid recent canary shadow returns no recent candidates when legacy serving is retired", async () => {
   const shadowFixture = createHybridRuntime({
     legacyRecentIds: [],
     isolatedRecentIds: ["isolated-1"],
@@ -226,7 +224,7 @@ test("hybrid recent canary shadow returns legacy empty result even when isolated
   assert.equal(result.debug.recent_canary_classification, "mismatch_counts");
 });
 
-test("hybrid recent canary shadow isolates isolated SQL errors from served legacy results", async () => {
+test("hybrid recent canary shadow does not serve legacy results after isolated errors", async () => {
   const shadowFixture = createHybridRuntime({
     legacyRecentIds: ["legacy-1"],
     isolatedRecentIds: ["legacy-1"],
@@ -235,8 +233,10 @@ test("hybrid recent canary shadow isolates isolated SQL errors from served legac
     failIsolatedCore: true,
   });
   const result = await hybridSearch("query", { topK: 5 }, shadowFixture.runtime);
-  assert.equal(result.results.some(item => item.id === "legacy-1".slice(0, 16)), true);
+  assert.equal(result.results.some(item => item.id === "legacy-1".slice(0, 16)), false);
   assert.equal(result.debug.recent_canary_classification, "isolated_error");
   assert.equal(result.debug.recent_canary_isolated_error, true);
   assert.equal(result.debug.recent_canary_served_mode, "legacy");
+  assert.equal(result.debug.recent_canary_legacy_core_query_count, 0);
+  assert.equal(result.debug.recent_canary_legacy_engine_query_count, 0);
 });

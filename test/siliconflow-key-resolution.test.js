@@ -6,10 +6,12 @@ import { generateEmbedding, resolveSFKey } from "../lib/siliconflow-runtime.js";
 
 function makeDbForVector() {
   return {
+    readonly: true,
     prepare(sql) {
       const q = String(sql);
       return {
         all() {
+          if (q.includes("PRAGMA database_list")) return [{ name: "main" }];
           if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
             return [{
               chunk_id: "chunk-1234567890abcdef",
@@ -28,6 +30,18 @@ function makeDbForVector() {
       };
     },
   };
+}
+
+function withIsolatedDb(db) {
+  return async run => run({
+    withCoreDb: callback => callback(db),
+    withEngineDb: callback => callback(db),
+    capabilities: {
+      isolatedFts: true,
+      isolatedKg: true,
+      isolatedRecent: true,
+    },
+  });
 }
 
 function makeRequestImpl({ statusCode = 200, body = null, onRequest } = {}) {
@@ -126,7 +140,7 @@ test("resolveSFKey falls back to env and openclaw.json file", () => {
 test("hybridSearch exposes missing SiliconFlow key without sensitive leakage in vector_error", async () => {
   const result = await hybridSearch("query", { topK: 3 }, {
     cfg: { memory: { backend: "sqlite" } },
-    withDb: fn => fn(makeDbForVector()),
+    withHybridDbAccessScope: withIsolatedDb(makeDbForVector()),
     calcRealtimeConf: row => row.confidence,
     syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
     getLancedbTable: () => ({

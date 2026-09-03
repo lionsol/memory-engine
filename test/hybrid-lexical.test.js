@@ -9,6 +9,18 @@ import {
   tokenizeQuery,
 } from "../lib/recall/hybrid/lexical.js";
 
+function withIsolatedDb(db) {
+  return async run => run({
+    withCoreDb: callback => callback(db),
+    withEngineDb: callback => callback(db),
+    capabilities: {
+      isolatedFts: true,
+      isolatedKg: true,
+      isolatedRecent: true,
+    },
+  });
+}
+
 test("tokenizeQuery handles english, mixed language, and empty input", () => {
   assert.deepEqual(tokenizeQuery("memory engine vector search"), ["memory", "engine", "vector", "search"]);
   assert.deepEqual(tokenizeQuery("记忆 memory 检索 recall"), ["记忆", "memory", "检索", "recall"]);
@@ -115,76 +127,126 @@ test("resolveLexicalConfidenceThreshold respects defaults and env override seman
 
 test("hybridSearch keeps lexical confidence driven vector skip debug fields", async () => {
   const { hybridSearch } = await import(`../lib/recall/hybrid-search.js?ts=${Date.now()}_${Math.random()}`);
+  const db = {
+    prepare(sql) {
+      const q = String(sql);
+      return {
+        all(...args) {
+          if (q.includes("PRAGMA database_list")) return [{ name: "main" }];
+          if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
+            return [{
+              chunk_id: "chunk-1234567890abcdef",
+              initial_confidence: 0.9,
+              confidence: 0.9,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "episodic",
+              is_archived: 0,
+            }];
+          }
+          if (q.includes("chunk_id") && q.includes("kg_data") && q.includes("FROM memory_confidence")) {
+            return [{
+              chunk_id: "chunk-1234567890abcdef",
+              chunk_id_storage_class: "text",
+              confidence: 0.9,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "episodic",
+              is_archived: 0,
+              kg_data: "session checkpoint project",
+            }];
+          }
+          if (q.includes("SELECT id, path, updated_at FROM chunks")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              source: "openclaw_core",
+              start_line: 1,
+              end_line: 1,
+              hash: null,
+              text: "session checkpoint project note",
+              path: "memory/episodes/session-checkpoint.md",
+              updated_at: 1710000000,
+            }];
+          }
+          if (q.includes("FROM memory_confidence mc") && q.includes("mc.kg_data LIKE")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              text: "session checkpoint project note",
+              path: "memory/episodes/session-checkpoint.md",
+              updated_at: 1710000000,
+              confidence: 0.9,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "episodic",
+              is_archived: 0,
+              kg_data: "session checkpoint project",
+            }];
+          }
+          if (q.includes("FROM chunks_fts f")) {
+            const query = String(args[0] || "");
+            if (query.includes(" OR ")) return [];
+            return [{
+              id: "chunk-1234567890abcdef",
+              text: "session checkpoint project note",
+              path: "memory/episodes/session-checkpoint.md",
+              updated_at: 1710000000,
+              confidence: 0.9,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "episodic",
+              is_archived: 0,
+            }];
+          }
+          if (q.includes("FROM json_each")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              text: "session checkpoint project note",
+              path: "memory/episodes/session-checkpoint.md",
+              updated_at: 1710000000,
+            }];
+          }
+          if (q.includes("FROM chunks c")) return [];
+          if (q.includes("FROM chunks") && !q.includes("chunks_fts")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              source: "openclaw_core",
+              start_line: 1,
+              end_line: 1,
+              hash: null,
+              text: "session checkpoint project note",
+              path: "memory/episodes/session-checkpoint.md",
+              updated_at: 1710000000,
+            }];
+          }
+          return [];
+        },
+        get(name) {
+          return ["chunks", "chunks_fts", "memory_confidence"].includes(String(name))
+            ? { 1: 1 }
+            : undefined;
+        },
+      };
+    },
+  };
+  db.readonly = true;
   const result = await hybridSearch("session checkpoint project", { topK: 3 }, {
     cfg: {
       memory: { backend: "sqlite" },
       autoRecall: { lexicalConfidenceThreshold: 0.65 },
     },
-    withDb: fn => fn({
-      prepare(sql) {
-        const q = String(sql);
-        return {
-          all(...args) {
-            if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
-              return [{
-                chunk_id: "chunk-1234567890abcdef",
-                confidence: 0.9,
-                last_confidence_update: 0,
-                base_tau: 7,
-                hit_count: 3,
-                is_protected: 0,
-                conflict_flag: 0,
-                category: "episodic",
-                is_archived: 0,
-              }];
-            }
-            if (q.includes("SELECT id, path, updated_at FROM chunks")) {
-              return [{
-                id: "chunk-1234567890abcdef",
-                path: "memory/episodes/session-checkpoint.md",
-                updated_at: 1710000000,
-              }];
-            }
-            if (q.includes("FROM memory_confidence mc") && q.includes("mc.kg_data LIKE")) {
-              return [{
-                id: "chunk-1234567890abcdef",
-                text: "session checkpoint project note",
-                path: "memory/episodes/session-checkpoint.md",
-                updated_at: 1710000000,
-                confidence: 0.9,
-                last_confidence_update: 0,
-                base_tau: 7,
-                hit_count: 3,
-                is_protected: 0,
-                conflict_flag: 0,
-                category: "episodic",
-                is_archived: 0,
-                kg_data: "session checkpoint project",
-              }];
-            }
-            if (q.includes("FROM chunks_fts f")) {
-              const query = String(args[0] || "");
-              if (query.includes(" OR ")) return [];
-              return [{
-                id: "chunk-1234567890abcdef",
-                text: "session checkpoint project note",
-                path: "memory/episodes/session-checkpoint.md",
-                updated_at: 1710000000,
-                confidence: 0.9,
-                last_confidence_update: 0,
-                base_tau: 7,
-                hit_count: 3,
-                is_protected: 0,
-                conflict_flag: 0,
-                category: "episodic",
-                is_archived: 0,
-              }];
-            }
-            return [];
-          },
-        };
-      },
-    }),
+    withHybridDbAccessScope: withIsolatedDb(db),
     calcRealtimeConf: row => row.confidence,
     syncIndexIfNeeded: async () => ({ synced: false, reason: "test" }),
     getMemorySearchManager: async () => ({

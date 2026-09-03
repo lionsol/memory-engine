@@ -46,6 +46,8 @@ function makeContext(recentFailClosedDecision) {
       recentAccessMode: "guarded_fallback",
       recentIsolationRequested: true,
       recentIsolationFallbackReason: "isolated_recent_guard_failed",
+      // Direct channel-policy fixture; production Hybrid never supplies this.
+      legacyFallbackAllowed: true,
       recentFailClosedDecision,
       normalizedQuery: "alpha",
       queryTerms: ["alpha"],

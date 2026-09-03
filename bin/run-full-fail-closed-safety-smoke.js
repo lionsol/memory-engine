@@ -229,7 +229,6 @@ function createSyntheticFixture({ nowMs = Date.now() } = {}) {
   const access = {
     withCoreDb: run => run(trackedCore),
     withEngineDb: run => run(trackedEngine),
-    withLegacyDb: run => run(trackedLegacy),
     capabilities: {
       isolatedFts: true,
       isolatedKg: true,
@@ -461,6 +460,17 @@ function allSurfaceRuns(matrix, scenario, predicate) {
   return PRODUCTION_SURFACES.every(surface => predicate(matrix[surface][scenario], surface));
 }
 
+function legacyFallbackWithheld(run) {
+  return run?.observation?.legacy_db_fallback_used === false
+    && run?.query_stats?.kg_legacy_query_count === 0
+    && run?.query_stats?.recent_legacy_query_count === 0;
+}
+
+function isolatedReadersObserved(run) {
+  return Number(run?.query_stats?.isolated_fts_query_count || 0) > 0
+    && Number(run?.query_stats?.vector_search_count || 0) > 0;
+}
+
 function surfaceDetails(matrix, scenario) {
   return Object.fromEntries(PRODUCTION_SURFACES.map(surface => [
     surface,
@@ -562,37 +572,28 @@ async function runSmoke({ now = new Date() } = {}) {
       ])),
     },
     {
-      id: "legacy_mode_restores_fallback",
-      name: "legacy mode executes KG and Recent fallbacks while preserving FTS and vector",
+      id: "legacy_mode_is_withheld",
+      name: "legacy mode requests cannot restore retired KG and Recent fallbacks",
       pass: allSurfaceRuns(matrix, "legacy", run => {
-        const channels = channelFacts(run);
-        return channels.kg && channels.recent && channels.fts && channels.vector
-          && run.query_stats.kg_legacy_query_count > 0
-          && run.query_stats.recent_legacy_query_count > 0;
+        return legacyFallbackWithheld(run) && isolatedReadersObserved(run);
       }),
       details: surfaceDetails(matrix, "legacy"),
     },
     {
-      id: "canary_scope_hit_suppresses_fallback",
-      name: "matching scoped canary suppresses KG and Recent fallbacks",
+      id: "canary_scope_hit_remains_withheld",
+      name: "matching scoped canary keeps retired fallbacks withheld",
       pass: allSurfaceRuns(matrix, "canary_hit", run => {
-        const channels = channelFacts(run);
-        return !channels.kg && !channels.recent && channels.fts && channels.vector
-          && run.query_stats.kg_legacy_query_count === 0
-          && run.query_stats.recent_legacy_query_count === 0
+        return legacyFallbackWithheld(run)
           && run.observation?.kg_runtime_mode === "fail_closed_canary"
           && run.observation?.recent_runtime_mode === "fail_closed_canary";
       }),
       details: surfaceDetails(matrix, "canary_hit"),
     },
     {
-      id: "canary_scope_miss_restores_fallback",
-      name: "scoped canary miss restores KG and Recent fallbacks",
+      id: "canary_scope_miss_does_not_restore_legacy",
+      name: "scoped canary miss cannot restore retired fallbacks",
       pass: allSurfaceRuns(matrix, "canary_miss", run => {
-        const channels = channelFacts(run);
-        return channels.kg && channels.recent && channels.fts && channels.vector
-          && run.query_stats.kg_legacy_query_count > 0
-          && run.query_stats.recent_legacy_query_count > 0;
+        return legacyFallbackWithheld(run);
       }),
       details: surfaceDetails(matrix, "canary_miss"),
     },
@@ -600,32 +601,25 @@ async function runSmoke({ now = new Date() } = {}) {
       id: "full_mode_suppresses_without_scope",
       name: "full mode suppresses KG and Recent fallbacks without canary scope",
       pass: allSurfaceRuns(matrix, "full", run => {
-        const channels = channelFacts(run);
-        return !channels.kg && !channels.recent && channels.fts && channels.vector
-          && run.query_stats.kg_legacy_query_count === 0
-          && run.query_stats.recent_legacy_query_count === 0;
+        return legacyFallbackWithheld(run);
       }),
       details: surfaceDetails(matrix, "full"),
     },
     {
-      id: "kg_full_mode_channel_isolation",
-      name: "KG full mode suppresses only KG fallback",
+      id: "kg_full_mode_cannot_restore_legacy",
+      name: "KG full mode cannot restore any retired fallback",
       pass: allSurfaceRuns(matrix, "kg_full_only", run => {
-        const channels = channelFacts(run);
-        return !channels.kg && channels.recent && channels.fts && channels.vector
-          && run.query_stats.kg_legacy_query_count === 0
-          && run.query_stats.recent_legacy_query_count > 0;
+        return legacyFallbackWithheld(run)
+          && run.observation?.kg_runtime_mode === "full_fail_closed";
       }),
       details: surfaceDetails(matrix, "kg_full_only"),
     },
     {
-      id: "recent_full_mode_channel_isolation",
-      name: "Recent full mode suppresses only Recent fallback",
+      id: "recent_full_mode_cannot_restore_legacy",
+      name: "Recent full mode cannot restore any retired fallback",
       pass: allSurfaceRuns(matrix, "recent_full_only", run => {
-        const channels = channelFacts(run);
-        return channels.kg && !channels.recent && channels.fts && channels.vector
-          && run.query_stats.kg_legacy_query_count > 0
-          && run.query_stats.recent_legacy_query_count === 0;
+        return legacyFallbackWithheld(run)
+          && run.observation?.recent_runtime_mode === "full_fail_closed";
       }),
       details: surfaceDetails(matrix, "recent_full_only"),
     },
@@ -661,16 +655,10 @@ async function runSmoke({ now = new Date() } = {}) {
       },
     },
     {
-      id: "dynamic_rollback_restores_fallback",
-      name: "switching from full mode back to legacy restores both fallbacks",
+      id: "dynamic_rollback_remains_withheld",
+      name: "switching from full mode back to legacy remains fail-closed",
       pass: allSurfaceRuns(matrix, "rollback_legacy", run => {
-        const fullChannels = channelFacts(matrix[run.observation.surface].full);
-        const rollbackChannels = channelFacts(run);
-        return !fullChannels.kg && !fullChannels.recent
-          && rollbackChannels.kg && rollbackChannels.recent
-          && rollbackChannels.fts && rollbackChannels.vector
-          && run.query_stats.kg_legacy_query_count > 0
-          && run.query_stats.recent_legacy_query_count > 0;
+        return legacyFallbackWithheld(run);
       }),
       details: surfaceDetails(matrix, "rollback_legacy"),
     },

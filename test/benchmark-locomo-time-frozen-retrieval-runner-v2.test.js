@@ -121,60 +121,69 @@ function fakeRunnerDependencies({ mismatchSearchClock = null, mismatchMaterializ
 function mockHybridRuntime(options = {}) {
   const { searchNowSec } = options;
   const realtimeClocks = [];
+  const withDb = fn => fn({
+    prepare(sql) {
+      const query = String(sql);
+      return {
+        all(...args) {
+          if (query.includes("SELECT chunk_id") && query.includes("FROM memory_confidence")) {
+            return [{
+              chunk_id: "chunk-1234567890abcdef",
+              confidence: 0.9,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "episodic",
+              is_archived: 0,
+            }];
+          }
+          if (query.includes("SELECT id, path, updated_at FROM chunks")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              path: "memory/episodes/session-checkpoint.md",
+              updated_at: 1710000000,
+            }];
+          }
+          if (query.includes("FROM memory_confidence mc") && query.includes("mc.kg_data LIKE")) {
+            return [];
+          }
+          if (query.includes("FROM chunks_fts f")) {
+            const ftsQuery = String(args[0] || "");
+            if (ftsQuery.includes(" OR ")) return [];
+            return [{
+              id: "chunk-1234567890abcdef",
+              text: "session checkpoint project note",
+              path: "memory/episodes/session-checkpoint.md",
+              updated_at: 1710000000,
+              confidence: 0.9,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "episodic",
+              is_archived: 0,
+            }];
+          }
+          return [];
+        },
+      };
+    },
+  });
   const runtime = {
     cfg: {
       memory: { backend: "sqlite" },
       autoRecall: { lexicalConfidenceThreshold: 0.65 },
     },
-    withDb: fn => fn({
-      prepare(sql) {
-        const query = String(sql);
-        return {
-          all(...args) {
-            if (query.includes("SELECT chunk_id") && query.includes("FROM memory_confidence")) {
-              return [{
-                chunk_id: "chunk-1234567890abcdef",
-                confidence: 0.9,
-                last_confidence_update: 0,
-                base_tau: 7,
-                hit_count: 3,
-                is_protected: 0,
-                conflict_flag: 0,
-                category: "episodic",
-                is_archived: 0,
-              }];
-            }
-            if (query.includes("SELECT id, path, updated_at FROM chunks")) {
-              return [{
-                id: "chunk-1234567890abcdef",
-                path: "memory/episodes/session-checkpoint.md",
-                updated_at: 1710000000,
-              }];
-            }
-            if (query.includes("FROM memory_confidence mc") && query.includes("mc.kg_data LIKE")) {
-              return [];
-            }
-            if (query.includes("FROM chunks_fts f")) {
-              const ftsQuery = String(args[0] || "");
-              if (ftsQuery.includes(" OR ")) return [];
-              return [{
-                id: "chunk-1234567890abcdef",
-                text: "session checkpoint project note",
-                path: "memory/episodes/session-checkpoint.md",
-                updated_at: 1710000000,
-                confidence: 0.9,
-                last_confidence_update: 0,
-                base_tau: 7,
-                hit_count: 3,
-                is_protected: 0,
-                conflict_flag: 0,
-                category: "episodic",
-                is_archived: 0,
-              }];
-            }
-            return [];
-          },
-        };
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: withDb,
+      withEngineDb: withDb,
+      capabilities: {
+        isolatedFts: true,
+        isolatedKg: true,
+        isolatedRecent: true,
       },
     }),
     calcRealtimeConf: (row, now) => {

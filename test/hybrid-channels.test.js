@@ -131,6 +131,7 @@ function makeBaseCtx(overrides = {}) {
     recentAccessMode: "legacy",
     recentIsolationRequested: false,
     recentIsolationFallbackReason: null,
+    legacyFallbackAllowed: true,
     minConfidence,
     filterForRerank: item => isCandidateAllowedForRerank(item, minConfidence),
     ...overrides,
@@ -454,7 +455,7 @@ test("KG isolated mode uses Engine candidate SQL plus Core JSON JOIN and never l
   assert.equal(CORE_KG_JSON_JOIN_SQL.includes("LIMIT ?"), false);
 });
 
-test("KG isolated mode fail-closes to legacy when a matching candidate has non-text ID", async () => {
+test("KG isolated mode blocks legacy when a matching candidate has non-text ID", async () => {
   let legacyCalls = 0;
   let coreCalls = 0;
   const ctx = makeBaseCtx({
@@ -463,6 +464,7 @@ test("KG isolated mode fail-closes to legacy when a matching candidate has non-t
     queryTerms: ["session", "checkpoint"],
     kgAccessMode: "isolated",
     kgIsolationRequested: true,
+    legacyFallbackAllowed: false,
     withEngineDb: fn => fn({
       prepare() {
         return {
@@ -517,11 +519,12 @@ test("KG isolated mode fail-closes to legacy when a matching candidate has non-t
   });
 
   await collectKgCandidates(ctx);
-  assert.equal(legacyCalls, 1);
+  assert.equal(legacyCalls, 0);
   assert.equal(coreCalls, 0);
-  assert.equal(ctx.debug.kg_access_mode, "legacy_fallback");
+  assert.equal(ctx.debug.kg_access_mode, "isolated_blocked");
   assert.equal(ctx.debug.kg_isolated_fallback_reason, "non_text_matching_candidate_id");
-  assert.equal(ctx.channels.kg.length, 1);
+  assert.equal(ctx.debug.kg_legacy_fallback_disabled, true);
+  assert.equal(Object.hasOwn(ctx.channels, "kg"), false);
 });
 
 test("KG isolated Engine SQL errors surface through kg_error and never fall back to legacy", async () => {
@@ -1020,70 +1023,89 @@ test("bounded multi-query Lance fusion excludes archived managed candidates befo
 
 test("hybridSearch integration smoke keeps topK order and debug compatibility", async () => {
   const { hybridSearch } = await import(`../lib/recall/hybrid-search.js?ts=${Date.now()}_${Math.random()}`);
+  const withDb = fn => fn({
+    readonly: true,
+    prepare(sql) {
+      const q = String(sql);
+      return {
+        all(...args) {
+          if (q.includes("PRAGMA database_list")) return [{ name: "main" }];
+          if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
+            return [{
+              chunk_id: "chunk-1234567890abcdef",
+              initial_confidence: 0.82,
+              confidence: 0.82,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "raw_log",
+              is_archived: 0,
+            }];
+          }
+          if (q.includes("SELECT id, path, updated_at FROM chunks")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              path: "memory/smart-add/memory-engine-compatibility.md",
+              updated_at: 1710000000,
+            }];
+          }
+          if (q.includes("FROM memory_confidence mc") && q.includes("mc.kg_data LIKE")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              text: "memory-engine compatibility notes",
+              path: "memory/smart-add/memory-engine-compatibility.md",
+              updated_at: 1710000000,
+              confidence: 0.82,
+              last_confidence_update: 0,
+              base_tau: 7,
+              hit_count: 3,
+              is_protected: 0,
+              conflict_flag: 0,
+              category: "raw_log",
+              is_archived: 0,
+              kg_data: "memory-engine compatibility stable module",
+            }];
+          }
+          if (q.includes("FROM chunks_fts f")) {
+            const query = String(args[0] || "");
+            if (query.includes(" OR ")) return [];
+            return [{
+              id: "chunk-1234567890abcdef",
+              text: "memory-engine compatibility notes",
+              path: "memory/smart-add/memory-engine-compatibility.md",
+              updated_at: 1710000000,
+            }];
+          }
+          if (q.includes("FROM chunks") && !q.includes("chunks_fts")) {
+            return [{
+              id: "chunk-1234567890abcdef",
+              source: "openclaw_core",
+              start_line: 1,
+              end_line: 1,
+              hash: null,
+              text: "memory-engine compatibility notes",
+              path: "memory/smart-add/memory-engine-compatibility.md",
+              updated_at: 1710000000,
+            }];
+          }
+          return [];
+        },
+        get(name) {
+          return { 1: 1, name };
+        },
+      };
+    },
+  });
   const result = await hybridSearch("memory-engine compatibility", { topK: 3 }, {
-    withDb: fn => fn({
-      prepare(sql) {
-        const q = String(sql);
-        return {
-          all(...args) {
-            if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
-              return [{
-                chunk_id: "chunk-1234567890abcdef",
-                confidence: 0.82,
-                last_confidence_update: 0,
-                base_tau: 7,
-                hit_count: 3,
-                is_protected: 0,
-                conflict_flag: 0,
-                category: "raw_log",
-                is_archived: 0,
-              }];
-            }
-            if (q.includes("SELECT id, path, updated_at FROM chunks")) {
-              return [{
-                id: "chunk-1234567890abcdef",
-                path: "memory/smart-add/memory-engine-compatibility.md",
-                updated_at: 1710000000,
-              }];
-            }
-            if (q.includes("FROM memory_confidence mc") && q.includes("mc.kg_data LIKE")) {
-              return [{
-                id: "chunk-1234567890abcdef",
-                text: "memory-engine compatibility notes",
-                path: "memory/smart-add/memory-engine-compatibility.md",
-                updated_at: 1710000000,
-                confidence: 0.82,
-                last_confidence_update: 0,
-                base_tau: 7,
-                hit_count: 3,
-                is_protected: 0,
-                conflict_flag: 0,
-                category: "raw_log",
-                is_archived: 0,
-                kg_data: "memory-engine compatibility stable module",
-              }];
-            }
-            if (q.includes("FROM chunks_fts f")) {
-              const query = String(args[0] || "");
-              if (query.includes(" OR ")) return [];
-              return [{
-                id: "chunk-1234567890abcdef",
-                text: "memory-engine compatibility notes",
-                path: "memory/smart-add/memory-engine-compatibility.md",
-                updated_at: 1710000000,
-                confidence: 0.82,
-                last_confidence_update: 0,
-                base_tau: 7,
-                hit_count: 3,
-                is_protected: 0,
-                conflict_flag: 0,
-                category: "raw_log",
-                is_archived: 0,
-              }];
-            }
-            return [];
-          },
-        };
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: withDb,
+      withEngineDb: withDb,
+      capabilities: {
+        isolatedFts: true,
+        isolatedKg: true,
+        isolatedRecent: true,
       },
     }),
     calcRealtimeConf: row => row.confidence,

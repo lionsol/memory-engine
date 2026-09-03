@@ -51,6 +51,8 @@ function buildContext({ decision = null, legacyCalls = [] } = {}) {
     kgAccessMode: "legacy",
     kgIsolationRequested: true,
     kgIsolationFallbackReason: "text_id_invariant_failed",
+    // Direct channel-policy fixture; production Hybrid never supplies this.
+    legacyFallbackAllowed: true,
     kgFailClosedDecision: decision,
     channels: {},
     debug,
