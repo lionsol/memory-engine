@@ -277,6 +277,141 @@ test("every hybrid breadth field rejects explicit non-contract values", () => {
   }
 });
 
+test("R2 rejects timeout coercion and optional threshold coercion", () => {
+  for (const value of [500, 999, 0, -1, "8000", Number.NaN, Number.POSITIVE_INFINITY, null, {}, []]) {
+    const result = resolveEffectiveHybridRuntimeConfig({
+      pluginConfig: { autoRecall: { timeoutMs: value } },
+    });
+    assert.equal(result.valid, false, `timeoutMs=${String(value)}`);
+    assert.ok(result.errors.includes("invalid_number:autoRecall.timeoutMs"), `timeoutMs=${String(value)}`);
+    assert.equal(result.autoRecall.timeoutMs, 8000, `timeoutMs=${String(value)}`);
+  }
+
+  const validTimeout = resolveEffectiveHybridRuntimeConfig({
+    pluginConfig: { autoRecall: { timeoutMs: 1000.5 } },
+  });
+  assert.equal(validTimeout.autoRecall.timeoutMs, 1000.5);
+  assert.equal(validTimeout.errors.includes("invalid_number:autoRecall.timeoutMs"), false);
+
+  for (const field of ["minConfidence", "lexicalConfidenceThreshold"]) {
+    for (const value of ["0.4", -0.1, 1.1, Number.NaN, Number.POSITIVE_INFINITY, {}, []]) {
+      const result = resolveEffectiveHybridRuntimeConfig({
+        pluginConfig: { autoRecall: { [field]: value } },
+      });
+      assert.equal(result.valid, false, `${field}=${String(value)}`);
+      assert.ok(result.errors.includes(`invalid_number:autoRecall.${field}`), `${field}=${String(value)}`);
+      assert.equal(result.autoRecall[field], null, `${field}=${String(value)}`);
+    }
+  }
+
+  const optionalNull = resolveEffectiveHybridRuntimeConfig({
+    pluginConfig: { autoRecall: { minConfidence: null, lexicalConfidenceThreshold: null } },
+  });
+  assert.equal(optionalNull.autoRecall.minConfidence, null);
+  assert.equal(optionalNull.autoRecall.lexicalConfidenceThreshold, null);
+  assert.equal(optionalNull.errors.some(error => error.includes("autoRecall.minConfidence")), false);
+  assert.equal(optionalNull.errors.some(error => error.includes("autoRecall.lexicalConfidenceThreshold")), false);
+});
+
+test("R2 threshold validation attributes config sources and never clamps", () => {
+  const invalidValues = [null, "0.4", -0.1, 1.1, Number.NaN, Number.POSITIVE_INFINITY, {}, []];
+  const configSources = [
+    ["memory", "minConfidence", "invalid_number:memory.minConfidence", 0.15],
+    ["autoRecall", "minConfidence", "invalid_number:autoRecall.minConfidence", 0.15],
+    ["memory", "autoRecallLexicalConfidenceThreshold", "invalid_number:memory.autoRecallLexicalConfidenceThreshold", 0.7],
+    ["autoRecall", "lexicalConfidenceThreshold", "invalid_number:autoRecall.lexicalConfidenceThreshold", 0.7],
+  ];
+
+  for (const [section, field, errorCode, fallback] of configSources) {
+    for (const value of invalidValues) {
+      const result = resolveEffectiveHybridRuntimeConfig({
+        apiConfig: { [section]: { [field]: value } },
+      });
+      const effective = field === "minConfidence"
+        ? result.hybridRetrieval.effectiveMinConfidence
+        : result.hybridRetrieval.effectiveLexicalConfidenceThreshold;
+      assert.equal(result.valid, false, `${section}.${field}=${String(value)}`);
+      assert.ok(result.errors.includes(errorCode), `${section}.${field}=${String(value)}`);
+      assert.equal(effective, fallback, `${section}.${field}=${String(value)}`);
+    }
+  }
+
+  for (const [path, field, errorCode, fallback] of [
+    ["confidence", "min", "invalid_number:memoryEngineConfig.confidence.min", 0.15],
+    ["recall", "lexicalConfidenceThreshold", "invalid_number:memoryEngineConfig.recall.lexicalConfidenceThreshold", 0.7],
+  ]) {
+    for (const value of invalidValues) {
+      const result = resolveEffectiveHybridRuntimeConfig({
+        memoryEngineConfig: { [path]: { [field]: value } },
+      });
+      const effective = path === "confidence"
+        ? result.hybridRetrieval.effectiveMinConfidence
+        : result.hybridRetrieval.effectiveLexicalConfidenceThreshold;
+      assert.equal(result.valid, false, `memoryEngineConfig.${path}.${field}=${String(value)}`);
+      assert.ok(result.errors.includes(errorCode), `memoryEngineConfig.${path}.${field}=${String(value)}`);
+      assert.equal(effective, fallback, `memoryEngineConfig.${path}.${field}=${String(value)}`);
+    }
+  }
+});
+
+test("R2 thresholds accept only bounded explicit numbers and strict environment decimals", () => {
+  const previousMin = process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
+  const previousLexical = process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;
+  try {
+    delete process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
+    delete process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;
+
+    for (const value of [0, 0.5, 1]) {
+      const result = resolveEffectiveHybridRuntimeConfig({
+        apiConfig: {
+          memory: { minConfidence: value },
+          autoRecall: { lexicalConfidenceThreshold: value },
+        },
+      });
+      assert.equal(result.valid, true, result.errors.join(", "));
+      assert.equal(result.hybridRetrieval.effectiveMinConfidence, value);
+      assert.equal(result.hybridRetrieval.effectiveLexicalConfidenceThreshold, value);
+    }
+
+    process.env.MEMORY_ENGINE_MIN_CONFIDENCE = "0.25";
+    process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = "0.75";
+    const fromEnvironment = resolveEffectiveHybridRuntimeConfig({});
+    assert.equal(fromEnvironment.valid, true, fromEnvironment.errors.join(", "));
+    assert.equal(fromEnvironment.hybridRetrieval.effectiveMinConfidence, 0.25);
+    assert.equal(fromEnvironment.hybridRetrieval.effectiveLexicalConfidenceThreshold, 0.75);
+
+    process.env.MEMORY_ENGINE_MIN_CONFIDENCE = "1.1";
+    process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = "not-a-number";
+    const invalidEnvironment = resolveEffectiveHybridRuntimeConfig({});
+    assert.equal(invalidEnvironment.valid, false);
+    assert.ok(invalidEnvironment.errors.includes("invalid_number:MEMORY_ENGINE_MIN_CONFIDENCE"));
+    assert.ok(invalidEnvironment.errors.includes("invalid_number:AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD"));
+    assert.equal(invalidEnvironment.hybridRetrieval.effectiveMinConfidence, 0.15);
+    assert.equal(invalidEnvironment.hybridRetrieval.effectiveLexicalConfidenceThreshold, 0.7);
+
+    process.env.MEMORY_ENGINE_MIN_CONFIDENCE = "0.8";
+    process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = "0.9";
+    const invalidConfig = resolveEffectiveHybridRuntimeConfig({
+      apiConfig: {
+        memory: { minConfidence: "0.6" },
+        autoRecall: { lexicalConfidenceThreshold: 1.2 },
+      },
+    });
+    assert.equal(invalidConfig.valid, false);
+    assert.ok(invalidConfig.errors.includes("invalid_number:memory.minConfidence"));
+    assert.ok(invalidConfig.errors.includes("invalid_number:autoRecall.lexicalConfidenceThreshold"));
+    assert.equal(invalidConfig.errors.includes("invalid_number:MEMORY_ENGINE_MIN_CONFIDENCE"), false);
+    assert.equal(invalidConfig.errors.includes("invalid_number:AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD"), false);
+    assert.equal(invalidConfig.hybridRetrieval.effectiveMinConfidence, 0.15);
+    assert.equal(invalidConfig.hybridRetrieval.effectiveLexicalConfidenceThreshold, 0.7);
+  } finally {
+    if (previousMin === undefined) delete process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
+    else process.env.MEMORY_ENGINE_MIN_CONFIDENCE = previousMin;
+    if (previousLexical === undefined) delete process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;
+    else process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = previousLexical;
+  }
+});
+
 test("environment retrieval overrides are normalized into the effective config", () => {
   const previousMin = process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
   const previousLexical = process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;

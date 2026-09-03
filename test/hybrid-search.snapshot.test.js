@@ -428,6 +428,36 @@ test("hybridSearch minConfidence default and override come from unified config",
   assert.equal(overrideResult.debug.min_confidence, 0.22);
 });
 
+test("hybridSearch consumes normalized effective confidence thresholds", async () => {
+  const normalized = (await import("../lib/config/effective-hybrid-runtime-config.js"))
+    .resolveEffectiveHybridRuntimeConfig({}).hybridRetrieval;
+  const result = await hybridSearch("x", { topK: 1 }, {
+    withHybridDbAccessScope: withFakeDbScope,
+    calcRealtimeConf: row => row.confidence,
+    cfg: {
+      memoryEngine: {
+        confidence: { min: 0.99 },
+        recall: { lexicalConfidenceThreshold: 0.99 },
+      },
+    },
+    hybridRetrieval: {
+      ...normalized,
+      effectiveMinConfidence: 0.01,
+      effectiveLexicalConfidenceThreshold: 0.02,
+      confidence: { ...normalized.confidence, min: 0.01 },
+      recall: { ...normalized.recall, lexicalConfidenceThreshold: 0.02 },
+    },
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async () => ({ entries: [] }),
+      },
+    }),
+  });
+
+  assert.equal(result.debug.min_confidence, 0.01);
+  assert.equal(result.debug.lexical_confidence_threshold, 0.02);
+});
+
 test("hybridSearch consumes normalized candidate limits instead of coercing raw config", async () => {
   const limits = [];
   const result = await hybridSearch("x", { topK: 1 }, {

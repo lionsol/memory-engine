@@ -80,7 +80,8 @@ test("grouped runtime drives both search tool surfaces through one context", asy
       apiConfig: {
         marker: true,
         memoryEngine: {
-          recall: { vectorTopK: 41 },
+          confidence: { min: 0.22 },
+          recall: { vectorTopK: 41, lexicalConfidenceThreshold: 0.33 },
           ranking: { rrfK: 2.5 },
         },
       },
@@ -116,6 +117,8 @@ test("grouped runtime drives both search tool surfaces through one context", asy
   assert.equal(calls[0].runtime.cfg, context.retrievalPolicy.apiConfig);
   assert.equal(calls[0].runtime.hybridRetrieval.recall.vectorTopK, 41);
   assert.equal(calls[0].runtime.hybridRetrieval.ranking.rrfK, 2.5);
+  assert.equal(calls[0].runtime.hybridRetrieval.effectiveMinConfidence, 0.22);
+  assert.equal(calls[0].runtime.hybridRetrieval.effectiveLexicalConfidenceThreshold, 0.33);
 });
 
 test("observation uses telemetry group and resolves tool traffic origin", () => {

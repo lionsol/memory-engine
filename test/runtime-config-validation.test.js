@@ -127,6 +127,39 @@ test("invalid hybrid limits reach the startup warning without raw values", () =>
   }
 });
 
+test("invalid thresholds and timeout reach the startup warning with source-specific codes", () => {
+  const { root, assembly } = createAssembly({
+    autoRecall: { timeoutMs: 500 },
+  }, {
+    memoryEngine: {
+      confidence: { min: 1.1 },
+      recall: { lexicalConfidenceThreshold: "private-threshold-value" },
+    },
+  });
+  const warnings = [];
+  try {
+    assert.equal(assembly.config.validation.valid, false);
+    assert.deepEqual(assembly.config.validation.errors, [
+      "invalid_number:autoRecall.timeoutMs",
+      "invalid_number:memoryEngineConfig.confidence.min",
+      "invalid_number:memoryEngineConfig.recall.lexicalConfidenceThreshold",
+    ]);
+    assert.equal(emitRuntimeConfigValidationWarning(assembly.config.validation, {
+      logger: { warn: message => warnings.push(message) },
+      consoleWarn: () => {
+        throw new Error("console fallback must not be called when logger exists");
+      },
+    }), true);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /invalid_number:autoRecall\.timeoutMs/);
+    assert.match(warnings[0], /invalid_number:memoryEngineConfig\.confidence\.min/);
+    assert.match(warnings[0], /invalid_number:memoryEngineConfig\.recall\.lexicalConfidenceThreshold/);
+    assert.equal(warnings[0].includes("private-threshold-value"), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("valid or absent optional config emits no invalid-config warning", () => {
   const warnings = [];
   const consoleWarnings = [];
