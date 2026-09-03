@@ -49,13 +49,14 @@ export default definePluginEntry({
   },
   register(api) {
     const assembly = createMemoryEngineRuntimeAssembly({
-      apiConfig: api?.config || null,
-      pluginConfig: api?.pluginConfig || null,
+      apiConfig: api?.config ?? null,
+      pluginConfig: api?.pluginConfig ?? null,
     });
     emitRuntimeConfigValidationWarning(assembly.config.validation, {
       logger: api?.logger,
     });
     const { paths, config, database, lancedb } = assembly;
+    const consumerRuntimeConfig = config.embeddingRuntimeConfig;
     const {
       withCoreDb,
       withEngineDbReadonly,
@@ -118,7 +119,7 @@ export default definePluginEntry({
     const smartAddTimeZone = config.smartAddTimeZone;
     const generateEmbeddingRuntime = text => generateEmbedding(text, {
       cfg: config.embeddingRuntimeConfig,
-      apiConfig: api?.config || null,
+      apiConfig: consumerRuntimeConfig,
     });
     const autoRecallConfig = effectiveRuntimeConfig.autoRecall;
     const kgFailClosedMode = effectiveRuntimeConfig.kgFailClosedMode;
@@ -129,7 +130,7 @@ export default definePluginEntry({
     const autoRecallLifecycle = createAutoRecallHookLifecycle({
       api,
       autoRecallConfig,
-      apiConfig: api?.config || null,
+      apiConfig: config.memoryEngineConfig,
       recordMemoryEvent,
       withDb: withEngineDbWritable,
       batchReinforce,
@@ -142,7 +143,7 @@ export default definePluginEntry({
         getMemorySearchManager,
       },
       retrievalPolicy: {
-        apiConfig: api?.config || null,
+        apiConfig: consumerRuntimeConfig,
         calcRealtimeConf,
         syncIndexIfNeeded,
         categoryMap: CATEGORY_MAP,

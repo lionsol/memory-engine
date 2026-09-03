@@ -528,6 +528,162 @@ test("malformed high-priority AutoRecall does not fall through to a lower source
   }
 });
 
+test("malformed config roots are observable and use safe source barriers", () => {
+  const malformedValues = ["bad", 4, false, [], Number.NaN, Number.POSITIVE_INFINITY];
+  for (const value of malformedValues) {
+    const plugin = resolveEffectiveHybridRuntimeConfig({
+      pluginConfig: value,
+      pluginEntryConfig: { autoRecall: { enabled: true } },
+    });
+    assert.equal(plugin.valid, false, `pluginConfig=${String(value)}`);
+    assert.ok(plugin.errors.includes("invalid_object:pluginConfig"), `pluginConfig=${String(value)}`);
+    assert.equal(plugin.autoRecall.enabled, false, `pluginConfig=${String(value)}`);
+
+    const entry = resolveEffectiveHybridRuntimeConfig({
+      pluginConfig: {},
+      pluginEntryConfig: value,
+      apiConfig: { autoRecall: { enabled: true } },
+    });
+    assert.equal(entry.valid, false, `pluginEntryConfig=${String(value)}`);
+    assert.ok(entry.errors.includes("invalid_object:pluginEntryConfig"), `pluginEntryConfig=${String(value)}`);
+    assert.equal(entry.autoRecall.enabled, false, `pluginEntryConfig=${String(value)}`);
+  }
+
+  for (const value of malformedValues) {
+    const api = resolveEffectiveHybridRuntimeConfig({ apiConfig: value });
+    assert.equal(api.valid, false, `apiConfig=${String(value)}`);
+    assert.ok(api.errors.includes("invalid_object:apiConfig"), `apiConfig=${String(value)}`);
+  }
+
+  const absentAndEmpty = resolveEffectiveHybridRuntimeConfig({
+    pluginConfig: {},
+    pluginEntryConfig: null,
+    apiConfig: { memoryEngine: null, memory: null },
+    memoryEngineConfig: null,
+  });
+  assert.equal(absentAndEmpty.valid, true, absentAndEmpty.errors.join(", "));
+
+  const malformedMemoryEngine = resolveEffectiveHybridRuntimeConfig({
+    apiConfig: { memoryEngine: "bad" },
+  });
+  assert.equal(malformedMemoryEngine.valid, false);
+  assert.ok(malformedMemoryEngine.errors.includes("invalid_object:apiConfig.memoryEngine"));
+  assert.equal(malformedMemoryEngine.hybridRetrieval.recall.vectorTopK, 30);
+
+  const malformedDirectMemoryEngine = resolveEffectiveHybridRuntimeConfig({
+    memoryEngineConfig: "bad",
+  });
+  assert.equal(malformedDirectMemoryEngine.valid, false);
+  assert.ok(malformedDirectMemoryEngine.errors.includes("invalid_object:memoryEngineConfig"));
+  assert.equal(malformedDirectMemoryEngine.hybridRetrieval.recall.vectorTopK, 30);
+
+  const malformedApiMemoryEngine = resolveEffectiveHybridRuntimeConfig({
+    apiConfig: { memoryEngine: { confidence: "bad" } },
+  });
+  assert.equal(malformedApiMemoryEngine.valid, false);
+  assert.ok(malformedApiMemoryEngine.errors.includes("invalid_object:memoryEngineConfig.confidence"));
+  assert.equal(malformedApiMemoryEngine.hybridRetrieval.effectiveMinConfidence, 0.15);
+  assert.equal(Object.hasOwn(malformedApiMemoryEngine.hybridRetrieval.confidence, "0"), false);
+
+  for (const value of malformedValues) {
+    const apiMemoryEngine = resolveEffectiveHybridRuntimeConfig({
+      apiConfig: { memoryEngine: value },
+    });
+    assert.equal(apiMemoryEngine.valid, false, `apiConfig.memoryEngine=${String(value)}`);
+    assert.ok(
+      apiMemoryEngine.errors.includes("invalid_object:apiConfig.memoryEngine"),
+      `apiConfig.memoryEngine=${String(value)}`,
+    );
+
+    const directMemoryEngine = resolveEffectiveHybridRuntimeConfig({
+      memoryEngineConfig: value,
+    });
+    assert.equal(directMemoryEngine.valid, false, `memoryEngineConfig=${String(value)}`);
+    assert.ok(
+      directMemoryEngine.errors.includes("invalid_object:memoryEngineConfig"),
+      `memoryEngineConfig=${String(value)}`,
+    );
+  }
+
+  for (const value of malformedValues) {
+    const confidence = resolveEffectiveHybridRuntimeConfig({
+      apiConfig: { memoryEngine: { confidence: value } },
+    });
+    assert.equal(confidence.valid, false, `api confidence=${String(value)}`);
+    assert.ok(
+      confidence.errors.includes("invalid_object:memoryEngineConfig.confidence"),
+      `api confidence=${String(value)}`,
+    );
+    assert.equal(Object.hasOwn(confidence.hybridRetrieval.confidence, "0"), false);
+  }
+});
+
+test("malformed threshold containers block lower aliases and preserve confidence shape", () => {
+  const previousMin = process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
+  const previousLexical = process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;
+  try {
+    process.env.MEMORY_ENGINE_MIN_CONFIDENCE = "0.82";
+    process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = "0.83";
+
+    const malformedMemory = resolveEffectiveHybridRuntimeConfig({
+      apiConfig: {
+        memory: "bad",
+        autoRecall: {
+          minConfidence: 0.91,
+          lexicalConfidenceThreshold: 0.92,
+        },
+      },
+      memoryEngineConfig: {
+        confidence: { min: 0.73 },
+        recall: { lexicalConfidenceThreshold: 0.74 },
+      },
+    });
+    assert.equal(malformedMemory.valid, false);
+    assert.ok(malformedMemory.errors.includes("invalid_object:apiConfig.memory"));
+    assert.equal(malformedMemory.hybridRetrieval.effectiveMinConfidence, 0.15);
+    assert.equal(malformedMemory.hybridRetrieval.effectiveLexicalConfidenceThreshold, 0.7);
+
+    const malformedAutoRecall = resolveEffectiveHybridRuntimeConfig({
+      apiConfig: { autoRecall: "bad" },
+      memoryEngineConfig: {
+        confidence: { min: 0.73 },
+        recall: { lexicalConfidenceThreshold: 0.74 },
+      },
+    });
+    assert.equal(malformedAutoRecall.valid, false);
+    assert.ok(malformedAutoRecall.errors.includes("invalid_object:apiConfig.autoRecall"));
+    assert.equal(malformedAutoRecall.hybridRetrieval.effectiveMinConfidence, 0.15);
+    assert.equal(malformedAutoRecall.hybridRetrieval.effectiveLexicalConfidenceThreshold, 0.7);
+
+    const malformedConfidence = resolveEffectiveHybridRuntimeConfig({
+      memoryEngineConfig: { confidence: "bad" },
+    });
+    assert.equal(malformedConfidence.valid, false);
+    assert.ok(malformedConfidence.errors.includes("invalid_object:memoryEngineConfig.confidence"));
+    assert.equal(malformedConfidence.hybridRetrieval.effectiveMinConfidence, 0.15);
+    assert.equal(malformedConfidence.hybridRetrieval.confidence.min, 0.15);
+    assert.equal(Object.hasOwn(malformedConfidence.hybridRetrieval.confidence, "0"), false);
+    assert.equal(Object.hasOwn(malformedConfidence.hybridRetrieval.confidence, "1"), false);
+    assert.equal(Object.hasOwn(malformedConfidence.hybridRetrieval.confidence, "2"), false);
+  } finally {
+    if (previousMin === undefined) delete process.env.MEMORY_ENGINE_MIN_CONFIDENCE;
+    else process.env.MEMORY_ENGINE_MIN_CONFIDENCE = previousMin;
+    if (previousLexical === undefined) delete process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD;
+    else process.env.AUTO_RECALL_LEXICAL_CONFIDENCE_THRESHOLD = previousLexical;
+  }
+});
+
+test("valid higher-priority plugin values survive malformed lower roots", () => {
+  const result = resolveEffectiveHybridRuntimeConfig({
+    pluginConfig: { kgFailClosedMode: "full_fail_closed" },
+    pluginEntryConfig: "bad",
+    apiConfig: { kgFailClosedMode: "shadow_fail_closed" },
+  });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.includes("invalid_object:pluginEntryConfig"));
+  assert.equal(result.kgFailClosedMode, "full_fail_closed");
+});
+
 test("invalid fail-closed modes fail safe and invalidate runtime config", () => {
   const result = resolveEffectiveHybridRuntimeConfig({
     pluginConfig: { kgFailClosedMode: "unexpected_mode" },

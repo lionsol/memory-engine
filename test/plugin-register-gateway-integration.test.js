@@ -87,21 +87,10 @@ test("plugin register warns once before registering product surfaces for invalid
     const tools = [];
     const hooks = [];
     const commands = [];
-    const apiConfig = {
-      plugins: {
-        entries: {
-          "active-memory": { enabled: false },
-          "memory-engine": { enabled: true, config: {} },
-        },
-      },
-    };
+    const apiConfig = false;
     const api = {
       config: apiConfig,
-      pluginConfig: {
-        autoRecall: {
-          enabled: "invalid-config-value",
-        },
-      },
+      pluginConfig: "private-secret-value",
       runtime: {
         version: "test-openclaw-runtime",
         config: { current: () => apiConfig },
@@ -140,8 +129,10 @@ test("plugin register warns once before registering product surfaces for invalid
     assert.equal(validationWarnings.length, 1);
     assert.match(validationWarnings[0], /MEMORY_ENGINE_CONFIG_INVALID/);
     assert.match(validationWarnings[0], /fallback_applied=true/);
-    assert.match(validationWarnings[0], /error_count=1/);
-    assert.match(validationWarnings[0], /invalid_boolean:autoRecall\.enabled/);
+    assert.match(validationWarnings[0], /error_count=2/);
+    assert.match(validationWarnings[0], /invalid_object:apiConfig/);
+    assert.match(validationWarnings[0], /invalid_object:pluginConfig/);
+    assert.equal(validationWarnings[0].includes("private-secret-value"), false);
     assert.equal(startupEvents[0], "logger.warn");
     assert.deepEqual([...gatewayMethods.keys()], []);
     assert.deepEqual(tools.sort(), ["memory_engine", "memory_engine_get", "memory_engine_search"]);
