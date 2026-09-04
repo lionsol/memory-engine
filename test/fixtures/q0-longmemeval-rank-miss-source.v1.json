@@ -1,0 +1,1990 @@
+{
+  "schema": "memory_engine_q0_longmemeval_rank_failure_manifest_v1",
+  "rank_miss_count": 248,
+  "cases": [
+    {
+      "case_id": "q0e2b-longmemeval-0977f2af",
+      "source_ref": "longmemeval:0977f2af",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-18bc8abd",
+      "source_ref": "longmemeval:18bc8abd",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-1cea1afa",
+      "source_ref": "longmemeval:1cea1afa",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2133c1b5",
+      "source_ref": "longmemeval:2133c1b5",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-3ba21379",
+      "source_ref": "longmemeval:3ba21379",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-41698283",
+      "source_ref": "longmemeval:41698283",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-50635ada",
+      "source_ref": "longmemeval:50635ada",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-5c40ec5b",
+      "source_ref": "longmemeval:5c40ec5b",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-830ce83f",
+      "source_ref": "longmemeval:830ce83f",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-89941a93",
+      "source_ref": "longmemeval:89941a93",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-9ea5eabc",
+      "source_ref": "longmemeval:9ea5eabc",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-a2f3aa27",
+      "source_ref": "longmemeval:a2f3aa27",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-affe2881",
+      "source_ref": "longmemeval:affe2881",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b6019101",
+      "source_ref": "longmemeval:b6019101",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-ba61f0b9",
+      "source_ref": "longmemeval:ba61f0b9",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-c4ea545c",
+      "source_ref": "longmemeval:c4ea545c",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-c6853660",
+      "source_ref": "longmemeval:c6853660",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-c7dc5443",
+      "source_ref": "longmemeval:c7dc5443",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-e61a7584",
+      "source_ref": "longmemeval:e61a7584",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-eace081b",
+      "source_ref": "longmemeval:eace081b",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-f685340e",
+      "source_ref": "longmemeval:f685340e",
+      "case_ref": "question_type:knowledge-update",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-00ca467f",
+      "source_ref": "longmemeval:00ca467f",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-078150f1",
+      "source_ref": "longmemeval:078150f1",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-09ba9854",
+      "source_ref": "longmemeval:09ba9854",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-0a995998",
+      "source_ref": "longmemeval:0a995998",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-0ea62687",
+      "source_ref": "longmemeval:0ea62687",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-1192316e",
+      "source_ref": "longmemeval:1192316e",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-129d1232",
+      "source_ref": "longmemeval:129d1232",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-157a136e",
+      "source_ref": "longmemeval:157a136e",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-1a8a66a6",
+      "source_ref": "longmemeval:1a8a66a6",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-1f2b8d4f",
+      "source_ref": "longmemeval:1f2b8d4f",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2311e44b",
+      "source_ref": "longmemeval:2311e44b",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2318644b",
+      "source_ref": "longmemeval:2318644b",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2788b940",
+      "source_ref": "longmemeval:2788b940",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-28dc39ac",
+      "source_ref": "longmemeval:28dc39ac",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2b8f3739",
+      "source_ref": "longmemeval:2b8f3739",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2ce6a0f2",
+      "source_ref": "longmemeval:2ce6a0f2",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2e6d26dc",
+      "source_ref": "longmemeval:2e6d26dc",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-36b9f61e",
+      "source_ref": "longmemeval:36b9f61e",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-37f165cf",
+      "source_ref": "longmemeval:37f165cf",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-3a704032",
+      "source_ref": "longmemeval:3a704032",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-3c1045c8",
+      "source_ref": "longmemeval:3c1045c8",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-3fdac837",
+      "source_ref": "longmemeval:3fdac837",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-46a3abf7",
+      "source_ref": "longmemeval:46a3abf7",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-4adc0475",
+      "source_ref": "longmemeval:4adc0475",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-5025383b",
+      "source_ref": "longmemeval:5025383b",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-51c32626",
+      "source_ref": "longmemeval:51c32626",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-60472f9c",
+      "source_ref": "longmemeval:60472f9c",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-60bf93ed",
+      "source_ref": "longmemeval:60bf93ed",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-61f8c8f8",
+      "source_ref": "longmemeval:61f8c8f8",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-6456829e",
+      "source_ref": "longmemeval:6456829e",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-67e0d0f2",
+      "source_ref": "longmemeval:67e0d0f2",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-6d550036",
+      "source_ref": "longmemeval:6d550036",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-7024f17c",
+      "source_ref": "longmemeval:7024f17c",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-73d42213",
+      "source_ref": "longmemeval:73d42213",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-7405e8b1",
+      "source_ref": "longmemeval:7405e8b1",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-77eafa52",
+      "source_ref": "longmemeval:77eafa52",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-80ec1f4f",
+      "source_ref": "longmemeval:80ec1f4f",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-81507db6",
+      "source_ref": "longmemeval:81507db6",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-85fa3a3f",
+      "source_ref": "longmemeval:85fa3a3f",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-87f22b4a",
+      "source_ref": "longmemeval:87f22b4a",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-88432d0a",
+      "source_ref": "longmemeval:88432d0a",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-8979f9ec",
+      "source_ref": "longmemeval:8979f9ec",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-8cf4d046",
+      "source_ref": "longmemeval:8cf4d046",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-8e91e7d9",
+      "source_ref": "longmemeval:8e91e7d9",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-91b15a6e",
+      "source_ref": "longmemeval:91b15a6e",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-9aaed6a3",
+      "source_ref": "longmemeval:9aaed6a3",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-a1cc6108",
+      "source_ref": "longmemeval:a1cc6108",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-a346bb18",
+      "source_ref": "longmemeval:a346bb18",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-a9f6b44c",
+      "source_ref": "longmemeval:a9f6b44c",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-aae3761f",
+      "source_ref": "longmemeval:aae3761f",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b3c15d39",
+      "source_ref": "longmemeval:b3c15d39",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b5ef892d",
+      "source_ref": "longmemeval:b5ef892d",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-ba358f49",
+      "source_ref": "longmemeval:ba358f49",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-bb7c3b45",
+      "source_ref": "longmemeval:bb7c3b45",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-bc149d6b",
+      "source_ref": "longmemeval:bc149d6b",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-bf659f65",
+      "source_ref": "longmemeval:bf659f65",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-c18a7dc8",
+      "source_ref": "longmemeval:c18a7dc8",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-c4a1ceb8",
+      "source_ref": "longmemeval:c4a1ceb8",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-cc06de0d",
+      "source_ref": "longmemeval:cc06de0d",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d23cf73b",
+      "source_ref": "longmemeval:d23cf73b",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d3ab962e",
+      "source_ref": "longmemeval:d3ab962e",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d6062bb9",
+      "source_ref": "longmemeval:d6062bb9",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d682f1a2",
+      "source_ref": "longmemeval:d682f1a2",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d851d5ba",
+      "source_ref": "longmemeval:d851d5ba",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d905b33f",
+      "source_ref": "longmemeval:d905b33f",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-dd2973ad",
+      "source_ref": "longmemeval:dd2973ad",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-e25c3b8d",
+      "source_ref": "longmemeval:e25c3b8d",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-e3038f8c",
+      "source_ref": "longmemeval:e3038f8c",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-e56a43b9",
+      "source_ref": "longmemeval:e56a43b9",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-e831120c",
+      "source_ref": "longmemeval:e831120c",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-edced276",
+      "source_ref": "longmemeval:edced276",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-eeda8a6d",
+      "source_ref": "longmemeval:eeda8a6d",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-ef66a6e5",
+      "source_ref": "longmemeval:ef66a6e5",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-ef9cf60a",
+      "source_ref": "longmemeval:ef9cf60a",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-efc3f7c2",
+      "source_ref": "longmemeval:efc3f7c2",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-f0e564bc",
+      "source_ref": "longmemeval:f0e564bc",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-f35224e0",
+      "source_ref": "longmemeval:f35224e0",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_15e38248",
+      "source_ref": "longmemeval:gpt4_15e38248",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_194be4b3",
+      "source_ref": "longmemeval:gpt4_194be4b3",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_2ba83207",
+      "source_ref": "longmemeval:gpt4_2ba83207",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_2f8be40d",
+      "source_ref": "longmemeval:gpt4_2f8be40d",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_2f91af09",
+      "source_ref": "longmemeval:gpt4_2f91af09",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_31ff4165",
+      "source_ref": "longmemeval:gpt4_31ff4165",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_372c3eed",
+      "source_ref": "longmemeval:gpt4_372c3eed",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_5501fe77",
+      "source_ref": "longmemeval:gpt4_5501fe77",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_59c863d7",
+      "source_ref": "longmemeval:gpt4_59c863d7",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_731e37d7",
+      "source_ref": "longmemeval:gpt4_731e37d7",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_7fce9456",
+      "source_ref": "longmemeval:gpt4_7fce9456",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_a56e767c",
+      "source_ref": "longmemeval:gpt4_a56e767c",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_ab202e7f",
+      "source_ref": "longmemeval:gpt4_ab202e7f",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_d12ceb0e",
+      "source_ref": "longmemeval:gpt4_d12ceb0e",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_d84a3211",
+      "source_ref": "longmemeval:gpt4_d84a3211",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_f2262a51",
+      "source_ref": "longmemeval:gpt4_f2262a51",
+      "case_ref": "question_type:multi-session",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-4388e9dd",
+      "source_ref": "longmemeval:4388e9dd",
+      "case_ref": "question_type:single-session-assistant",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-561fabcd",
+      "source_ref": "longmemeval:561fabcd",
+      "case_ref": "question_type:single-session-assistant",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-5809eb10",
+      "source_ref": "longmemeval:5809eb10",
+      "case_ref": "question_type:single-session-assistant",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-f523d9fe",
+      "source_ref": "longmemeval:f523d9fe",
+      "case_ref": "question_type:single-session-assistant",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-06878be2",
+      "source_ref": "longmemeval:06878be2",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-06f04340",
+      "source_ref": "longmemeval:06f04340",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-07b6f563",
+      "source_ref": "longmemeval:07b6f563",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-09d032c9",
+      "source_ref": "longmemeval:09d032c9",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-0a34ad58",
+      "source_ref": "longmemeval:0a34ad58",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-195a1a1b",
+      "source_ref": "longmemeval:195a1a1b",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-1a1907b4",
+      "source_ref": "longmemeval:1a1907b4",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-1c0ddc50",
+      "source_ref": "longmemeval:1c0ddc50",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-1d4e3b97",
+      "source_ref": "longmemeval:1d4e3b97",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-32260d93",
+      "source_ref": "longmemeval:32260d93",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-38146c39",
+      "source_ref": "longmemeval:38146c39",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-505af2f5",
+      "source_ref": "longmemeval:505af2f5",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-54026fce",
+      "source_ref": "longmemeval:54026fce",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-57f827a0",
+      "source_ref": "longmemeval:57f827a0",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-6b7dfb22",
+      "source_ref": "longmemeval:6b7dfb22",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-8a2466db",
+      "source_ref": "longmemeval:8a2466db",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-95228167",
+      "source_ref": "longmemeval:95228167",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-a89d7624",
+      "source_ref": "longmemeval:a89d7624",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-afdc33df",
+      "source_ref": "longmemeval:afdc33df",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b0479f84",
+      "source_ref": "longmemeval:b0479f84",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d24813b1",
+      "source_ref": "longmemeval:d24813b1",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d6233ab6",
+      "source_ref": "longmemeval:d6233ab6",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-fca70973",
+      "source_ref": "longmemeval:fca70973",
+      "case_ref": "question_type:single-session-preference",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-001be529",
+      "source_ref": "longmemeval:001be529",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-19b5f2b3",
+      "source_ref": "longmemeval:19b5f2b3",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-4100d0a0",
+      "source_ref": "longmemeval:4100d0a0",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-6b168ec8",
+      "source_ref": "longmemeval:6b168ec8",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-75499fd8",
+      "source_ref": "longmemeval:75499fd8",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-94f70d80",
+      "source_ref": "longmemeval:94f70d80",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b320f3f8",
+      "source_ref": "longmemeval:b320f3f8",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b86304ba",
+      "source_ref": "longmemeval:b86304ba",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-c14c00dd",
+      "source_ref": "longmemeval:c14c00dd",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-caf9ead2",
+      "source_ref": "longmemeval:caf9ead2",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-e01b8e2f",
+      "source_ref": "longmemeval:e01b8e2f",
+      "case_ref": "question_type:single-session-user",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-08f4fc43",
+      "source_ref": "longmemeval:08f4fc43",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-0bc8ad92",
+      "source_ref": "longmemeval:0bc8ad92",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-0bc8ad93",
+      "source_ref": "longmemeval:0bc8ad93",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-0db4c65d",
+      "source_ref": "longmemeval:0db4c65d",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2a1811e2",
+      "source_ref": "longmemeval:2a1811e2",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2c63a862",
+      "source_ref": "longmemeval:2c63a862",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2ebe6c90",
+      "source_ref": "longmemeval:2ebe6c90",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-2ebe6c92",
+      "source_ref": "longmemeval:2ebe6c92",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-370a8ff4",
+      "source_ref": "longmemeval:370a8ff4",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-4dfccbf7",
+      "source_ref": "longmemeval:4dfccbf7",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-4dfccbf8",
+      "source_ref": "longmemeval:4dfccbf8",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-5e1b23de",
+      "source_ref": "longmemeval:5e1b23de",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-6613b389",
+      "source_ref": "longmemeval:6613b389",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-6e984301",
+      "source_ref": "longmemeval:6e984301",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-6e984302",
+      "source_ref": "longmemeval:6e984302",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-71017276",
+      "source_ref": "longmemeval:71017276",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-71017277",
+      "source_ref": "longmemeval:71017277",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-8c18457d",
+      "source_ref": "longmemeval:8c18457d",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-993da5e2",
+      "source_ref": "longmemeval:993da5e2",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-9a707b82",
+      "source_ref": "longmemeval:9a707b82",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-a3838d2b",
+      "source_ref": "longmemeval:a3838d2b",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 6
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-af082822",
+      "source_ref": "longmemeval:af082822",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b46e15ed",
+      "source_ref": "longmemeval:b46e15ed",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b46e15ee",
+      "source_ref": "longmemeval:b46e15ee",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 4
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-b9cfe692",
+      "source_ref": "longmemeval:b9cfe692",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-bbf86515",
+      "source_ref": "longmemeval:bbf86515",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-c8090214",
+      "source_ref": "longmemeval:c8090214",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-d01c6aa8",
+      "source_ref": "longmemeval:d01c6aa8",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-dcfa8644",
+      "source_ref": "longmemeval:dcfa8644",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-e4e14d04",
+      "source_ref": "longmemeval:e4e14d04",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-eac54adc",
+      "source_ref": "longmemeval:eac54adc",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-eac54add",
+      "source_ref": "longmemeval:eac54add",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-f0853d11",
+      "source_ref": "longmemeval:f0853d11",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_0b2f1d21",
+      "source_ref": "longmemeval:gpt4_0b2f1d21",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_18c2b244",
+      "source_ref": "longmemeval:gpt4_18c2b244",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_1916e0ea",
+      "source_ref": "longmemeval:gpt4_1916e0ea",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_1a1dc16d",
+      "source_ref": "longmemeval:gpt4_1a1dc16d",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_1d4ab0c9",
+      "source_ref": "longmemeval:gpt4_1d4ab0c9",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_1e4a8aeb",
+      "source_ref": "longmemeval:gpt4_1e4a8aeb",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_1e4a8aec",
+      "source_ref": "longmemeval:gpt4_1e4a8aec",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_213fd887",
+      "source_ref": "longmemeval:gpt4_213fd887",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_21adecb5",
+      "source_ref": "longmemeval:gpt4_21adecb5",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_2487a7cb",
+      "source_ref": "longmemeval:gpt4_2487a7cb",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_2655b836",
+      "source_ref": "longmemeval:gpt4_2655b836",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_2c50253f",
+      "source_ref": "longmemeval:gpt4_2c50253f",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_2f584639",
+      "source_ref": "longmemeval:gpt4_2f584639",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_385a5000",
+      "source_ref": "longmemeval:gpt4_385a5000",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_45189cb4",
+      "source_ref": "longmemeval:gpt4_45189cb4",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_468eb063",
+      "source_ref": "longmemeval:gpt4_468eb063",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_4929293a",
+      "source_ref": "longmemeval:gpt4_4929293a",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_4929293b",
+      "source_ref": "longmemeval:gpt4_4929293b",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_4edbafa2",
+      "source_ref": "longmemeval:gpt4_4edbafa2",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_4ef30696",
+      "source_ref": "longmemeval:gpt4_4ef30696",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_4fc4f797",
+      "source_ref": "longmemeval:gpt4_4fc4f797",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_5438fa52",
+      "source_ref": "longmemeval:gpt4_5438fa52",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_59149c77",
+      "source_ref": "longmemeval:gpt4_59149c77",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_59149c78",
+      "source_ref": "longmemeval:gpt4_59149c78",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_5dcc0aab",
+      "source_ref": "longmemeval:gpt4_5dcc0aab",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_61e13b3c",
+      "source_ref": "longmemeval:gpt4_61e13b3c",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_65aabe59",
+      "source_ref": "longmemeval:gpt4_65aabe59",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_68e94287",
+      "source_ref": "longmemeval:gpt4_68e94287",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_68e94288",
+      "source_ref": "longmemeval:gpt4_68e94288",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_6ed717ea",
+      "source_ref": "longmemeval:gpt4_6ed717ea",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_70e84552",
+      "source_ref": "longmemeval:gpt4_70e84552",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_74aed68e",
+      "source_ref": "longmemeval:gpt4_74aed68e",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_76048e76",
+      "source_ref": "longmemeval:gpt4_76048e76",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_78cf46a3",
+      "source_ref": "longmemeval:gpt4_78cf46a3",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_7abb270c",
+      "source_ref": "longmemeval:gpt4_7abb270c",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 6
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_7ddcf75f",
+      "source_ref": "longmemeval:gpt4_7ddcf75f",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_7de946e7",
+      "source_ref": "longmemeval:gpt4_7de946e7",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_7f6b06db",
+      "source_ref": "longmemeval:gpt4_7f6b06db",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_8279ba02",
+      "source_ref": "longmemeval:gpt4_8279ba02",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_8279ba03",
+      "source_ref": "longmemeval:gpt4_8279ba03",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_88806d6e",
+      "source_ref": "longmemeval:gpt4_88806d6e",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_8c8961ae",
+      "source_ref": "longmemeval:gpt4_8c8961ae",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_8e165409",
+      "source_ref": "longmemeval:gpt4_8e165409",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_93159ced",
+      "source_ref": "longmemeval:gpt4_93159ced",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_93f6379c",
+      "source_ref": "longmemeval:gpt4_93f6379c",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_9a159967",
+      "source_ref": "longmemeval:gpt4_9a159967",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_a1b77f9c",
+      "source_ref": "longmemeval:gpt4_a1b77f9c",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 6
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_b0863698",
+      "source_ref": "longmemeval:gpt4_b0863698",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_b4a80587",
+      "source_ref": "longmemeval:gpt4_b4a80587",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_c27434e8",
+      "source_ref": "longmemeval:gpt4_c27434e8",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_cd90e484",
+      "source_ref": "longmemeval:gpt4_cd90e484",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_d6585ce8",
+      "source_ref": "longmemeval:gpt4_d6585ce8",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_d6585ce9",
+      "source_ref": "longmemeval:gpt4_d6585ce9",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_e061b84f",
+      "source_ref": "longmemeval:gpt4_e061b84f",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_e072b769",
+      "source_ref": "longmemeval:gpt4_e072b769",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 1
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_e414231e",
+      "source_ref": "longmemeval:gpt4_e414231e",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_e414231f",
+      "source_ref": "longmemeval:gpt4_e414231f",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_ec93e27f",
+      "source_ref": "longmemeval:gpt4_ec93e27f",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_f420262c",
+      "source_ref": "longmemeval:gpt4_f420262c",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_f420262d",
+      "source_ref": "longmemeval:gpt4_f420262d",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 5
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_f49edff3",
+      "source_ref": "longmemeval:gpt4_f49edff3",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 3
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_fa19884c",
+      "source_ref": "longmemeval:gpt4_fa19884c",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_fa19884d",
+      "source_ref": "longmemeval:gpt4_fa19884d",
+      "case_ref": "question_type:temporal-reasoning",
+      "diagnostics": {
+        "evidence_count": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,458 @@
+{
+  "schema": "memory_engine_q0_failure_evaluation_corpus_v1",
+  "corpus_version": "v1",
+  "valid": true,
+  "errors": [],
+  "case_count": 40,
+  "composition": {
+    "trigger_miss": 21,
+    "rank_miss": 19,
+    "write_miss": 0,
+    "candidate_miss": 0,
+    "use_miss": 0
+  },
+  "evaluation_only": true,
+  "prevalence_claim": false,
+  "selection": {
+    "method": "coverage_first_largest_remainder_then_salted_sha256",
+    "salt": "q0-e2c-selector-v1",
+    "rank_target": 19,
+    "rank_family_quotas": {
+      "knowledge-update": 2,
+      "multi-session": 6,
+      "single-session-assistant": 1,
+      "single-session-preference": 2,
+      "single-session-user": 2,
+      "temporal-reasoning": 6
+    }
+  },
+  "source_authority": {
+    "trigger_source_fixture": "auto-recall-policy-holdout.v2b5",
+    "trigger_source_id_set_sha256": "22d053bb64aa1275a410730ad5bff91f8113efe33f09521e2d81797d3a5d235e",
+    "longmemeval_dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "rank_source_count": 248,
+    "rank_source_id_set_sha256": "f11c6034ab89f9b4796ec66144e9a130bb324977381d4c0f1e6cd49e6a45f8cf",
+    "selected_rank_id_set_sha256": "003e0adbb1a0c6434fecb9b4366aed188826e222e25d764c64c1b16e39654bbf",
+    "combined_id_set_sha256": "b91990e6a60cec6f0a6cdebb3a80a999d79edfdf198c3b3ea57c6611c48d5bb5",
+    "combined_hash_trailing_newline": true
+  },
+  "cases": [
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_c2_morning_unfinished",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_c2_morning_unfinished",
+      "case_ref": "family:continuation_temporal_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_c3_carry_on_en",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_c3_carry_on_en",
+      "case_ref": "family:continuation_temporal_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_d1_boundary_tradeoff",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_d1_boundary_tradeoff",
+      "case_ref": "family:decision_rationale_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_d2_autorecall_tradeoff_en",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_d2_autorecall_tradeoff_en",
+      "case_ref": "family:decision_rationale_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_d3_active_memory_excluded",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_d3_active_memory_excluded",
+      "case_ref": "family:decision_rationale_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_e1_openmemory_takeaway",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_e1_openmemory_takeaway",
+      "case_ref": "family:historical_entity_unicode_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_e2_mem0_takeaway",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_e2_mem0_takeaway",
+      "case_ref": "family:historical_entity_unicode_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_e3_letta_conclusion",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_e3_letta_conclusion",
+      "case_ref": "family:historical_entity_unicode_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_e4_zep_takeaway_en",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_e4_zep_takeaway_en",
+      "case_ref": "family:historical_entity_unicode_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_m1_no_repeat_but_decision",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_m1_no_repeat_but_decision",
+      "case_ref": "family:mixed_scope_history_required_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_m2_no_reuse_but_rationale",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_m2_no_reuse_but_rationale",
+      "case_ref": "family:mixed_scope_history_required_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_m3_ignore_details_but_position",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_m3_ignore_details_but_position",
+      "case_ref": "family:mixed_scope_history_required_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_m4_ignore_plan_but_decision_en",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_m4_ignore_plan_but_decision_en",
+      "case_ref": "family:mixed_scope_history_required_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_p1_workline_position",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_p1_workline_position",
+      "case_ref": "family:contextual_state_lookup_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_p2_l2_completion",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_p2_l2_completion",
+      "case_ref": "family:contextual_state_lookup_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_p3_engine_missing",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_p3_engine_missing",
+      "case_ref": "family:contextual_state_lookup_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_p4_current_work_unlanded",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_p4_current_work_unlanded",
+      "case_ref": "family:contextual_state_lookup_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_w1_terminal_preference",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_w1_terminal_preference",
+      "case_ref": "family:preference_workflow_indirect_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_w2_local_model_preference",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_w2_local_model_preference",
+      "case_ref": "family:preference_workflow_indirect_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_w3_role_split",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_w3_role_split",
+      "case_ref": "family:preference_workflow_indirect_holdout"
+    },
+    {
+      "case_id": "q0e2a-trigger-v2b5-v2b5_w4_commit_boundary",
+      "provenance": "TARGETED_SYNTHETIC",
+      "evaluation_scope": "TRIGGER_ONLY",
+      "failure_class": "TRIGGER_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "auto-recall-policy-holdout.v2b5:v2b5_w4_commit_boundary",
+      "case_ref": "family:preference_workflow_indirect_holdout"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-06878be2",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:06878be2",
+      "case_ref": "question_type:single-session-preference",
+      "effective_top_k": 3,
+      "evidence_count": 1,
+      "selection_hash": "02ea64c37f43633799baf6ff950a8857531a61e8ebfc43ac0694e41ea81b39ca"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-1a1907b4",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:1a1907b4",
+      "case_ref": "question_type:single-session-preference",
+      "effective_top_k": 3,
+      "evidence_count": 1,
+      "selection_hash": "0188aafa162cc79c59fbe479222c67077e66d921ca0c08effe1faad603be8f09"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-4100d0a0",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:4100d0a0",
+      "case_ref": "question_type:single-session-user",
+      "effective_top_k": 3,
+      "evidence_count": 1,
+      "selection_hash": "0ea7c3392d8c2409f8642e6c99461451e39ca5073eac8eec9b34897d76e086b8"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-5e1b23de",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:5e1b23de",
+      "case_ref": "question_type:temporal-reasoning",
+      "effective_top_k": 3,
+      "evidence_count": 1,
+      "selection_hash": "09bfa5f00b001268c96ca3e090bb705343e48ca9a47f0209e435e9af415e6388"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-60bf93ed",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:60bf93ed",
+      "case_ref": "question_type:multi-session",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "05ab78a9c0c86f54f829530889c21f9d074f0df2c26d260589905563629d6fb5"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-61f8c8f8",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:61f8c8f8",
+      "case_ref": "question_type:multi-session",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "027101501f2cd6222417526e7b1c3a8ec251b02f7c3c5bdd1a56c4bf6eb769b7"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-7405e8b1",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:7405e8b1",
+      "case_ref": "question_type:multi-session",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "003106edb28fbda0a409da250f6329cbf730a2322ecc9316c849385a35d8cd1a"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-75499fd8",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:75499fd8",
+      "case_ref": "question_type:single-session-user",
+      "effective_top_k": 3,
+      "evidence_count": 1,
+      "selection_hash": "13d2849fbc148d6a6579f93451bc6e668278c5c7ade2d8656057a0fb24d10f58"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-89941a93",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:89941a93",
+      "case_ref": "question_type:knowledge-update",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "06961d79f1aca2e9374a88732e6cf2688097466d2d21feb481b24139773b2a8d"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-9aaed6a3",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:9aaed6a3",
+      "case_ref": "question_type:multi-session",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "02b864264a2d852f8f5e3d498ebf7cc8102660fe18fc78081239f6fa3f0565b1"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-a1cc6108",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:a1cc6108",
+      "case_ref": "question_type:multi-session",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "058a0479ffca918764ba28504967ee25844f70995ca10488a5b7cfcdce2168fb"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-eac54adc",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:eac54adc",
+      "case_ref": "question_type:temporal-reasoning",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "0147daa31bd101cd6c5517e84cc4187c43549b07dc073673ef71b9838b0d1289"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-eace081b",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:eace081b",
+      "case_ref": "question_type:knowledge-update",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "281c820ebfa0487a2c5437ec981cd481e068a8f21515bf4122f0e6cb0ddcafb9"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-f523d9fe",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:f523d9fe",
+      "case_ref": "question_type:single-session-assistant",
+      "effective_top_k": 3,
+      "evidence_count": 1,
+      "selection_hash": "0921cf3e7f25b88aaa65805546815e6956bda11e42a5287e7cdaad695ae77a23"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_213fd887",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:gpt4_213fd887",
+      "case_ref": "question_type:temporal-reasoning",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "0cfb9a63ad67629593f86338f3b8722e0a6d70b0b1ec3400a49d1e19267f5706"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_59149c77",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:gpt4_59149c77",
+      "case_ref": "question_type:temporal-reasoning",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "0a684843c7cd9dc1f8c8fbd3a4032a28bc9a4e2994cfd0bb166342edf4c923ad"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_68e94288",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:gpt4_68e94288",
+      "case_ref": "question_type:temporal-reasoning",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "06816b8df9be20768bb29b2bdef43e7e5671c2b3a817fba5c741f1e3b08546e2"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_93159ced",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:gpt4_93159ced",
+      "case_ref": "question_type:temporal-reasoning",
+      "effective_top_k": 3,
+      "evidence_count": 2,
+      "selection_hash": "06b8a23489d46f1b2397a979e27d2d7696f453eb7fea68277f843a7b4688ade4"
+    },
+    {
+      "case_id": "q0e2b-longmemeval-gpt4_d12ceb0e",
+      "provenance": "BENCHMARK_DERIVED",
+      "evaluation_scope": "RETRIEVAL_FROM_MATERIALIZED_MEMORY",
+      "failure_class": "RANK_MISS",
+      "loss_authority": "SCOPED",
+      "source_ref": "longmemeval:gpt4_d12ceb0e",
+      "case_ref": "question_type:multi-session",
+      "effective_top_k": 3,
+      "evidence_count": 3,
+      "selection_hash": "032eea95b8b1634f7263c9a03bbf1cff06c853ad1abff34844e33b9d9c65c7e4"
+    }
+  ]
+}
