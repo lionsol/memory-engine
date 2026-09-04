@@ -200,6 +200,95 @@ test('rank failure at a non-Q0 topK remains unclassified', () => {
   assert.equal(result.diagnostic_reason, 'Q0_RANK_REQUIRES_EFFECTIVE_TOP_K_3');
 });
 
+test('END_TO_END rank PASS at topK=50 cannot authorize a disclosure loss', () => {
+  const result = adjudicateQ0FailureEvaluationCase(makeCase({
+    effective_top_k: 50,
+    stages: {
+      write: stage('PASS', true),
+      trigger: stage('PASS', true),
+      candidate: stage('PASS', true),
+      rank: stage('PASS', true),
+      disclosure: stage('FAIL', true),
+    },
+  }));
+
+  assert.equal(result.adjudication_status, 'INSUFFICIENT_EVIDENCE');
+  assert.equal(result.failure_class, null);
+  assert.equal(result.loss_authority, null);
+  assert.equal(
+    result.diagnostic_reason,
+    'Q0_END_TO_END_RANK_PREFIX_REQUIRES_EFFECTIVE_TOP_K_3',
+  );
+});
+
+test('END_TO_END rank PASS at topK=50 cannot authorize an answer-use loss', () => {
+  const result = adjudicateQ0FailureEvaluationCase(makeCase({
+    effective_top_k: 50,
+    stages: {
+      write: stage('PASS', true),
+      trigger: stage('PASS', true),
+      candidate: stage('PASS', true),
+      rank: stage('PASS', true),
+      disclosure: stage('PASS', true),
+      answer_use: stage('FAIL', true),
+    },
+  }));
+
+  assert.equal(result.adjudication_status, 'INSUFFICIENT_EVIDENCE');
+  assert.equal(result.failure_class, null);
+  assert.equal(result.loss_authority, null);
+  assert.equal(
+    result.diagnostic_reason,
+    'Q0_END_TO_END_RANK_PREFIX_REQUIRES_EFFECTIVE_TOP_K_3',
+  );
+});
+
+test('END_TO_END all-pass evidence at topK=50 is not Q0 NO_LOSS', () => {
+  const result = adjudicateQ0FailureEvaluationCase(makeCase({
+    effective_top_k: 50,
+    stages: passAll(),
+  }));
+
+  assert.equal(result.adjudication_status, 'INSUFFICIENT_EVIDENCE');
+  assert.equal(result.failure_class, null);
+  assert.equal(result.loss_authority, null);
+  assert.equal(
+    result.diagnostic_reason,
+    'Q0_END_TO_END_RANK_PREFIX_REQUIRES_EFFECTIVE_TOP_K_3',
+  );
+});
+
+test('END_TO_END rank PASS at topK=3 still authorizes disclosure classification', () => {
+  const result = adjudicateQ0FailureEvaluationCase(makeCase({
+    effective_top_k: 3,
+    stages: {
+      write: stage('PASS', true),
+      trigger: stage('PASS', true),
+      candidate: stage('PASS', true),
+      rank: stage('PASS', true),
+      disclosure: stage('FAIL', true),
+    },
+  }));
+
+  assert.equal(result.adjudication_status, 'CLASSIFIED');
+  assert.equal(result.failure_class, 'USE_MISS');
+  assert.equal(result.use_loss_stage, 'DISCLOSURE');
+  assert.equal(result.loss_authority, 'END_TO_END');
+});
+
+test('materialized-memory retrieval can remain a scoped NO_LOSS at topK=50', () => {
+  const result = adjudicateQ0FailureEvaluationCase(makeCase({
+    evaluation_scope: 'RETRIEVAL_FROM_MATERIALIZED_MEMORY',
+    effective_top_k: 50,
+    stages: passAll('RETRIEVAL_FROM_MATERIALIZED_MEMORY'),
+  }));
+
+  assert.equal(result.adjudication_status, 'NO_LOSS');
+  assert.equal(result.failure_class, null);
+  assert.equal(result.loss_authority, null);
+  assert.equal(result.validation_errors.length, 0);
+});
+
 test('disclosure failure maps to USE_MISS with DISCLOSURE stage', () => {
   const result = adjudicateQ0FailureEvaluationCase(makeCase({
     stages: {

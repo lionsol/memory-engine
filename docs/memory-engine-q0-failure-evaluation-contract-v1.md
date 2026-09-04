@@ -102,9 +102,13 @@ means an exact, collision-free candidate identity and a complete,
 untruncated relevant candidate capture. A positive candidate observation does
 not require proof of absence.
 
-RANK_MISS is a Q0 classification only when effective_top_k === 3. Another
-effective top-k remains diagnostic, but its rank failure is returned as
-INSUFFICIENT_EVIDENCE without a Q0 failure class.
+RANK_MISS is a Q0 classification only when effective_top_k === 3. For an
+END_TO_END_OBSERVED case, a complete rank PASS also establishes the production
+prefix only at effective_top_k === 3. A non-3 rank PASS therefore blocks later
+disclosure/answer-use classification and blocks NO_LOSS as
+INSUFFICIENT_EVIDENCE. Another effective top-k remains valid scoped diagnostic
+evidence, including RETRIEVAL_FROM_MATERIALIZED_MEMORY; its rank failure is
+returned as INSUFFICIENT_EVIDENCE without a Q0 failure class.
 
 The result status is one of:
 
