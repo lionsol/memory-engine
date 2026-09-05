@@ -11,6 +11,51 @@ The existing semantic runners remain the execution authority and are unchanged:
 
 There is no Q2-B1 result fixture because no real semantic execution is authorized in this stage.
 
+## Q2-B2 adjudication — 2026-09-05
+
+Status: **PASS_WITH_FINDINGS / CLOSED**. Q3 is NEXT / NOT STARTED.
+
+Retrieval source: `36b480be4db396f83273e408c0a3d4d17a1635cf`.
+Binding source: `805ff9307757b489dd262c6fb59e786c73967354`.
+The Level A binder correction excludes abstention from the independent no-user-target skip count; 39/39 focused tests pass. Original retrieval artifacts were unchanged. Re-binding made zero provider calls and did not rerun retrieval.
+
+| Metric | LongMemEval semantic | Delta vs Q1 | LoCoMo semantic | Delta vs Q1 |
+| --- | ---: | ---: | ---: | ---: |
+| Recall-any@3 | 0.742243 | +0.033413 | 0.581643 | +0.099391 |
+| Recall-all@3 | 0.429594 | +0.045346 | 0.503043 | +0.091278 |
+| NDCG@3 | 0.562546 | +0.035090 | 0.485173 | +0.097508 |
+| Evidence coverage@3 | 0.579117 | +0.043636 | 0.536765 | +0.095104 |
+| Feasible Recall-all@3 | 0.465116 | +0.049096 | 0.518016 | +0.093995 |
+| Cross-session coverage@3 | 0.538833 | +0.024278 | 0.260002 | +0.047832 |
+
+Paired transitions (improved / regressed / unchanged), tolerance 1e-12:
+
+| Metric | LongMemEval, n=419 | LoCoMo, n=1972 |
+| --- | --- | --- |
+| Recall-any@3 | 24 / 10 / 385 | 211 / 15 / 1746 |
+| Recall-all@3 | 30 / 11 / 378 | 195 / 15 / 1762 |
+| NDCG@3 | 80 / 49 / 290 | 392 / 52 / 1528 |
+| Evidence coverage@3 | 49 / 22 / 348 | 223 / 18 / 1731 |
+
+LongMemEval: 500 rows, 419 scored, 81 skipped, 387 feasible / 32 infeasible; first ranks 229 / 53 / 29 / 108 misses.
+LoCoMo: 1986 rows, 1972 strict scored, 14 skipped, 1915 feasible / 57 infeasible; first ranks 809 / 222 / 116 / 825 misses.
+Vector attempted/in-fusion/LanceDB evidence covers every scored case, with no skips, errors or host fallback. LoCoMo runner attempts remain 1978, distinct from 1972 strict scored cases. LoCoMo re-binding equals the saved binding.
+
+Findings: LongMemEval multi-session any/all@3 both decline by 0.016529; Preference any@3 improves by 0.1 but remains approximately 0.333333. LoCoMo multi-hop all@3 improves only approximately 0.0217. Always-vector improves aggregate quality under the frozen profiles; it does not solve cross-session evidence assembly or establish an optimal semantic architecture.
+
+Execution deviation: after an ETIMEDOUT, execution used cache continuation and a temporary supervisor configured for up to eight attempts, contrary to the stop-on-failure packet. No active benchmark process was found during review. Preserve completed quality evidence; do not retroactively describe execution discipline as conforming. Failed-attempt calls/time/total cost remain unknown. Completed-attempt calls/hits are 15800/4552 (LongMemEval) and 7848/12 (LoCoMo). All latency remains DESCRIPTIVE_RUNNER_TOP50, incomparable to Q1 lexical top3; these counts do not establish total experiment cost.
+
+Provider sentinel: SiliconFlow, https://api.siliconflow.cn/, Qwen/Qwen3-Embedding-4B, 2560 dimensions, revision unavailable/unpinned; observed 2026-09-05T10:30:44.137Z; hash `058f0396b6cc060036863a8e6052b3da298adf508dd788e4dd820eb2bc7d5e12`, method sha256_utf8_json_number_array_v1, input q2-neutral-provider-sentinel-v1.
+
+Reviewed artifacts under /tmp/q2b2-execution/:
+- lme-semantic-run.json: `23d992f21400b2d36c7eb4ec6ff60db229c1a3dc5e7340cdfd47dd6c70790910`
+- lme-rebound-report.json: `d2d01f6579ea4266afe45b05b5b5cfabf3a298211f69203af64ef0bc15bf43d3`
+- lme-rebound-binding-full.json (dual provenance): `6f3dbbd684d0e12460b611bfe813b563f21e7662e3a014c4ff4177ad021fe514`
+- locomo-semantic-run.json: `e5908af2099a307c5f37efdf260e3889f346d91389ea1201808d149149b7e2fb`
+- locomo-binding-full.json: `949d217aed77fe0f1e8b9b428d99bde98c1f3df76331257688d7a9f9f95c3e7e`
+
+These local artifacts are not vendored; hashes identify evidence but do not guarantee /tmp retention. This adjudication authorizes no deployment, AutoRecall activation, production semantic enablement, ranking change, or selective-vector implementation.
+
 ## Frozen profile registry
 
 Q2 defines one conceptual profile, `q2_always_vector_v1`, with two dataset-specific bindings.
