@@ -73,14 +73,14 @@ The four profile breakdowns are identical and are retained independently in the 
 
 ### LongMemEval latency and channels
 
-These are `BENCHMARK_DERIVED` retrieval-attempt measurements, not production latency.
+These are the values frozen in fixture SHA `ae3304c41e347370c019d06667d062dd305ef147acb8ad6d957debd42785ea1d`. They are `BENCHMARK_DERIVED` retrieval-attempt measurements and descriptive wall-clock evidence, not production latency.
 
 | Profile | p50 ms | p95 ms | Attempts | FTS | KG | like | recent | episode | recent_fallback | vector |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| FTS only | 7.856486 | 10.059221 | 419 | 419 | 0 | 0 | 0 | 0 | 0 | 0 |
-| FTS + KG | 8.242278 | 11.581075 | 419 | 419 | 0 | 0 | 0 | 0 | 0 | 0 |
-| FTS + Recent | 8.324977 | 12.044295 | 419 | 419 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Full non-vector | 9.093523 | 13.771079 | 419 | 419 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FTS only | 7.940576 | 10.118326 | 419 | 419 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FTS + KG | 8.279270 | 11.401448 | 419 | 419 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FTS + Recent | 8.586985 | 12.783171 | 419 | 419 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Full non-vector | 9.124042 | 13.655454 | 419 | 419 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ## LoCoMo results
 
@@ -111,14 +111,14 @@ The four profile breakdowns are identical and remain separately attributable by 
 
 ### LoCoMo latency and channels
 
-These are `BENCHMARK_DERIVED` retrieval-attempt measurements. The strict metric denominator (1,972) is intentionally not merged with the retrieval-latency denominator (1,978).
+These are the values frozen in fixture SHA `ae3304c41e347370c019d06667d062dd305ef147acb8ad6d957debd42785ea1d`. They are `BENCHMARK_DERIVED` retrieval-attempt measurements and descriptive wall-clock evidence, not production latency. The strict metric denominator (1,972) is intentionally not merged with the retrieval-latency denominator (1,978).
 
 | Profile | p50 ms | p95 ms | Attempts | FTS | KG | like | recent | episode | recent_fallback | vector |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| FTS only | 15.583900 | 21.044959 | 1,978 | 1,978 | 0 | 0 | 0 | 0 | 0 | 0 |
-| FTS + KG | 15.939362 | 20.818957 | 1,978 | 1,978 | 0 | 0 | 0 | 0 | 0 | 0 |
-| FTS + Recent | 16.229220 | 22.846164 | 1,978 | 1,978 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Full non-vector | 16.623197 | 22.829656 | 1,978 | 1,978 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FTS only | 15.624539 | 20.275599 | 1,978 | 1,978 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FTS + KG | 15.719779 | 20.216724 | 1,978 | 1,978 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FTS + Recent | 16.209761 | 20.934290 | 1,978 | 1,978 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Full non-vector | 16.600363 | 21.703477 | 1,978 | 1,978 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ## Paired transitions and factorial effects
 
@@ -147,7 +147,17 @@ The fixture also stores `absolute_delta_vs_full` for all six scalar metrics in e
 
 Metrics are definitions and observed evaluation summaries, not rollout targets or thresholds. LongMemEval-S and LoCoMo are separate benchmark tracks and are never pooled. Trigger metrics are outside this retrieval ablation and are not pooled with either dataset.
 
-The current materialization served FTS candidates only. Therefore the zero KG/Recent effects mean that no incremental candidates were observed in this bounded offline corpus under these profiles; they do not establish that KG or Recent are generally useless. The latency values are descriptive benchmark evidence and are not production latency.
+The current Q1/Q2 lexical benchmark is effectively FTS-driven on the actually exercised retrieval surface. Q2-A2 validates the channel-ablation harness and proves that enabling currently unexercised KG/Recent capability paths does not alter these frozen benchmark results. It does not measure the quality contribution of populated production KG or eligible smart-add/episode Recent corpora.
+
+The zero factorial effect is not production channel redundancy.
+
+The limitation is structural in the frozen benchmark materialization:
+
+- KG: LongMemEval and LoCoMo materialize `memory_confidence.kg_data = null`, so no KG candidate is exercisable in either frozen corpus. The result does not establish KG redundancy or lack of product value.
+- Recent family: production isolated Recent retrieval selects only paths matching `memory/smart-add/%` and `memory/episodes/%`. The benchmark materialization uses `benchmark/longmemeval/...` and `benchmark/locomo/...`, so `recent`, `episode`, and `recent_fallback` are structurally unexercised.
+- LIKE: the LIKE branch is conditional on FTS-empty behavior. Every scored retrieval attempt in Q2-A2 served FTS, so LIKE was also unexercised.
+
+No benchmark paths were changed to `memory/episodes/...`, no `kg_data` was synthesized, and the Q1 baseline materialization was not altered. Such changes would create a new benchmark projection outside this corrective documentation update. The latency values remain descriptive benchmark evidence and are not production latency.
 
 Top-3 full recall can be structurally impossible when a case requires more than three distinct evidence sessions. LongMemEval-S has 32 such cases in its 419 scored cases, represented by the separate feasible/infeasible and feasible-full-recall fields. `evidence_coverage@3` is retrieval evidence coverage, not semantic answer use.
 
