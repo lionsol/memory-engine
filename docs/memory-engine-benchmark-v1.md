@@ -1713,13 +1713,24 @@ contract; B6-S2/S3 remain an optional evaluation branch and do not block 1.1.
 
 ### Pre-recall correctness gate
 
-The 1.1 sequence now begins with **QA0 Identity & Lifecycle Correctness Gate**
-(`NOW / NOT STARTED`), followed by Q0 production failure review
-(`THEN / NOT STARTED`). QA0 is a bounded source-level gate, not a benchmark or
-runtime stage. It covers exact identity and fail-closed mutation, current-state
-reinforcement without clearing conflicts, exact checkpoint binding, safe
-category routing, explicit Add outcomes, complete vectorization, and Core
-read-only contract consistency.
+The active 1.1 benchmark line has advanced beyond QA0/Q0. QA0 source blockers
+no longer block recall-quality diagnosis; Q0 is `PASS_WITH_FINDINGS / CLOSED`;
+Q1 product metrics are `CLOSED` and the current lexical baseline is `FROZEN`;
+Q2-A1/A2 are `CLOSED`; and Q2-B1 semantic binding is `PASS / CLOSED`. The next
+benchmark decision is **Q2-B2 Always-Vector Semantic Execution** against the
+frozen Q1 baseline and B1 binding contract. These are offline/source milestones
+only and do not change the deployed 1.0 runtime baseline.
+
+The 2026-09-05 architecture/code review adds a bounded repair backlog without
+creating a new benchmark stage. Tool ID-prefix/result correctness may proceed in
+parallel because it does not alter retrieval ranking. Smart-add concurrent-write
+safety is a separate persistent-write change. Canonical valid-topK backfill is
+explicitly deferred to Q3 because changing `take K → canonical project` into
+`canonical validate → take K valid` would alter retrieval serving semantics and
+invalidate direct comparison with the already-frozen Q1 baseline. AutoRecall
+intent-policy and untrusted-memory prompt isolation remain later activation
+blockers, not Q2-B2 blockers. Historical qualification/governance machinery is a
+maintainability cleanup after Q2/Q3 rather than another product gate.
 
 Structured event-time is part of this gate's boundary review:
 `memory_event_times` is an Engine-owned schema MVP with default
@@ -1733,34 +1744,34 @@ mutation, production tuning, or runtime deployment.
 
 ### Small-budget product metrics
 
-Future retrieval experiments add Recall-any@3, Recall-all@3, NDCG@3, first
-relevant rank, answer-evidence coverage@3, cross-session complete-evidence
-coverage, stale/conflicting evidence in top 3, unnecessary-recall and
-context-pollution rates, and p50/p95 latency. Recall@50 and large candidate-pool
-coverage remain diagnostics rather than standalone production success gates.
+Q1 now freezes Recall-any@3, Recall-all@3, NDCG@3, first relevant rank,
+evidence coverage@3 and feasibility-aware full recall, with dataset/category
+breakdowns and bounded latency accounting where authority exists. Production
+safety, injection quality, answer-use coverage, and true production latency
+remain unavailable unless separately measured. Recall@50 and large candidate-
+pool coverage remain diagnostics rather than standalone product success gates.
 Gold evidence remains evaluator-only and must not enter memory Add, Search,
 embedding, query planning, ranking, or answer prompts.
 
 ### Minimal channel ablation
 
-The bounded matrix is:
+Q2 has intentionally narrowed the experiment surface rather than expanding into
+a full combinatorial matrix:
 
-| Profile | Decision purpose |
-|---|---|
-| Lexical only | Freeze the low-latency baseline |
-| Vector only | Measure independent semantic capability |
-| Lexical + Vector | Preserve the B4 hybrid comparison |
-| Lexical + Metadata | Measure entity/project/temporal marginal value |
-| Lexical + Session/Episode expansion | Measure multi-evidence recovery |
-| Full candidate fusion | Test channel complementarity |
-| Lexical → selective Vector fallback | Test quality/latency production candidate |
+| Q2 item | Status | Decision purpose |
+|---|---|---|
+| A1 channel-ablation harness | `CLOSED` | Bind capability-isolated non-vector profiles to the Q1 scorer |
+| A2 FTS / FTS+KG / FTS+Recent / FTS+KG+Recent | `CLOSED` | Measure current non-vector marginal effects; observed Q1 quality deltas are zero because benchmark materialization does not activate KG/Recent candidates |
+| B1 always-vector semantic binding | `PASS / CLOSED` | Require dataset/profile/clock/vector/fusion/fallback invariants and reuse Q1 metrics |
+| B2 always-vector semantic execution | `NEXT` | Measure the semantic ceiling at Q1 depth with paired improved/regressed/unchanged accounting |
+| Selective vector | `NOT IMPLEMENTED` | Consider only after B2 establishes useful semantic headroom |
 
-Each profile reports preference, multi-session, temporal, knowledge-update,
-single-session-user, and single-session-preference families, plus @3 metrics,
-first-rank and case-level deltas, p50/p95 latency, vector invocation rate, and
-marginal gain per expensive call. Do not expand the core matrix into all `2^N`
-channel combinations, broad embedding-model comparisons, unconditional
-multi-query, large Recall Hint grids, or Recall@50-only comparisons.
+Q2-B2 reports the frozen Q1 @3 metrics and per-family/category deltas, plus
+paired transitions and descriptive semantic latency. It must not silently add a
+new ranking formula, serving-semantic change, unconditional multi-query path,
+large embedding-model grid, or Recall@50-only success criterion. Any canonical
+valid-topK serving change belongs to Q3 and requires a new same-profile baseline
+before comparison.
 
 Recall Hint remains a later independent experiment defined only as candidate
 expansion and soft weighting metadata. It cannot grant recall, skip, or hard

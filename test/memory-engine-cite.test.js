@@ -63,6 +63,7 @@ test("memory_engine cite reinforces exact ids returned by the authorizer and rec
   assert.equal(result.success, true);
   assert.equal(result.reinforced, 2);
   assert.deepEqual(result.ids, ["alpha-full-id", "beta-full-id"]);
+  assert.equal("next_confidence" in result, false);
   assert.equal(events.length, 4);
   assert.deepEqual(
     events.map(event => [event.event_type, event.memory_id, event.source]),
