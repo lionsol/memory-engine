@@ -37,8 +37,14 @@ function authorityOptions(dataset, overrides = {}) {
   };
 }
 
-function rawLongCase(index, { evidenceCount = 1, abstention = false, noUserTarget = false } = {}) {
+function rawLongCase(index, {
+  evidenceCount = 1,
+  abstention = false,
+  noUserTarget = false,
+  abstentionNoUserTarget = false,
+} = {}) {
   const sessionIds = Array.from({ length: 6 }, (_, sessionIndex) => `long-${index}-s-${sessionIndex}`);
+  const missingUserTarget = noUserTarget || abstentionNoUserTarget;
   return {
     question_id: abstention ? `long-${index}_abs` : `long-${index}`,
     question_type: "multi-session",
@@ -50,27 +56,29 @@ function rawLongCase(index, { evidenceCount = 1, abstention = false, noUserTarge
     haystack_sessions: sessionIds.map((sessionId, sessionIndex) => [{
       role: "user",
       content: `Synthetic evidence ${sessionId}`,
-      has_answer: !noUserTarget && sessionIndex === 0,
+      has_answer: !missingUserTarget && sessionIndex === 0,
     }]),
-    answer_session_ids: noUserTarget || abstention ? [] : sessionIds.slice(0, evidenceCount),
+    answer_session_ids: missingUserTarget || abstention ? [] : sessionIds.slice(0, evidenceCount),
   };
 }
 
-function buildLongDataset() {
+function buildLongDataset({ abstentionNoUserTarget = false, nonAbstentionNoUserTargetCount = 51 } = {}) {
   const records = [];
-  for (let index = 0; index < 30; index += 1) records.push(rawLongCase(index, { abstention: true }));
-  for (let index = 30; index < 81; index += 1) {
+  for (let index = 0; index < 30; index += 1) {
+    records.push(rawLongCase(index, { abstention: true, abstentionNoUserTarget }));
+  }
+  for (let index = 30; index < 30 + nonAbstentionNoUserTargetCount; index += 1) {
     records.push(rawLongCase(index, { noUserTarget: true }));
   }
   const distribution = [[1, 119], [2, 229], [3, 39], [4, 18], [5, 11], [6, 3]];
-  let index = 81;
+  let index = 30 + nonAbstentionNoUserTargetCount;
   for (const [evidenceCount, count] of distribution) {
     for (let offset = 0; offset < count; offset += 1) {
       records.push(rawLongCase(index, { evidenceCount }));
       index += 1;
     }
   }
-  return records;
+  return records.slice(0, 500);
 }
 
 function semanticDiagnostics({ fallback = 0 } = {}) {
@@ -327,6 +335,33 @@ test("LongMemEval skipped cases remain unknown rather than zero misses", () => {
   const result = bindLong();
   assert.equal(result.q1.unknown_or_unscoreable_case_count, 81);
   assert.equal(result.q1["recall_any@3"], 1);
+});
+
+test("LongMemEval abstention/no-target overlap is counted independently", () => {
+  const records = buildLongDataset({ abstentionNoUserTarget: true });
+  assert.equal(records.length, 500);
+  const result = binding.bindQ2LongMemEvalAlwaysVectorRun(
+    records,
+    longSemanticRun(records),
+    authorityOptions("LongMemEval-S"),
+  );
+  assert.equal(result.denominator.scoreable_case_count, 419);
+  assert.equal(result.denominator.skipped_case_count, 81);
+  assert.equal(result.q1.scoreable_case_count, 419);
+  assert.equal(result.q1.unknown_or_unscoreable_case_count, 81);
+});
+
+test("LongMemEval rejects an incorrect non-abstention/no-target population", () => {
+  const records = buildLongDataset({
+    abstentionNoUserTarget: true,
+    nonAbstentionNoUserTargetCount: 52,
+  });
+  assert.equal(records.length, 500);
+  assert.throws(() => binding.bindQ2LongMemEvalAlwaysVectorRun(
+    records,
+    longSemanticRun(records),
+    authorityOptions("LongMemEval-S"),
+  ), /q2_semantic_longmemeval_scoreable_cases/);
 });
 
 test("LoCoMo strict skipped cases remain unknown rather than zero misses", () => {
