@@ -13,6 +13,10 @@ import { handleTelemetryApi } from "./routes/telemetry.js";
 import { handleMetricsApi } from "./routes/metrics.js";
 import { handleReportsApi } from "./routes/reports.js";
 import { annotationReportsSnapshot, reportsPageSnapshot } from "./services/reports-service.js";
+import {
+  createConsoleSecurityPolicy,
+  evaluateConsoleRequestSecurity,
+} from "./security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -62,8 +66,11 @@ function send(res, status, body, headers = {}) {
   res.end(body);
 }
 
-function sendJson(res, status, body) {
-  send(res, status, JSON.stringify(body, null, 2), { "content-type": "application/json; charset=utf-8" });
+function sendJson(res, status, body, headers = {}) {
+  send(res, status, JSON.stringify(body, null, 2), {
+    "content-type": "application/json; charset=utf-8",
+    ...headers,
+  });
 }
 
 function serveStatic(res, pathname) {
@@ -101,12 +108,27 @@ function routePage(pathname) {
   return null;
 }
 
-export async function createServer() {
+export async function createServer(options = {}) {
+  const securityPolicy = createConsoleSecurityPolicy({
+    token: options.token,
+    bindHost: options.host ?? host,
+    port: options.port ?? port,
+    allowedHosts: options.allowedHosts,
+  });
   initConsoleStorage();
   return http.createServer(async (req, res) => {
     try {
-      const url = new URL(req.url || "/", `http://${req.headers.host || `${host}:${port}`}`);
-      if (url.pathname.startsWith("/public/") && serveStatic(res, url.pathname)) return;
+      const requestUrl = new URL(req.url || "/", "http://memory-console.local");
+      const isStatic = requestUrl.pathname.startsWith("/public/");
+      const security = evaluateConsoleRequestSecurity(req, securityPolicy, {
+        requireAuth: !isStatic,
+      });
+      if (!security.allowed) {
+        return sendJson(res, security.status, { error: security.code }, security.headers);
+      }
+
+      const url = new URL(req.url || "/", `http://${req.headers.host}`);
+      if (isStatic && serveStatic(res, url.pathname)) return;
       if (url.pathname.startsWith("/api/") && await handleApi(req, res, url)) return;
       const page = routePage(url.pathname);
       if (page) return send(res, 200, render(page.view, { title: page.title, active: page.active, payload: page.data }), { "content-type": "text/html; charset=utf-8" });

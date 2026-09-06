@@ -37,9 +37,8 @@ test("resolvePrefixes fails closed when an active prefix is ambiguous", () => {
         return { get: () => null };
       }
       return {
-        all(prefix, repeatedPrefix) {
-          assert.equal(prefix, "abc");
-          assert.equal(repeatedPrefix, "abc");
+        all(pattern) {
+          assert.equal(pattern, "abc*");
           return [{ chunk_id: "abcdef-first" }, { chunk_id: "abcdef-second" }];
         },
       };

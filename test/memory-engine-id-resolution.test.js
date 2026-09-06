@@ -6,12 +6,12 @@ import {
   createMemoryEngineGetExecute,
 } from "../lib/tools/memory-engine-actions.js";
 
-function sqlLikePrefix(value, pattern) {
-  const source = String(pattern)
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/%/g, ".*")
-    .replace(/_/g, ".");
-  return new RegExp(`^${source}`, "u").test(String(value));
+function literalPrefixFromGlob(pattern) {
+  return String(pattern || "")
+    .replace(/\*$/, "")
+    .replaceAll("[[]", "[")
+    .replaceAll("[*]", "*")
+    .replaceAll("[?]", "?");
 }
 
 function createUpdateRuntime(ids) {
@@ -22,20 +22,27 @@ function createUpdateRuntime(ids) {
       const query = String(sql);
       queries.push(query);
       if (query.includes("SELECT chunk_id FROM memory_confidence")) {
-        return {
-          all(...args) {
-            let matches;
-            if (query.includes(" LIKE ")) {
-              matches = ids.filter(id => sqlLikePrefix(id, args[0]));
-            } else if (query.includes("substr(chunk_id")) {
-              const prefix = String(args[0] ?? "");
-              matches = ids.filter(id => id.startsWith(prefix));
-            } else {
-              throw new Error(`unexpected id resolver SQL: ${query}`);
-            }
-            return matches.slice(0, 2).map(chunk_id => ({ chunk_id }));
-          },
-        };
+        if (query.includes("WHERE chunk_id = ?")) {
+          return {
+            all(value) {
+              const match = ids.find(id => id === String(value));
+              return match ? [{ chunk_id: match }] : [];
+            },
+          };
+        }
+        if (query.includes("WHERE chunk_id GLOB ?")) {
+          return {
+            all(pattern) {
+              const prefix = literalPrefixFromGlob(pattern);
+              return ids
+                .filter(id => id.startsWith(prefix))
+                .sort()
+                .slice(0, 2)
+                .map(chunk_id => ({ chunk_id }));
+            },
+          };
+        }
+        throw new Error(`unexpected id resolver SQL: ${query}`);
       }
       if (query.startsWith("UPDATE memory_confidence SET")) {
         return {
@@ -81,18 +88,26 @@ function createGetRuntime(coreRows, engineRows = []) {
         };
       }
       if (query.includes("FROM chunks c")) {
-        return {
-          all(...args) {
-            if (query.includes(" LIKE ")) {
-              return coreRows.filter(row => sqlLikePrefix(row.id, args[0]));
-            }
-            if (query.includes("substr(c.id")) {
-              const prefix = String(args[0] ?? "");
-              return coreRows.filter(row => row.id.startsWith(prefix));
-            }
-            throw new Error(`unexpected Core id resolver SQL: ${query}`);
-          },
-        };
+        if (query.includes("WHERE c.id = ?")) {
+          return {
+            all(value) {
+              const match = coreRows.find(row => row.id === String(value));
+              return match ? [match] : [];
+            },
+          };
+        }
+        if (query.includes("WHERE c.id GLOB ?")) {
+          return {
+            all(pattern) {
+              const prefix = literalPrefixFromGlob(pattern);
+              return coreRows
+                .filter(row => row.id.startsWith(prefix))
+                .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+                .slice(0, 2);
+            },
+          };
+        }
+        throw new Error(`unexpected Core id resolver SQL: ${query}`);
       }
       throw new Error(`unexpected Core SQL: ${query}`);
     },
@@ -135,7 +150,8 @@ test("memory_engine update resolves literal wildcard characters instead of SQL L
   assert.equal(result.success, true);
   assert.deepEqual(updated, ["literal%id-target"]);
   assert.equal(queries.some(query => query.includes(" LIKE ")), false);
-  assert.equal(queries.some(query => query.includes("substr(chunk_id")), true);
+  assert.equal(queries.some(query => query.includes("substr(chunk_id")), false);
+  assert.equal(queries.some(query => query.includes("chunk_id GLOB ?")), true);
 });
 
 test("memory_engine update gives an exact id precedence over longer ids sharing the prefix", async () => {
@@ -193,5 +209,6 @@ test("memory_engine_get resolves literal wildcard characters and keeps exact-id 
   assert.equal(result.memory.id, "owner%memory");
   assert.equal(result.memory.text, "literal percent memory");
   assert.equal(queries.some(query => query.includes(" LIKE ")), false);
-  assert.equal(queries.some(query => query.includes("substr(c.id")), true);
+  assert.equal(queries.some(query => query.includes("substr(c.id")), false);
+  assert.equal(queries.some(query => query.includes("WHERE c.id = ?")), true);
 });
