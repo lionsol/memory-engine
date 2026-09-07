@@ -1,0 +1,17 @@
+[Unit]
+Description=Independent LoCoMo v1.2 rerank experiment
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Restart=no
+WorkingDirectory=/home/lionsol/.openclaw/workspace/plugins/memory-engine
+Environment=Q3_LOCOMO_ROOT=/home/lionsol/.openclaw/workspace/q3-locomo-v1.2
+ExecStart=/home/lionsol/.local/node24/bin/node /home/lionsol/.openclaw/workspace/plugins/memory-engine/bin/run-locomo-rerank-v1.mjs --root /home/lionsol/.openclaw/workspace/q3-locomo-v1.2
+TimeoutStartSec=infinity
+NoNewPrivileges=yes
+PrivateTmp=no
+
+[Install]
+WantedBy=default.target
