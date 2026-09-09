@@ -22,7 +22,7 @@ function modelIdentity() {
   };
 }
 
-function buildFixture() {
+function buildFixture({ includeUnknown = false } = {}) {
   const sample = {
     sample_id: "conv-scorer-test",
     conversation: {
@@ -33,15 +33,16 @@ function buildFixture() {
       ],
     },
   };
-  const chunkMarkdown = (content) => [
+  const texts = [
     "A: evidence one ",
     "two",
     "evidence one two",
     "B: second evidence",
     "A: evidence one two\nB: second evidence",
     "C: third",
-    "not in source",
-  ].map((text, index) => ({
+  ];
+  if (includeUnknown) texts.push("not in source");
+  const chunkMarkdown = (content) => texts.map((text, index) => ({
     startLine: index === 4 ? 1 : (index === 3 ? 2 : (index === 5 ? 3 : 1)),
     endLine: index === 3 || index === 4 ? 2 : (index === 5 ? 3 : 1),
     text,
@@ -95,7 +96,15 @@ test("source-offset union completes cross-chunk evidence and deduplicates overla
   ]);
   assert.equal(crossChunk.metrics["recall_all@3"], 1);
   assert.equal(crossChunk.metrics["evidence_coverage@3"], 1);
+  assert.equal(crossChunk.metrics["ndcg@3"], null);
+  assert.deepEqual(crossChunk.diagnostics["completion_gains@3"], [0, 1, 1]);
+  assert.equal(crossChunk.diagnostics.ndcg_reason, "formal_idcg_contract_pending_cross_chunk_dependencies");
   assert.equal(crossChunk.budget.status, "satisfied");
+
+  const dependentCompletion = score(fixture, ["D1:1"], [fixture.ids.prefix, fixture.ids.suffix]);
+  assert.deepEqual(dependentCompletion.diagnostics["completion_gains@3"], [0, 1]);
+  assert.equal(dependentCompletion.diagnostics["completion_dcg@3"], 1 / Math.log2(3));
+  assert.equal(dependentCompletion.metrics["ndcg@3"], null);
 
   const overlap = score(fixture, ["D1:1", "D1:2"], [
     fixture.ids.prefix,
@@ -123,16 +132,41 @@ test("one chunk may cover multiple evidence turns, while partial coverage is not
   assert.equal(partial.metrics["evidence_coverage@3"], 0);
 });
 
-test("unknown source offsets remain unknown and never become a miss or zero", () => {
-  const fixture = buildFixture();
-  const result = score(fixture, ["D1:1"], [fixture.ids.unknown]);
-  assert.equal(result.scoreable, false);
-  assert.equal(result.evidence[0].status, "unknown");
-  assert.equal(result.metrics["recall_any@3"], null);
-  assert.equal(result.metrics["recall_all@3"], null);
-  assert.equal(result.metrics["ndcg@3"], null);
-  assert.equal(result.metrics["evidence_coverage@3"], null);
-  assert.equal(result.budget.status, "unknown");
+test("material unknown population stays unknown regardless of selected ranking", () => {
+  const fixture = buildFixture({ includeUnknown: true });
+  const selectedKnown = score(fixture, ["D1:1"], [fixture.ids.prefix]);
+  const selectedUnknown = score(fixture, ["D1:1"], [fixture.ids.unknown]);
+  for (const result of [selectedKnown, selectedUnknown]) {
+    assert.equal(result.scoreable, false);
+    assert.equal(result.evidence[0].status, "unknown");
+    assert.equal(result.evidence[0].unknownScope, "material");
+    assert.equal(result.metrics["recall_any@3"], null);
+    assert.equal(result.metrics["recall_all@3"], null);
+    assert.equal(result.metrics["ndcg@3"], null);
+    assert.equal(result.metrics["evidence_coverage@3"], null);
+    assert.equal(result.budget.status, "unknown");
+  }
+  assert.deepEqual(selectedKnown.frozen_unknown_evidence_ids, ["D1:1"]);
+  assert.deepEqual(selectedUnknown.frozen_unknown_evidence_ids, ["D1:1"]);
+  assert.deepEqual(selectedKnown.selection_unknown_evidence_ids, []);
+  assert.deepEqual(selectedUnknown.selection_unknown_evidence_ids, []);
+  assert.deepEqual(selectedKnown.selection_unknown_chunk_ids, []);
+  assert.deepEqual(selectedUnknown.selection_unknown_chunk_ids, [fixture.ids.unknown]);
+
+  const control = scoreLocomoChunkCases({
+    material: fixture.material,
+    evidenceCases: [{ sampleId: "conv-scorer-test", qaIndex: 0, evidence: [{ evidenceId: "D1:1" }] }],
+    selectedChunkIdsByCase: { "conv-scorer-test:qa:0": [fixture.ids.prefix] },
+  });
+  const rerank = scoreLocomoChunkCases({
+    material: fixture.material,
+    evidenceCases: [{ sampleId: "conv-scorer-test", qaIndex: 0, evidence: [{ evidenceId: "D1:1" }] }],
+    selectedChunkIdsByCase: { "conv-scorer-test:qa:0": [fixture.ids.unknown] },
+  });
+  assert.equal(control.population.frozen_material_unknown_case_count, 1);
+  assert.equal(rerank.population.frozen_material_unknown_case_count, 1);
+  assert.equal(control.population.final_unknown_case_count, 1);
+  assert.equal(rerank.population.final_unknown_case_count, 1);
 });
 
 test("chunk budget is observed from source coverage, not gold evidence count", () => {
@@ -169,7 +203,9 @@ test("chunk budget is observed from source coverage, not gold evidence count", (
   });
   assert.equal(result.budget.evidence_count, 4);
   assert.equal(result.budget.status, "satisfied");
-  assert.equal(result.budget.old_gold_evidence_count_heuristic_used, false);
+  assert.equal(result.budget.feasibility, "unknown");
+  assert.equal(result.budget.feasibility_reason, "formal_minimum_chunk_cover_not_computed");
+  assert.equal(Object.hasOwn(result.budget, "feasibility_definition"), false);
   assert.equal(result.metrics["recall_all@3"], 1);
 });
 
