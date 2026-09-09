@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -13,6 +13,12 @@ import {
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
+
+const TEST_REPOSITORY_PROVENANCE = {
+  repository_commit: "1".repeat(40),
+  repository_worktree_clean: true,
+  repository_provenance_source: "git",
+};
 
 function makeCanonical({ sampleId, id, text, path = `memory/${sampleId}/${id}.md`, lifecycle = {} }) {
   const hash = sha256(text);
@@ -121,6 +127,7 @@ async function build(cases, overrides = {}) {
       },
       profile: LOCOMO_CHUNK_FTS_ONLY_PROFILE,
       outputDir: dir,
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
       ...overrides,
     });
     return { result, dir };
@@ -154,6 +161,12 @@ test("candidate manifest scopes every query to its sample and never calls closed
     assert.equal(row.candidate_ids[0], "sample-a-chunk-00");
     assert.equal(row.candidate_ids[1], "sample-a-chunk-01");
     assert.equal(row.candidate_ids.every(id => id.length > 16), true);
+    assert.equal(manifest.candidate_generation_runs, 1);
+    assert.equal(manifest.query_case_count, 1);
+    assert.equal(manifest.retrieval_runs, 1);
+    assert.equal(manifest.source_commit, manifest.execution_source.repository_commit);
+    assert.equal(manifest.execution_source.repository_provenance_source, "git");
+    assert.equal(manifest.contract_source_commit, "aa2e65ffa2f04d991026d03bc97aebecce944412");
     assert.match(readFileSync(result.checksumsPath, "utf8"), /candidate-manifest\.json/);
     assert.doesNotMatch(readFileSync(result.checksumsPath, "utf8"), /SHA256SUMS/);
   } finally {
@@ -181,6 +194,53 @@ test("empty FTS result is recorded without guessing a candidate", async () => {
   }
 });
 
+test("FTS errors stop the build and preserve failed case identity without publishing a manifest", async () => {
+  const { materialChunks, canonicalMemories } = fixture();
+  const dir = outputDir();
+  try {
+    await assert.rejects(
+      buildLocomoChunkCandidateManifest({
+        cases: [{
+          question_id: "q-fts-error",
+          sample_id: "sample-a",
+          qa_index: 2,
+          question: "alpha",
+        }],
+        materialChunks,
+        canonicalMemories,
+        materialIdentity: {
+          dataset_sha256: "dataset-fixture-sha",
+          chunk_material_manifest_sha256: "material-fixture-sha",
+        },
+        profile: LOCOMO_CHUNK_FTS_ONLY_PROFILE,
+        outputDir: dir,
+        repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
+        collectFtsCandidatesFn: async context => {
+          context.debug.fts_error = "forced_sql_error";
+        },
+      }),
+      error => {
+        assert.equal(error.code, "locomo_chunk_candidate_fts_error");
+        assert.equal(error.case.question_id, "q-fts-error");
+        assert.equal(error.diagnostic.fts_error, "forced_sql_error");
+        return true;
+      },
+    );
+    assert.equal(existsSync(join(dir, "candidate-manifest.json")), false);
+    assert.equal(existsSync(join(dir, "SHA256SUMS")), false);
+    const failure = JSON.parse(readFileSync(join(dir, "candidate-build-failure.json"), "utf8"));
+    assert.equal(failure.status, "failed");
+    assert.equal(failure.failed_case.question_id, "q-fts-error");
+    assert.equal(failure.failed_case.sample_id, "sample-a");
+    assert.equal(failure.diagnostics.fts_error, "forced_sql_error");
+    assert.equal(failure.provider_calls, 0);
+    assert.equal(failure.query_case_count, 1);
+    assert.equal(failure.retrieval_runs, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("invalid material-to-canonical mapping and missing lifecycle are rejected before index creation", async () => {
   const { materialChunks, canonicalMemories } = fixture();
   const dir = outputDir();
@@ -197,6 +257,7 @@ test("invalid material-to-canonical mapping and missing lifecycle are rejected b
       materialIdentity: { dataset_sha256: "d", chunk_material_manifest_sha256: "m" },
       profile: LOCOMO_CHUNK_FTS_ONLY_PROFILE,
       outputDir: dir,
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
     }),
     /canonical_memory:0:text_mismatch/,
   );
@@ -215,6 +276,7 @@ test("invalid material-to-canonical mapping and missing lifecycle are rejected b
       materialIdentity: { dataset_sha256: "d", chunk_material_manifest_sha256: "m" },
       profile: LOCOMO_CHUNK_FTS_ONLY_PROFILE,
       outputDir: secondDir,
+      repositoryProvenance: TEST_REPOSITORY_PROVENANCE,
     }),
     /canonical_memory:0:lifecycle_confidence_missing/,
   );
