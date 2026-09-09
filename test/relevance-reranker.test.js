@@ -155,6 +155,25 @@ test("requires a complete unique in-range finite score set", async () => {
   }
 });
 
+test("invalid response keeps returned usage while falling back all scores", async () => {
+  const usage = { input_tokens: 12, output_tokens: 3, total_tokens: 15 };
+  const result = await rerankCandidates({
+    query: "query",
+    candidates: candidates(2),
+    deadlineMs: 100,
+    adapter: async () => ({
+      scores: [{ index: 0, score: 0.8 }],
+      usage,
+    }),
+  });
+
+  assert.equal(result.status, RERANK_STATUS.FALLBACK);
+  assert.equal(result.reason, "invalid_response");
+  assert.deepEqual(result.orderedIds, ["candidate-0", "candidate-1"]);
+  assert.deepEqual(result.scores, { "candidate-0": null, "candidate-1": null });
+  assert.strictEqual(result.usage, usage);
+});
+
 test("provider errors fall back without retry or partial scores", async () => {
   let calls = 0;
   const result = await rerankCandidates({
