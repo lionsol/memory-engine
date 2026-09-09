@@ -5,6 +5,7 @@ import test from "node:test";
 import { buildLocomoChunkMaterial, flattenChunkMaterial } from "../lib/benchmark/locomo-chunk-material.js";
 import {
   alignLocomoChunkScoreRows,
+  classifyLocomoChunkMaterialPopulation,
   scoreLocomoChunkCase,
   scoreLocomoChunkCases,
 } from "../lib/benchmark/locomo-chunk-evidence-scorer.js";
@@ -134,6 +135,18 @@ test("one chunk may cover multiple evidence turns, while partial coverage is not
 
 test("empty evidence is frozen unknown with empty and missing selection", () => {
   const fixture = buildFixture();
+  const population = classifyLocomoChunkMaterialPopulation({
+    material: fixture.material,
+    evidenceCases: [{ sampleId: "conv-scorer-test", qaIndex: 0, evidence: [] }],
+  });
+  assert.equal(population[0].frozen_material_scoreable, false);
+  assert.deepEqual(population[0].unknown_reasons, { evidence_ids_empty: 1 });
+  assert.equal(Object.hasOwn(population[0], "metrics"), false);
+  const invalidEvidence = classifyLocomoChunkMaterialPopulation({
+    material: fixture.material,
+    evidenceCases: [{ sampleId: "conv-scorer-test", qaIndex: 0, evidence: [{ evidenceId: "D1:0" }] }],
+  });
+  assert.deepEqual(invalidEvidence[0].unknown_reasons, { evidence_id_invalid: 1 });
   const direct = score(fixture, [], []);
   assert.equal(direct.frozen_material_scoreable, false);
   assert.equal(direct.scoreable, false);
