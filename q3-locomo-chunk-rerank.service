@@ -1,0 +1,17 @@
+[Unit]
+Description=Independent LoCoMo canonical chunk rerank experiment
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Restart=no
+WorkingDirectory=/home/lionsol/.openclaw/workspace/plugins/memory-engine
+Environment=Q3_LOCOMO_CHUNK_RERANK_ROOT=/home/lionsol/.openclaw/workspace/q3-locomo-v1.2/runs/q3-locomo-chunk-fts-rerank-v1
+ExecStart=/home/lionsol/.local/node24/bin/node /home/lionsol/.openclaw/workspace/plugins/memory-engine/bin/run-locomo-chunk-rerank-v1.mjs --root /home/lionsol/.openclaw/workspace/q3-locomo-v1.2/runs/q3-locomo-chunk-fts-rerank-v1
+TimeoutStartSec=infinity
+NoNewPrivileges=yes
+PrivateTmp=no
+
+[Install]
+WantedBy=default.target
