@@ -187,6 +187,23 @@ test("offline profile uses candidateDepth, excludes archived/missing candidates,
       rerank_elapsed_ms: result.debug.offline_rerank.rerank_elapsed_ms,
     });
     assert.equal(Number.isFinite(result.debug.offline_rerank.rerank_elapsed_ms), true);
+    assert.deepEqual(result.debug.canonical_result_projection, {
+      attempted: true,
+      requested_count: 3,
+      resolved_count: 3,
+      dropped_count: 0,
+      dropped_reasons: {
+        core_not_found: 0,
+        core_ambiguous: 0,
+        core_malformed: 0,
+        engine_ambiguous: 0,
+        engine_malformed: 0,
+        invalid_db_topology: 0,
+      },
+      category_mismatch_count: 0,
+      path_mismatch_count: 0,
+      management_mismatch_count: 0,
+    });
     assert.deepEqual(projectionMetadata.map(item => item.id), [
       IDS.a,
       IDS.b,
