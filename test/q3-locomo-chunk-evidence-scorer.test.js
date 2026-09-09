@@ -132,6 +132,37 @@ test("one chunk may cover multiple evidence turns, while partial coverage is not
   assert.equal(partial.metrics["evidence_coverage@3"], 0);
 });
 
+test("empty evidence is frozen unknown with empty and missing selection", () => {
+  const fixture = buildFixture();
+  const direct = score(fixture, [], []);
+  assert.equal(direct.frozen_material_scoreable, false);
+  assert.equal(direct.scoreable, false);
+  assert.deepEqual(direct.unknown_reasons, ["evidence_ids_empty"]);
+
+  const evidenceCases = [{ sampleId: "conv-scorer-test", qaIndex: 0, evidence: [] }];
+  const emptySelection = scoreLocomoChunkCases({
+    material: fixture.material,
+    evidenceCases,
+    selectedChunkIdsByCase: { "conv-scorer-test:qa:0": [] },
+  });
+  const missingSelection = scoreLocomoChunkCases({
+    material: fixture.material,
+    evidenceCases,
+    selectedChunkIdsByCase: {},
+  });
+  for (const result of [emptySelection, missingSelection]) {
+    assert.equal(result.population.frozen_material_scoreable_case_count, 0);
+    assert.equal(result.population.frozen_material_unknown_case_count, 1);
+    assert.equal(result.population.frozen_material_unclassified_case_count, 0);
+    assert.equal(result.population.final_scoreable_case_count, 0);
+    assert.equal(result.population.final_unknown_case_count, 1);
+    assert.equal(result.population.final_unclassified_case_count, 0);
+    assert.equal(result.cases[0].frozen_material_scoreable, false);
+  }
+  assert.deepEqual(emptySelection.cases[0].unknown_reasons, ["evidence_ids_empty"]);
+  assert.deepEqual(missingSelection.cases[0].unknown_reasons, ["selected_chunk_ids_missing"]);
+});
+
 test("material unknown population stays unknown regardless of selected ranking", () => {
   const fixture = buildFixture({ includeUnknown: true });
   const selectedKnown = score(fixture, ["D1:1"], [fixture.ids.prefix]);
@@ -246,8 +277,14 @@ test("aligned table keeps old session metrics separate from new chunk metrics", 
 
   const direct = alignLocomoChunkScoreRows({
     oldRows: [{ question_id: "old-only", scoreable: true }],
-    chunkRows: [{ question_id: "new-only", scoreable: true, unknown: false, metrics: {} }],
+    chunkRows: [
+      { question_id: "new-only", scoreable: true, unknown: false, metrics: {} },
+      { question_id: "missing-scoreable", unknown: false, metrics: {} },
+    ],
   });
   assert.equal(direct.summary.old_only_case_count, 1);
-  assert.equal(direct.summary.chunk_only_case_count, 1);
+  assert.equal(direct.summary.chunk_only_case_count, 2);
+  assert.equal(direct.summary.chunk_scoreable_case_count, 1);
+  assert.equal(direct.summary.chunk_unknown_case_count, 0);
+  assert.equal(direct.summary.chunk_unclassified_case_count, 1);
 });
