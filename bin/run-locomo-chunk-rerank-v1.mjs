@@ -13,12 +13,15 @@ export const CHUNK_RERANK_SCHEMA = "q3_locomo_chunk_rerank_runner_v1";
 export const CHUNK_RERANK_PROFILE = "q3_locomo_chunk_fts_only_v1";
 export const CHUNK_RERANK_MODEL = "BAAI/bge-reranker-v2-m3";
 export const CHUNK_RERANK_ENDPOINT = "https://api.siliconflow.cn/v1/rerank";
-export const CHUNK_RERANK_DEADLINE_MS = 2_000;
+export const CHUNK_RERANK_DEADLINE_MS = 10_000;
 export const CHUNK_RERANK_MIN_INTERVAL_MS = 60_000;
 export const CHUNK_RERANK_CASE_COUNT = 1_970;
 export const CHUNK_RERANK_PRIOR_CONSUMED = 2_523;
-export const CHUNK_RERANK_NEW_REQUEST_CAP = 1_970;
-export const CHUNK_RERANK_CUMULATIVE_CAP = 4_493;
+export const CHUNK_RERANK_NEW_REQUEST_CAP = 1_971;
+export const CHUNK_RERANK_CUMULATIVE_CAP = 4_494;
+export const CHUNK_RERANK_HISTORICAL_DEADLINE_MS = 2_000;
+export const CHUNK_RERANK_HISTORICAL_NEW_REQUEST_CAP = 1_970;
+export const CHUNK_RERANK_HISTORICAL_CUMULATIVE_CAP = 4_493;
 export const CHUNK_RERANK_MAX_CODE_POINTS_PER_CANDIDATE = 8_000;
 export const CHUNK_RERANK_MAX_TOTAL_CODE_POINTS = 400_000;
 
@@ -45,9 +48,35 @@ const PARAMS = Object.freeze({
   overlap_tokens: 0,
 });
 
+const RECOVERY_PLAN_SCHEMA = "q3_locomo_chunk_rerank_recovery_plan_v1";
+const RECOVERY_MODE = "recovery";
+
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+
+function makeExecutionConfig({ deadlineMs, newRequestCap, cumulativeCap }) {
+  return {
+    profile_id: CHUNK_RERANK_PROFILE,
+    model: CHUNK_RERANK_MODEL,
+    endpoint: CHUNK_RERANK_ENDPOINT,
+    deadline_ms: deadlineMs,
+    min_interval_ms: CHUNK_RERANK_MIN_INTERVAL_MS,
+    max_code_points_per_candidate: CHUNK_RERANK_MAX_CODE_POINTS_PER_CANDIDATE,
+    max_total_code_points: CHUNK_RERANK_MAX_TOTAL_CODE_POINTS,
+    params: PARAMS,
+    candidate_count: CHUNK_RERANK_CASE_COUNT,
+    prior_consumed: CHUNK_RERANK_PRIOR_CONSUMED,
+    new_request_cap: newRequestCap,
+    cumulative_cap: cumulativeCap,
+  };
+}
+
+const HISTORICAL_EXECUTION_CONFIG = Object.freeze(makeExecutionConfig({
+  deadlineMs: CHUNK_RERANK_HISTORICAL_DEADLINE_MS,
+  newRequestCap: CHUNK_RERANK_HISTORICAL_NEW_REQUEST_CAP,
+  cumulativeCap: CHUNK_RERANK_HISTORICAL_CUMULATIVE_CAP,
+}));
 
 function sha256Bytes(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -186,6 +215,14 @@ function gitProvenance(repositoryRoot) {
     repository_worktree_clean: status.stdout.trim() === "",
     repository_provenance_source: "git",
   };
+}
+
+function isGitAncestor(repositoryRoot, ancestor, descendant) {
+  if (typeof ancestor !== "string" || typeof descendant !== "string") return false;
+  const result = spawnSync("git", ["-C", repositoryRoot, "merge-base", "--is-ancestor", ancestor, descendant], {
+    encoding: "utf8",
+  });
+  return result.status === 0;
 }
 
 function sourceKey(sampleId, sessionId) {
@@ -363,7 +400,11 @@ function loadFrozenInputs(root, repositoryRoot) {
   };
 }
 
-function buildRequest(materialCase) {
+function buildRequest(materialCase, {
+  deadlineMs = CHUNK_RERANK_DEADLINE_MS,
+  mode = "main",
+  attemptNumber = null,
+} = {}) {
   const submitted = materialCase.projection.candidates
     .map((candidate, originalIndex) => ({ ...candidate, originalIndex }))
     .filter(candidate => candidate.text.length > 0);
@@ -374,10 +415,14 @@ function buildRequest(materialCase) {
     top_n: submitted.length,
     ...PARAMS,
   };
-  const requestId = `q3-locomo-chunk-rerank-v1:main:${materialCase.ordinal}:${materialCase.question_id}`;
+  const requestId = mode === RECOVERY_MODE
+    ? `q3-locomo-chunk-rerank-v1:recovery:${attemptNumber}:${materialCase.ordinal}:${materialCase.question_id}`
+    : `q3-locomo-chunk-rerank-v1:main:${materialCase.ordinal}:${materialCase.question_id}`;
   const requestIdentity = {
     request_id: requestId,
     phase: "main",
+    execution_mode: mode,
+    ...(mode === RECOVERY_MODE ? { attempt: attemptNumber } : {}),
     ordinal: materialCase.ordinal,
     question_id: materialCase.question_id,
     query: materialCase.query,
@@ -388,7 +433,7 @@ function buildRequest(materialCase) {
       endpoint: CHUNK_RERANK_ENDPOINT,
       model: CHUNK_RERANK_MODEL,
       top_n: body.top_n,
-      deadline_ms: CHUNK_RERANK_DEADLINE_MS,
+      deadline_ms: deadlineMs,
       return_documents: false,
       max_chunks_per_doc: 1,
       overlap_tokens: 0,
@@ -577,20 +622,11 @@ function makeSuccessEvidence({ materialCase, request, attempt, startedAtMs, resp
 }
 
 function initialState(material, now = new Date().toISOString()) {
-  const executionConfig = {
-    profile_id: CHUNK_RERANK_PROFILE,
-    model: CHUNK_RERANK_MODEL,
-    endpoint: CHUNK_RERANK_ENDPOINT,
-    deadline_ms: CHUNK_RERANK_DEADLINE_MS,
-    min_interval_ms: CHUNK_RERANK_MIN_INTERVAL_MS,
-    max_code_points_per_candidate: CHUNK_RERANK_MAX_CODE_POINTS_PER_CANDIDATE,
-    max_total_code_points: CHUNK_RERANK_MAX_TOTAL_CODE_POINTS,
-    params: PARAMS,
-    candidate_count: CHUNK_RERANK_CASE_COUNT,
-    prior_consumed: CHUNK_RERANK_PRIOR_CONSUMED,
-    new_request_cap: CHUNK_RERANK_NEW_REQUEST_CAP,
-    cumulative_cap: CHUNK_RERANK_CUMULATIVE_CAP,
-  };
+  const executionConfig = makeExecutionConfig({
+    deadlineMs: CHUNK_RERANK_DEADLINE_MS,
+    newRequestCap: CHUNK_RERANK_NEW_REQUEST_CAP,
+    cumulativeCap: CHUNK_RERANK_CUMULATIVE_CAP,
+  });
   return {
     schema: CHUNK_RERANK_SCHEMA,
     runner_version: "q3_locomo_chunk_rerank_v1",
@@ -671,6 +707,186 @@ function readOrCreateState(root, material) {
   return { statePath, state };
 }
 
+function readEvidenceForRecovery(result) {
+  if (!isRecord(result) || typeof result.evidence_path !== "string" || !existsSync(result.evidence_path)) {
+    throw new Error(`rerank_recovery_evidence_missing:${result?.question_id || "unknown"}`);
+  }
+  return readJson(result.evidence_path);
+}
+
+function validateHistoricalEvidence(result, materialCase) {
+  const evidence = readEvidenceForRecovery(result);
+  if (evidence.schema !== "q3_locomo_chunk_rerank_request_evidence_v1"
+      || evidence.attempt !== result.attempt
+      || evidence.question_id !== materialCase.question_id
+      || evidence.validation?.ok !== true
+      || evidence.request_identity?.params?.deadline_ms !== CHUNK_RERANK_HISTORICAL_DEADLINE_MS
+      || evidence.request_identity?.candidate_ids?.join("\u0000") !== materialCase.candidate_ids.join("\u0000")) {
+    throw new Error(`rerank_recovery_historical_evidence_invalid:${materialCase.question_id}`);
+  }
+  if (evidence.request_identity?.params?.model !== CHUNK_RERANK_MODEL
+      || evidence.request_identity?.params?.endpoint !== CHUNK_RERANK_ENDPOINT) {
+    throw new Error(`rerank_recovery_historical_request_identity_invalid:${materialCase.question_id}`);
+  }
+  if (evidence.request_identity_sha256 !== sha256Json(evidence.request_identity)) {
+    throw new Error(`rerank_recovery_historical_request_hash_invalid:${materialCase.question_id}`);
+  }
+  return evidence;
+}
+
+function readRecoveryState(root, material, repositoryRoot) {
+  const statePath = join(root, "state", "runner-state.json");
+  if (!existsSync(statePath)) throw new Error("rerank_recovery_state_missing");
+  const state = readJson(statePath);
+  if (state.schema !== CHUNK_RERANK_SCHEMA) throw new Error("rerank_recovery_state_schema_mismatch");
+  if (sha256Json(state.material_identity) !== sha256Json(material.material_identity)) {
+    throw new Error("rerank_recovery_state_material_identity_mismatch");
+  }
+  if (state.status !== "stopped" || state.inflight !== null) {
+    throw new Error("rerank_recovery_state_not_stopped");
+  }
+  if (sha256Json(state.execution_config) !== sha256Json(HISTORICAL_EXECUTION_CONFIG)
+      || state.execution_config_sha256 !== sha256Json(HISTORICAL_EXECUTION_CONFIG)) {
+    throw new Error("rerank_recovery_historical_config_mismatch");
+  }
+  const currentSource = material.execution_source;
+  const historicalSource = state.execution_source;
+  if (!isRecord(historicalSource)
+      || historicalSource.repository_provenance_source !== "git"
+      || historicalSource.repository_worktree_clean !== true
+      || historicalSource.repository_commit === currentSource.repository_commit
+      || !isGitAncestor(repositoryRoot, historicalSource.repository_commit, currentSource.repository_commit)) {
+    throw new Error("rerank_recovery_source_version_invalid");
+  }
+  const budget = state.budget;
+  if (!isRecord(budget)
+      || budget.prior_consumed !== CHUNK_RERANK_PRIOR_CONSUMED
+      || budget.new_request_cap !== CHUNK_RERANK_HISTORICAL_NEW_REQUEST_CAP
+      || budget.cumulative_cap !== CHUNK_RERANK_HISTORICAL_CUMULATIVE_CAP
+      || budget.attempts !== 21
+      || budget.valid_responses !== 20
+      || budget.failed_responses !== 0
+      || budget.unknown_requests !== 1
+      || budget.cumulative_consumed !== 2_544) {
+    throw new Error("rerank_recovery_historical_budget_mismatch");
+  }
+  if (!Array.isArray(state.attempts) || state.attempts.length !== 21) {
+    throw new Error("rerank_recovery_attempt_history_mismatch");
+  }
+  const attemptsByNumber = new Map();
+  for (const attempt of state.attempts) {
+    if (!Number.isInteger(attempt?.attempt) || attemptsByNumber.has(attempt.attempt)) {
+      throw new Error("rerank_recovery_attempt_identity_mismatch");
+    }
+    attemptsByNumber.set(attempt.attempt, attempt);
+  }
+  for (let attemptNumber = 1; attemptNumber <= 20; attemptNumber += 1) {
+    if (attemptsByNumber.get(attemptNumber)?.outcome !== "confirmed_valid") {
+      throw new Error("rerank_recovery_completed_attempt_mismatch");
+    }
+  }
+  const unknownAttempt = attemptsByNumber.get(21);
+  if (unknownAttempt?.outcome !== "unknown"
+      || unknownAttempt.question_id !== state.stop?.question_id
+      || unknownAttempt.evidence_path !== state.stop?.evidence_path
+      || state.stop?.reason !== "transport_error_unconfirmed") {
+    throw new Error("rerank_recovery_unknown_attempt_mismatch");
+  }
+  if (!isRecord(state.phases?.main) || !Array.isArray(state.phases.main.results)
+      || state.phases.main.results.length !== 20) {
+    throw new Error("rerank_recovery_completed_results_mismatch");
+  }
+  const casesById = new Map(material.cases.map(materialCase => [materialCase.question_id, materialCase]));
+  const completed = new Set();
+  for (const result of state.phases.main.results) {
+    if (result?.completion_confirmed !== true || completed.has(result.question_id)) {
+      throw new Error("rerank_recovery_completed_id_mismatch");
+    }
+    const materialCase = casesById.get(result.question_id);
+    if (!materialCase || result.attempt !== attemptsByNumber.get(result.attempt)?.attempt) {
+      throw new Error(`rerank_recovery_completed_case_invalid:${result?.question_id || "unknown"}`);
+    }
+    validateHistoricalEvidence(result, materialCase);
+    completed.add(result.question_id);
+  }
+  if (completed.has(unknownAttempt.question_id)) throw new Error("rerank_recovery_unknown_already_completed");
+  const unknownEvidence = readEvidenceForRecovery({ evidence_path: state.stop?.evidence_path, question_id: unknownAttempt.question_id });
+  if (unknownEvidence.schema !== "q3_locomo_chunk_rerank_request_evidence_v1"
+      || unknownEvidence.attempt !== 21
+      || unknownEvidence.question_id !== unknownAttempt.question_id
+      || unknownEvidence.validation?.ok !== false
+      || unknownEvidence.validation?.reason !== "transport_error_unconfirmed") {
+    throw new Error("rerank_recovery_unknown_evidence_invalid");
+  }
+  if (!casesById.has(unknownAttempt.question_id)) {
+    throw new Error("rerank_recovery_unknown_case_missing");
+  }
+  return { statePath, state, casesById, completed, historicalSource, currentSource };
+}
+
+function buildRecoveryPlan({ statePath, state, material, casesById, completed, historicalSource, currentSource }) {
+  const pending = material.cases.filter(materialCase => !completed.has(materialCase.question_id));
+  const unknownAttempt = state.attempts.find(attempt => attempt.outcome === "unknown");
+  const unknownCase = casesById.get(unknownAttempt.question_id);
+  const recoveryConfig = makeExecutionConfig({
+    deadlineMs: CHUNK_RERANK_DEADLINE_MS,
+    newRequestCap: CHUNK_RERANK_NEW_REQUEST_CAP,
+    cumulativeCap: CHUNK_RERANK_CUMULATIVE_CAP,
+  });
+  return {
+    schema: RECOVERY_PLAN_SCHEMA,
+    status: "prepared",
+    mode: RECOVERY_MODE,
+    state_path: statePath,
+    material_identity: material.material_identity,
+    input_hashes: material.hashes,
+    historical_execution_source: historicalSource,
+    recovery_execution_source: currentSource,
+    historical_execution_config: state.execution_config,
+    historical_execution_config_sha256: state.execution_config_sha256,
+    recovery_execution_config: recoveryConfig,
+    recovery_execution_config_sha256: sha256Json(recoveryConfig),
+    completed_case_count: completed.size,
+    pending_case_count: pending.length,
+    unsent_case_count: pending.length - 1,
+    explicit_unknown_retry: {
+      question_id: unknownCase.question_id,
+      previous_attempt: unknownAttempt.attempt,
+      next_attempt: state.attempts.length + 1,
+      previous_evidence_path: state.stop.evidence_path,
+      new_request_id_required: true,
+    },
+    budget: {
+      current_attempts: state.budget.attempts,
+      current_cumulative_consumed: state.budget.cumulative_consumed,
+      recovery_requests_required: pending.length,
+      projected_attempts: state.budget.attempts + pending.length,
+      projected_cumulative_consumed: state.budget.cumulative_consumed + pending.length,
+      proposed_new_request_cap: CHUNK_RERANK_NEW_REQUEST_CAP,
+      proposed_cumulative_cap: CHUNK_RERANK_CUMULATIVE_CAP,
+      additional_authorization_over_historical_cap: 1,
+    },
+    completed_question_ids_sha256: sha256Json([...completed].sort()),
+  };
+}
+
+function loadRecoveryPlan(root, material, repositoryRoot) {
+  const recoveryState = readRecoveryState(root, material, repositoryRoot);
+  return {
+    ...recoveryState,
+    plan: buildRecoveryPlan({ ...recoveryState, material }),
+  };
+}
+
+export function prepareLocomoChunkRerankRecovery({
+  root,
+  repositoryRoot = resolve(new URL("..", import.meta.url).pathname),
+} = {}) {
+  if (!root) throw new Error("rerank_root_required");
+  const material = loadFrozenInputs(root, repositoryRoot);
+  return loadRecoveryPlan(root, material, repositoryRoot).plan;
+}
+
 function markStopped(statePath, state, stop) {
   state.stop = stop;
   state.status = "stopped";
@@ -695,15 +911,47 @@ export async function runLocomoChunkRerank({
   now = () => Date.now(),
   checkOnly = false,
   requestLimit = null,
+  recovery = false,
+  confirmRecovery = false,
 } = {}) {
   if (!root) throw new Error("rerank_root_required");
   ensureDirs(root);
   const material = loadFrozenInputs(root, repositoryRoot);
-  if (checkOnly) return { check_only: true, material_identity: material.material_identity, execution_source: material.execution_source };
-  if (!apiKey) throw new Error("rerank_api_key_missing");
-  const { statePath, state } = readOrCreateState(root, material);
+  let statePath;
+  let state;
+  let executionMode = "main";
+  let activeExecutionConfig;
+  if (recovery) {
+    const recoveryContext = loadRecoveryPlan(root, material, repositoryRoot);
+    if (checkOnly || !confirmRecovery) return recoveryContext.plan;
+    if (recoveryContext.plan.recovery_execution_source.repository_worktree_clean !== true) {
+      throw new Error("rerank_recovery_git_worktree_dirty");
+    }
+    if (!apiKey) throw new Error("rerank_api_key_missing");
+    ({ statePath, state } = recoveryContext);
+    state.stop_history = [...(Array.isArray(state.stop_history) ? state.stop_history : []), state.stop];
+    state.recovery = {
+      ...recoveryContext.plan,
+      status: "running",
+      started_at: new Date().toISOString(),
+      historical_stop: state.stop,
+    };
+    state.budget.new_request_cap = recoveryContext.plan.budget.proposed_new_request_cap;
+    state.budget.cumulative_cap = recoveryContext.plan.budget.proposed_cumulative_cap;
+    state.status = "running";
+    activeExecutionConfig = recoveryContext.plan.recovery_execution_config;
+    executionMode = RECOVERY_MODE;
+    saveState(statePath, state);
+  } else {
+    if (checkOnly) return { check_only: true, material_identity: material.material_identity, execution_source: material.execution_source };
+    if (!apiKey) throw new Error("rerank_api_key_missing");
+    ({ statePath, state } = readOrCreateState(root, material));
+    activeExecutionConfig = state.execution_config;
+  }
   if (state.status === "complete") return { status: state.status, state_path: statePath, budget: state.budget };
-  if (state.status === "stopped") throw new Error(`rerank_runner_stopped:${state.stop?.reason || "unknown"}`);
+  if (state.status === "stopped") {
+    throw new Error(`rerank_runner_stopped:${state.stop?.reason || "unknown"}`);
+  }
   if (state.inflight) {
     markPriorInflightUnknown(statePath, state);
     throw new Error("rerank_prior_inflight_request_marked_unknown");
@@ -719,8 +967,8 @@ export async function runLocomoChunkRerank({
       saveState(statePath, state);
       return { status: state.status, state_path: statePath, budget: state.budget };
     }
-    if (state.budget.attempts >= CHUNK_RERANK_NEW_REQUEST_CAP
-        || state.budget.cumulative_consumed >= CHUNK_RERANK_CUMULATIVE_CAP) {
+    if (state.budget.attempts >= activeExecutionConfig.new_request_cap
+        || state.budget.cumulative_consumed >= activeExecutionConfig.cumulative_cap) {
       markStopped(statePath, state, {
         reason: "request_budget_exhausted",
         question_id: materialCase.question_id,
@@ -728,8 +976,11 @@ export async function runLocomoChunkRerank({
       throw new Error("rerank_request_budget_exhausted");
     }
 
-    const request = buildRequest(materialCase);
-    if (request.submitted.length === 0) {
+    const bypassRequest = buildRequest(materialCase, {
+      deadlineMs: activeExecutionConfig.deadline_ms,
+      mode: executionMode,
+    });
+    if (bypassRequest.submitted.length === 0) {
       const bypassPath = join(root, "evidence", "main", `bypass-${safeName(materialCase.question_id)}.json`);
       atomicWriteJson(bypassPath, {
         schema: "q3_locomo_chunk_rerank_request_evidence_v1",
@@ -764,6 +1015,11 @@ export async function runLocomoChunkRerank({
     await waitMs(throttleWaitMs, sleep);
     const startedAtMs = now();
     const attemptNumber = state.attempts.length + 1;
+    const request = buildRequest(materialCase, {
+      deadlineMs: activeExecutionConfig.deadline_ms,
+      mode: executionMode,
+      attemptNumber,
+    });
     state.budget.attempts += 1;
     state.budget.cumulative_consumed += 1;
     state.last_request_started_at_ms = startedAtMs;
@@ -794,7 +1050,7 @@ export async function runLocomoChunkRerank({
 
     let response;
     try {
-      response = await requestWithDeadline(transport, request, apiKey);
+      response = await requestWithDeadline(transport, request, apiKey, activeExecutionConfig.deadline_ms);
     } catch (error) {
       const evidencePath = join(root, "evidence", "main", `${String(attemptNumber).padStart(4, "0")}-${safeName(materialCase.question_id)}.json`);
       const evidence = makeFailureEvidence({
@@ -892,11 +1148,15 @@ function parseArgs(argv) {
   const args = {
     root: process.env.Q3_LOCOMO_CHUNK_RERANK_ROOT || "/home/lionsol/.openclaw/workspace/q3-locomo-v1.2/runs/q3-locomo-chunk-fts-rerank-v1",
     checkOnly: false,
+    recovery: false,
+    confirmRecovery: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === "--root") args.root = argv[++index];
     else if (token === "--check-only") args.checkOnly = true;
+    else if (token === "--prepare-recovery" || token === "--recovery") args.recovery = true;
+    else if (token === "--confirm-recovery") args.confirmRecovery = true;
     else if (token === "--request-limit") args.requestLimit = Number(argv[++index]);
     else if (token === "--help" || token === "-h") args.help = true;
     else throw new Error(`unknown_argument:${token}`);
@@ -908,14 +1168,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     const args = parseArgs(process.argv.slice(2));
     if (args.help) {
-      console.log("Usage: node bin/run-locomo-chunk-rerank-v1.mjs [--root <experiment-root>] [--check-only] [--request-limit <n>]");
+      console.log("Usage: node bin/run-locomo-chunk-rerank-v1.mjs [--root <experiment-root>] [--check-only] [--prepare-recovery] [--recovery --confirm-recovery] [--request-limit <n>]");
       process.exit(0);
     }
+    if (args.confirmRecovery && !args.recovery) throw new Error("confirm_recovery_requires_recovery");
     const result = await runLocomoChunkRerank({
       root: resolve(args.root),
-      apiKey: args.checkOnly ? "check-only" : readProviderKey(),
+      apiKey: args.checkOnly || !args.confirmRecovery ? "check-only" : readProviderKey(),
       checkOnly: args.checkOnly,
       requestLimit: args.requestLimit ?? null,
+      recovery: args.recovery,
+      confirmRecovery: args.confirmRecovery,
     });
     console.log(JSON.stringify(result));
   } catch (error) {
