@@ -1164,22 +1164,34 @@ function parseArgs(argv) {
   return args;
 }
 
+export async function runLocomoChunkRerankCli(argv = process.argv.slice(2), {
+  readProviderKeyImpl = readProviderKey,
+  run = runLocomoChunkRerank,
+  transport,
+} = {}) {
+  const args = parseArgs(argv);
+  if (args.help) return { help: true };
+  if (args.confirmRecovery && !args.recovery) throw new Error("confirm_recovery_requires_recovery");
+  const readOnly = args.checkOnly || (args.recovery && !args.confirmRecovery);
+  const runnerOptions = {
+    root: resolve(args.root),
+    apiKey: readOnly ? "check-only" : readProviderKeyImpl(),
+    checkOnly: args.checkOnly,
+    requestLimit: args.requestLimit ?? null,
+    recovery: args.recovery,
+    confirmRecovery: args.confirmRecovery,
+  };
+  if (transport) runnerOptions.transport = transport;
+  return run(runnerOptions);
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   try {
-    const args = parseArgs(process.argv.slice(2));
-    if (args.help) {
+    if (process.argv.includes("--help") || process.argv.includes("-h")) {
       console.log("Usage: node bin/run-locomo-chunk-rerank-v1.mjs [--root <experiment-root>] [--check-only] [--prepare-recovery] [--recovery --confirm-recovery] [--request-limit <n>]");
       process.exit(0);
     }
-    if (args.confirmRecovery && !args.recovery) throw new Error("confirm_recovery_requires_recovery");
-    const result = await runLocomoChunkRerank({
-      root: resolve(args.root),
-      apiKey: args.checkOnly || !args.confirmRecovery ? "check-only" : readProviderKey(),
-      checkOnly: args.checkOnly,
-      requestLimit: args.requestLimit ?? null,
-      recovery: args.recovery,
-      confirmRecovery: args.confirmRecovery,
-    });
+    const result = await runLocomoChunkRerankCli(process.argv.slice(2));
     console.log(JSON.stringify(result));
   } catch (error) {
     console.error(`LOCOMO_CHUNK_RERANK_STOPPED ${error?.message || error}`);

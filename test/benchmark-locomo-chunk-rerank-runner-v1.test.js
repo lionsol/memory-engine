@@ -11,6 +11,7 @@ import {
   providerUsage,
   requestWithDeadline,
   runLocomoChunkRerank,
+  runLocomoChunkRerankCli,
 } from "../bin/run-locomo-chunk-rerank-v1.mjs";
 
 const INPUT_SOURCE = "/home/lionsol/.openclaw/workspace/q3-locomo-v1.2/runs/q3-locomo-chunk-fts-rerank-v1/input";
@@ -161,6 +162,43 @@ test("check-only validates the frozen chunk inputs without transport", async () 
     assert.equal(result.material_identity.profile_id, "q3_locomo_chunk_fts_only_v1");
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI reads credentials for ordinary execution but not check-only", async () => {
+  const root = fixtureRoot();
+  const checkRoot = fixtureRoot();
+  const calls = [];
+  let credentialReads = 0;
+  const readProviderKeyImpl = () => {
+    credentialReads += 1;
+    return "fake-cli-key";
+  };
+  try {
+    const ordinary = await runLocomoChunkRerankCli([
+      "--root", root,
+      "--request-limit", "1",
+    ], {
+      readProviderKeyImpl,
+      transport: fakeTransport(calls),
+    });
+    assert.equal(ordinary.status, "paused");
+    assert.equal(credentialReads, 1);
+    assert.equal(calls.length, 1);
+
+    const checkOnly = await runLocomoChunkRerankCli([
+      "--root", checkRoot,
+      "--check-only",
+    ], {
+      readProviderKeyImpl,
+      transport: fakeTransport(calls),
+    });
+    assert.equal(checkOnly.check_only, true);
+    assert.equal(credentialReads, 1);
+    assert.equal(calls.length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(checkRoot, { recursive: true, force: true });
   }
 });
 
