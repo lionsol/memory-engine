@@ -115,10 +115,37 @@ export function readProviderKey({ configPath = join(homedir(), ".openclaw", "ope
 }
 
 export function createHttpsTransport({ httpsImpl = https } = {}) {
-  return ({ body, apiKey, timeoutMs = CHUNK_RERANK_DEADLINE_MS }) => new Promise((resolveResponse, reject) => {
+  return ({ body, apiKey, timeoutMs = CHUNK_RERANK_DEADLINE_MS, signal = null }) => new Promise((resolveResponse, reject) => {
     const payload = JSON.stringify(body);
     const url = new URL(CHUNK_RERANK_ENDPOINT);
-    const request = httpsImpl.request(url, {
+    let settled = false;
+    let request;
+    const cleanup = () => {
+      signal?.removeEventListener("abort", abortRequest);
+    };
+    const resolveOnce = value => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolveResponse(value);
+    };
+    const rejectOnce = error => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const abortRequest = () => {
+      const error = new Error("request_aborted");
+      error.code = "ABORT_ERR";
+      request?.destroy(error);
+      rejectOnce(error);
+    };
+    if (signal?.aborted) {
+      abortRequest();
+      return;
+    }
+    request = httpsImpl.request(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -130,7 +157,7 @@ export function createHttpsTransport({ httpsImpl = https } = {}) {
       let raw = "";
       response.setEncoding("utf8");
       response.on("data", chunk => { raw += chunk; });
-      response.on("end", () => resolveResponse({
+      response.on("end", () => resolveOnce({
         status: response.statusCode ?? 0,
         headers: response.headers,
         body: raw,
@@ -140,8 +167,10 @@ export function createHttpsTransport({ httpsImpl = https } = {}) {
       const error = new Error("timeout");
       error.code = "ETIMEDOUT";
       request.destroy(error);
+      rejectOnce(error);
     });
-    request.on("error", reject);
+    request.on("error", rejectOnce);
+    signal?.addEventListener("abort", abortRequest, { once: true });
     request.write(payload);
     request.end();
   });
@@ -415,11 +444,28 @@ function parseOptionalJson(rawBody) {
   }
 }
 
-function requestWithDeadline(transport, request, apiKey) {
+export function providerUsage(parsed) {
+  if (!isRecord(parsed)) return null;
+  const hasUsage = Object.hasOwn(parsed, "usage");
+  const hasMeta = Object.hasOwn(parsed, "meta");
+  if (!hasUsage && !hasMeta) return null;
+  const meta = isRecord(parsed.meta) ? parsed.meta : parsed.meta ?? null;
+  return {
+    source: hasUsage ? "response.usage" : "response.meta",
+    response_usage: hasUsage ? parsed.usage : null,
+    response_meta: meta,
+    meta_tokens: isRecord(parsed.meta) && Object.hasOwn(parsed.meta, "tokens") ? parsed.meta.tokens : null,
+    meta_billed_units: isRecord(parsed.meta) && Object.hasOwn(parsed.meta, "billed_units") ? parsed.meta.billed_units : null,
+  };
+}
+
+export function requestWithDeadline(transport, request, apiKey, deadlineMs = CHUNK_RERANK_DEADLINE_MS) {
+  const controller = new AbortController();
   const transportPromise = Promise.resolve().then(() => transport({
     body: request.body,
     apiKey,
-    timeoutMs: CHUNK_RERANK_DEADLINE_MS,
+    timeoutMs: deadlineMs,
+    signal: controller.signal,
   }));
   // A late transport settlement is intentionally observed and discarded so
   // an ignored deadline cannot create an unhandled rejection or mutate state.
@@ -427,10 +473,11 @@ function requestWithDeadline(transport, request, apiKey) {
   let timer;
   const deadline = new Promise((_, reject) => {
     timer = setTimeout(() => {
+      controller.abort();
       const error = new Error("deadline_exceeded");
       error.code = "ETIMEDOUT";
       reject(error);
-    }, CHUNK_RERANK_DEADLINE_MS);
+    }, deadlineMs);
   });
   return Promise.race([transportPromise, deadline]).finally(() => clearTimeout(timer));
 }
@@ -465,7 +512,7 @@ function makeFailureEvidence({ materialCase, request, attempt, startedAtMs, resp
     http_status: response?.status ?? null,
     response_headers: response?.headers ?? {},
     raw_response_body: response?.body ?? null,
-    usage: validation?.parsed?.usage ?? null,
+    usage: providerUsage(validation?.parsed),
     validation: { ok: false, reason: validation?.reason ?? null },
     transport_error: transportError,
   };
@@ -523,7 +570,7 @@ function makeSuccessEvidence({ materialCase, request, attempt, startedAtMs, resp
     http_status: response.status,
     response_headers: response.headers || {},
     raw_response_body: response.body,
-    usage: validation.parsed.usage ?? null,
+    usage: providerUsage(validation.parsed),
     fingerprint: validation.fingerprint,
     validation: { ok: true, reason: null },
   };
@@ -808,7 +855,7 @@ export async function runLocomoChunkRerank({
           reason: evidence.reason,
           evidence_path: evidencePath,
           latency_ms: latencyMs,
-          usage: validation.parsed.usage ?? null,
+          usage: providerUsage(validation.parsed),
         });
       } else {
         attempt.outcome = "confirmed_failure";

@@ -6,6 +6,8 @@ import test from "node:test";
 
 import {
   CHUNK_RERANK_MODEL,
+  providerUsage,
+  requestWithDeadline,
   runLocomoChunkRerank,
 } from "../bin/run-locomo-chunk-rerank-v1.mjs";
 
@@ -30,7 +32,10 @@ function fakeTransport(calls) {
           relevance_score: body.documents.length - index,
           document: null,
         })),
-        usage: { input_tokens: body.documents.length, output_tokens: body.documents.length },
+        meta: {
+          tokens: body.documents.length,
+          billed_units: body.documents.length + 1,
+        },
       }),
     };
   };
@@ -80,7 +85,9 @@ test("zero-provider persistence records scores, identity, usage, budget, and res
     assert.equal(evidence.request_identity.params.model, CHUNK_RERANK_MODEL);
     assert.equal(Array.isArray(evidence.raw_scores_by_submitted_index), true);
     assert.equal(typeof evidence.raw_response_body, "string");
-    assert.equal(evidence.usage.input_tokens > 0, true);
+    assert.equal(evidence.usage.source, "response.meta");
+    assert.equal(evidence.usage.response_meta.tokens > 0, true);
+    assert.equal(evidence.usage.meta_billed_units > 0, true);
     assert.equal(evidence.request_serialization, "node_json_stringify_utf8_sha256_v1");
 
     const second = await runLocomoChunkRerank({
@@ -101,6 +108,33 @@ test("zero-provider persistence records scores, identity, usage, budget, and res
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("deadline aborts the transport signal and isolates late success or failure", async () => {
+  let signalSeen;
+  await assert.rejects(
+    () => requestWithDeadline(
+      ({ signal }) => {
+        signalSeen = signal;
+        return new Promise((resolve, reject) => {
+          setTimeout(() => reject(new Error("late_transport_failure")), 40);
+        });
+      },
+      { body: { query: "q", documents: ["d"] } },
+      "test-only",
+      10,
+    ),
+    /deadline_exceeded/,
+  );
+  assert.equal(signalSeen.aborted, true);
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.deepEqual(providerUsage({ meta: { tokens: 12, billed_units: 3 } }), {
+    source: "response.meta",
+    response_usage: null,
+    response_meta: { tokens: 12, billed_units: 3 },
+    meta_tokens: 12,
+    meta_billed_units: 3,
+  });
 });
 
 test("an unconfirmed inflight request becomes unknown and is never resent", async () => {
