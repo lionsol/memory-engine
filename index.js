@@ -29,6 +29,7 @@ import {
 import { createAutoRecallHookLifecycle } from "./lib/recall/auto-recall-hook-lifecycle.js";
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { createHybridRuntimeContext } from "./lib/recall/hybrid/runtime-context.js";
+import { createExplicitSearchRerankControlPolicy } from "./lib/recall/hybrid/explicit-search-rerank-control-policy.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
 import {
   createMemoryEngineGetExecute,
@@ -126,6 +127,7 @@ export default definePluginEntry({
     const kgFailClosedCanary = effectiveRuntimeConfig.kgFailClosedCanary;
     const recentFailClosedMode = effectiveRuntimeConfig.recentFailClosedMode;
     const recentFailClosedCanary = effectiveRuntimeConfig.recentFailClosedCanary;
+    const explicitSearchRerankPolicy = createExplicitSearchRerankControlPolicy(effectiveRuntimeConfig);
 
     const autoRecallLifecycle = createAutoRecallHookLifecycle({
       api,
@@ -154,6 +156,7 @@ export default definePluginEntry({
         recentFailClosedMode,
         recentFailClosedCanary,
         hybridRetrieval: effectiveRuntimeConfig.hybridRetrieval,
+        explicitSearchRerankPolicy,
       },
       telemetry: {
         recordMemoryEvent,

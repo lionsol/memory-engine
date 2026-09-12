@@ -130,6 +130,19 @@
           }
         }
       },
+      "explicitSearchRerankControl": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {
+          "enabled": false
+        },
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
       "kgFailClosedMode": {
         "type": "string",
         "enum": [
