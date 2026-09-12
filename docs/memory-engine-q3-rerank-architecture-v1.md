@@ -21,13 +21,13 @@ Primary LoCoMo evidence: /home/lionsol/.openclaw/workspace/q3-locomo-v1.2/report
 
 The frozen `q3_locomo_chunk_fts_only_v1` comparison is accepted with limitations as evidence for the architecture direction. On the same 1970-case FTS-only chunk candidate pools, Recall-all@3 improved from `888/1970 = 45.08%` under control to `1354/1970 = 68.73%` after rerank; 476 cases improved and 10 regressed. This supports retaining an independent relevance-rerank layer as the integration direction. It does not establish production-equivalent chunking, always-vector or selective-vector policy, or a causal comparison with session-level Q1 results.
 
-The accepted integration foundation is the independent rerank interface, canonical `source.text` projection and orchestrator. Provider error, timeout, invalid response or persistence failure remains an all-or-nothing fallback to the same-profile control order; this fallback is not a successful rerank result. The experiment's `50` candidate depth and `10` second deadline are not production parameters. Production candidate depth, text budget, deadline, adapter/provider, default enablement and serving profile remain undecided.
+The accepted integration foundation is the independent rerank interface, canonical `source.text` projection and orchestrator. Provider error, timeout or invalid response remains an all-or-nothing fallback to the same-profile control order; this fallback is not a successful rerank result. The experiment's `50` candidate depth and recovered `10s` deadline remain historical experiment parameters. Subsequent R3 decisions source-close explicit-search bounded valid-pool serving and design-freeze the first qualification profile at live `topK=3`, depth `20`, `4000`/`48000` code-point budgets and `2500ms` adapter deadline; adapter/provider, provider token budgets, default runtime enablement and real canonical-text egress remain undecided/unauthorized.
 
 ## Source boundary
 
-Current hybridSearch sorts fused candidates, takes K, then calls projectCanonicalHybridResults. Canonical projection can drop candidates without backfill. Its pre/post-rerank debug field names do not establish that a cross-encoder is present.
+The disabled/default Hybrid branch still sorts fused candidates, takes K, then calls `projectCanonicalHybridResults`; canonical projection can drop candidates without backfill. The accepted R3 branch is separate and only reachable from the trusted explicit-search runner when an enabled normalized profile is injected: it takes a bounded fused pool, performs canonical validation, runs same-pool control/rerank, then takes K with no refill outside candidateDepth. Pre/post-rerank debug field names by themselves do not establish that a cross-encoder is active.
 
-The first implementation is a standalone module, not an edit to that serving sequence. It receives immutable ordered candidates and returns an ordering of the same exact IDs. It does not fetch DB records, expand sessions, write confidence, reinforce memories, select channels, or call AutoRecall.
+The original standalone reranker remains a pure ordering module. It receives immutable ordered candidates and returns an ordering of the same exact IDs. It does not fetch DB records, expand sessions, write confidence, reinforce memories, select channels, or call AutoRecall.
 
 Proposed input:
 - query: nonempty string supplied by the caller;
@@ -36,7 +36,7 @@ Proposed input:
 - adapter: injected score function accepting query, nonempty candidate texts, and an abort signal;
 - adapter identity: provider/model/revision observation, with unknown revision explicit.
 
-Candidate count is 0..50 for this first contract. Fifty is a bounded engineering limit aligned with the existing benchmark depth, not a measured production optimum. Reject oversize input rather than silently trimming. Production candidate depth and deadline value remain profile decisions; do not invent a production default from benchmark p95.
+Candidate count remains 0..50 for the standalone reranker contract. Fifty is a bounded engineering limit aligned with the historical benchmark depth, not a measured production optimum. Reject oversize input rather than silently trimming. The first production-shaped qualification profile separately fixes candidateDepth `20` and adapter deadline `2500ms`; these are qualification inputs rather than evidence-derived quality optima or runtime authorization.
 
 Output:
 - orderedIds: full permutation of input IDs;
@@ -118,6 +118,73 @@ The architecture direction is accepted with limitations:
 
 The fixed-candidate LoCoMo result is evidence for this layer, not a production-quality or production-latency claim. Recall-all@3 improved from `45.08%` to `68.73%` on the frozen FTS-only chunk profile, with 476 improved and 10 regressed cases. The comparison cannot decide always-vector or selective-vector retrieval, production canonical backfill, or whether `50` candidates and `10` seconds are suitable production values.
 
-The following remain explicitly undecided and require a separate product decision if pursued: production default enablement, adapter/provider, candidate depth, text budget, deadline, set-aware evidence selection, valid-topK/backfill semantics, and adaptive `0..K` serving. No additional benchmark or provider run is implied by this architecture decision. The accepted offline evidence remains in [the canonical chunk acceptance report](memory-engine-q3-locomo-chunk-rerank-acceptance-v1.md).
+At the original architecture-decision point, production default enablement, adapter/provider, candidate depth, text budget, deadline, set-aware evidence selection, valid-topK/backfill semantics and adaptive `0..K` serving were all undecided. The subsequent 2026-09-12 decisions recorded below source-close explicit-search bounded valid-pool serving and freeze the first qualification profile (`topK=3`, depth `20`, `4000`/`48000` code-point budgets, `2500ms` deadline). Provider/model/endpoint, provider token budgets, real canonical-text egress, runtime enablement, set-aware selection and adaptive `0..K` remain undecided/unauthorized. No additional benchmark or provider run is implied. The accepted offline evidence remains in [the canonical chunk acceptance report](memory-engine-q3-locomo-chunk-rerank-acceptance-v1.md).
 
 The completed runner's stale `recovery.status` is recorded as an ordinary adjacent source defect. The reconciled experiment is complete; this finding does not block the architecture decision and does not authorize editing historical experiment state.
+
+## Production wiring decision and source closure — 2026-09-12
+
+Status: R3 EXPLICIT-SEARCH SOURCE `PASS_WITH_FINDINGS / CLOSED` at `298627c13c14b69c5997db7942c8ed01c87154ac`; PRODUCTION ENABLEMENT / PROVIDER EGRESS / RUNTIME QUALIFICATION NOT AUTHORIZED.
+The completed benchmark provider budget remains 4494/4494. No additional provider request is authorized.
+
+### Entry and trusted enablement
+
+The accepted source integration surface is explicit memory search in `lib/tools/memory-engine-actions.js`, through its trusted runtime factory into `hybridSearch`. Dedicated `memory_engine_search` and legacy `memory_engine action=search` share the explicit runner. AutoRecall and unrelated internal callers remain outside this integration. Enablement, adapter, endpoint and budget selection are not model-controlled tool arguments.
+
+The runtime factory supplies an optional, validated rerank policy only after the explicit-search call-site policy permits it. Absent policy or `enabled=false` preserves the existing production path, with no R3 candidate expansion, canonical read, rerank projection, adapter call or R3 debug namespace. Default enablement remains false. Invalid enabled configuration fails before Hybrid/LanceDB work and before text disclosure.
+
+The source implementation reuses the canonical projector, reranker and orchestrator while preserving the orchestrator invariant that rerank text is derived internally from canonical `source.text`. The offline profile is not reused as production wiring.
+
+### Candidate and serving boundary
+
+The accepted R3 serving profile takes the bounded fused pool, performs existing eligibility plus exact canonical identity/source/lifecycle checks, runs control or rerank on the same valid pool, then takes K. Neither arm fetches replacements beyond candidateDepth. If canonical exclusions leave fewer than K valid candidates, fewer than K are served.
+
+This is a distinct retrieval/serving profile rather than a mechanically equivalent wiring edit. The source behavior is accepted and default-off; the disabled path remains fused slice(K) followed by canonical projection. Historical Q1/Q2 controls are not redefined by the new R3 control profile.
+
+Keep complete IDs, source authority, archive checks and public disclosure projection. No new public tool fields or raw provider scores; provider scores never enter fusion arithmetic. Remote scoring of live text needs separate Owner authorization for the provider and data scope: benchmark authorization does not cover live memories.
+
+### Resource policy
+
+Enabled policy still requires explicit candidateDepth, per-candidate/total code-point budgets, rerank deadline and adapter identity; there are no hidden enabled defaults. Existing module limits (candidateDepth at most 50, per-candidate at most 8000 and total at most 400000 code points) remain engineering ceilings.
+
+### Production-shaped profile v1 — design frozen
+
+For the current product baseline `topK=3`, freeze the first qualification profile as:
+
+- `candidateDepth=20`;
+- `maxCodePointsPerCandidate=4000`;
+- `maxTotalCodePoints=48000`;
+- `deadlineMs=2500`;
+- no refill outside candidateDepth;
+- same-pool atomic control fallback.
+
+These values are qualification inputs, not runtime authorization and not evidence of quality optimality. Existing candidate-generation defaults (`ftsTopK=20`, `vectorTopK=30`) prove that a depth-20 fused pool can be materially populated without changing candidate generation. The accepted offline experiment used depth 50 and therefore cannot prove that 20 is quality-optimal; no new benchmark is authorized to optimize this value before qualification.
+
+The offline rerank run's successful-request latency (`p95≈1245ms`) and depth-50 input volume are planning evidence only. `deadlineMs=2500` is a bounded first qualification envelope, not an end-to-end SLA. Canonical-read/projection time, adapter elapsed time and total profile time remain separate diagnostics. Code-point budgets are not token budgets; any later real provider adapter must impose provider/model-specific query/document token hard limits and must not rely on hidden server truncation.
+
+### Failure behavior and observability
+
+For valid projected input, timeout, provider exception and invalid scores return same-profile control atomically, null scores, known usage and a bounded reason. Cancel the underlying request and isolate late settlement; no automatic retry or endpoint/model switch.
+
+Canonical/authorization failures exclude candidates before either arm and cannot be restored by fallback. Invalid caller input or projection-budget rejection must occur before external disclosure and stay explicit. Optional telemetry persistence must not be a production prerequisite for serving; benchmark evidence-persistence stop rules do not define live request behavior.
+
+Internal diagnostics use existing debug/status surfaces: applied/bypassed/fallback, pool counts, reason, truncation counts, adapter identity, usage and separate timings. No raw memory text or credentials in logs. Disabling rerank restores the existing production branch; no data migration is involved.
+
+### Next runtime decision: R3-C0 control qualification
+
+R3 source implementation is closed. The next proposed step is **R3-C0 control-mode runtime qualification**, currently `NOT AUTHORIZED`.
+
+C0 must use the frozen profile v1 with `mode=control` and current live product `topK=3`. It must not install or call a real rerank provider, must not send canonical full text to an external endpoint, and must not authorize C1 by implication. C0 exists to qualify the serving-profile change itself before provider/rerank effects are introduced.
+
+C0 acceptance evidence must prove on the two explicit search surfaces:
+
+1. pre-state captured exactly, including plugin/source identity and effective disabled R3 policy;
+2. only the trusted explicit-search R3 control policy is enabled; AutoRecall remains false and unrelated Hybrid callers remain unchanged;
+3. valid-pool serving is bounded to candidateDepth 20, uses no refill outside that pool, and preserves exact `memory_id`/`canonical_id` plus existing public disclosure boundaries;
+4. canonical batch/projection failures fail closed with no adapter call; control mode performs no adapter/provider call at all;
+5. canonical-pool and final-serving diagnostics have stage-correct counts, with topK truncation not classified as canonical failure;
+6. dedicated `memory_engine_search` and legacy `memory_engine action=search` show equivalent selected canonical IDs under the same trusted policy;
+7. latency is recorded separately for canonical read, projection and total profile; C0 does not claim an adapter SLA;
+8. the exact pre-C0 configuration is restored and verified after qualification.
+
+C0 is source-free runtime qualification: no retrieval-source edit, benchmark, provider request, Core/Engine/LanceDB mutation, AutoRecall enablement, Gateway policy expansion, push or tag is implied. A later **R3-C1** rerank canary requires a separate Owner decision covering provider/model/endpoint, canonical-text egress scope, provider token budgets, credential handling, adapter identity and canary limits.
