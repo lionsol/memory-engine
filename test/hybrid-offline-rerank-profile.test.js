@@ -171,9 +171,26 @@ test("offline profile uses candidateDepth, excludes archived/missing candidates,
     assert.deepEqual(offlineDebug, {
       profile: "q3_offline_canonical_rerank_v1",
       candidate_depth: 5,
+      canonical_pool: {
+        bounded_candidate_count: 5,
+        eligible_candidate_count: 5,
+        requested_count: 5,
+        resolved_count: 4,
+        valid_count: 4,
+        excluded_count: 1,
+        excluded_reasons: { core_not_found: 1 },
+      },
+      final_serving: {
+        top_k: 3,
+        served_count: 3,
+        top_k_truncation_count: 1,
+      },
       valid_candidate_count: 4,
+      valid_candidate_count_scope: "bounded_canonical_pool",
       excluded_count: 1,
+      excluded_count_scope: "bounded_canonical_pool",
       excluded_reasons: { core_not_found: 1 },
+      excluded_reasons_scope: "bounded_canonical_pool",
       rerank_status: "applied",
       rerank_reason: "complete",
       scores: {
@@ -240,6 +257,49 @@ test("control and rerank use the same valid canonical candidate set", async () =
     assert.equal(reranked.debug.offline_rerank.valid_candidate_count, 4);
     assert.equal(reranked.debug.offline_rerank.excluded_count, control.debug.offline_rerank.excluded_count);
     assert.deepEqual(reranked.results.map(item => item.memory_id), [IDS.d, IDS.a, IDS.b]);
+    assert.deepEqual(
+      reranked.debug.offline_rerank.canonical_pool,
+      control.debug.offline_rerank.canonical_pool,
+    );
+    assert.deepEqual(reranked.debug.offline_rerank.final_serving, {
+      top_k: 3,
+      served_count: 3,
+      top_k_truncation_count: 1,
+    });
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("offline topK truncation is separate from canonical pool exclusions", async () => {
+  const fixture = createFixture();
+  try {
+    const result = await hybridSearch("offline-profile-query", { topK: 2 }, createRuntime(
+      fixture,
+      vectorEntries().filter(entry => entry.id !== IDS.missing),
+      {
+        offlineRerankProfile: profile(() => {
+          throw new Error("disabled profile must not call adapter");
+        }, { candidateDepth: 4, executeRerank: false }),
+      },
+    ));
+
+    assert.deepEqual(result.results.map(item => item.memory_id), [IDS.a, IDS.b]);
+    assert.deepEqual(result.debug.offline_rerank.canonical_pool, {
+      bounded_candidate_count: 4,
+      eligible_candidate_count: 4,
+      requested_count: 4,
+      resolved_count: 4,
+      valid_count: 4,
+      excluded_count: 0,
+      excluded_reasons: {},
+    });
+    assert.deepEqual(result.debug.offline_rerank.final_serving, {
+      top_k: 2,
+      served_count: 2,
+      top_k_truncation_count: 2,
+    });
+    assert.equal(result.debug.canonical_result_projection.dropped_count, 0);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

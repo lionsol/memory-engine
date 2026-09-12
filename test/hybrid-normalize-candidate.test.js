@@ -104,6 +104,24 @@ test("normalizeExternalMemory keeps external candidate semantics and rerank allo
   assert.equal(isCandidateAllowedForRerank(candidate, 0.95), true);
 });
 
+test("external archive-looking retrieval metadata does not become managed archive authority", () => {
+  const candidate = normalizeExternalMemory({
+    id: "external-archive-looking",
+    text: "External memory with archive-looking metadata",
+    path: "docs/external.md",
+    confidence: null,
+    is_archived: 1,
+    archived: true,
+    lifecycle: { management: "managed", archived: true },
+    archive_status: "archived",
+  });
+
+  assert.equal(candidate.confidence_mode, "external");
+  assert.equal(candidate.is_archived, 1);
+  assert.equal(candidate.archive_eligible, false);
+  assert.equal(isCandidateAllowedForRerank(candidate, 0.95), true);
+});
+
 test("normalizeExternalMemory excludes archived managed candidates while preserving active and external semantics", () => {
   const archived = normalizeExternalMemory({
     id: "managed-archived",
