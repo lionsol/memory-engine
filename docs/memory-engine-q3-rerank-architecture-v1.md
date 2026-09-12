@@ -1,15 +1,14 @@
 # Q3 Relevance Rerank Architecture Contract v1
 
-Date: 2026-09-09
-Status: OFFLINE HYBRID INTEGRATION PASS_WITH_FINDINGS / SOURCE CLOSED; Q3 QUALITY AND PRODUCTION DECISION OPEN
+Date: 2026-09-12
+Status: ARCHITECTURE DIRECTION ACCEPTED_WITH_LIMITATIONS; PRODUCTION INTEGRATION AND ENABLEMENT OPEN
 
-The independent interface was implemented and reviewed at 88bca20b47f6cf143f7776a194e65f3572050e97 (11/11 focused tests). Next: [Canonical rerank text contract](memory-engine-q3-rerank-text-contract-v1.md), a pure offline projector before any production integration. The implementation task below is retained as the completed contract scope.
-Inspected source: df602ca0d359cf6abef9f8ce92d6afd66f23aa31
-Scope: source-only interface and offline tests; no provider execution or runtime activation.
+The independent rerank interface, canonical text projector and orchestration boundary are accepted as the foundation for a later integration. The completed canonical-chunk comparison is retained as offline evidence; it does not approve production wiring, a production default, or benchmark-derived parameter values.
+Source acceptance remains recorded below. Production runtime factories still do not provide an adapter, and no provider execution or runtime activation follows from this document.
 
 ## Decision and evidence
 
-Choose an optional, provider-independent relevance rerank boundary operating on an already eligible, bounded candidate set. Keep candidate generation, evidence-set selection, and final serving policy separate. This document proposes the interface; it does not declare Q3 closed or approve production integration.
+Adopt an optional, provider-independent relevance rerank boundary operating on an already eligible, bounded candidate set. Keep candidate generation, evidence-set selection, and final serving policy separate. This is an accepted architecture direction, not approval for production integration.
 
 The completed fixed-candidate experiments support this direction:
 - LME Recall-all@3: 180/419 to 316/419; ACCEPTED_WITH_LIMITATIONS because pre-sentinel scores were not retained.
@@ -17,6 +16,12 @@ The completed fixed-candidate experiments support this direction:
 - LoCoMo sentinel: 14/16 fingerprints differ, 5/16 full orders differ, 0/16 top3 orders differ; maximum absolute score difference 0.009059906005859375. This is a bounded observation, not model revision pinning.
 - LoCoMo request p50/p95: 892/1069 ms, excluding pacing; these are benchmark request timings, not a production latency SLA.
 Primary LoCoMo evidence: /home/lionsol/.openclaw/workspace/q3-locomo-v1.2/reports/locomo-rerank-score.json and state/runner-state.json. The scorer's embedded self-hash is defective; use an external digest for finalized report bytes.
+
+### Canonical-chunk decision evidence — 2026-09-12
+
+The frozen `q3_locomo_chunk_fts_only_v1` comparison is accepted with limitations as evidence for the architecture direction. On the same 1970-case FTS-only chunk candidate pools, Recall-all@3 improved from `888/1970 = 45.08%` under control to `1354/1970 = 68.73%` after rerank; 476 cases improved and 10 regressed. This supports retaining an independent relevance-rerank layer as the integration direction. It does not establish production-equivalent chunking, always-vector or selective-vector policy, or a causal comparison with session-level Q1 results.
+
+The accepted integration foundation is the independent rerank interface, canonical `source.text` projection and orchestrator. Provider error, timeout, invalid response or persistence failure remains an all-or-nothing fallback to the same-profile control order; this fallback is not a successful rerank result. The experiment's `50` candidate depth and `10` second deadline are not production parameters. Production candidate depth, text budget, deadline, adapter/provider, default enablement and serving profile remain undecided.
 
 ## Source boundary
 
@@ -66,11 +71,11 @@ For the source contract, text is caller-provided. Do not silently copy benchmark
 
 ## Deferred Q3 decisions
 
+- Production default enablement, adapter/provider choice, candidate depth, text budget and deadline: not approved or selected. The offline `50`/`10s` values are experiment settings only.
 - Calibrated fusion: cheaper pre-ranking/fallback candidate, requiring measured evidence; no weight changes in this implementation.
-- Selective vector: candidate-generation decision; fixed semantic pools do not prove always-vector is necessary.
-- Set-aware selection: separate from pointwise relevance. Do not add MMR or session-family merging by default.
-- R3 valid-topK and adaptive cutoff: remain separate serving-profile decisions. Any new profile needs its own aligned lexical comparison; historical Q1/Q2 results stay immutable.
-- Production rerank adapter, candidate depth, token/text budget, deadline, and enablement: not selected here.
+- Always-vector and selective-vector: candidate-generation decisions; this FTS-only chunk comparison cannot decide either policy.
+- Set-aware evidence selection: the next architecture direction; multi-hop Recall-all remains only `51/277 = 18.41%` after rerank, so pointwise rerank does not solve evidence composition.
+- R3 valid-topK, adaptive `0..K`, and production canonical backfill: separate serving-profile decisions with no direct evidence in this comparison. Historical Q1/Q2 results remain immutable.
 - AutoRecall policy and untrusted-memory injection blockers remain unchanged.
 
 ## Completed standalone implementation task
@@ -102,25 +107,17 @@ The implemented internal runtime.offlineRerankProfile selects q3_offline_canonic
 
 This implements bounded valid-candidate serving only in the explicit offline profile. It does not approve R3 for production or retroactively change Q1/Q2 baselines.
 
-## Next aligned quality evaluation — plan, not execution authorization
+## Q3 architecture decision — 2026-09-12
 
-The next question is whether the canonical-chunk profile retains useful rerank gains under explicit text and latency budgets. Do not create another wrapper or verification stage.
+The architecture direction is accepted with limitations:
 
-First prepare a zero-provider case manifest and compatibility report using retained benchmark material:
-- Establish whether the existing benchmark DB/materialization actually represents production-like chunks or merely stores entire sessions as chunks. A source.record_type value alone cannot establish production granularity.
-- Record exact candidate IDs, canonical text hashes, eligible-pool order, exclusions, document lengths and truncations. Preserve official gold outside the model input.
-- Specify and verify the mapping from canonical units to official evidence IDs. Do not alter gold or merge official session families. If the material cannot support this mapping, state that limitation before proposing any dataset adaptation.
-- Choose one explicit candidate depth, text budget and deadline before execution. Fifty and 8000 code points are ceilings, not automatically approved production settings. No full-test-set parameter search.
+- retain the independent relevance-rerank interface, canonical text projector and orchestrator as the integration foundation;
+- operate rerank only after candidate eligibility and canonical validation, on an explicit bounded candidate set;
+- on provider error, timeout, invalid response or persistence failure, return the full same-profile control order with all rerank scores null; this is a fallback diagnosis, not a successful rerank;
+- keep candidate generation, set-aware evidence selection, canonical valid-topK serving and adaptive cutoff as separate decisions.
 
-Use three aligned arms once inputs and any additional provider budget are approved:
-1. Existing frozen retrieval path as a historical bridge.
-2. New offline profile with executeRerank=false as the primary control.
-3. The same profile and exact eligible candidate pool with executeRerank=true.
+The fixed-candidate LoCoMo result is evidence for this layer, not a production-quality or production-latency claim. Recall-all@3 improved from `45.08%` to `68.73%` on the frozen FTS-only chunk profile, with 476 improved and 10 regressed cases. The comparison cannot decide always-vector or selective-vector retrieval, production canonical backfill, or whether `50` candidates and `10` seconds are suitable production values.
 
-Compare arm 3 against arm 2 to assess rerank benefit; compare arm 2 against arm 1 to expose serving/projection changes. Hold query, candidate generation, clocks, gold and scorer constant. Do not describe arm 3 versus arm 1 as a pure model effect.
+The following remain explicitly undecided and require a separate product decision if pursued: production default enablement, adapter/provider, candidate depth, text budget, deadline, set-aware evidence selection, valid-topK/backfill semantics, and adaptive `0..K` serving. No additional benchmark or provider run is implied by this architecture decision. The accepted offline evidence remains in [the canonical chunk acceptance report](memory-engine-q3-locomo-chunk-rerank-acceptance-v1.md).
 
-Report frozen four @3 metrics and paired transitions, category/family slices, feasible and cross-session evidence, exclusions/truncations, request and end-to-end timings, and fallback frequency. Include fallback cases in end-to-end quality denominators; do not select only provider successes. Provider-only statistics remain separately labeled.
-
-Saved rerank scores may be reused only when request text, candidate set/order, model parameters and provenance match exactly. A matching memory ID alone is insufficient. New chunk texts generally require new scores. Fake-adapter tests prove wiring, not quality.
-
-All prior 2523 provider requests are consumed. This plan permits no new provider requests, retrieval runs or live reads. Prepare the manifest from existing offline material and provide a concrete execution/budget proposal before any such run. AutoRecall=false, production topK=3, and no deployment/tag/push remain unchanged.
+The completed runner's stale `recovery.status` is recorded as an ordinary adjacent source defect. The reconciled experiment is complete; this finding does not block the architecture decision and does not authorize editing historical experiment state.
