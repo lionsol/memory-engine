@@ -73,7 +73,29 @@ test("maps ordered IDs back to complete canonical memories and preserves metadat
     { id: "full-canonical-id-c", originalCodePoints: 5, outputCodePoints: 5, truncated: false },
   ]);
   assert.equal(result.totalCodePoints, 14);
+  assert.equal(Number.isFinite(result.projectionElapsedMs), true);
   assert.deepEqual(memories, before);
+});
+
+test("always projects canonical source text and ignores caller-supplied projection-shaped data", async () => {
+  let adapterTexts;
+  const memories = [memory("canonical-id", "canonical source text")];
+  const result = await rerankCanonicalMemories(input(memories, async (_query, texts) => {
+    adapterTexts = texts;
+    return {
+      scores: [{ index: 0, score: 1 }],
+      identity: { provider: "fake", model: "rerank-test", revision: null },
+    };
+  }, {
+    projection: {
+      candidates: [{ id: "canonical-id", text: "caller-controlled text" }],
+      metadata: [],
+      totalCodePoints: 0,
+    },
+  }));
+
+  assert.deepEqual(adapterTexts, ["canonical source text"]);
+  assert.deepEqual(result.orderedIds, ["canonical-id"]);
 });
 
 test("keeps empty-set, all-empty, and mixed-empty behavior from the components", async () => {

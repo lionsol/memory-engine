@@ -346,6 +346,63 @@ test("adapter failures atomically fall back to the same valid-pool control order
   }
 });
 
+test("observed adapter identity is bounded before it reaches debug diagnostics", async () => {
+  const matchingWithExtras = await executeDirect({
+    ids: [IDS.a],
+    topK: 1,
+    profile: policy(1, {
+      candidateDepth: 1,
+      adapter: async () => ({
+        scores: [{ index: 0, score: 1 }],
+        identity: {
+          provider: "fake",
+          model: "explicit-r3",
+          revision: null,
+          apiKey: "secret-api-key",
+          rawText: "must-not-appear",
+        },
+      }),
+    }),
+  });
+
+  assert.equal(matchingWithExtras.debug.rerank.status, "applied");
+  assert.deepEqual(matchingWithExtras.debug.rerank.observed_adapter_identity, {
+    provider: "fake",
+    model: "explicit-r3",
+    revision: null,
+  });
+  assert.equal(JSON.stringify(matchingWithExtras.debug).includes("secret-api-key"), false);
+  assert.equal(JSON.stringify(matchingWithExtras.debug).includes("must-not-appear"), false);
+
+  const malformedIdentity = {
+    provider: "fake",
+    model: { rawText: "malformed-model" },
+    revision: null,
+    endpoint: "https://must-not-appear",
+  };
+  const malformed = await executeDirect({
+    ids: [IDS.a, IDS.b],
+    topK: 2,
+    profile: policy(2, {
+      candidateDepth: 2,
+      adapter: async () => ({
+        scores: [{ index: 0, score: 1 }, { index: 1, score: 0 }],
+        identity: malformedIdentity,
+      }),
+    }),
+  });
+
+  assert.equal(malformed.debug.rerank.status, "fallback");
+  assert.equal(malformed.debug.rerank.reason, "adapter_identity_conflict");
+  assert.deepEqual(malformed.debug.rerank.observed_adapter_identity, {
+    provider: "fake",
+    model: null,
+    revision: null,
+  });
+  assert.equal(JSON.stringify(malformed.debug).includes("malformed-model"), false);
+  assert.equal(JSON.stringify(malformed.debug).includes("https://must-not-appear"), false);
+});
+
 test("timeout returns control immediately and late settlement cannot mutate the result", async () => {
   let resolveLate;
   const late = new Promise(resolve => { resolveLate = resolve; });
