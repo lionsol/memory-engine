@@ -293,7 +293,7 @@ test("broad action Search and dedicated Search both authorize same-turn cite", a
     insertMemory(broad.db, broad.resultIds[0]);
     insertMemory(dedicated.db, dedicated.resultIds[0]);
     const broadId = broad.resultIds[0].slice(0, 16);
-    const dedicatedId = dedicated.resultIds[0].slice(0, 16);
+    const dedicatedId = dedicated.resultIds[0];
 
     await broad.beforeToolCall("memory_engine", "broad-search-call", "run-broad");
     const broadSearch = await broad.executeAction("broad-search-call", {
@@ -320,7 +320,7 @@ test("broad action Search and dedicated Search both authorize same-turn cite", a
       action: "cite",
       chunk_ids: [dedicatedId],
     });
-    assert.equal(dedicatedSearch.results[0].id, dedicatedId);
+    assert.equal(dedicatedSearch.results[0].id, dedicated.resultIds[0]);
     assert.equal(dedicatedSearch.results[0].memory_id, dedicated.resultIds[0]);
     assert.equal(dedicatedCite.success, true);
     assert.equal(dedicatedCite.reinforced, 1);

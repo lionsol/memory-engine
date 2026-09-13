@@ -18,6 +18,15 @@ function sha256File(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+export function writeFinalizedJsonReportWithDigest(reportPath, report) {
+  const bytes = Buffer.from(JSON.stringify(report, null, 2), "utf8");
+  writeFileSync(reportPath, bytes, { mode: 0o600 });
+  const reportSha256 = createHash("sha256").update(bytes).digest("hex");
+  const reportSha256Path = `${reportPath}.sha256`;
+  writeFileSync(reportSha256Path, `${reportSha256}\n`, { mode: 0o600 });
+  return { reportSha256, reportSha256Path };
+}
+
 function mean(values) {
   return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
 }
@@ -220,10 +229,8 @@ export function scoreLocomoRerank({ root }) {
   };
   const reportPath = join(root, "reports", "locomo-rerank-score.json");
   mkdirSync(join(root, "reports"), { recursive: true, mode: 0o700 });
-  writeFileSync(reportPath, JSON.stringify(report, null, 2), { mode: 0o600 });
-  report.artifact_hashes.report = sha256File(reportPath);
-  writeFileSync(reportPath, JSON.stringify(report, null, 2), { mode: 0o600 });
-  return { reportPath, report };
+  const { reportSha256, reportSha256Path } = writeFinalizedJsonReportWithDigest(reportPath, report);
+  return { reportPath, reportSha256, reportSha256Path, report };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

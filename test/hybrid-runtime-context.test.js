@@ -96,7 +96,12 @@ test("grouped runtime drives both search tool surfaces through one context", asy
           channels: ["fts"],
           channel_sizes: { fts: 1 },
           debug: {},
-          results: [{ id: "memory-1", text: query }],
+          results: [{
+            id: "memory-1",
+            memory_id: "memory-1",
+            canonical_id: "cmem:core:memory-1",
+            text: query,
+          }],
         };
       },
     },

@@ -198,13 +198,27 @@ test("absent and disabled trusted policy preserve the legacy path with no R3 nam
     assert.equal(calls[1].profile, undefined);
     assert.deepEqual(actionResult.debug, { legacy: true });
     assert.deepEqual(searchResultValue.results, [{
-      id: "bounded-id",
+      id: "full-memory-id-001",
       memory_id: "full-memory-id-001",
       canonical_id: "cmem:core:full-memory-id-001",
       text: "preview",
     }]);
+    assert.equal(actionResult.results[0].id, "bounded-id");
     assert.equal(runtime.lancedbCalls, 2);
   }
+});
+
+test("dedicated search never falls back to a bounded compatibility id when exact memory_id is absent", async () => {
+  const runtime = createBaseRuntime({
+    hybridSearch: async () => ({
+      results: [{ id: "bounded-id", text: "preview" }],
+    }),
+  });
+  const executeSearch = createMemoryEngineSearchExecute(runtime);
+
+  const result = await executeSearch("search-call", { query: "identity query", top_k: 1 });
+
+  assert.deepEqual(result.results, [{ text: "preview" }]);
 });
 
 test("both explicit search surfaces receive the same trusted R3 profile and ignore model parameters", async () => {

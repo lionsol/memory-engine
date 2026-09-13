@@ -1,8 +1,8 @@
 -- ============================================================
 -- Memory Engine v1.0 — Schema Definition
 -- 
--- Usage:
---   sqlite3 ~/.openclaw/memory/main.sqlite < schemas.sql
+-- Usage (Engine DB only; never apply this schema to OpenClaw Core main.sqlite):
+--   sqlite3 ~/.openclaw/memory/memory-engine/memory-engine.sqlite < schemas.sql
 -- ============================================================
 
 -- memory_confidence: Parallel confidence/time-decay table.
