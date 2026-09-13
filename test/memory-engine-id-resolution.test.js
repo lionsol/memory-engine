@@ -14,18 +14,39 @@ function literalPrefixFromGlob(pattern) {
     .replaceAll("[?]", "?");
 }
 
-function createUpdateRuntime(ids) {
+function createUpdateRuntime(ids, overrides = {}) {
   const updated = [];
+  const updates = [];
   const queries = [];
+  const rows = new Map(ids.map(id => [id, {
+    chunk_id: id,
+    initial_confidence: 0.5,
+    confidence: 0.5,
+    last_confidence_update: 0,
+    base_tau: 7,
+    hit_count: 0,
+    is_archived: 0,
+    is_protected: 0,
+    conflict_flag: 0,
+    category: "raw_log",
+    ...(overrides.rows?.[id] || {}),
+  }]));
   const db = {
     prepare(sql) {
       const query = String(sql);
       queries.push(query);
+      if (query.includes("SELECT chunk_id, initial_confidence, confidence, last_confidence_update")) {
+        return {
+          get(value) {
+            return rows.get(String(value)) || null;
+          },
+        };
+      }
       if (query.includes("SELECT chunk_id FROM memory_confidence")) {
         if (query.includes("WHERE chunk_id = ?")) {
           return {
             all(value) {
-              const match = ids.find(id => id === String(value));
+              const match = [...rows.keys()].find(id => id === String(value));
               return match ? [{ chunk_id: match }] : [];
             },
           };
@@ -34,7 +55,7 @@ function createUpdateRuntime(ids) {
           return {
             all(pattern) {
               const prefix = literalPrefixFromGlob(pattern);
-              return ids
+              return [...rows.keys()]
                 .filter(id => id.startsWith(prefix))
                 .sort()
                 .slice(0, 2)
@@ -48,6 +69,7 @@ function createUpdateRuntime(ids) {
         return {
           run(...args) {
             updated.push(args.at(-1));
+            updates.push({ query, args });
             return { changes: 1 };
           },
         };
@@ -57,13 +79,15 @@ function createUpdateRuntime(ids) {
   };
   return {
     updated,
+    updates,
     queries,
     runtime: {
       api: { config: {} },
       getLancedbTable: () => null,
       withDb: fn => fn(db),
-      CATEGORY_MAP: {},
-      calcTau: () => 0,
+      CATEGORY_MAP: overrides.CATEGORY_MAP || {},
+      calcTau: overrides.calcTau || (() => 7),
+      now: overrides.now || (() => 1_800_000_000_000),
     },
   };
 }
@@ -169,6 +193,46 @@ test("memory_engine update gives an exact id precedence over longer ids sharing 
 
   assert.equal(result.success, true);
   assert.deepEqual(updated, ["exact-id"]);
+});
+
+test("classification-only update settles elapsed confidence under old decay parameters before changing category", async () => {
+  const id = "classification-decay-id";
+  const nowSec = 1_800_000_000;
+  const { runtime, updates } = createUpdateRuntime([id], {
+    rows: {
+      [id]: {
+        initial_confidence: 0.5,
+        confidence: 0.8,
+        last_confidence_update: nowSec - 10 * 86400,
+        base_tau: 10,
+        hit_count: 0,
+        category: "raw_log",
+      },
+    },
+    CATEGORY_MAP: {
+      raw_log: { conf: 0.5, tau: 7 },
+      preference: { conf: 0.7, tau: 30 },
+    },
+    now: () => nowSec * 1000,
+  });
+  const execute = createMemoryEngineExecute(runtime);
+
+  const result = await execute("update-category-decay", {
+    action: "update",
+    chunk_id: id,
+    category: "preference",
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(updates.length, 1);
+  assert.match(updates[0].query, /confidence = \?/);
+  assert.match(updates[0].query, /last_confidence_update = \?/);
+  assert.match(updates[0].query, /category = \?/);
+  assert.match(updates[0].query, /base_tau = \?/);
+  assert.doesNotMatch(updates[0].query, /initial_confidence = \?/);
+  const expectedSettled = 0.8 * Math.exp(-1);
+  assert.ok(Math.abs(updates[0].args[0] - expectedSettled) < 1e-12);
+  assert.deepEqual(updates[0].args.slice(1), [nowSec, "preference", 30, id]);
 });
 
 test("memory_engine_get resolves literal wildcard characters and keeps exact-id precedence", async () => {

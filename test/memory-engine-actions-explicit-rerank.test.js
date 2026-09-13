@@ -196,7 +196,7 @@ test("absent and disabled trusted policy preserve the legacy path with no R3 nam
     assert.equal(calls.length, 2);
     assert.equal(calls[0].profile, undefined);
     assert.equal(calls[1].profile, undefined);
-    assert.deepEqual(actionResult.debug, { legacy: true });
+    assert.deepEqual(Object.keys(actionResult), ["results"]);
     assert.deepEqual(searchResultValue.results, [{
       id: "full-memory-id-001",
       memory_id: "full-memory-id-001",
@@ -290,7 +290,7 @@ test("both explicit search surfaces receive the same trusted R3 profile and igno
     searchResultValue.results.map(item => item.memory_id),
     actionResult.results.map(item => item.memory_id),
   );
-  assert.equal(actionResult.debug.explicit_search_rerank.profile, "trusted");
+  assert.equal("debug" in actionResult, false);
 });
 
 test("enabled incomplete or invalid trusted policy fails before DB search and cannot be repaired by model params", async () => {
@@ -351,6 +351,7 @@ test("legacy action config errors are structured before LanceDB acquisition", as
   });
 
   assert.deepEqual(result, {
+    results: [],
     error: MEMORY_EXPLICIT_RERANK_CONFIG_INVALID,
     code: MEMORY_EXPLICIT_RERANK_CONFIG_INVALID,
   });
@@ -400,11 +401,8 @@ test("dedicated and legacy search surfaces share real R3 bounded serving semanti
     const searchIds = searchResultValue.results.map(item => item.memory_id);
     assert.deepEqual(actionIds, searchIds);
     assert.deepEqual(actionIds, ["explicit-b", "explicit-a", "explicit-outside"]);
-    assert.equal(actionResult.debug.explicit_search_rerank.profile, "q3_explicit_search_bounded_rerank_v1");
-    assert.equal(actionResult.debug.explicit_search_rerank.canonical_pool.excluded_count, 0);
-    assert.deepEqual(actionResult.debug.explicit_search_rerank.canonical_pool.excluded_reasons, {});
-    assert.equal(actionResult.debug.explicit_search_rerank.final_serving.served_count, 3);
-    assert.equal(actionResult.debug.explicit_search_rerank.final_serving.top_k_truncation_count, 0);
+    assert.equal("debug" in actionResult, false);
+    assert.equal("debug" in searchResultValue, false);
     assert.deepEqual(adapterTexts, [
       [
         fixture.canonicalTexts.get("explicit-a"),

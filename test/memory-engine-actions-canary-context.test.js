@@ -64,7 +64,13 @@ function createHybridSearchStub(record) {
         recent_canary_policy_error: decision.policy_error,
         recent_canary_shadow_executed: decision.mode === "shadow",
       },
-      results: [{ id: "legacy-1", score: 0.9, text: "legacy-result" }],
+      results: [{
+        id: "legacy-1",
+        memory_id: "legacy-1",
+        canonical_id: "cmem:core:legacy-1",
+        score: 0.9,
+        text: "legacy-result",
+      }],
     };
   };
 }
@@ -102,7 +108,12 @@ test("default trustedRuntimeContext is null and provider is not injected from pa
   assert.equal(record.decisions[0].mode, "off");
   assert.equal(record.decisions[0].mode === "shadow", false);
   assert.deepEqual(Object.keys(result), ["results"]);
-  assert.deepEqual(result.results, [{ id: "legacy-1", text: "legacy-result" }]);
+  assert.deepEqual(result.results, [{
+    id: "legacy-1",
+    memory_id: "legacy-1",
+    canonical_id: "cmem:core:legacy-1",
+    text: "legacy-result",
+  }]);
   assert.equal(JSON.stringify(result).includes("fake-session"), false);
   assert.equal(JSON.stringify(result).includes("\"edi\""), false);
 });
@@ -193,7 +204,12 @@ test("resolver errors fail closed without changing served legacy result", async 
   assert.equal(record.decisions[0].policy_error, true);
   assert.equal(record.decisions[0].mode === "shadow", false);
   assert.deepEqual(Object.keys(result), ["results"]);
-  assert.deepEqual(result.results, [{ id: "legacy-1", text: "legacy-result" }]);
+  assert.deepEqual(result.results, [{
+    id: "legacy-1",
+    memory_id: "legacy-1",
+    canonical_id: "cmem:core:legacy-1",
+    text: "legacy-result",
+  }]);
 });
 
 test("resolver illegal returns stay off and do not leak identities", async () => {
@@ -265,8 +281,9 @@ test("query text, action names, nested params, and toolCallId do not enable cana
 
   const result = await executeAction("toolCallId-edi-shadow", forgedParams);
 
-  assert.equal(result.debug.recent_canary_mode, "off");
-  assert.equal(result.debug.recent_canary_shadow_executed, false);
+  assert.equal(record.decisions[0].mode, "off");
+  assert.equal(record.decisions[0].mode === "shadow", false);
+  assert.equal("debug" in result, false);
   assert.equal(record.providerCalls, 0);
   assert.equal(JSON.stringify(record.runtimes[0]).includes("toolCallId-edi-shadow"), false);
 });

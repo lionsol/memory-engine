@@ -164,8 +164,8 @@ test("memory_engine_search returns the same top results as memory_engine action=
       channel_sizes: { fts: 1, vector: 1 },
       debug: { query: text },
       results: [
-        { id: "mem-1", score: 0.9, text: "first" },
-        { id: "mem-2", score: 0.8, text: "second" },
+        { id: "mem-1", memory_id: "mem-1", canonical_id: "cmem:core:mem-1", score: 0.9, text: "first" },
+        { id: "mem-2", memory_id: "mem-2", canonical_id: "cmem:core:mem-2", score: 0.8, text: "second" },
       ],
     };
   };
@@ -176,14 +176,16 @@ test("memory_engine_search returns the same top results as memory_engine action=
   const fromAction = await executeAction("tool-1", { action: "search", text: "alpha", top_k: 3 });
   const fromWrapper = await executeSearch("tool-2", { query: "alpha", top_k: 3 });
 
-  assert.deepEqual(fromWrapper.results.map((item) => item.id), fromAction.results.map((item) => item.id));
-  assert.deepEqual(Object.keys(fromAction).sort(), ["channel_sizes", "channels", "debug", "pool", "results"]);
-  assert.deepEqual(fromWrapper, {
+  assert.deepEqual(Object.keys(fromAction), ["results"]);
+  assert.deepEqual(Object.keys(fromWrapper), ["results"]);
+  assert.deepEqual(fromAction.results.map(item => item.memory_id), fromWrapper.results.map(item => item.memory_id));
+  assert.deepEqual(fromAction, {
     results: [
-      { id: "mem-1", text: "first" },
-      { id: "mem-2", text: "second" },
+      { id: "mem-1", memory_id: "mem-1", canonical_id: "cmem:core:mem-1", text: "first" },
+      { id: "mem-2", memory_id: "mem-2", canonical_id: "cmem:core:mem-2", text: "second" },
     ],
   });
+  assert.deepEqual(fromWrapper, fromAction);
   assert.deepEqual(hybridSearchCalls, [
     { text: "alpha", options: { topK: 3 } },
     { text: "alpha", options: { topK: 3 } },
@@ -226,16 +228,21 @@ test("memory_engine_search returns a bounded whitelist projection", async () => 
       }],
     }),
   });
+  const executeAction = createMemoryEngineExecute(runtime);
   const executeSearch = createMemoryEngineSearchExecute(runtime);
 
+  const actionResult = await executeAction("tool-bounded-action-search", { action: "search", text: "bounded", top_k: 1 });
   const result = await executeSearch("tool-bounded-search", { query: "bounded", top_k: 1 });
+  assert.equal(actionResult.results[0].id, "event-id");
+  assert.equal(result.results[0].id, "full-memory-id");
+  assert.deepEqual(actionResult.results[0].memory_id, result.results[0].memory_id);
   const projected = result.results[0];
 
   assert.equal(projected.text, longText.slice(0, 240));
   assert.equal(projected.text.length, 240);
   assert.deepEqual(projected.sources, ["fts", "vector"]);
   assert.deepEqual(projected, {
-    id: "event-id",
+    id: "full-memory-id",
     memory_id: "full-memory-id",
     canonical_id: "cmem:core:full-memory-id",
     text: longText.slice(0, 240),
@@ -254,6 +261,9 @@ test("memory_engine_search returns a bounded whitelist projection", async () => 
     confidence: 0.77,
     created_at: 1710000000,
   });
+  const actionProjected = actionResult.results[0];
+  assert.equal(actionProjected.text, longText.slice(0, 240));
+  assert.deepEqual(actionProjected.sources, ["fts", "vector"]);
   for (const field of [
     "pool",
     "channels",
@@ -267,7 +277,9 @@ test("memory_engine_search returns a bounded whitelist projection", async () => 
     "classification",
   ]) {
     assert.equal(field in result, false);
+    assert.equal(field in actionResult, false);
     assert.equal(field in projected, false);
+    assert.equal(field in actionProjected, false);
   }
 });
 
@@ -277,6 +289,8 @@ test("manual memory_engine_search is not filtered by autoRecall hard deny policy
       results: [
         {
           id: "suspected-tool-output-1",
+          memory_id: "suspected-tool-output-1",
+          canonical_id: "cmem:core:suspected-tool-output-1",
           primary_bucket: "suspected_tool_output",
           sample_buckets: ["suspected_tool_output"],
           text: "tool transcript residue",
@@ -340,6 +354,10 @@ test("memory_engine_get executor can still return suspected_tool_output memory",
             all: () => [{
               id: "suspected-tool-output-1",
               path: "memory/dreaming/light/2026-05-16.md",
+              source: "memory",
+              start_line: 1,
+              end_line: 1,
+              updated_at: 1710000000,
               text: "tool transcript residue",
               confidence: 0.2,
               last_confidence_update: 1710000000,
@@ -417,9 +435,195 @@ test("memory_engine_get returns source path and line range when chunk metadata i
 
   assert.equal(result.found, true);
   assert.equal(result.memory.id, "chunk-1234567890abcdef");
+  assert.equal(result.memory.memory_id, "chunk-1234567890abcdef");
+  assert.equal(result.memory.canonical_id, "cmem:core:chunk-1234567890abcdef");
   assert.equal(result.memory.path, "memory/smart-add/2026-05-27.md");
   assert.equal(result.memory.source, "memory/smart-add/2026-05-27.md");
   assert.deepEqual(result.memory.line_range, { start: 12, end: 18 });
+});
+
+test("memory_engine_get returns validated managed canonical identity and lifecycle metadata", async () => {
+  const coreRow = {
+    id: "managed-canonical-id",
+    path: "memory/smart-add/2026-09-13.md",
+    source: "memory",
+    start_line: 3,
+    end_line: 5,
+    hash: "core-hash",
+    updated_at: 1789260000000,
+    text: "managed canonical body",
+  };
+  const engineRow = {
+    chunk_id: "managed-canonical-id",
+    initial_confidence: 0.7,
+    confidence: 0.8,
+    last_confidence_update: 1789260000,
+    base_tau: 30,
+    hit_count: 4,
+    is_protected: 0,
+    conflict_flag: 0,
+    is_archived: 1,
+    category: "preference",
+  };
+  const runtime = createBaseRuntime({
+    withDb: () => {
+      throw new Error("combined DB accessor must not be used");
+    },
+    withCoreDb: (fn) => fn({
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("PRAGMA table_info(chunks)")) {
+          return {
+            all: () => [
+              { name: "id" }, { name: "path" }, { name: "source" },
+              { name: "start_line" }, { name: "end_line" }, { name: "hash" },
+              { name: "updated_at" }, { name: "text" },
+            ],
+          };
+        }
+        if (query.includes("FROM chunks c")) return { all: () => [coreRow] };
+        throw new Error(`unexpected Core SQL: ${query}`);
+      },
+    }),
+    withEngineDb: (fn) => fn({
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("FROM memory_confidence WHERE chunk_id IN")) {
+          return { all: () => [engineRow] };
+        }
+        throw new Error(`unexpected Engine SQL: ${query}`);
+      },
+    }),
+  });
+  const result = await createMemoryEngineGetExecute(runtime)("tool-managed-canonical", {
+    id: "managed-canonical-id",
+  });
+
+  assert.equal(result.found, true);
+  assert.equal(result.memory.id, "managed-canonical-id");
+  assert.equal(result.memory.memory_id, "managed-canonical-id");
+  assert.equal(result.memory.canonical_id, "cmem:core:managed-canonical-id");
+  assert.equal(result.memory.category, "preference");
+  assert.equal(result.memory.category_authority, "engine");
+  assert.equal(result.memory.confidence_mode, "managed");
+  assert.equal(result.memory.source_type, "memory-engine-managed");
+  assert.equal(result.memory.is_archived, 1);
+  assert.equal(result.memory.hit_count, 4);
+  assert.equal(result.memory.text, "managed canonical body");
+});
+
+test("memory_engine_get fails closed when canonical Core or Engine rows are malformed", async () => {
+  const coreMalformed = createBaseRuntime({
+    withDb: (fn) => fn({
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("PRAGMA table_info(chunks)")) {
+          return {
+            all: () => [
+              { name: "id" },
+              { name: "path" },
+              { name: "source" },
+              { name: "start_line" },
+              { name: "end_line" },
+              { name: "hash" },
+              { name: "updated_at" },
+              { name: "text" },
+            ],
+          };
+        }
+        if (query.includes("FROM chunks c")) {
+          return {
+            all: () => [{
+              id: "malformed-core-id",
+              path: "memory/malformed.md",
+              source: null,
+              start_line: 1,
+              end_line: 1,
+              hash: null,
+              updated_at: 1710000000,
+              text: "body",
+            }],
+          };
+        }
+        if (query.includes("FROM memory_confidence")) return { all: () => [] };
+        return { all: () => [], get: () => null, run: () => ({}) };
+      },
+      transaction: (inner) => inner,
+    }),
+  });
+  const malformedCoreResult = await createMemoryEngineGetExecute(coreMalformed)("tool-malformed-core", {
+    id: "malformed-core-id",
+  });
+  assert.deepEqual(malformedCoreResult, {
+    found: false,
+    id: "malformed-core-id",
+    error: "canonical read failed",
+    code: "MEMORY_GET_CANONICAL_INVALID",
+    reason: "core_malformed",
+  });
+
+  const validCoreRow = {
+    id: "malformed-engine-id",
+    path: "memory/managed.md",
+    source: "memory",
+    start_line: 1,
+    end_line: 1,
+    hash: null,
+    updated_at: 1710000000,
+    text: "managed body",
+  };
+  const engineMalformed = createBaseRuntime({
+    withDb: () => {
+      throw new Error("combined DB accessor must not be used");
+    },
+    withCoreDb: (fn) => fn({
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("PRAGMA table_info(chunks)")) {
+          return {
+            all: () => [
+              { name: "id" }, { name: "path" }, { name: "source" },
+              { name: "start_line" }, { name: "end_line" }, { name: "hash" },
+              { name: "updated_at" }, { name: "text" },
+            ],
+          };
+        }
+        if (query.includes("FROM chunks c")) return { all: () => [validCoreRow] };
+        throw new Error(`unexpected Core SQL: ${query}`);
+      },
+    }),
+    withEngineDb: (fn) => fn({
+      prepare(sql) {
+        const query = String(sql);
+        if (query.includes("FROM memory_confidence WHERE chunk_id IN")) {
+          return {
+            all: () => [{
+              chunk_id: "malformed-engine-id",
+              confidence: 0.7,
+              last_confidence_update: 1710000000,
+              base_tau: 30,
+              hit_count: 2,
+              is_protected: 0,
+              conflict_flag: 0,
+              is_archived: 0,
+              category: "preference",
+            }],
+          };
+        }
+        throw new Error(`unexpected Engine SQL: ${query}`);
+      },
+    }),
+  });
+  const malformedEngineResult = await createMemoryEngineGetExecute(engineMalformed)("tool-malformed-engine", {
+    id: "malformed-engine-id",
+  });
+  assert.deepEqual(malformedEngineResult, {
+    found: false,
+    id: "malformed-engine-id",
+    error: "canonical read failed",
+    code: "MEMORY_GET_CANONICAL_INVALID",
+    reason: "engine_malformed",
+  });
 });
 
 test("memory_engine_get preserves managed-first and reinforcement ordering for ambiguous id prefixes", async () => {
