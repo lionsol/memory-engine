@@ -165,6 +165,12 @@ test("bounded valid pool excludes missing candidates, admits deeper in-bound can
     `CANONICAL FULL TEXT ${IDS.b}`,
   ]);
   assert.equal(result.results.some(item => item.memory_id === IDS.outside), false);
+  assert.deepEqual(result.debug.limits, {
+    candidate_depth: 3,
+    max_code_points_per_candidate: 8000,
+    max_total_code_points: 400000,
+    deadline_ms: 100,
+  });
   assert.deepEqual(result.debug.canonical_pool, {
     bounded_candidate_count: 3,
     eligible_candidate_count: 3,

@@ -134,6 +134,215 @@ test("hybrid observation preserves canonical fields and derives fallback from ac
   assert.equal(JSON.stringify(observation).includes("must not persist"), false);
 });
 
+test("hybrid observation persists only bounded explicit-search rerank metadata", () => {
+  const observation = buildHybridSearchObservation({
+    surface: "memory_engine_search",
+    result: {
+      results: [{ memory_id: "must-not-persist-id" }],
+      debug: {
+        explicit_search_rerank: {
+          profile: "q3_explicit_search_bounded_rerank_v1",
+          mode: "control",
+          limits: {
+            candidate_depth: 20,
+            max_code_points_per_candidate: 4000,
+            max_total_code_points: 48000,
+            deadline_ms: 2500,
+            hidden_limit: 999,
+          },
+          canonical_pool: {
+            bounded_candidate_count: 20,
+            eligible_candidate_count: 18,
+            requested_count: 18,
+            resolved_count: 17,
+            valid_count: 16,
+            excluded_count: 2,
+            excluded_reasons: { core_not_found: 1, canonical_archived: 1 },
+            raw_memory_text: "must not persist canonical text",
+          },
+          final_serving: {
+            top_k: 3,
+            served_count: 3,
+            top_k_truncation_count: 13,
+            served_ids: ["must-not-persist-id"],
+          },
+          rerank: {
+            status: "bypassed",
+            reason: "control_mode",
+            configured_adapter_identity: {
+              provider: "local-control",
+              model: "none",
+              revision: "r3-c0-control-v1",
+              credential: "must-not-persist-secret",
+            },
+            observed_adapter_identity: {
+              provider: "local-control",
+              model: "none",
+              revision: "r3-c0-control-v1",
+              endpoint: "https://must-not-persist.example",
+            },
+            usage: { input_tokens: 999 },
+            scores: [0.9, 0.8],
+          },
+          timings: {
+            canonical_read_elapsed_ms: 12.5,
+            projection_elapsed_ms: 1.25,
+            rerank_elapsed_ms: 0,
+            total_profile_elapsed_ms: 14,
+            provider_elapsed_ms: 999,
+          },
+          query: "must not persist query",
+          raw_text: "must not persist raw text",
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(observation.explicit_search_rerank, {
+    profile: "q3_explicit_search_bounded_rerank_v1",
+    mode: "control",
+    limits: {
+      candidate_depth: 20,
+      max_code_points_per_candidate: 4000,
+      max_total_code_points: 48000,
+      deadline_ms: 2500,
+    },
+    canonical_pool: {
+      bounded_candidate_count: 20,
+      eligible_candidate_count: 18,
+      requested_count: 18,
+      resolved_count: 17,
+      valid_count: 16,
+      excluded_count: 2,
+      excluded_reasons: { core_not_found: 1, canonical_archived: 1 },
+    },
+    final_serving: {
+      top_k: 3,
+      served_count: 3,
+      top_k_truncation_count: 13,
+    },
+    rerank: {
+      status: "bypassed",
+      reason: "control_mode",
+      configured_adapter_identity: {
+        provider: "local-control",
+        model: "none",
+        revision: "r3-c0-control-v1",
+      },
+      observed_adapter_identity: {
+        provider: "local-control",
+        model: "none",
+        revision: "r3-c0-control-v1",
+      },
+    },
+    timings: {
+      canonical_read_elapsed_ms: 12.5,
+      projection_elapsed_ms: 1.25,
+      rerank_elapsed_ms: 0,
+      total_profile_elapsed_ms: 14,
+    },
+  });
+  const serialized = JSON.stringify(observation);
+  for (const forbidden of [
+    "must-not-persist-id",
+    "must not persist canonical text",
+    "must-not-persist-secret",
+    "must-not-persist.example",
+    "must not persist query",
+    "must not persist raw text",
+    "input_tokens",
+    "scores",
+    "hidden_limit",
+    "served_ids",
+    "provider_elapsed_ms",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false, forbidden);
+  }
+});
+
+test("both explicit search surfaces persist C0 observability while public results stay bounded", async () => {
+  const events = [];
+  const explicitDebug = {
+    profile: "q3_explicit_search_bounded_rerank_v1",
+    mode: "control",
+    limits: {
+      candidate_depth: 20,
+      max_code_points_per_candidate: 4000,
+      max_total_code_points: 48000,
+      deadline_ms: 2500,
+    },
+    canonical_pool: {
+      bounded_candidate_count: 5,
+      eligible_candidate_count: 5,
+      requested_count: 5,
+      resolved_count: 5,
+      valid_count: 5,
+      excluded_count: 0,
+      excluded_reasons: {},
+    },
+    final_serving: {
+      top_k: 3,
+      served_count: 3,
+      top_k_truncation_count: 2,
+    },
+    rerank: {
+      status: "bypassed",
+      reason: "control_mode",
+      configured_adapter_identity: {
+        provider: "local-control",
+        model: "none",
+        revision: "r3-c0-control-v1",
+      },
+      observed_adapter_identity: {
+        provider: "local-control",
+        model: "none",
+        revision: "r3-c0-control-v1",
+      },
+    },
+    timings: {
+      canonical_read_elapsed_ms: 2,
+      projection_elapsed_ms: 1,
+      rerank_elapsed_ms: 0,
+      total_profile_elapsed_ms: 4,
+    },
+  };
+  const runtime = createRuntime(events, {
+    hybridSearch: async () => ({
+      pool: 5,
+      channels: ["fts"],
+      channel_sizes: { fts: 5 },
+      debug: { explicit_search_rerank: explicitDebug },
+      results: [{
+        id: "bounded-id",
+        memory_id: "exact-memory-id",
+        canonical_id: "cmem:core:exact-memory-id",
+        text: "bounded preview",
+      }],
+    }),
+  });
+  const executeAction = createMemoryEngineExecute(runtime);
+  const executeSearch = createMemoryEngineSearchExecute(runtime);
+
+  const actionResult = await executeAction("action-c0", { action: "search", text: "alpha", top_k: 3 });
+  const searchResult = await executeSearch("search-c0", { query: "alpha", top_k: 3 });
+
+  assert.equal("debug" in actionResult, false);
+  assert.equal("debug" in searchResult, false);
+  assert.equal(actionResult.results[0].id, "bounded-id");
+  assert.equal(searchResult.results[0].id, "exact-memory-id");
+  assert.equal(events.length, 2);
+  assert.deepEqual(events.map(event => event.metadata_json.surface), [
+    "memory_engine_action_search",
+    "memory_engine_search",
+  ]);
+  assert.deepEqual(
+    events.map(event => event.metadata_json.explicit_search_rerank),
+    [events[0].metadata_json.explicit_search_rerank, events[0].metadata_json.explicit_search_rerank],
+  );
+  assert.equal(events[0].metadata_json.explicit_search_rerank.limits.candidate_depth, 20);
+  assert.equal(events[0].metadata_json.explicit_search_rerank.final_serving.top_k, 3);
+});
+
 test("recordHybridSearchObservation writes one canonical event and preserves write failures", () => {
   const events = [];
   assert.equal(recordHybridSearchObservation({
