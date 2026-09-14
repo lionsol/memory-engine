@@ -1,10 +1,10 @@
 # Q3 Relevance Rerank Architecture Contract v1
 
 Date: 2026-09-12
-Status: ARCHITECTURE DIRECTION ACCEPTED_WITH_LIMITATIONS; PRODUCTION INTEGRATION AND ENABLEMENT OPEN
+Status: ARCHITECTURE DIRECTION ACCEPTED_WITH_LIMITATIONS; R3-C0 CONTROL RUNTIME QUALIFIED; R3-C1 PROVIDER QUALIFICATION NOT STARTED / NOT AUTHORIZED
 
-The independent rerank interface, canonical text projector and orchestration boundary are accepted as the foundation for a later integration. The completed canonical-chunk comparison is retained as offline evidence; it does not approve production wiring, a production default, or benchmark-derived parameter values.
-Source acceptance remains recorded below. Production runtime factories still do not provide an adapter, and no provider execution or runtime activation follows from this document.
+The independent rerank interface, canonical text projector and orchestration boundary are accepted as the foundation for the qualified control runtime and a later provider integration. The completed canonical-chunk comparison is retained as offline evidence; it does not approve a production provider, provider default, or benchmark-derived quality claim.
+Source acceptance and the closed R3-C0 runtime evidence are recorded below. The production runtime keeps `AutoRecall=false`, `topK=3`, and `explicitSearchRerankControl` absent; no provider execution or further runtime mutation is authorized.
 
 ## Decision and evidence
 
@@ -21,7 +21,7 @@ Primary LoCoMo evidence: /home/lionsol/.openclaw/workspace/q3-locomo-v1.2/report
 
 The frozen `q3_locomo_chunk_fts_only_v1` comparison is accepted with limitations as evidence for the architecture direction. On the same 1970-case FTS-only chunk candidate pools, Recall-all@3 improved from `888/1970 = 45.08%` under control to `1354/1970 = 68.73%` after rerank; 476 cases improved and 10 regressed. This supports retaining an independent relevance-rerank layer as the integration direction. It does not establish production-equivalent chunking, always-vector or selective-vector policy, or a causal comparison with session-level Q1 results.
 
-The accepted integration foundation is the independent rerank interface, canonical `source.text` projection and orchestrator. Provider error, timeout or invalid response remains an all-or-nothing fallback to the same-profile control order; this fallback is not a successful rerank result. The experiment's `50` candidate depth and recovered `10s` deadline remain historical experiment parameters. Subsequent R3 decisions source-close explicit-search bounded valid-pool serving and design-freeze the first qualification profile at live `topK=3`, depth `20`, `4000`/`48000` code-point budgets and `2500ms` adapter deadline; adapter/provider, provider token budgets, default runtime enablement and real canonical-text egress remain undecided/unauthorized.
+The accepted integration foundation is the independent rerank interface, canonical `source.text` projection and orchestrator. Provider error, timeout or invalid response remains an all-or-nothing fallback to the same-profile control order; this fallback is not a successful rerank result. The experiment's `50` candidate depth and recovered `10s` deadline remain historical experiment parameters. R3-C0 subsequently qualified the control profile at live `topK=3`, depth `20`, `4000`/`48000` code-point budgets and `2500ms` adapter deadline. Adapter/provider choice, provider token budgets and real canonical-text egress remain the separate, `NOT STARTED / NOT AUTHORIZED` R3-C1 decision.
 
 ## Source boundary
 
@@ -71,7 +71,7 @@ For the source contract, text is caller-provided. Do not silently copy benchmark
 
 ## Deferred Q3 decisions
 
-- Production default enablement, adapter/provider choice, candidate depth, text budget and deadline: not approved or selected. The offline `50`/`10s` values are experiment settings only.
+- Real provider integration, provider choice, provider token budgets and production provider enablement: `NOT STARTED / NOT AUTHORIZED`. C0 control runtime qualification is closed; the offline `50`/`10s` values remain experiment settings only.
 - Calibrated fusion: cheaper pre-ranking/fallback candidate, requiring measured evidence; no weight changes in this implementation.
 - Always-vector and selective-vector: candidate-generation decisions; this FTS-only chunk comparison cannot decide either policy.
 - Set-aware evidence selection: the next architecture direction; multi-hop Recall-all remains only `51/277 = 18.41%` after rerank, so pointwise rerank does not solve evidence composition.
@@ -124,7 +124,7 @@ The completed runner's stale `recovery.status` is recorded as an ordinary adjace
 
 ## Production wiring decision and source closure — 2026-09-12
 
-Status: R3 EXPLICIT-SEARCH SOURCE `PASS_WITH_FINDINGS / CLOSED` at `298627c13c14b69c5997db7942c8ed01c87154ac`; PRODUCTION ENABLEMENT / PROVIDER EGRESS / RUNTIME QUALIFICATION NOT AUTHORIZED.
+Status: R3 EXPLICIT-SEARCH SOURCE `PASS_WITH_FINDINGS / CLOSED` at `298627c13c14b69c5997db7942c8ed01c87154ac`; `R3-C0-O1 = CLOSED`; `R3-C0 = CONTROL RUNTIME QUALIFIED`; real provider/C1 qualification remains `NOT STARTED / NOT AUTHORIZED`.
 The completed benchmark provider budget remains 4494/4494. No additional provider request is authorized.
 
 ### Entry and trusted enablement
@@ -170,21 +170,16 @@ Canonical/authorization failures exclude candidates before either arm and cannot
 
 Internal diagnostics use existing debug/status surfaces: applied/bypassed/fallback, pool counts, reason, truncation counts, adapter identity, usage and separate timings. No raw memory text or credentials in logs. Disabling rerank restores the existing production branch; no data migration is involved.
 
-### Next runtime decision: R3-C0 control qualification
+### R3-C0 control runtime qualification — CLOSED
 
-R3 source implementation is closed. The next proposed step is **R3-C0 control-mode runtime qualification**, currently `NOT AUTHORIZED`.
+`R3-C0-O1 = CLOSED` and `R3-C0 = CONTROL RUNTIME QUALIFIED`. The final production runtime is `7f2e80d3f4887fd4b3db41afc5d0e8b60b96c16631674589d38b4c6a843b6272`, from source `5f263b3d5a4aab7480b7d7e55c917b11d786842e`, candidate artifact `0a6edaf4688eebeaabccd9dcee888db6889711eb758befa9710d82d00eb98fc9`, with native SHA-256 `be4109c5b07514ade1a2e1452cbed9fca25cbb8d025b76fa2a81e21a91286a05`.
 
-C0 must use the frozen profile v1 with `mode=control` and current live product `topK=3`. It must not install or call a real rerank provider, must not send canonical full text to an external endpoint, and must not authorize C1 by implication. C0 exists to qualify the serving-profile change itself before provider/rerank effects are introduced.
+The installed-artifact result was `SPLIT_ONLY`, `accepted=true`, policy `allow_internal_hardlink_split_v1`, stop reason `accepted_controlled_internal_hardlink_split_v1`; candidate/installed semantic identity was `e556b82c2d67487b8c4166000603a43de610694cf3d169c6205495b2739854ae`, with internal hardlink groups normalized `3→0` and no external references or validation errors. Production remains `AutoRecall=false`, `topK=3`, and `explicitSearchRerankControl` absent with `memory-engine enabled=true`; Gateway is healthy with `NRestarts=0`, and the final disabled production stability window passed for 60 seconds.
 
-C0 acceptance evidence must prove on the two explicit search surfaces:
+The closed runtime evidence recorded Engine identity `2d642bdb90a3b374e4a899639534bf83aaee5f11493d49cf6361649de6d685fb`, `memory_events.max(id)=369`, `row_count=321`, and no new events during final deployment. C0 observations `366/367/368/369` remain preserved. Lance identity `30ecfcbeb8460fd409f84c8a9ecdc3ca9effd7f705f17fe34a2d17ec59033e94` was unchanged. Normalized config equality was true; the raw config SHA changed only from OpenClaw's auto-managed `meta.lastTouchedAt`, not semantic config drift. `provider_calls=0`, `benchmark_runs=0`, and `C1=0`.
 
-1. pre-state captured exactly, including plugin/source identity and effective disabled R3 policy;
-2. only the trusted explicit-search R3 control policy is enabled; AutoRecall remains false and unrelated Hybrid callers remain unchanged;
-3. valid-pool serving is bounded to candidateDepth 20, uses no refill outside that pool, and preserves exact `memory_id`/`canonical_id` plus existing public disclosure boundaries;
-4. canonical batch/projection failures fail closed with no adapter call; control mode performs no adapter/provider call at all;
-5. canonical-pool and final-serving diagnostics have stage-correct counts, with topK truncation not classified as canonical failure;
-6. dedicated `memory_engine_search` and legacy `memory_engine action=search` show equivalent selected canonical IDs under the same trusted policy;
-7. latency is recorded separately for canonical read, projection and total profile; C0 does not claim an adapter SLA;
-8. the exact pre-C0 configuration is restored and verified after qualification.
+The prior qualification false failures are archived as harness/operator failures, not product, installer, or R3 architecture defects: incorrect topology/v1 equality, a nonexistent comparator nested field, `.result` versus authoritative `.output.results`, full Lance manifest byte comparison including `checked_at`, and raw config SHA equality despite an OpenClaw auto-stamp.
 
-C0 is source-free runtime qualification: no retrieval-source edit, benchmark, provider request, Core/Engine/LanceDB mutation, AutoRecall enablement, Gateway policy expansion, push or tag is implied. A later **R3-C1** rerank canary requires a separate Owner decision covering provider/model/endpoint, canonical-text egress scope, provider token budgets, credential handling, adapter identity and canary limits.
+### Next runtime decision: R3-C1 real rerank-provider qualification
+
+R3-C1 is `NOT STARTED / NOT AUTHORIZED`. It requires a separate Owner decision covering provider/model/endpoint, canonical-text egress scope, provider token budgets, credential handling, adapter identity and canary limits. This C0 closure authorizes no provider, C1, AutoRecall, benchmark, or further runtime mutation.
