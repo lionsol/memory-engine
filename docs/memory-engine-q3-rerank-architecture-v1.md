@@ -1,10 +1,10 @@
 # Q3 Relevance Rerank Architecture Contract v1
 
 Date: 2026-09-12
-Status: ARCHITECTURE DIRECTION ACCEPTED_WITH_LIMITATIONS; R3-C0 CONTROL RUNTIME QUALIFIED; R3-C1-A-E0 FAIL_WITH_FINDINGS / QUALITY PASS / 2500ms RELIABILITY FAIL; R3-C1-A-L1 DEADLINE-V2 SOURCE IMPLEMENTED / VERIFIED; R3-C1-A-E1 NOT AUTHORIZED
+Status: ARCHITECTURE DIRECTION ACCEPTED_WITH_LIMITATIONS; R3-C0 CONTROL RUNTIME QUALIFIED; R3-C1-A-E0/E1 EXECUTION COMPLETE / QUALITY PASS / PROVIDER LATENCY-RELIABILITY FAIL; R3-C1-A-M1 MODEL-ATTRIBUTION SOURCE WORKTREE VERIFIED / COMMIT PENDING; R3-C1-A-M2 NOT AUTHORIZED
 
 The independent rerank interface, canonical text projector and orchestration boundary are accepted as the foundation for the qualified control runtime and a later provider integration. The completed canonical-chunk comparison is retained as offline evidence; it does not approve a production provider, provider default, or benchmark-derived quality claim.
-Source acceptance, the closed R3-C0 runtime evidence, and the completed bounded E0 provider qualification are recorded below. The production runtime keeps `AutoRecall=false`, `topK=3`, and `explicitSearchRerankControl` absent; the completed E0 qualification does not authorize production provider serving or further runtime mutation.
+Source acceptance, the closed R3-C0 runtime evidence, and the completed bounded E0/E1 provider qualifications are recorded below. The production runtime keeps `AutoRecall=false`, `topK=3`, and `explicitSearchRerankControl` absent; completed qualification runs do not authorize production provider serving or further runtime mutation.
 
 ## Decision and evidence
 
@@ -124,7 +124,7 @@ The completed runner's stale `recovery.status` is recorded as an ordinary adjace
 
 ## Production wiring decision and source closure — 2026-09-12
 
-Status: R3 EXPLICIT-SEARCH SOURCE `PASS_WITH_FINDINGS / CLOSED` at `298627c13c14b69c5997db7942c8ed01c87154ac`; `R3-C0-O1 = CLOSED`; `R3-C0 = CONTROL RUNTIME QUALIFIED`; `R3-C1-A-E0 = EXECUTION COMPLETE / QUALITY PASS / 2500ms RELIABILITY FAIL`; `R3-C1-A-L1 = PASS / SOURCE IMPLEMENTED / VERIFIED` at `3228d5e5662a9d8a8b4318f5c8ad9af69f1c8bd9`; only the follow-up E1 real-provider execution remains `NOT AUTHORIZED`.
+Status: R3 EXPLICIT-SEARCH SOURCE `PASS_WITH_FINDINGS / CLOSED` at `298627c13c14b69c5997db7942c8ed01c87154ac`; `R3-C0-O1 = CLOSED`; `R3-C0 = CONTROL RUNTIME QUALIFIED`; `R3-C1-A-E0/E1 = EXECUTION COMPLETE / QUALITY PASS / PROVIDER LATENCY-RELIABILITY FAIL`; `R3-C1-A-M1 = WORKTREE VERIFIED / COMMIT PENDING`; real 0.6B M2 provider execution remains `NOT AUTHORIZED`.
 The completed benchmark provider budget remains 4494/4494. No additional provider request is authorized.
 
 ### Entry and trusted enablement
@@ -194,7 +194,7 @@ The closed runtime evidence recorded Engine identity `2d642bdb90a3b374e4a8996395
 
 The prior qualification false failures are archived as harness/operator failures, not product, installer, or R3 architecture defects: incorrect topology/v1 equality, a nonexistent comparator nested field, `.result` versus authoritative `.output.results`, full Lance manifest byte comparison including `checked_at`, and raw config SHA equality despite an OpenClaw auto-stamp.
 
-### R3-C1-A provider qualification and deadline-v2 source closure
+### R3-C1-A provider qualification, deadline-v2, and model attribution
 
 `R3-C1-A-I0 = PASS / SOURCE IMPLEMENTED / VERIFIED` at `1324c8c05e62639ae3418b64b6e4e04c14c51adb`. The source-only tooling binds deterministic `P256/D64/S8` qualification populations, the frozen FTS-only candidate-generation limitation, canonical depth-20 `4000/48000` text projection, a fail-closed SiliconFlow `Qwen/Qwen3-Reranker-8B` adapter, conservative token/request/cost accounting, packet-bound pacing and bounded evidence/scoring.
 
@@ -202,4 +202,8 @@ The prior qualification false failures are archived as harness/operator failures
 
 `R3-C1-A-L1 = PASS / SOURCE IMPLEMENTED / VERIFIED` at `3228d5e5662a9d8a8b4318f5c8ad9af69f1c8bd9`. It advances the C1-A qualification profile from `r3_c1a_locomo_fts20_canonical_v1` to `..._v2` and changes only the qualification hard deadline from `2500ms` to `5000ms`; acceptance thresholds remain unchanged. Node24 C1/C0 adjacent tests passed `65/65`; static check passed `759` files, test-integrity `346/0`, and OpenSpec strict `12/12`.
 
-The next decision is `R3-C1-A-E1 deadline-v2 provider execution authorization = NOT STARTED / NOT AUTHORIZED`. E1 must use a new exact clean source binding and regenerated v2 manifest. It is a bounded requalification of deadline/reliability only, not permission to replay E0, change provider/model, enable production rerank, start C1-B, enable AutoRecall, or mutate Gateway/config/DB/LanceDB/live-plugin state.
+`R3-C1-A-E1 = FAIL_WITH_FINDINGS / EXECUTION COMPLETE; QUALITY PASS; PROVIDER LATENCY/RELIABILITY FAIL`. The v2 run used source `dae3aa20105403b1acbbb787720f921d4c844f06`, manifest `4f353270a15bcadc269748d95e19f281b14a9a93ebdc86dd0c6272472e522c7a`, the same deterministic P256/D64/S8 populations, and the unchanged scorer thresholds with only the hard deadline widened to `5000ms`. P256 Recall-all@3 improved `44.92%→64.06%` (`+19.14pp`), Recall-any@3 `52.73%→75.39%` (`+22.66pp`), evidence coverage@3 `48.16%→69.01%` (`+20.84pp`), and protected-control regression remained `1.74%`. Reliability improved to `242/256 applied` and `14/256 fallback`, but still failed the frozen `>=99% / <=1%` gates. Successful-request p95/p99 were `2620/4267ms`, both above the unchanged `2000/2400ms` latency gates. The observed remaining main-run fallbacks were timeout-only. Sentinel applied-pair exact top3 stability was `7/8`; the one failed pair was a timeout rather than observed order drift. This closes the hypothesis that merely increasing the 8B hard deadline can qualify the current provider under the existing SLA.
+
+`R3-C1-A-M1 = WORKTREE VERIFIED / COMMIT PENDING`. The qualification-only model seam retains `Qwen/Qwen3-Reranker-8B` as default and permits exactly one alternate, `Qwen/Qwen3-Reranker-0.6B`; arbitrary model strings and `Qwen/Qwen3-Reranker-4B` fail closed. `prepare --model` binds the selected allowed model into the manifest, `execute-provider` regenerates from that exact manifest-bound model, and packet validation requires exact equality. Production configuration and C0 are untouched. Node24 C1/C0 adjacent tests pass `69/69`; static check `759`, test-integrity `346/0`, OpenSpec strict `12/12`, and `git diff --check` pass.
+
+The next decision is `R3-C1-A-M2 0.6B model-attribution provider qualification = NOT STARTED / NOT AUTHORIZED`. M2 holds SiliconFlow, frozen P256/D64/S8, candidate/text budgets, `5000ms` hard deadline, pacing and all scorer thresholds constant while changing only `Qwen3-Reranker-8B → Qwen3-Reranker-0.6B`. It is a latency-attribution/quality-trade-off experiment, not permission to change provider, enable production rerank, start C1-B, enable AutoRecall, or mutate Gateway/config/DB/LanceDB/live-plugin state.

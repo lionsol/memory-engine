@@ -16,7 +16,7 @@ import { C1A_ACCEPTANCE_THRESHOLDS } from "../lib/benchmark/c1a-qualification-sc
 
 const sourceCommit = "a".repeat(40);
 
-function boundManifest(manifestSha) {
+function boundManifest(manifestSha, model = "Qwen/Qwen3-Reranker-8B") {
   return {
     schema: "memory_engine_r3_c1a_qualification_manifest_v1",
     manifest_sha256: manifestSha,
@@ -28,7 +28,7 @@ function boundManifest(manifestSha) {
     profile: {
       provider: {
         provider: "siliconflow",
-        model: "Qwen/Qwen3-Reranker-8B",
+        model,
         endpoint: "https://api.siliconflow.cn/v1/rerank",
         revision: null,
       },
@@ -48,13 +48,13 @@ function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-function packet(manifestSha, executionRoot) {
+function packet(manifestSha, executionRoot, model = "Qwen/Qwen3-Reranker-8B") {
   return {
     schema: C1A_EXECUTION_PACKET_SCHEMA,
     source_commit: sourceCommit,
     manifest_sha256: manifestSha,
     provider: "siliconflow",
-    model: "Qwen/Qwen3-Reranker-8B",
+    model,
     endpoint: "https://api.siliconflow.cn/v1/rerank",
     egress: { query: "ALLOW", canonical_text: "ALLOW", scope: C1A_EGRESS_SCOPE },
     max_provider_requests: 328,
@@ -100,6 +100,33 @@ test("C1-A pacer enforces both request interval and rolling conservative token b
   );
 });
 
+test("C1-A CLI prepare binds an explicitly allowed model without provider calls", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-c1a-prepare-model-"));
+  const output = join(root, "manifest.json");
+  const model = "Qwen/Qwen3-Reranker-0.6B";
+  const manifest = boundManifest("d".repeat(64), model);
+  let observedModel = null;
+
+  const result = await runC1AQualificationCli([
+    "prepare",
+    "--root", "/synthetic/frozen",
+    "--repo", "/synthetic/repo",
+    "--egress-decision", "ALLOW",
+    "--model", model,
+    "--output", output,
+  ], {
+    prepareFromFrozen: ({ rerankModel }) => {
+      observedModel = rerankModel;
+      return { manifest };
+    },
+    gitIdentity: () => ({ sourceCommit, worktreeClean: true }),
+  });
+
+  assert.equal(result.provider_calls, 0);
+  assert.equal(observedModel, model);
+  assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), manifest);
+});
+
 test("C1-A CLI prepare writes only the frozen manifest and makes zero provider calls", async () => {
   const root = mkdtempSync(join(tmpdir(), "memory-engine-c1a-prepare-"));
   const output = join(root, "manifest.json");
@@ -129,6 +156,42 @@ test("C1-A CLI prepare writes only the frozen manifest and makes zero provider c
   assert.equal(prepareCalls, 1);
   assert.equal(adapterCalls, 0);
   assert.deepEqual(JSON.parse(readFileSync(output, "utf8")), manifest);
+});
+
+test("C1-A CLI execute-provider regenerates material using the manifest-bound model", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-c1a-execute-model-"));
+  const manifestPath = join(root, "manifest.json");
+  const packetPath = join(root, "packet.json");
+  const executionRoot = join(root, "execution");
+  const model = "Qwen/Qwen3-Reranker-0.6B";
+  const manifest = boundManifest("e".repeat(64), model);
+  writeJson(manifestPath, manifest);
+  writeJson(packetPath, packet(manifest.manifest_sha256, executionRoot, model));
+  let observedModel = null;
+
+  await runC1AQualificationCli([
+    "execute-provider",
+    "--root", "/synthetic/frozen",
+    "--repo", "/synthetic/repo",
+    "--manifest", manifestPath,
+    "--packet", packetPath,
+    "--execution-root", executionRoot,
+  ], {
+    prepareFromFrozen: ({ rerankModel }) => {
+      observedModel = rerankModel;
+      return { manifest, material: { cases: [] } };
+    },
+    executeQualification: async () => ({ score: { pass: true }, batch: { budget: { requests: 0 } } }),
+    adapterFactory: ({ model: adapterModel }) => {
+      assert.equal(adapterModel, model);
+      return async () => ({ scores: [] });
+    },
+    transportFactory: () => async () => ({ status: 200, body: "{}" }),
+    gitIdentity: () => ({ sourceCommit, worktreeClean: true }),
+    env: { SILICONFLOW_API_KEY: "synthetic-secret" },
+  });
+
+  assert.equal(observedModel, model);
 });
 
 test("C1-A CLI execute-provider binds packet/root and consumes the execution before fake execution", async () => {

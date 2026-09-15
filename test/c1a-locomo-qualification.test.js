@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   buildC1ALocomoQualificationCases,
+  C1A_LOCOMO_0_6B_QUALIFICATION_PROFILE,
   C1A_LOCOMO_QUALIFICATION_PROFILE,
   C1A_LOCOMO_SOURCE_PROFILE,
+  resolveC1AQualificationProfile,
 } from "../lib/benchmark/c1a-locomo-qualification.js";
 
 function syntheticFrozen() {
@@ -79,6 +81,21 @@ const turnRows = [{
   },
   chunkCoverage: { status: "full", chunkIds: ["memory-1"] },
 }];
+
+test("C1-A model attribution resolves only the explicit 8B and 0.6B qualification profiles", () => {
+  assert.equal(
+    resolveC1AQualificationProfile("Qwen/Qwen3-Reranker-8B"),
+    C1A_LOCOMO_QUALIFICATION_PROFILE,
+  );
+  assert.equal(
+    resolveC1AQualificationProfile("Qwen/Qwen3-Reranker-0.6B"),
+    C1A_LOCOMO_0_6B_QUALIFICATION_PROFILE,
+  );
+  assert.throws(
+    () => resolveC1AQualificationProfile("Qwen/Qwen3-Reranker-4B"),
+    /C1A_LOCOMO_RERANK_MODEL_NOT_ALLOWED/,
+  );
+});
 
 test("C1-A LoCoMo bridge projects the frozen source population into the depth20 qualification envelope", () => {
   const material = buildC1ALocomoQualificationCases({

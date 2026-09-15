@@ -18,6 +18,7 @@ import { executeC1ALocomoQualification } from "../lib/benchmark/c1a-qualificatio
 import {
   createSiliconFlowHttpsTransport,
   createSiliconFlowRerankAdapter,
+  SILICONFLOW_RERANK_MODEL,
 } from "../lib/recall/rerank/siliconflow-rerank-adapter.js";
 
 export const C1A_DEFAULT_FROZEN_ROOT = "/home/lionsol/.openclaw/workspace/q3-locomo-v1.2/runs/q3-locomo-chunk-fts-rerank-v1";
@@ -65,6 +66,7 @@ export function prepareC1AFromFrozen({
   repositoryRoot,
   egressDecision,
   qualificationSourceIdentity = null,
+  rerankModel = SILICONFLOW_RERANK_MODEL,
   loadFrozen = loadFrozenInputs,
   readTurnRows = root => readJsonl(join(root, "input", "chunk-material", "turn-chunk-map.jsonl")),
 } = {}) {
@@ -75,6 +77,7 @@ export function prepareC1AFromFrozen({
     turnRows,
     egressDecision,
     qualificationSourceIdentity,
+    rerankModel,
   });
 }
 
@@ -143,6 +146,7 @@ function parseArgs(argv) {
     manifest: null,
     packet: null,
     executionRoot: null,
+    rerankModel: SILICONFLOW_RERANK_MODEL,
   };
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
@@ -153,6 +157,7 @@ function parseArgs(argv) {
     else if (token === "--manifest") args.manifest = tokens[++index];
     else if (token === "--packet") args.packet = tokens[++index];
     else if (token === "--execution-root") args.executionRoot = tokens[++index];
+    else if (token === "--model") args.rerankModel = tokens[++index];
     else if (token === "--help" || token === "-h") args.help = true;
     else throw fail("C1A_CLI_ARGUMENT_UNKNOWN", { token });
   }
@@ -162,7 +167,7 @@ function parseArgs(argv) {
 function usage() {
   return [
     "Usage:",
-    "  node bin/run-c1a-qualification-v1.mjs prepare --root <frozen-root> --repo <repo> --egress-decision ALLOW --output <manifest.json>",
+    "  node bin/run-c1a-qualification-v1.mjs prepare --root <frozen-root> --repo <repo> --egress-decision ALLOW [--model <allowed-model>] --output <manifest.json>",
     "  node bin/run-c1a-qualification-v1.mjs execute-provider --root <frozen-root> --repo <repo> --manifest <manifest.json> --packet <execution-packet.json> --execution-root <dir>",
     "",
     "prepare never calls a provider. execute-provider requires a separately authorized, exact-bound execution packet; the packet does not itself create Owner authority.",
@@ -202,6 +207,7 @@ export async function runC1AQualificationCli(argv = process.argv.slice(2), {
         source_commit: identity.sourceCommit,
         worktree_clean: true,
       },
+      rerankModel: args.rerankModel,
     });
     atomicWriteJson(resolve(args.output), prepared.manifest);
     return {
@@ -236,6 +242,7 @@ export async function runC1AQualificationCli(argv = process.argv.slice(2), {
       source_commit: identity.sourceCommit,
       worktree_clean: true,
     },
+    rerankModel: manifest.profile?.provider?.model,
   });
   if (prepared.manifest.manifest_sha256 !== manifest.manifest_sha256
       || sha256Json(prepared.manifest) !== sha256Json(manifest)) {

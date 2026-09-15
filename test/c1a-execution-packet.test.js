@@ -101,6 +101,43 @@ test("C1-A execution packet fails closed on authority-binding drift", () => {
   );
 });
 
+test("C1-A execution packet accepts only manifest-bound supported qualification models", () => {
+  const alternateManifest = structuredClone(manifest);
+  alternateManifest.profile.provider.model = "Qwen/Qwen3-Reranker-0.6B";
+  const binding = validateC1AExecutionPacket({
+    packet: packet({ model: "Qwen/Qwen3-Reranker-0.6B" }),
+    manifest: alternateManifest,
+    sourceCommit,
+    worktreeClean: true,
+    executionRoot,
+  });
+  assert.equal(binding.model, "Qwen/Qwen3-Reranker-0.6B");
+
+  const unsupportedManifest = structuredClone(manifest);
+  unsupportedManifest.profile.provider.model = "Qwen/Qwen3-Reranker-4B";
+  assert.throws(
+    () => validateC1AExecutionPacket({
+      packet: packet({ model: "Qwen/Qwen3-Reranker-4B" }),
+      manifest: unsupportedManifest,
+      sourceCommit,
+      worktreeClean: true,
+      executionRoot,
+    }),
+    /C1A_EXECUTION_MANIFEST_PROVIDER_MISMATCH/,
+  );
+
+  assert.throws(
+    () => validateC1AExecutionPacket({
+      packet: packet({ model: "Qwen/Qwen3-Reranker-0.6B" }),
+      manifest,
+      sourceCommit,
+      worktreeClean: true,
+      executionRoot,
+    }),
+    /C1A_EXECUTION_PROVIDER_BINDING_MISMATCH/,
+  );
+});
+
 test("C1-A execution packet cannot infer missing egress or rate-limit approval", () => {
   const base = { manifest, sourceCommit, worktreeClean: true, executionRoot };
   assert.throws(
