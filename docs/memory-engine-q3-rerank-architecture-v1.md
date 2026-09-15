@@ -1,10 +1,10 @@
 # Q3 Relevance Rerank Architecture Contract v1
 
 Date: 2026-09-12
-Status: ARCHITECTURE DIRECTION ACCEPTED_WITH_LIMITATIONS; R3-C0 CONTROL RUNTIME QUALIFIED; R3-C1-A-I0 SOURCE IMPLEMENTED / VERIFIED; R3-C1-A-E0 PROVIDER EXECUTION NOT AUTHORIZED
+Status: ARCHITECTURE DIRECTION ACCEPTED_WITH_LIMITATIONS; R3-C0 CONTROL RUNTIME QUALIFIED; R3-C1-A-E0 FAIL_WITH_FINDINGS / QUALITY PASS / 2500ms RELIABILITY FAIL; R3-C1-A-L1 DEADLINE-V2 SOURCE IMPLEMENTED / VERIFIED; R3-C1-A-E1 NOT AUTHORIZED
 
 The independent rerank interface, canonical text projector and orchestration boundary are accepted as the foundation for the qualified control runtime and a later provider integration. The completed canonical-chunk comparison is retained as offline evidence; it does not approve a production provider, provider default, or benchmark-derived quality claim.
-Source acceptance and the closed R3-C0 runtime evidence are recorded below. The production runtime keeps `AutoRecall=false`, `topK=3`, and `explicitSearchRerankControl` absent; no provider execution or further runtime mutation is authorized.
+Source acceptance, the closed R3-C0 runtime evidence, and the completed bounded E0 provider qualification are recorded below. The production runtime keeps `AutoRecall=false`, `topK=3`, and `explicitSearchRerankControl` absent; the completed E0 qualification does not authorize production provider serving or further runtime mutation.
 
 ## Decision and evidence
 
@@ -21,7 +21,7 @@ Primary LoCoMo evidence: /home/lionsol/.openclaw/workspace/q3-locomo-v1.2/report
 
 The frozen `q3_locomo_chunk_fts_only_v1` comparison is accepted with limitations as evidence for the architecture direction. On the same 1970-case FTS-only chunk candidate pools, Recall-all@3 improved from `888/1970 = 45.08%` under control to `1354/1970 = 68.73%` after rerank; 476 cases improved and 10 regressed. This supports retaining an independent relevance-rerank layer as the integration direction. It does not establish production-equivalent chunking, always-vector or selective-vector policy, or a causal comparison with session-level Q1 results.
 
-The accepted integration foundation is the independent rerank interface, canonical `source.text` projection and orchestrator. Provider error, timeout or invalid response remains an all-or-nothing fallback to the same-profile control order; this fallback is not a successful rerank result. The experiment's `50` candidate depth and recovered `10s` deadline remain historical experiment parameters. R3-C0 subsequently qualified the control profile at live `topK=3`, depth `20`, `4000`/`48000` code-point budgets and `2500ms` adapter deadline. R3-C1-A-I0 later source-closed isolated qualification tooling for SiliconFlow `Qwen/Qwen3-Reranker-8B`; provider execution, account/rate-limit budgets and real canonical-text egress remain separately `NOT AUTHORIZED`.
+The accepted integration foundation is the independent rerank interface, canonical `source.text` projection and orchestrator. Provider error, timeout or invalid response remains an all-or-nothing fallback to the same-profile control order; this fallback is not a successful rerank result. The experiment's `50` candidate depth and recovered `10s` deadline remain historical experiment parameters. R3-C0 qualified its control-only production-shaped profile at live `topK=3`, depth `20`, `4000`/`48000` code-point budgets and `2500ms` adapter deadline. R3-C1-A-E0 then qualified the real SiliconFlow `Qwen/Qwen3-Reranker-8B` ordering value on a frozen P256/D64/S8 population: quality passed strongly, but the `2500ms` hard deadline produced a `14.84%` P256 fallback rate, all from timeout. The follow-up L1 source revision therefore creates a separate C1-A qualification profile v2 with a `5000ms` hard deadline; C0's qualified `2500ms` control profile is not rewritten.
 
 ## Source boundary
 
@@ -36,7 +36,7 @@ Proposed input:
 - adapter: injected score function accepting query, nonempty candidate texts, and an abort signal;
 - adapter identity: provider/model/revision observation, with unknown revision explicit.
 
-Candidate count remains 0..50 for the standalone reranker contract. Fifty is a bounded engineering limit aligned with the historical benchmark depth, not a measured production optimum. Reject oversize input rather than silently trimming. The first production-shaped qualification profile separately fixes candidateDepth `20` and adapter deadline `2500ms`; these are qualification inputs rather than evidence-derived quality optima or runtime authorization.
+Candidate count remains 0..50 for the standalone reranker contract. Fifty is a bounded engineering limit aligned with the historical benchmark depth, not a measured production optimum. Reject oversize input rather than silently trimming. The first production-shaped qualification profile fixed candidateDepth `20` and adapter deadline `2500ms`; E0 demonstrated that this deadline right-censors too many real-provider requests. The C1-A qualification profile v2 keeps depth/text budgets unchanged and raises only the hard adapter deadline to `5000ms`; this is a qualification candidate, not production runtime authorization.
 
 Output:
 - orderedIds: full permutation of input IDs;
@@ -124,7 +124,7 @@ The completed runner's stale `recovery.status` is recorded as an ordinary adjace
 
 ## Production wiring decision and source closure — 2026-09-12
 
-Status: R3 EXPLICIT-SEARCH SOURCE `PASS_WITH_FINDINGS / CLOSED` at `298627c13c14b69c5997db7942c8ed01c87154ac`; `R3-C0-O1 = CLOSED`; `R3-C0 = CONTROL RUNTIME QUALIFIED`; `R3-C1-A-I0 = PASS / SOURCE IMPLEMENTED / VERIFIED` at `1324c8c05e62639ae3418b64b6e4e04c14c51adb`; real provider execution remains `NOT AUTHORIZED`.
+Status: R3 EXPLICIT-SEARCH SOURCE `PASS_WITH_FINDINGS / CLOSED` at `298627c13c14b69c5997db7942c8ed01c87154ac`; `R3-C0-O1 = CLOSED`; `R3-C0 = CONTROL RUNTIME QUALIFIED`; `R3-C1-A-E0 = EXECUTION COMPLETE / QUALITY PASS / 2500ms RELIABILITY FAIL`; `R3-C1-A-L1 = PASS / SOURCE IMPLEMENTED / VERIFIED` at `3228d5e5662a9d8a8b4318f5c8ad9af69f1c8bd9`; only the follow-up E1 real-provider execution remains `NOT AUTHORIZED`.
 The completed benchmark provider budget remains 4494/4494. No additional provider request is authorized.
 
 ### Entry and trusted enablement
@@ -160,7 +160,21 @@ For the current product baseline `topK=3`, freeze the first qualification profil
 
 These values are qualification inputs, not runtime authorization and not evidence of quality optimality. Existing candidate-generation defaults (`ftsTopK=20`, `vectorTopK=30`) prove that a depth-20 fused pool can be materially populated without changing candidate generation. The accepted offline experiment used depth 50 and therefore cannot prove that 20 is quality-optimal; no new benchmark is authorized to optimize this value before qualification.
 
-The offline rerank run's successful-request latency (`p95≈1245ms`) and depth-50 input volume are planning evidence only. `deadlineMs=2500` is a bounded first qualification envelope, not an end-to-end SLA. Canonical-read/projection time, adapter elapsed time and total profile time remain separate diagnostics. Code-point budgets are not token budgets; any later real provider adapter must impose provider/model-specific query/document token hard limits and must not rely on hidden server truncation.
+The offline rerank run's successful-request latency (`p95≈1245ms`) and depth-50 input volume are planning evidence only. `deadlineMs=2500` was the bounded first qualification envelope, not an end-to-end SLA. E0 subsequently showed that this hard cutoff right-censored too many real-provider requests: P256 applied `218/256`, fallback `38/256`, and every fallback was timeout at the hard boundary. Canonical-read/projection time, adapter elapsed time and total profile time remain separate diagnostics. Code-point budgets are not token budgets; any real provider adapter must impose provider/model-specific query/document token hard limits and must not rely on hidden server truncation.
+
+### C1-A qualification profile v2 — deadline revision
+
+After E0, freeze a separate C1-A qualification profile v2 with only one serving-envelope change:
+
+- `candidateDepth=20` unchanged;
+- `maxCodePointsPerCandidate=4000` unchanged;
+- `maxTotalCodePoints=48000` unchanged;
+- `deadlineMs=5000`;
+- no refill outside candidateDepth;
+- same-pool atomic control fallback;
+- provider/model/endpoint unchanged for the qualification candidate.
+
+Do **not** loosen acceptance thresholds after observing E0. The existing gates remain `p95<=2000ms`, `p99<=2400ms`, applied rate `>=99%`, fallback rate `<=1%`, Recall-all delta `>=+8pp`, evidence-coverage delta `>=+5pp`, Recall-any guardrail `>=-1pp`, protected-control regression `<=3%`, and sentinel `8/8`. The purpose of the 5-second hard deadline is to remove E0 right-censoring and expose the real tail distribution; it does not declare 5 seconds acceptable product latency.
 
 ### Failure behavior and observability
 
@@ -180,8 +194,12 @@ The closed runtime evidence recorded Engine identity `2d642bdb90a3b374e4a8996395
 
 The prior qualification false failures are archived as harness/operator failures, not product, installer, or R3 architecture defects: incorrect topology/v1 equality, a nonexistent comparator nested field, `.result` versus authoritative `.output.results`, full Lance manifest byte comparison including `checked_at`, and raw config SHA equality despite an OpenClaw auto-stamp.
 
-### R3-C1-A-I0 source closure and next decision
+### R3-C1-A provider qualification and deadline-v2 source closure
 
-`R3-C1-A-I0 = PASS / SOURCE IMPLEMENTED / VERIFIED` at `1324c8c05e62639ae3418b64b6e4e04c14c51adb`. The source-only tooling binds deterministic `P256/D64/S8` qualification populations, the frozen FTS-only candidate-generation limitation, canonical depth-20 `4000/48000` text projection, a fail-closed SiliconFlow `Qwen/Qwen3-Reranker-8B` adapter, conservative token/request/cost accounting, packet-bound pacing and bounded evidence/scoring. Post-commit C1/Q3 tests passed `56/56`; Node24 explicit-search adjacent native tests passed `6/6`. Provider requests and external egress remained zero.
+`R3-C1-A-I0 = PASS / SOURCE IMPLEMENTED / VERIFIED` at `1324c8c05e62639ae3418b64b6e4e04c14c51adb`. The source-only tooling binds deterministic `P256/D64/S8` qualification populations, the frozen FTS-only candidate-generation limitation, canonical depth-20 `4000/48000` text projection, a fail-closed SiliconFlow `Qwen/Qwen3-Reranker-8B` adapter, conservative token/request/cost accounting, packet-bound pacing and bounded evidence/scoring.
 
-The next decision is `R3-C1-A-E0 provider execution authorization = NOT STARTED / NOT AUTHORIZED`. E0 requires a separate Owner authorization binding the exact clean HEAD and frozen manifest, provider/model/endpoint, explicit query/canonical-text egress scope, account-confirmed rate limits and pacing, credential reference, `MAX_PROVIDER_REQUESTS=328`, `MAX_INPUT_TOKENS=6,000,000`, a finite cost cap and `execution_count=1`. I0 does not authorize provider execution, C1-B, AutoRecall, production rerank enablement, benchmark expansion or further runtime mutation.
+`R3-C1-A-E0 = FAIL_WITH_FINDINGS / EXECUTION COMPLETE; QUALITY PASS; 2500ms RELIABILITY FAIL`. The exact one-shot run consumed `328/328` authorized requests. P256 Recall-all@3 improved `44.92%→63.67%` (`+18.75pp`), Recall-any@3 `52.73%→73.83%` (`+21.09pp`), and evidence coverage@3 `48.16%→68.10%` (`+19.93pp`); protected-control regression was `1.74%`. Reliability failed because `38/256` P256 cases fell back and all were hard timeouts. There were no 429, HTTP, structural-response, authorization, retry, request-budget, token-budget or cost-cap failures. Successful-request latency was p95 `1974ms` and p99 `2373ms`, but these are right-censored by the failed 2500ms requests and therefore are not sufficient to accept the tail.
+
+`R3-C1-A-L1 = PASS / SOURCE IMPLEMENTED / VERIFIED` at `3228d5e5662a9d8a8b4318f5c8ad9af69f1c8bd9`. It advances the C1-A qualification profile from `r3_c1a_locomo_fts20_canonical_v1` to `..._v2` and changes only the qualification hard deadline from `2500ms` to `5000ms`; acceptance thresholds remain unchanged. Node24 C1/C0 adjacent tests passed `65/65`; static check passed `759` files, test-integrity `346/0`, and OpenSpec strict `12/12`.
+
+The next decision is `R3-C1-A-E1 deadline-v2 provider execution authorization = NOT STARTED / NOT AUTHORIZED`. E1 must use a new exact clean source binding and regenerated v2 manifest. It is a bounded requalification of deadline/reliability only, not permission to replay E0, change provider/model, enable production rerank, start C1-B, enable AutoRecall, or mutate Gateway/config/DB/LanceDB/live-plugin state.
