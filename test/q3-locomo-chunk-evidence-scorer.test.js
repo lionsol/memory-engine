@@ -6,6 +6,7 @@ import { buildLocomoChunkMaterial, flattenChunkMaterial } from "../lib/benchmark
 import {
   alignLocomoChunkScoreRows,
   classifyLocomoChunkMaterialPopulation,
+  evaluateLocomoChunkEvidenceCoverage,
   scoreLocomoChunkCase,
   scoreLocomoChunkCases,
 } from "../lib/benchmark/locomo-chunk-evidence-scorer.js";
@@ -65,6 +66,7 @@ function buildFixture({ includeUnknown = false } = {}) {
       overlap: byText.get("evidence one two"),
       second: byText.get("B: second evidence"),
       combined: byText.get("A: evidence one two\nB: second evidence"),
+      third: byText.get("C: third"),
       unknown: byText.get("not in source"),
     },
   };
@@ -116,6 +118,29 @@ test("source-offset union completes cross-chunk evidence and deduplicates overla
   assert.deepEqual(firstEvidence.chunkIds, [fixture.ids.prefix, fixture.ids.overlap]);
   assert.equal(firstEvidence.coveredUtf16, firstEvidence.targetUtf16);
   assert.equal(overlap.metrics["evidence_coverage@3"], 1);
+});
+
+test("arbitrary-selection coverage reuses source-union semantics without the top3 serving truncation", () => {
+  const fixture = buildFixture();
+  const selected = [
+    fixture.ids.prefix,
+    fixture.ids.suffix,
+    fixture.ids.second,
+    fixture.ids.third,
+  ];
+  const top3Score = score(fixture, ["D1:1", "D1:2", "D1:3"], selected);
+  assert.equal(top3Score.metrics["recall_all@3"], 0);
+
+  const fullSelection = evaluateLocomoChunkEvidenceCoverage({
+    material: fixture.material,
+    sampleId: "conv-scorer-test",
+    qaIndex: 0,
+    evidenceIds: ["D1:1", "D1:2", "D1:3"],
+    selectedChunkIds: selected,
+  });
+  assert.equal(fullSelection.scoreable, true);
+  assert.equal(fullSelection.recall_all, 1);
+  assert.equal(fullSelection.evidence_coverage, 1);
 });
 
 test("one chunk may cover multiple evidence turns, while partial coverage is not a hit", () => {

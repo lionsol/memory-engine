@@ -273,7 +273,7 @@ function validateCanonicalMemory(memory, materialById) {
   return memory;
 }
 
-function loadFrozenInputs(root, repositoryRoot) {
+export function loadFrozenInputs(root, repositoryRoot) {
   const { inputRoot, hashes } = validateInputHashes(root);
   const dataset = readJson(join(inputRoot, "dataset/locomo10.json"));
   const alignment = readJson(join(inputRoot, "population-alignment.json"));
@@ -385,6 +385,7 @@ function loadFrozenInputs(root, repositoryRoot) {
     candidateProfile,
     overlay,
     control,
+    chunks,
     cases: preparedCases,
     hashes,
     material_identity: {
