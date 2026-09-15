@@ -89,6 +89,8 @@ test("C1-A LoCoMo bridge projects the frozen source population into the depth20 
   assert.equal(material.schema, "memory_engine_r3_c1a_locomo_material_v1");
   assert.equal(material.source_profile, C1A_LOCOMO_SOURCE_PROFILE);
   assert.equal(material.qualification_profile, C1A_LOCOMO_QUALIFICATION_PROFILE);
+  assert.equal(material.qualification_profile, "r3_c1a_locomo_fts20_canonical_v2");
+  assert.equal(material.profile.deadlineMs, 5000);
   assert.equal(material.evidence_limitations.production_equivalent_candidate_generation, false);
   assert.equal(material.cases.length, 1970);
   assert.equal(material.cases[0].control_recall_all_at_3, 1);

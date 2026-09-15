@@ -52,7 +52,7 @@ function packet(overrides = {}) {
     max_input_tokens: 6_000_000,
     max_cost_usd: 1,
     input_price_usd_per_million: 0.04,
-    deadline_ms: 2500,
+    deadline_ms: 5000,
     execution_count: 1,
     pacing: {
       min_interval_ms: 1000,
