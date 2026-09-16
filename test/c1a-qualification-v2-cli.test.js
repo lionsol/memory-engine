@@ -223,9 +223,145 @@ test("C1-A v2 CLI freeze-packet and validate are zero-provider exact-binding ope
   assert.equal(validated.model, "Qwen/Qwen3-Reranker-0.6B");
 });
 
-test("C1-A v2 operator intentionally exposes no execute-provider command", async () => {
+test("C1-A v2 execute-provider binds, consumes once, and writes bounded completion markers", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-c1a-v2-execute-"));
+  const observedPath = join(root, "observed.json");
+  const manifestPath = join(root, "manifest.json");
+  const packetPath = join(root, "packet.json");
+  const executionRoot = join(root, "execution");
+  const { observedManifest, manifest } = fixture();
+  writeJson(observedPath, observedManifest);
+  writeJson(manifestPath, manifest);
+
+  await runC1AV2QualificationCli([
+    "freeze-packet",
+    "--repo", "/synthetic/repo",
+    "--manifest", manifestPath,
+    "--execution-root", executionRoot,
+    "--max-cost-usd", "1",
+    "--input-price-usd-per-million", "0.01",
+    "--pacing-min-interval-ms", "1000",
+    "--pacing-token-window-ms", "60000",
+    "--pacing-max-estimated-tokens-per-window", "400000",
+    "--rate-limit-source", "synthetic-current-rate-limit",
+    "--api-key-env", "SILICONFLOW_API_KEY",
+    "--packet-output", packetPath,
+  ], {
+    gitIdentity: cleanIdentity,
+    expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
+  });
+
+  let adapterFactoryCalls = 0;
+  let transportFactoryCalls = 0;
+  let executeCalls = 0;
+  const fakeResult = {
+    score: { pass: true },
+    batch: { budget: { requests: 336 } },
+  };
+  const dependencies = {
+    prepareFromFrozen: () => ({ manifest, material: { cases: [] } }),
+    executeQualification: async ({ adapter, pacer, onEvidence }) => {
+      executeCalls += 1;
+      assert.equal(typeof adapter, "function");
+      assert.equal(typeof pacer, "function");
+      await onEvidence({ phase: "main", evidence: { case_id: "synthetic-case", status: "applied" } });
+      return fakeResult;
+    },
+    adapterFactory: ({ apiKey, model }) => {
+      adapterFactoryCalls += 1;
+      assert.equal(apiKey, "synthetic-secret");
+      assert.equal(model, "Qwen/Qwen3-Reranker-0.6B");
+      return async () => ({ scores: [] });
+    },
+    transportFactory: () => {
+      transportFactoryCalls += 1;
+      return async () => { throw new Error("fake transport must not be called"); };
+    },
+    pacerFactory: () => async () => {},
+    gitIdentity: cleanIdentity,
+    expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
+    env: { SILICONFLOW_API_KEY: "synthetic-secret" },
+  };
+
+  const result = await runC1AV2QualificationCli([
+    "execute-provider",
+    "--root", "/synthetic/frozen",
+    "--repo", "/synthetic/repo",
+    "--observed-manifest", observedPath,
+    "--manifest", manifestPath,
+    "--packet", packetPath,
+    "--execution-root", executionRoot,
+  ], dependencies);
+
+  assert.equal(result.result, "completed");
+  assert.equal(result.provider_calls, 336);
+  assert.equal(executeCalls, 1);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(transportFactoryCalls, 1);
+  assert.equal(JSON.parse(readFileSync(join(executionRoot, "execution-started.json"), "utf8")).execution_count_consumed, 1);
+  assert.equal(JSON.parse(readFileSync(join(executionRoot, "execution-finished.json"), "utf8")).provider_calls, 336);
+  const evidence = JSON.parse(readFileSync(join(executionRoot, "evidence", "main-0001-synthetic-case.json"), "utf8"));
+  assert.equal(evidence.case_id, "synthetic-case");
+
   await assert.rejects(
-    () => runC1AV2QualificationCli(["execute-provider"], { gitIdentity: cleanIdentity }),
-    /C1A_V2_CLI_COMMAND_INVALID/,
+    () => runC1AV2QualificationCli([
+      "execute-provider",
+      "--root", "/synthetic/frozen",
+      "--repo", "/synthetic/repo",
+      "--observed-manifest", observedPath,
+      "--manifest", manifestPath,
+      "--packet", packetPath,
+      "--execution-root", executionRoot,
+    ], dependencies),
+    /C1A_V2_EXECUTION_PACKET_ALREADY_CONSUMED/,
   );
+});
+
+test("C1-A v2 execute-provider fails before consumption when API key is unavailable", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-engine-c1a-v2-no-key-"));
+  const observedPath = join(root, "observed.json");
+  const manifestPath = join(root, "manifest.json");
+  const packetPath = join(root, "packet.json");
+  const executionRoot = join(root, "execution");
+  const { observedManifest, manifest } = fixture();
+  writeJson(observedPath, observedManifest);
+  writeJson(manifestPath, manifest);
+
+  await runC1AV2QualificationCli([
+    "freeze-packet",
+    "--repo", "/synthetic/repo",
+    "--manifest", manifestPath,
+    "--execution-root", executionRoot,
+    "--max-cost-usd", "1",
+    "--input-price-usd-per-million", "0.01",
+    "--pacing-min-interval-ms", "1000",
+    "--pacing-token-window-ms", "60000",
+    "--pacing-max-estimated-tokens-per-window", "400000",
+    "--rate-limit-source", "synthetic-current-rate-limit",
+    "--api-key-env", "SILICONFLOW_API_KEY",
+    "--packet-output", packetPath,
+  ], {
+    gitIdentity: cleanIdentity,
+    expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
+  });
+
+  await assert.rejects(
+    () => runC1AV2QualificationCli([
+      "execute-provider",
+      "--root", "/synthetic/frozen",
+      "--repo", "/synthetic/repo",
+      "--observed-manifest", observedPath,
+      "--manifest", manifestPath,
+      "--packet", packetPath,
+      "--execution-root", executionRoot,
+    ], {
+      prepareFromFrozen: () => ({ manifest, material: { cases: [] } }),
+      gitIdentity: cleanIdentity,
+      expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
+      env: {},
+    }),
+    /C1A_V2_EXECUTION_API_KEY_UNAVAILABLE/,
+  );
+
+  assert.throws(() => readFileSync(join(executionRoot, "execution-started.json"), "utf8"), /ENOENT/);
 });

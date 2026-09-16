@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -11,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 import { loadFrozenInputs } from "./run-locomo-chunk-rerank-v1.mjs";
+import { createC1APacer } from "./run-c1a-qualification-v1.mjs";
 import {
   buildC1ALocomoQualificationCases,
   C1A_LOCOMO_SOURCE_PROFILE,
@@ -24,6 +26,7 @@ import {
   C1A_V2_EXPECTED_PRIOR_OBSERVED_MANIFEST_SHA256,
   validateC1AV2ExecutionPacket,
 } from "../lib/benchmark/c1a-qualification-v2-execution-packet.js";
+import { executeC1AV2LocomoQualification } from "../lib/benchmark/c1a-qualification-v2-execution.js";
 import { preflightC1AQualificationCase } from "../lib/benchmark/c1a-qualification-runner.js";
 import {
   QWEN3_UTF8_BYTE_TOKEN_UPPER_BOUND_ID,
@@ -32,6 +35,8 @@ import {
   SILICONFLOW_RERANK_MODEL_0_6B,
   SILICONFLOW_RERANK_PROVIDER,
   qwen3Utf8ByteTokenUpperBound,
+  createSiliconFlowHttpsTransport,
+  createSiliconFlowRerankAdapter,
 } from "../lib/recall/rerank/siliconflow-rerank-adapter.js";
 
 export const C1A_V2_DEFAULT_FROZEN_ROOT = "/home/lionsol/.openclaw/workspace/q3-locomo-v1.2/runs/q3-locomo-chunk-fts-rerank-v1";
@@ -197,21 +202,32 @@ function parseArgs(argv) {
   return args;
 }
 
+function safeEvidenceName(phase, index, caseId) {
+  const safeId = String(caseId).replace(/[^a-zA-Z0-9_.:-]/gu, "_").slice(0, 140);
+  return `${phase}-${String(index).padStart(4, "0")}-${safeId}.json`;
+}
+
 function usage() {
   return [
     "Usage:",
     "  node bin/run-c1a-qualification-v2.mjs prepare --root <frozen-root> --repo <repo> --observed-manifest <m2-manifest.json> --egress-decision ALLOW --output <v2-manifest.json>",
     "  node bin/run-c1a-qualification-v2.mjs freeze-packet --repo <repo> --manifest <v2-manifest.json> --execution-root <dir> --max-cost-usd <n> --input-price-usd-per-million <n> --pacing-min-interval-ms <n> --pacing-token-window-ms <n> --pacing-max-estimated-tokens-per-window <n> --rate-limit-source <source> --api-key-env <ENV> --packet-output <packet.json>",
     "  node bin/run-c1a-qualification-v2.mjs validate --repo <repo> --manifest <v2-manifest.json> --packet <packet.json> [--execution-root <dir>]",
+    "  node bin/run-c1a-qualification-v2.mjs execute-provider --root <frozen-root> --repo <repo> --observed-manifest <m2-manifest.json> --manifest <v2-manifest.json> --packet <packet.json> --execution-root <dir>",
     "",
-    "All v2 commands are zero-provider. This CLI intentionally has no execute-provider command. An ALLOW manifest/packet records a bounded egress contract but does not itself create Owner execution authority.",
+    "prepare/freeze-packet/validate are zero-provider. execute-provider requires a separately authorized, exact-bound packet and consumes execution_count=1 before the first provider request.",
   ].join("\n");
 }
 
 export async function runC1AV2QualificationCli(argv = process.argv.slice(2), {
   prepareFromFrozen = prepareC1AV2FromFrozen,
+  executeQualification = executeC1AV2LocomoQualification,
+  adapterFactory = createSiliconFlowRerankAdapter,
+  transportFactory = createSiliconFlowHttpsTransport,
+  pacerFactory = createC1APacer,
   gitIdentity = resolveC1AV2GitIdentity,
   expectedPriorObservedManifestSha256 = C1A_V2_EXPECTED_PRIOR_OBSERVED_MANIFEST_SHA256,
+  env = process.env,
 } = {}) {
   const args = parseArgs(argv);
   if (args.help || !args.command) return { help: usage() };
@@ -309,6 +325,118 @@ export async function runC1AV2QualificationCli(argv = process.argv.slice(2), {
       max_provider_requests: binding.max_provider_requests,
       model: binding.model,
     };
+  }
+
+  if (args.command === "execute-provider") {
+    if (!args.observedManifest || !args.manifest || !args.packet || !args.executionRoot) {
+      throw fail("C1A_V2_EXECUTE_ARGUMENTS_REQUIRED");
+    }
+    const observedManifest = readJson(resolve(args.observedManifest));
+    const manifest = readJson(resolve(args.manifest));
+    const packet = readJson(resolve(args.packet));
+    const executionRoot = resolve(args.executionRoot);
+    const binding = validateC1AV2ExecutionPacket({
+      packet,
+      manifest,
+      sourceCommit: identity.sourceCommit,
+      worktreeClean: identity.worktreeClean,
+      executionRoot,
+      expectedPriorObservedManifestSha256,
+    });
+    if (observedManifest.manifest_sha256 !== binding.prior_observed_manifest_sha256) {
+      throw fail("C1A_V2_EXECUTION_OBSERVED_MANIFEST_MISMATCH");
+    }
+
+    const prepared = prepareFromFrozen({
+      frozenRoot: resolve(args.frozenRoot),
+      repositoryRoot,
+      observedManifest,
+      egressDecision: "ALLOW",
+      qualificationSourceIdentity: {
+        source_commit: identity.sourceCommit,
+        worktree_clean: true,
+      },
+      expectedPriorObservedManifestSha256,
+    });
+    if (prepared.manifest.manifest_sha256 !== manifest.manifest_sha256
+        || JSON.stringify(prepared.manifest) !== JSON.stringify(manifest)) {
+      throw fail("C1A_V2_EXECUTION_REGENERATED_MANIFEST_MISMATCH");
+    }
+
+    const apiKey = env[binding.api_key_env];
+    if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
+      throw fail("C1A_V2_EXECUTION_API_KEY_UNAVAILABLE");
+    }
+
+    const startedPath = join(executionRoot, "execution-started.json");
+    if (existsSync(startedPath)) throw fail("C1A_V2_EXECUTION_PACKET_ALREADY_CONSUMED");
+    mkdirSync(join(executionRoot, "evidence"), { recursive: true, mode: 0o700 });
+    atomicWriteJson(startedPath, {
+      schema: "memory_engine_r3_c1a_execution_started_v2",
+      source_commit: binding.source_commit,
+      manifest_sha256: binding.manifest_sha256,
+      prior_observed_manifest_sha256: binding.prior_observed_manifest_sha256,
+      provider: binding.provider,
+      model: binding.model,
+      endpoint: binding.endpoint,
+      execution_count_consumed: 1,
+    });
+
+    const adapter = adapterFactory({
+      apiKey: apiKey.trim(),
+      transport: transportFactory(),
+      model: binding.model,
+      endpoint: binding.endpoint,
+    });
+    const pacer = pacerFactory(binding.pacing);
+    let evidenceIndex = 0;
+    const onEvidence = async ({ phase, evidence }) => {
+      evidenceIndex += 1;
+      atomicWriteJson(
+        join(executionRoot, "evidence", safeEvidenceName(phase, evidenceIndex, evidence.case_id)),
+        evidence,
+      );
+    };
+
+    try {
+      const result = await executeQualification({
+        packet,
+        manifest,
+        material: prepared.material,
+        sourceCommit: identity.sourceCommit,
+        worktreeClean: identity.worktreeClean,
+        adapter,
+        pacer,
+        onEvidence,
+      });
+      atomicWriteJson(join(executionRoot, "execution-result.json"), result);
+      atomicWriteJson(join(executionRoot, "execution-finished.json"), {
+        schema: "memory_engine_r3_c1a_execution_finished_v2",
+        source_commit: binding.source_commit,
+        manifest_sha256: binding.manifest_sha256,
+        prior_observed_manifest_sha256: binding.prior_observed_manifest_sha256,
+        pass: result.score.pass,
+        provider_calls: result.batch.budget.requests,
+        execution_count_consumed: 1,
+      });
+      return {
+        command: "execute-provider",
+        result: "completed",
+        pass: result.score.pass,
+        provider_calls: result.batch.budget.requests,
+        manifest_sha256: binding.manifest_sha256,
+      };
+    } catch (error) {
+      atomicWriteJson(join(executionRoot, "execution-stopped.json"), {
+        schema: "memory_engine_r3_c1a_execution_stopped_v2",
+        source_commit: binding.source_commit,
+        manifest_sha256: binding.manifest_sha256,
+        prior_observed_manifest_sha256: binding.prior_observed_manifest_sha256,
+        error_code: typeof error?.code === "string" ? error.code : "C1A_V2_EXECUTION_UNCLASSIFIED_STOP",
+        execution_count_consumed: 1,
+      });
+      throw error;
+    }
   }
 
   throw fail("C1A_V2_CLI_COMMAND_INVALID");
