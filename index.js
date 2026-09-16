@@ -30,6 +30,7 @@ import { createAutoRecallHookLifecycle } from "./lib/recall/auto-recall-hook-lif
 import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync.js";
 import { createHybridRuntimeContext } from "./lib/recall/hybrid/runtime-context.js";
 import { createExplicitSearchRerankControlPolicy } from "./lib/recall/hybrid/explicit-search-rerank-control-policy.js";
+import { createExplicitSearchRerankProviderPolicy } from "./lib/recall/hybrid/explicit-search-rerank-provider-policy.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
 import {
   createMemoryEngineGetExecute,
@@ -37,7 +38,7 @@ import {
 } from "./lib/tools/memory-engine-actions.js";
 import { registerMemoryEngineTools } from "./lib/tools/register-memory-engine-tools.js";
 import { createOwnerDisclosureCommandHandler } from "./lib/recall/disclosure/owner-disclosure-command.js";
-import { generateEmbedding } from "./lib/siliconflow-runtime.js";
+import { generateEmbedding, resolveSFKey } from "./lib/siliconflow-runtime.js";
 
 const { INDEX_SYNC_WATCH_DIRS } = runtimePaths;
 
@@ -127,7 +128,17 @@ export default definePluginEntry({
     const kgFailClosedCanary = effectiveRuntimeConfig.kgFailClosedCanary;
     const recentFailClosedMode = effectiveRuntimeConfig.recentFailClosedMode;
     const recentFailClosedCanary = effectiveRuntimeConfig.recentFailClosedCanary;
-    const explicitSearchRerankPolicy = createExplicitSearchRerankControlPolicy(effectiveRuntimeConfig);
+    const explicitSearchRerankProviderPolicy = createExplicitSearchRerankProviderPolicy(
+      effectiveRuntimeConfig,
+      {
+        apiKey: resolveSFKey({
+          cfg: config.embeddingRuntimeConfig,
+          apiConfig: config.memoryEngineConfig,
+        }),
+      },
+    );
+    const explicitSearchRerankPolicy = explicitSearchRerankProviderPolicy
+      || createExplicitSearchRerankControlPolicy(effectiveRuntimeConfig);
 
     const autoRecallLifecycle = createAutoRecallHookLifecycle({
       api,

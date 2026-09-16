@@ -143,6 +143,20 @@
           }
         }
       },
+      "explicitSearchRerankProvider": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {
+          "enabled": false
+        },
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable the experimental SiliconFlow Qwen3-Reranker-0.6B explicit-search rerank path"
+          }
+        }
+      },
       "kgFailClosedMode": {
         "type": "string",
         "enum": [
