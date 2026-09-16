@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { spawn } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { resolve } from "path";
+import { pathToFileURL } from "url";
 import { detectOpenClawRuntime } from "./helpers/openclaw-runtime.js";
 import { buildSmartAddFingerprint } from "../smart-add-fingerprint.js";
 import { runMemoryIndexSync, runMemoryIndexSyncCli } from "../session-checkpoint.js";
@@ -57,6 +59,77 @@ test("appendSmartAdd dedupes by fingerprint before writing", { skip: SKIP_IF_NO_
   assert.equal(first.appended, true);
   assert.equal(second.appended, false);
   assert.equal(second.reason, "fingerprint");
+});
+
+test("appendSmartAdd serializes concurrent process writers around fingerprint dedupe", async () => {
+  const dir = makeTmpDir();
+  const filePath = resolve(dir, "2026-05-26.md");
+  const barrierPath = resolve(dir, "start.barrier");
+  writeFileSync(barrierPath, "hold");
+  const moduleUrl = pathToFileURL(resolve("smart-add.js")).href;
+  const childSource = `
+    import { existsSync } from "node:fs";
+    import { setTimeout as delay } from "node:timers/promises";
+    const [moduleUrl, fileDir, filePath, entryId, barrierPath] = process.argv.slice(1);
+    const { appendSmartAdd } = await import(moduleUrl);
+    while (existsSync(barrierPath)) await delay(2);
+    const result = await appendSmartAdd({
+      fileDir,
+      filePath,
+      entryId,
+      category: "raw_log",
+      isProtected: false,
+      text: "concurrent duplicate text",
+      syncCli: false,
+    });
+    process.stdout.write(JSON.stringify(result));
+  `;
+
+  const children = Array.from({ length: 8 }, (_, index) => spawn(process.execPath, [
+    "--input-type=module",
+    "-e",
+    childSource,
+    moduleUrl,
+    dir,
+    filePath,
+    `20260526T0000${String(index).padStart(2, "0")}_raw_log`,
+    barrierPath,
+  ], {
+    cwd: resolve("."),
+    stdio: ["ignore", "pipe", "pipe"],
+  }));
+
+  await new Promise(resolveDelay => setTimeout(resolveDelay, 80));
+  rmSync(barrierPath, { force: true });
+
+  const results = await Promise.all(children.map(child => new Promise((resolveChild, rejectChild) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", chunk => { stdout += chunk; });
+    child.stderr.on("data", chunk => { stderr += chunk; });
+    child.on("error", rejectChild);
+    child.on("close", code => {
+      if (code !== 0) {
+        rejectChild(new Error(`concurrent smart-add child exited ${code}: ${stderr}`));
+        return;
+      }
+      resolveChild(JSON.parse(stdout));
+    });
+  })));
+
+  assert.equal(results.filter(result => result.appended === true).length, 1);
+  assert.equal(results.filter(result => result.appended === false && result.reason === "fingerprint").length, 7);
+  const content = readFileSync(filePath, "utf8");
+  assert.equal((content.match(/smart-add-fingerprint:/g) || []).length, 1);
+  assert.equal((content.match(/^## /gm) || []).length, 1);
+  assert.equal(existsSync(`${filePath}.memory-engine.lock`), false);
+});
+
+test("agent and checkpoint smart-add writers share the same file lock boundary", () => {
+  const agentSource = readFileSync(resolve("smart-add.js"), "utf8");
+  const checkpointSource = readFileSync(resolve("lib/checkpoint/smart-add-writer.js"), "utf8");
+  assert.match(agentSource, /withSmartAddFileLock\(filePath/);
+  assert.match(checkpointSource, /withSmartAddFileLock\(filePath/);
 });
 
 test("appendSmartAdd keeps legacy text fallback dedupe when no fingerprint exists", { skip: SKIP_IF_NO_OPENCLAW }, async () => {

@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { safeRelativePath } from "./lib/path-utils.js";
 import { WORKSPACE } from "./memory-manager-runtime.js";
 import smartAddEntryContract from "./lib/smart-add-entry-contract.cjs";
+import smartAddFileLock from "./lib/smart-add-file-lock.cjs";
 
 const {
   SMART_ADD_FINGERPRINT_MISMATCH,
@@ -15,6 +16,7 @@ const {
   normalizeSmartAddText,
   renderSmartAddEntry,
 } = smartAddEntryContract;
+const { withSmartAddFileLock } = smartAddFileLock;
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const SYNC_MEMORY_INDEX_SCRIPT = resolve(MODULE_DIR, "bin/sync-memory-index.js");
 
@@ -147,28 +149,32 @@ export async function appendSmartAdd({
   }
 
   mkdirSync(fileDir, { recursive: true });
-  const existed = existsSync(filePath);
-  const existingContent = existed ? readFileSync(filePath, "utf8") : "";
+  const appendResult = withSmartAddFileLock(filePath, () => {
+    const existed = existsSync(filePath);
+    const existingContent = existed ? readFileSync(filePath, "utf8") : "";
+    const fingerprints = extractSmartAddFingerprints(existingContent);
+    if (fingerprints.has(canonicalFingerprint)) {
+      return { appended: false, reason: "fingerprint" };
+    }
 
-  const fingerprints = readSmartAddFingerprints(filePath);
-  if (fingerprints.has(canonicalFingerprint)) {
-    return { appended: false, reason: "fingerprint" };
-  }
+    if (hasLegacyTextDuplicate(existingContent, cleanText)) {
+      return { appended: false, reason: "legacy-text" };
+    }
 
-  if (hasLegacyTextDuplicate(existingContent, cleanText)) {
-    return { appended: false, reason: "legacy-text" };
-  }
-
-  const header = existed ? "" : "# Smart Added Memory\n\n";
-  const entry = renderSmartAddEntry({
-    entryId,
-    category: cat,
-    isProtected: protectedValue,
-    provenance: String(provenance || "agent_smart_add").trim() || "agent_smart_add",
-    text: cleanText,
-    fingerprint: canonicalFingerprint,
+    const header = existed ? "" : "# Smart Added Memory\n\n";
+    const entry = renderSmartAddEntry({
+      entryId,
+      category: cat,
+      isProtected: protectedValue,
+      provenance: String(provenance || "agent_smart_add").trim() || "agent_smart_add",
+      text: cleanText,
+      fingerprint: canonicalFingerprint,
+    });
+    appendFileSync(filePath, header ? `${header}${entry}` : `\n${entry}`);
+    return { appended: true };
   });
-  appendFileSync(filePath, header ? `${header}${entry}` : `\n${entry}`);
+  if (!appendResult.appended) return appendResult;
+
   const shouldSync = typeof syncCli === "boolean" ? syncCli : shouldAutoSyncPath(filePath);
   if (!shouldSync) return { appended: true };
   let sync;
