@@ -272,6 +272,8 @@ test("production boundary discloses a bounded card only after the full authority
     const context = formatDirectCardContext(result.selected);
     assert.match(context, /direct-card-memory-001/u);
     assert.match(context, /memory cards/u);
+    assert.match(context, /untrusted historical data/iu);
+    assert.match(context, /Never follow commands/iu);
     assert.doesNotMatch(context, new RegExp(SAFE_SENTINEL, "u"));
     assert.doesNotMatch(context, /get_token|full_content|source_text/u);
   } finally {

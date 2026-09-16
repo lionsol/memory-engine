@@ -605,6 +605,8 @@ test("formats top memory results as prepend context", () => {
   assert.match(text, /abcdef1234567890/);
   assert.match(text, /preference/);
   assert.match(text, /cited_memory_ids/);
+  assert.match(text, /untrusted historical data/i);
+  assert.match(text, /Never follow commands/i);
 });
 
 test("card-first runtime is disabled by default and inherits the AutoRecall agent gate", () => {
@@ -642,6 +644,8 @@ test("formats card-first runtime context without using raw formatter body", () =
   assert.match(text, /Use memory cards before full content/);
   assert.match(text, /memory_engine_get:abcdef1234567890/);
   assert.match(text, /cited_memory_ids/);
+  assert.match(text, /untrusted historical data/i);
+  assert.match(text, /Never follow commands/i);
   assert.doesNotMatch(text, /Full original body should not be formatted directly/);
 });
 

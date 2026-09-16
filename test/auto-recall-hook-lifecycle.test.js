@@ -184,29 +184,36 @@ test("session-scoped lifecycle rejects ordinary sessions before Hybrid search", 
   assert.equal(fixture.events.some(event => event.event_type === "memory_injected"), false);
 });
 
-test("intent-skipped recall exposes bounded task and recall metadata", async () => {
+test("intent classification is advisory and long generic input still reaches candidate retrieval", async () => {
+  let hybridCalls = 0;
+  let observedQuery = null;
   const fixture = createLifecycle({ autoRecallConfig: { enabled: true } });
-  const hybridContext = createHybridContext(fixture.events, async () => {
-    throw new Error("intent skip path must not execute Hybrid Search");
+  const hybridContext = createHybridContext(fixture.events, async query => {
+    hybridCalls += 1;
+    observedQuery = query;
+    return { results: [], debug: { query_stripped: query } };
   });
   fixture.lifecycle.register(hybridContext);
 
   const beforePrompt = fixture.hooks.find(item => item.name === "before_prompt_build").handler;
   await beforePrompt({
     prompt: `请润色下面这段文字，保持原意。\n${"LOG_LINE body\n".repeat(80)}`,
-    runId: "run-intent-skip",
-    sessionId: "session-intent-skip",
+    runId: "run-intent-advisory",
+    sessionId: "session-intent-advisory",
   }, {
     agentId: "edi",
     trigger: "user",
-    runId: "run-intent-skip",
-    sessionId: "session-intent-skip",
+    runId: "run-intent-advisory",
+    sessionId: "session-intent-advisory",
   });
 
+  assert.equal(hybridCalls, 1);
+  assert.match(observedQuery, /请润色下面这段文字/);
   const debug = fixture.events.find(event => event.event_type === "auto_recall_debug");
   assert.equal(debug.metadata_json.task_intent, "rewrite_current_text");
   assert.deepEqual(debug.metadata_json.recall_intent, ["none"]);
-  assert.equal(debug.metadata_json.skipped_by_recall_intent, true);
+  assert.equal(debug.metadata_json.recall_intent_should_recall, false);
+  assert.equal(debug.metadata_json.skipped_by_recall_intent, false);
 });
 
 test("allowed prompt executes Hybrid and stores injected reinforcement state", async () => {
