@@ -152,6 +152,7 @@ test("C1-A v2 packet binds the exact disjoint manifest, 0.6B model and 336-reque
     sourceCommit,
     worktreeClean: true,
     executionRoot,
+    expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
   });
   assert.equal(binding.model, "Qwen/Qwen3-Reranker-0.6B");
   assert.equal(binding.max_provider_requests, 336);
@@ -159,10 +160,21 @@ test("C1-A v2 packet binds the exact disjoint manifest, 0.6B model and 336-reque
 
   assert.throws(
     () => validateC1AV2ExecutionPacket({
+      packet: packet(manifest),
+      manifest,
+      sourceCommit,
+      worktreeClean: true,
+    }),
+    /C1A_V2_EXECUTION_PRIOR_MANIFEST_NOT_FROZEN_M2/,
+  );
+
+  assert.throws(
+    () => validateC1AV2ExecutionPacket({
       packet: packet(manifest, { model: "Qwen/Qwen3-Reranker-8B" }),
       manifest,
       sourceCommit,
       worktreeClean: true,
+      expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
     }),
     /C1A_V2_EXECUTION_PROVIDER_BINDING_MISMATCH/,
   );
@@ -172,6 +184,7 @@ test("C1-A v2 packet binds the exact disjoint manifest, 0.6B model and 336-reque
       manifest,
       sourceCommit,
       worktreeClean: true,
+      expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
     }),
     /C1A_V2_EXECUTION_REQUEST_CAP_MISMATCH/,
   );
@@ -184,6 +197,7 @@ test("C1-A v2 packet binds the exact disjoint manifest, 0.6B model and 336-reque
       manifest: tampered,
       sourceCommit,
       worktreeClean: true,
+      expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
     }),
     /C1A_V2_EXECUTION_MANIFEST_HASH_MISMATCH/,
   );
@@ -242,6 +256,7 @@ test("C1-A v2 execution uses the 336 budget and the v2 scorer seam", async () =>
       assert.equal(rows, expectedRows);
       return { schema: "synthetic-v2-score", pass: true };
     },
+    expectedPriorObservedManifestSha256: manifest.prior_observed_manifest_sha256,
   });
 
   assert.equal(scorerCalls, 1);
