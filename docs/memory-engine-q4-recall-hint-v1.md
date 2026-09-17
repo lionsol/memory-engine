@@ -1,6 +1,6 @@
 # memory-engine Q4 — Recall Hint v1
 
-Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 EVALUATION CONTRACT SOURCE IMPLEMENTED / SYNTHETIC SMOKE PASS / Q4-C1 NEXT / NO REAL PROVIDER AUTHORIZATION`
+Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 EVALUATION CONTRACT CLOSED / Q4-C1a FRESH CORPUS + MANIFEST FROZEN / Q4-C1b NEXT / NO REAL PROVIDER AUTHORIZATION`
 
 ## 1. Product question
 
@@ -254,4 +254,25 @@ Only three product questions matter:
 2. **Final usefulness:** Recall-any@3, Recall-all@3, and paired improve/regress/unchanged counts;
 3. **Cost:** end-to-end p95, added planner/embedding/search calls or tokens, and failure/fallback rate.
 
-Real provider/planner execution, data egress, Q4-C1 acceptance execution, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
+### Q4-C1a frozen corpus and manifest
+
+Q4-C1a uses a fresh targeted synthetic retrieval corpus rather than reusing the Q0 `RANK_MISS` set as the primary Q4 sample. `RANK_MISS` already means the gold evidence entered the historical candidate pool, while Recall Hint's primary hypothesis is candidate recovery when underspecified wording causes evidence to miss the bounded pool.
+
+The frozen C1a corpus contains `48` cases and `72` synthetic memory records across four equal families (`12` each): `entity_reference`, `temporal_relation`, `multi_facet`, and `protection`. A fixed family-stratified salted-SHA256 policy assigns `4` cases per family to development and `8` per family to acceptance, producing `16` development and `32` acceptance cases without manual result-aware selection.
+
+Frozen identities:
+
+```text
+corpus_sha256      = a2718822fe9ed69a1b6b5f750823d066d3702b5199cc98845434a265f6c5b61b
+development_sha256 = 0e310f3c2e887ca4949e703a4fdf17d16de5e6da2170a94efad3d4afc5f63fda
+acceptance_sha256  = 9f43b50b767937ef204fb1751c2e72f5b9a4ef1aaf662d22144729e5c096bd7e
+manifest_sha256    = 0a18b7dadf102df499f6f99f85729179df815fac3113def93bc2792eb508bff2
+```
+
+The future producer packet exposes only `case_id`, the current `query`, and bounded caller context (`active_project`, up to four `recent_entities`, and optional `temporal_anchor`). Gold evidence IDs and corpus memory records are never part of producer input. Any corpus text, gold, split salt, query, bounded context, or producer-input drift changes the frozen manifest identity and fails the source contract.
+
+Q4-C1b must execute a Hint-off baseline before any Hint producer result is scored. All acceptance `protection` cases must already have complete baseline pool coverage and `Recall-all@3=1`; otherwise they are not valid protection cases and execution stops before Hint-on scoring. Across the three target families, at least one acceptance case must exhibit baseline `POOL_MISS`; if target `POOL_MISS=0`, the candidate-recovery hypothesis has no observable headroom and Q4-C1b stops rather than manufacturing a quality claim.
+
+The C1a corpus is targeted synthetic product evidence. It is independent of Q3 tuning data, but it is not a claim of LongMemEval/LoCoMo or broad conversational generalization. Historical datasets may remain regression/development evidence only.
+
+Real provider/planner execution, data egress, Q4-C1b Hint-on execution, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
