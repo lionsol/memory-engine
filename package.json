@@ -27,6 +27,7 @@
     "benchmark:longmemeval:retrieval": "node bin/run-longmemeval-retrieval-v1.js",
     "benchmark:longmemeval:semantic": "node bin/run-longmemeval-semantic-retrieval-v1.js",
     "benchmark:q4:recall-hint:development": "node bin/run-q4-recall-hint-c1b-development-v1.mjs",
+    "benchmark:q4:recall-hint:retrieval-effect": "node bin/run-q4-recall-hint-c1b-retrieval-effect-v1.mjs",
     "benchmark:aml:serve": "node bin/serve-aml-benchmark-v1.js",
     "smoke:quality-baseline": "node bin/run-memory-quality-baseline-smoke.js",
     "smoke:smart-add-duplicates": "node bin/run-smart-add-duplicate-baseline-smoke.js",

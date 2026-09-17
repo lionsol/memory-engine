@@ -80,6 +80,10 @@ test("Q4-C1b semantic effect bounds 72 corpus + 16 original + 19 expansion embed
     baseline_query_inputs: 16,
     hint_expansion_inputs: 19,
     max_provider_requests: 107,
+    max_input_tokens_per_request: 32768,
+    max_total_input_tokens: 3506176,
+    deadline_ms: 15000,
+    max_response_bytes: 524288,
   });
 });
 
@@ -97,6 +101,8 @@ test("Q4-C1b semantic effect freezes the existing 0.6B rerank profile for both a
     baseline_max_requests: 16,
     hint_max_requests: 16,
     max_provider_requests: 32,
+    max_pair_tokens: 12288,
+    max_total_input_tokens: 7864320,
   });
 });
 
@@ -128,15 +134,22 @@ test("Q4-C1b semantic effect permits only synthetic benchmark text/query egress 
   });
 });
 
-test("Q4-C1b semantic effect cannot execute until cost binding is explicitly frozen", () => {
+test("Q4-C1b semantic effect freezes conservative USD prices and a hard cost cap", () => {
   const { contract } = fixture();
   assert.deepEqual(contract.cost_binding, {
-    status: "MUST_BE_FROZEN_BEFORE_EGRESS",
-    billing_currency: null,
-    embedding_price: null,
-    rerank_price: null,
-    max_cost: null,
+    status: "FROZEN",
+    billing_currency: "USD",
+    embedding_price_usd_per_million_input_tokens: 0.02,
+    rerank_price_usd_per_million_input_tokens: 0.01,
+    embedding_max_input_tokens: 3506176,
+    rerank_max_input_tokens: 7864320,
+    embedding_cost_upper_bound_usd: 0.07012352,
+    rerank_cost_upper_bound_usd: 0.0786432,
+    theoretical_max_cost_usd: 0.14876672,
+    max_cost_usd: 0.20,
+    source: "SiliconFlow current model pages + project R3-C1 0.6B observed billing",
   });
+  assert.equal(contract.cost_binding.theoretical_max_cost_usd < contract.cost_binding.max_cost_usd, true);
 });
 
 test("Q4-C1b retrieval-effect contract fails closed if the frozen Hint identity drifts", () => {
