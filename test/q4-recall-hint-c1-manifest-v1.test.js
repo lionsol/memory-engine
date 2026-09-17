@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildQ4RecallHintC1FreshCorpusV1 } from "../lib/benchmark/q4-recall-hint-c1-corpus-v1.js";
+import {
+  Q4_RECALL_HINT_C1_CORPUS_VERSION,
+  buildQ4RecallHintC1FreshCorpusV1,
+} from "../lib/benchmark/q4-recall-hint-c1-corpus-v1.js";
 import {
   Q4_RECALL_HINT_C1_FAMILIES,
   Q4_RECALL_HINT_C1_FROZEN_IDENTITY,
@@ -26,8 +29,12 @@ test("Q4-C1 fresh corpus freezes 48 cases, 72 memory records, and four equal fam
   for (const family of Q4_RECALL_HINT_C1_FAMILIES) {
     assert.equal(normalized.cases.filter(row => row.family === family).length, 12, family);
   }
+  assert.equal(Q4_RECALL_HINT_C1_CORPUS_VERSION, "q4c1-fresh-synthetic-v2");
   assert.equal(new Set(normalized.cases.map(row => row.case_id)).size, 48);
   assert.equal(new Set(flattenQ4RecallHintC1MemoryRecordsV1(corpus).map(row => row.id)).size, 72);
+  for (const row of normalized.cases.filter(item => item.family === "protection")) {
+    assert.equal(row.memory_records[0].text.includes(row.query), true, row.case_id);
+  }
 });
 
 test("Q4-C1 family-stratified salted split is deterministic at 16 development and 32 acceptance", () => {

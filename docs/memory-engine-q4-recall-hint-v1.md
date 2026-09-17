@@ -258,20 +258,24 @@ Only three product questions matter:
 
 Q4-C1a uses a fresh targeted synthetic retrieval corpus rather than reusing the Q0 `RANK_MISS` set as the primary Q4 sample. `RANK_MISS` already means the gold evidence entered the historical candidate pool, while Recall Hint's primary hypothesis is candidate recovery when underspecified wording causes evidence to miss the bounded pool.
 
-The frozen C1a corpus contains `48` cases and `72` synthetic memory records across four equal families (`12` each): `entity_reference`, `temporal_relation`, `multi_facet`, and `protection`. A fixed family-stratified salted-SHA256 policy assigns `4` cases per family to development and `8` per family to acceptance, producing `16` development and `32` acceptance cases without manual result-aware selection.
+The C1a corpus contains `48` cases and `72` synthetic memory records across four equal families (`12` each): `entity_reference`, `temporal_relation`, `multi_facet`, and `protection`. A fixed family-stratified salted-SHA256 policy assigns `4` cases per family to development and `8` per family to acceptance, producing `16` development and `32` acceptance cases without manual result-aware selection.
 
-Frozen identities:
+The first frozen corpus (`q4c1-fresh-synthetic-v1`) was invalidated before any Hint producer execution: a zero-provider lexical-control baseline preflight showed target-family headroom but only `6/8` acceptance protection cases in the depth-20 pool and `3/8` complete at top3. Because no Hint output had been generated or scored, C1a was repaired only at the corpus-validity boundary by making protection memory statements explicitly contain their already-specific query semantics. Target cases, case IDs, split salt/method, family counts, gold IDs, and Hint contract were unchanged. The superseding frozen corpus is `q4c1-fresh-synthetic-v2`.
+
+Frozen v2 identities:
 
 ```text
-corpus_sha256      = a2718822fe9ed69a1b6b5f750823d066d3702b5199cc98845434a265f6c5b61b
-development_sha256 = 0e310f3c2e887ca4949e703a4fdf17d16de5e6da2170a94efad3d4afc5f63fda
-acceptance_sha256  = 9f43b50b767937ef204fb1751c2e72f5b9a4ef1aaf662d22144729e5c096bd7e
-manifest_sha256    = 0a18b7dadf102df499f6f99f85729179df815fac3113def93bc2792eb508bff2
+corpus_sha256      = 834a958fca9fafdd60aaec6d49d4dff2b5d7fa6ec1c2344bf6cc84e8710fad6f
+development_sha256 = 787696c8081a4b06417a88f69e917ebb7b93880c0861abe8e43423858855e141
+acceptance_sha256  = 6cfeafcfda817db68100efcf89d5be70f57d37c2eb34826b601f5b3a7fe5786e
+manifest_sha256    = 8a9074dbccbc37f05ae6a26ee17dd810da641baa157cff02d4bf54719e2af247
 ```
 
 The future producer packet exposes only `case_id`, the current `query`, and bounded caller context (`active_project`, up to four `recent_entities`, and optional `temporal_anchor`). Gold evidence IDs and corpus memory records are never part of producer input. Any corpus text, gold, split salt, query, bounded context, or producer-input drift changes the frozen manifest identity and fails the source contract.
 
-Q4-C1b must execute a Hint-off baseline before any Hint producer result is scored. All acceptance `protection` cases must already have complete baseline pool coverage and `Recall-all@3=1`; otherwise they are not valid protection cases and execution stops before Hint-on scoring. Across the three target families, at least one acceptance case must exhibit baseline `POOL_MISS`; if target `POOL_MISS=0`, the candidate-recovery hypothesis has no observable headroom and Q4-C1b stops rather than manufacturing a quality claim.
+Q4-C1b must execute a Hint-off baseline before any Hint producer result is scored. All acceptance `protection` cases must already have complete baseline pool coverage and `Recall-all@3=1`; otherwise they are not valid protection cases and execution stops before Hint-on scoring. Across each of the three target families, at least one acceptance case must exhibit baseline `POOL_MISS`; if a target family has `POOL_MISS=0`, that family has no observable candidate-recovery headroom and execution stops rather than manufacturing a quality claim.
+
+The v2 zero-provider lexical-control preflight now passes this eligibility boundary. Acceptance contains `18/32` pool misses overall: `7/8` entity-reference, `4/8` temporal-relation, and `7/8` multi-facet cases miss at least one gold item from the bounded pool, while protection is `8/8` pool-complete and `8/8` Recall-all@3. This is corpus/headroom evidence only (`ZERO_PROVIDER_LEXICAL_CONTROL_PREFLIGHT_ONLY`), not Q4 product-quality evidence and not a substitute for the fixed real-provider baseline required for Hint-on comparison.
 
 The C1a corpus is targeted synthetic product evidence. It is independent of Q3 tuning data, but it is not a claim of LongMemEval/LoCoMo or broad conversational generalization. Historical datasets may remain regression/development evidence only.
 
