@@ -1,6 +1,6 @@
 # memory-engine Q4 — Recall Hint v1
 
-Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 CLOSED / Q4-C1a V2 CORPUS + MANIFEST FROZEN / BASELINE ELIGIBILITY PASS / Q4-C1b PROVIDER CONTRACT FROZEN / PROVIDER SELECTION + REAL EXECUTION NOT AUTHORIZED`
+Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 CLOSED / Q4-C1a V2 CORPUS + MANIFEST FROZEN / BASELINE ELIGIBILITY PASS / Q4-C1b PROVIDER CONTRACT + SILICONFLOW V4-FLASH BINDING FROZEN / REAL EXECUTION NOT AUTHORIZED`
 
 ## 1. Product question
 
@@ -281,7 +281,7 @@ The C1a corpus is targeted synthetic product evidence. It is independent of Q3 t
 
 ### Q4-C1b provider contract
 
-The C1b producer contract is now source-frozen without selecting or calling a real provider. The provider/model/endpoint have no source default: an execution packet must bind them explicitly together with the frozen v2 manifest and a clean source commit. The producer sees only the current query plus the C1 bounded caller context; gold IDs, memory text, retrieval results, full session content and tool traces remain explicit egress denials.
+The C1b producer contract remains provider-neutral at its generic boundary, while the selected experiment binding is now frozen separately as SiliconFlow `deepseek-ai/DeepSeek-V4-Flash` at `https://api.siliconflow.cn/v1/chat/completions`. The binding does not create a provider call by itself: an execution packet still binds the frozen v2 manifest and a clean source commit, and real egress remains separately unauthorized. The producer sees only the current query plus the C1 bounded caller context; gold IDs, memory text, retrieval results, full session content and tool traces remain explicit egress denials.
 
 Frozen producer identity:
 
@@ -302,9 +302,12 @@ Frozen execution envelope:
 - maximum response size: `16,384` bytes;
 - hard request deadline: `15,000ms` with `AbortSignal` supplied to the injected transport;
 - temperature: `0`;
-- absolute experiment cost ceiling: `$1.00`; the selected execution packet must bind an equal or lower exact cost cap plus explicit input/output token prices;
+- cost accounting is currency-neutral in the generic packet (`billing_currency`, `input/output_price_per_million`, `max_cost`);
+- the selected SiliconFlow binding uses `CNY`, non-discounted/non-cache-hit prices `¥3/M` input and `¥9/M` output, producing a theoretical full-envelope maximum of `¥0.405504` and a hard experiment cap of `¥0.50`;
 - one frozen acceptance execution, with `acceptance_replay_count=0`.
 
-The source includes only an injected producer executor and fake-transport tests. It contains no provider HTTP implementation, API-key resolution, `fetch()`, or network side effect. Development output may still be used to adjust the producer before acceptance begins, but any prompt/schema/model/query-plan/gate change after formal acceptance starts invalidates that acceptance run.
+The selected SiliconFlow adapter is source-only request/response mapping, not a network client. It binds `response_format={type:"json_object"}`, disables thinking for this bounded extraction task, maps provider `prompt_tokens/completion_tokens` into Q4 accounting, and deliberately excludes provider `reasoning_content` from the C1b result. The binding uses the existing `SILICONFLOW_API_KEY` environment-variable name but does not read a credential or issue a request. The current source still contains no new provider HTTP implementation, API-key resolution, `fetch()`, or network side effect. Development output may still be used to adjust the producer before acceptance begins, but any prompt/schema/model/query-plan/gate change after formal acceptance starts invalidates that acceptance run.
 
-Real provider selection, execution-packet authorization, data egress, Q4-C1b Hint-on execution, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
+The selected pricing basis is the provider's 2026-09-01 DeepSeek-V4-Flash time-of-day schedule, frozen at the more expensive non-discounted interval so packet validity does not depend on execution hour. Provider model revision is `null` because the public API model identifier does not expose a revision-qualified ID.
+
+Real execution-packet authorization, data egress, Q4-C1b development/acceptance Hint-on execution, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.

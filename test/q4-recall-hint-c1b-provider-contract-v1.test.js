@@ -7,7 +7,6 @@ import {
   buildQ4RecallHintC1ProducerInputV1,
 } from "../lib/benchmark/q4-recall-hint-c1-manifest-v1.js";
 import {
-  Q4_RECALL_HINT_C1B_ABSOLUTE_MAX_COST_USD,
   Q4_RECALL_HINT_C1B_MAX_ACCEPTANCE_REQUESTS,
   Q4_RECALL_HINT_C1B_MAX_DEVELOPMENT_REQUESTS,
   Q4_RECALL_HINT_C1B_MAX_PROVIDER_REQUESTS,
@@ -39,9 +38,10 @@ function fixture() {
     endpoint: "https://provider.invalid/v1/chat/completions",
     revision: null,
     apiKeyEnv: "Q4_C1B_FAKE_API_KEY",
-    maxCostUsd: 0.25,
-    inputPriceUsdPerMillion: 1,
-    outputPriceUsdPerMillion: 2,
+    billingCurrency: "USD",
+    maxCost: 0.25,
+    inputPricePerMillion: 1,
+    outputPricePerMillion: 2,
   });
   return { corpus, manifest, row, producerInput, packet };
 }
@@ -131,9 +131,10 @@ test("Q4-C1b execution packet has no provider/model defaults and binds frozen eg
     model: "m",
     endpoint: "https://provider.invalid/v1",
     apiKeyEnv: "KEY",
-    maxCostUsd: 0.1,
-    inputPriceUsdPerMillion: 1,
-    outputPriceUsdPerMillion: 1,
+    billingCurrency: "USD",
+    maxCost: 0.1,
+    inputPricePerMillion: 1,
+    outputPricePerMillion: 1,
   }), /Q4_C1B_PROVIDER_REQUIRED/);
 });
 
@@ -145,18 +146,19 @@ test("Q4-C1b execution packet rejects insecure endpoint and excessive cost cap",
     provider: "P",
     model: "M",
     apiKeyEnv: "KEY",
-    inputPriceUsdPerMillion: 1,
-    outputPriceUsdPerMillion: 1,
+    billingCurrency: "USD",
+    inputPricePerMillion: 1,
+    outputPricePerMillion: 1,
   };
   assert.throws(
-    () => buildQ4RecallHintC1BExecutionPacket({ ...base, endpoint: "http://provider.invalid/v1", maxCostUsd: 0.1 }),
+    () => buildQ4RecallHintC1BExecutionPacket({ ...base, endpoint: "http://provider.invalid/v1", maxCost: 0.1 }),
     /Q4_C1B_ENDPOINT_MUST_BE_HTTPS/,
   );
   assert.throws(
     () => buildQ4RecallHintC1BExecutionPacket({
       ...base,
       endpoint: "https://provider.invalid/v1",
-      maxCostUsd: Q4_RECALL_HINT_C1B_ABSOLUTE_MAX_COST_USD + 0.01,
+      maxCost: 0,
     }),
     /Q4_C1B_COST_CAP_INVALID/,
   );
@@ -188,7 +190,8 @@ test("Q4-C1b fake transport receives AbortSignal and returns validated Hint with
   });
   assert.equal(result.usage.input_tokens, 200);
   assert.equal(result.usage.output_tokens, 40);
-  assert.equal(result.usage.cost_usd, 0.00028);
+  assert.equal(result.usage.billing_currency, "USD");
+  assert.equal(result.usage.cost, 0.00028);
 });
 
 test("Q4-C1b fake transport deadline aborts and token budgets fail closed", async () => {
@@ -234,14 +237,18 @@ test("Q4-C1b aggregate usage cannot exceed split, token, or absolute cost budget
     acceptanceRequests: 32,
     totalInputTokens: 50_000,
     totalOutputTokens: 5_000,
-    costUsd: 0.5,
+    billingCurrency: "USD",
+    cost: 0.5,
+    maxCost: 1,
   }), {
     providerRequests: 48,
     developmentRequests: 16,
     acceptanceRequests: 32,
     totalInputTokens: 50_000,
     totalOutputTokens: 5_000,
-    costUsd: 0.5,
+    billingCurrency: "USD",
+    cost: 0.5,
+    maxCost: 1,
   });
   assert.throws(() => validateQ4RecallHintC1BUsage({
     providerRequests: 49,
@@ -249,6 +256,8 @@ test("Q4-C1b aggregate usage cannot exceed split, token, or absolute cost budget
     acceptanceRequests: 33,
     totalInputTokens: 1,
     totalOutputTokens: 1,
-    costUsd: 0.01,
+    billingCurrency: "USD",
+    cost: 0.01,
+    maxCost: 1,
   }), /Q4_C1B_USAGE_BUDGET_EXCEEDED/);
 });
