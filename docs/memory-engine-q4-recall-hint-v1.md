@@ -1,6 +1,6 @@
 # memory-engine Q4 — Recall Hint v1
 
-Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 CLOSED / Q4-C1a V2 CORPUS + MANIFEST FROZEN / BASELINE ELIGIBILITY PASS / Q4-C1b PROVIDER CONTRACT + SILICONFLOW V4-FLASH BINDING FROZEN / REAL EXECUTION NOT AUTHORIZED`
+Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 CLOSED / Q4-C1a V2 CORPUS + MANIFEST FROZEN / BASELINE ELIGIBILITY PASS / Q4-C1b DEVELOPMENT REAL-PROVIDER EXECUTION AUTHORIZED / RUNNER SOURCE IMPLEMENTED / AWAITING CLEAN COMMITTED SOURCE`
 
 ## 1. Product question
 
@@ -310,4 +310,10 @@ The selected SiliconFlow adapter is source-only request/response mapping, not a 
 
 The selected pricing basis is the provider's 2026-09-01 DeepSeek-V4-Flash time-of-day schedule, frozen at the more expensive non-discounted interval so packet validity does not depend on execution hour. Provider model revision is `null` because the public API model identifier does not expose a revision-qualified ID.
 
-Real execution-packet authorization, data egress, Q4-C1b development/acceptance Hint-on execution, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
+Owner authorization dated 2026-09-17 now permits **development only** real-provider execution for the frozen SiliconFlow `deepseek-ai/DeepSeek-V4-Flash` binding. The authorized envelope is `16` development requests, `0` acceptance requests, at most `32,768` input tokens, `4,096` output tokens, `CNY 0.15` total cost, `15s` per-request deadline, `256` output tokens per request, `temperature=0`, and `enable_thinking=false`. Egress remains limited to current query plus bounded caller context; memory records, gold IDs, retrieval results, full session content and tool traces remain denied.
+
+The source now includes a development-only execution guard, exact-env credential preflight, abortable HTTPS transport, atomic progress persistence, and fail-closed resume semantics. Progress writes `inflight_case_id` before egress; any restart with an ambiguous in-flight case stops instead of automatically reissuing that request. The runner records only validated RecallHint output, bounded expansion plans, latency and usage/cost accounting. It does not authorize or perform acceptance execution.
+
+Because this authorization forbids external disclosure of synthetic memory text, the development run does not add remote embedding/rerank calls. It evaluates real Hint-producer validity, structured-field/expansion behavior, latency, tokens and cost. A production-equivalent candidate-recovery comparison that requires remote vectorization of the synthetic corpus would require a separate egress authorization; this development authorization does not imply it.
+
+The execution packet also requires a clean committed source identity. Therefore real requests must not begin until the development runner/transport source is committed and the preflight confirms the frozen manifest, source commit, provider/model/endpoint, prompt/schema hashes, credential binding and development-only budgets. Acceptance Hint-on execution, AutoRecall integration, live deployment, runtime/config mutation, DB/LanceDB mutation, push and tag remain unauthorized.
