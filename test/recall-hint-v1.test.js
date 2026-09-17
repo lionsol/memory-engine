@@ -113,7 +113,7 @@ test("Recall Hint v1 query plans are deterministic, bounded, and keep zero to tw
   );
 });
 
-function makeVectorContext(vectorQueryPlan, rowsByQuery, vectorTopK = 2) {
+function makeVectorContext(vectorQueryPlan, rowsByQuery, vectorTopK = 2, { recallHintVectorExecutionMode } = {}) {
   const candidateCounts = createCandidateCounts();
   const debug = createHybridDebug({
     rawQuery: "query",
@@ -164,6 +164,7 @@ function makeVectorContext(vectorQueryPlan, rowsByQuery, vectorTopK = 2) {
     warnVectorChannelOnce,
     cfg: null,
     vectorQueryPlan,
+    recallHintVectorExecutionMode,
   };
 }
 
@@ -204,18 +205,162 @@ test("recall_hint_v1 vector mode prepends original, fuses and deduplicates, and 
   assert.equal(ctx.channels.vector.find(item => item.id === "useful-original").vector_query_rrf_score > 1 / 61, true);
 });
 
+test("recall_hint_v1 parallel vector execution is opt-in and output-equivalent to sequential fusion", async () => {
+  const plan = buildRecallHintVectorQueryPlan("query", normalizeRecallHintV1({
+    version: "recall_hint_v1",
+    query_facets: ["reason", "limitation"],
+  }));
+  const rows = [
+    [
+      { id: "useful-original", text: "useful", similarity: 0.95 },
+      { id: "displaced-original", text: "displaced", similarity: 0.9 },
+    ],
+    [
+      { id: "useful-original", text: "useful", similarity: 0.8 },
+      { id: "extra-expansion", text: "extra", similarity: 0.7 },
+    ],
+    [
+      { id: "extra-expansion", text: "extra", similarity: 0.7 },
+    ],
+  ];
+  const sequential = makeVectorContext(plan, rows, 2);
+  const parallel = makeVectorContext(plan, rows, 2, { recallHintVectorExecutionMode: "parallel" });
+  const vectorByQuery = new Map([
+    ["query", [1]],
+    ["query reason", [2]],
+    ["query limitation", [3]],
+  ]);
+  parallel.generateEmbeddingRuntime = async query => {
+    parallel.seenQueries.push(query);
+    return vectorByQuery.get(query);
+  };
+
+  await collectVectorCandidates(sequential);
+  await collectVectorCandidates(parallel);
+
+  const project = ctx => ctx.channels.vector.map(item => ({
+    id: item.id,
+    semantic_score: item.semantic_score,
+    similarity: item.similarity,
+    vector_query_rrf_score: item.vector_query_rrf_score,
+  }));
+  assert.deepEqual(project(parallel), project(sequential));
+  assert.equal(sequential.debug.vector_query_execution, "sequential");
+  assert.equal(parallel.debug.vector_query_execution, "parallel");
+  assert.equal(parallel.debug.vector_search_count, 3);
+  assert.equal(parallel.candidateCounts.vector_raw, sequential.candidateCounts.vector_raw);
+
+  const unknownMode = makeVectorContext(plan, rows, 2, { recallHintVectorExecutionMode: "unknown" });
+  await collectVectorCandidates(unknownMode);
+  assert.equal(unknownMode.debug.vector_query_execution, "sequential");
+  assert.deepEqual(project(unknownMode), project(sequential));
+});
+
+test("recall_hint_v1 parallel execution overlaps embedding/search work without changing call counts", async () => {
+  const plan = buildRecallHintVectorQueryPlan("query", normalizeRecallHintV1({
+    version: "recall_hint_v1",
+    query_facets: ["reason", "limitation"],
+  }));
+  const ctx = makeVectorContext(plan, [[], [], []], 3, { recallHintVectorExecutionMode: "parallel" });
+  let activeEmbeddings = 0;
+  let maxActiveEmbeddings = 0;
+  let embeddingCalls = 0;
+  let activeSearches = 0;
+  let maxActiveSearches = 0;
+  let searchCalls = 0;
+  const queryIndex = new Map([
+    ["query", 1],
+    ["query reason", 2],
+    ["query limitation", 3],
+  ]);
+
+  ctx.generateEmbeddingRuntime = async query => {
+    ctx.seenQueries.push(query);
+    embeddingCalls += 1;
+    activeEmbeddings += 1;
+    maxActiveEmbeddings = Math.max(maxActiveEmbeddings, activeEmbeddings);
+    await new Promise(resolve => setTimeout(resolve, 15));
+    activeEmbeddings -= 1;
+    return [queryIndex.get(query)];
+  };
+  ctx.getLancedbTableRuntime = () => ({
+    search(vector) {
+      return {
+        limit() { return this; },
+        async execute() {
+          searchCalls += 1;
+          activeSearches += 1;
+          maxActiveSearches = Math.max(maxActiveSearches, activeSearches);
+          await new Promise(resolve => setTimeout(resolve, 15));
+          activeSearches -= 1;
+          return [{ id: `row-${vector[0]}`, text: "row", similarity: 0.9 }];
+        },
+      };
+    },
+  });
+
+  await collectVectorCandidates(ctx);
+
+  assert.equal(embeddingCalls, 3);
+  assert.equal(searchCalls, 3);
+  assert.ok(maxActiveEmbeddings > 1);
+  assert.ok(maxActiveSearches > 1);
+  assert.equal(ctx.debug.vector_query_execution, "parallel");
+});
+
 test("legacy vector query plans retain the historical exactly-two expansion contract", async () => {
-  const legacy = makeVectorContext({ queries: ["planner one", "planner two"] }, [[], [], []], 5);
+  const legacy = makeVectorContext(
+    { queries: ["planner one", "planner two"] },
+    [[], [], []],
+    5,
+    { recallHintVectorExecutionMode: "parallel" },
+  );
   await collectVectorCandidates(legacy);
   assert.deepEqual(legacy.seenQueries, ["query", "planner one", "planner two"]);
   assert.equal(legacy.debug.vector_query_mode, "bounded_multi_query");
   assert.equal(legacy.debug.vector_query_count, 3);
+  assert.equal(legacy.debug.vector_query_execution, "sequential");
 
   const invalidOne = makeVectorContext({ mode: "recall_hint_v1", queries: ["query"] }, [[]], 5);
   await collectVectorCandidates(invalidOne);
   assert.deepEqual(invalidOne.seenQueries, ["query"]);
   assert.equal(invalidOne.debug.vector_multi_query_failed, true);
   assert.equal(invalidOne.debug.vector_hint_fallback_original, true);
+});
+
+test("recall_hint_v1 parallel failure remains fail-closed but may launch sibling query work before fallback", async () => {
+  const plan = buildRecallHintVectorQueryPlan("query", normalizeRecallHintV1({
+    version: "recall_hint_v1",
+    query_facets: ["reason", "limitation"],
+  }));
+  const ctx = makeVectorContext(plan, [], 5, { recallHintVectorExecutionMode: "parallel" });
+  const embeddingCalls = [];
+  ctx.generateEmbeddingRuntime = async query => {
+    embeddingCalls.push(query);
+    if (query === "query reason") throw new Error("fake parallel expansion failure");
+    return [query === "query" ? 1 : 3];
+  };
+  ctx.getLancedbTableRuntime = () => ({
+    search(vector) {
+      return {
+        limit() { return this; },
+        async execute() {
+          return vector[0] === 1
+            ? [{ id: "original-only", text: "original", similarity: 0.9 }]
+            : [{ id: "sibling-expansion", text: "sibling", similarity: 0.8 }];
+        },
+      };
+    },
+  });
+
+  await collectVectorCandidates(ctx);
+
+  assert.equal(ctx.debug.vector_query_execution, "parallel");
+  assert.equal(ctx.debug.vector_multi_query_failed, true);
+  assert.equal(ctx.debug.vector_hint_fallback_original, true);
+  assert.deepEqual(embeddingCalls.slice(0, 3), ["query", "query reason", "query limitation"]);
+  assert.equal(embeddingCalls.at(-1), "query");
+  assert.deepEqual(ctx.channels.vector.map(item => item.id), ["original-only"]);
 });
 
 test("recall_hint_v1 expansion failure falls back to the original vector query", async () => {
@@ -262,7 +407,7 @@ test("recall_hint_v1 missing embedding runtime falls back without ReferenceError
   assert.deepEqual(ctx.channels.vector.map(item => item.id), ["manager-original"]);
 });
 
-function makeSearchContext({ recallHintProvider, hybridSearch } = {}) {
+function makeSearchContext({ recallHintProvider, hybridSearch, recallHintVectorExecutionMode } = {}) {
   return createHybridRuntimeContext({
     dataAccess: {
       getLancedbTable: () => null,
@@ -270,6 +415,7 @@ function makeSearchContext({ recallHintProvider, hybridSearch } = {}) {
     retrievalPolicy: {
       recallHintProvider,
       hybridSearch,
+      recallHintVectorExecutionMode,
       calcRealtimeConf: () => 0.8,
       generateEmbedding: async () => [],
     },
@@ -283,6 +429,7 @@ function makeSearchContext({ recallHintProvider, hybridSearch } = {}) {
 test("Recall Hint provider is injected only for explicit memory_engine_search and forwards a bounded plan", async () => {
   const calls = { provider: 0, args: [], runtimes: [] };
   const context = makeSearchContext({
+    recallHintVectorExecutionMode: "parallel",
     recallHintProvider: input => {
       calls.provider += 1;
       calls.args.push(input);
@@ -307,6 +454,7 @@ test("Recall Hint provider is injected only for explicit memory_engine_search an
     mode: "recall_hint_v1",
     queries: ["original query reason project:project-a"],
   });
+  assert.equal(calls.runtimes[0].runtime.recallHintVectorExecutionMode, "parallel");
   assert.deepEqual(calls.runtimes[0].runtime.recallHintDebug, {
     mode: "recall_hint_v1",
     status: "applied",
