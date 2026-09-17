@@ -1,6 +1,6 @@
 # memory-engine Q4 — Recall Hint v1
 
-Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 EVALUATION CONTRACT CLOSED / Q4-C1a FRESH CORPUS + MANIFEST FROZEN / Q4-C1b NEXT / NO REAL PROVIDER AUTHORIZATION`
+Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 CLOSED / Q4-C1a V2 CORPUS + MANIFEST FROZEN / BASELINE ELIGIBILITY PASS / Q4-C1b PROVIDER CONTRACT FROZEN / PROVIDER SELECTION + REAL EXECUTION NOT AUTHORIZED`
 
 ## 1. Product question
 
@@ -279,4 +279,32 @@ The v2 zero-provider lexical-control preflight now passes this eligibility bound
 
 The C1a corpus is targeted synthetic product evidence. It is independent of Q3 tuning data, but it is not a claim of LongMemEval/LoCoMo or broad conversational generalization. Historical datasets may remain regression/development evidence only.
 
-Real provider/planner execution, data egress, Q4-C1b Hint-on execution, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
+### Q4-C1b provider contract
+
+The C1b producer contract is now source-frozen without selecting or calling a real provider. The provider/model/endpoint have no source default: an execution packet must bind them explicitly together with the frozen v2 manifest and a clean source commit. The producer sees only the current query plus the C1 bounded caller context; gold IDs, memory text, retrieval results, full session content and tool traces remain explicit egress denials.
+
+Frozen producer identity:
+
+```text
+prompt_version       = q4_recall_hint_producer_prompt_v1
+prompt_sha256        = 377cde9a388a2ba0115a20eb4132c6edb207b98ccfd4f5116f8ce64cb59aec95
+output_schema_sha256 = 237bf7f7b7601715f9030b134f725ff8cde4cf1d9392ec993d9b078f1661d5a2
+manifest_sha256      = 8a9074dbccbc37f05ae6a26ee17dd810da641baa157cff02d4bf54719e2af247
+```
+
+The prompt instructs the producer to use only supplied input, never answer the user question, never invent missing context, omit unsupported Hint fields, and return strict `recall_hint_v1` JSON. An otherwise empty Hint (`{"version":"recall_hint_v1"}`) is valid. Output is revalidated through the same production Hint validator before scoring.
+
+Frozen execution envelope:
+
+- maximum provider requests: `48` total = `16` development + `32` acceptance;
+- maximum input tokens: `2048` per request / `98,304` total;
+- maximum output tokens: `256` per request / `12,288` total;
+- maximum response size: `16,384` bytes;
+- hard request deadline: `15,000ms` with `AbortSignal` supplied to the injected transport;
+- temperature: `0`;
+- absolute experiment cost ceiling: `$1.00`; the selected execution packet must bind an equal or lower exact cost cap plus explicit input/output token prices;
+- one frozen acceptance execution, with `acceptance_replay_count=0`.
+
+The source includes only an injected producer executor and fake-transport tests. It contains no provider HTTP implementation, API-key resolution, `fetch()`, or network side effect. Development output may still be used to adjust the producer before acceptance begins, but any prompt/schema/model/query-plan/gate change after formal acceptance starts invalidates that acceptance run.
+
+Real provider selection, execution-packet authorization, data egress, Q4-C1b Hint-on execution, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
