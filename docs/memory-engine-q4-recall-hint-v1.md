@@ -1,0 +1,223 @@
+# memory-engine Q4 — Recall Hint v1
+
+Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE IMPLEMENTED / FOCUSED VERIFIED / PASS_WITH_FINDINGS / Q4-C NOT AUTHORIZED / NO REAL PROVIDER AUTHORIZATION`
+
+## 1. Product question
+
+Q4 asks whether bounded query understanding can recover candidate evidence that the original user wording misses without turning query understanding into a new recall authority.
+
+Recall Hint v1 is therefore **candidate-expansion metadata only**. It may add bounded retrieval queries and later support soft weighting, but it cannot decide whether recall runs, suppress the original query, hard-filter candidates, grant disclosure authority, choose final topK, or write memory/confidence state.
+
+Q4 v1 does not claim to solve all multi-hop failures. Candidate expansion may recover missing evidence; top3 capacity, set-aware evidence selection, and answer reasoning remain separate problems.
+
+## 2. Q4-A scope
+
+Q4-A freezes only:
+
+1. the Hint data contract;
+2. the explicit-search consumption seam;
+3. reuse boundaries for the existing bounded multi-query vector path;
+4. candidate/call budgets and fallback invariants.
+
+Q4-A does **not** add a real planner, provider call, benchmark run, live configuration, AutoRecall integration, DB/LanceDB mutation, or deployment.
+
+### Q4-B implementation status
+
+Q4-B is now source-implemented with fake/injected providers only. The source adds the v1 validator/normalizer, deterministic bounded Hint-to-query planner, explicit-search-only provider injection, `recall_hint_v1` vector-plan mode, bounded structured debug, and explicit forwarding of the plan into `hybridSearch()`. The historical H2 exactly-two expansion contract remains unchanged.
+
+Acceptance review found and repaired two source gaps before closure: a stale `boundedMultiQueryEnabled` identifier in the embedding-unavailable branch, and Q4's initial inheritance of H2 all-or-nothing vector failure semantics. `recall_hint_v1` now falls back to the original-query vector path when its plan or expansion execution fails, while historical H2 retains its prior behavior. Focused Q4 tests pass `11/11`; affected Hybrid/runtime/tool/AutoRecall regressions pass `86/86`.
+
+No real provider request, runtime/config mutation, DB/LanceDB mutation, deployment, or AutoRecall Hint integration occurred. The injected Q4-B provider seam uses a local bounded timeout only for source testing; a future real-provider adapter must own an abortable/deadline-bound transport before Q4-C/provider execution is considered.
+
+## 3. v1 Hint contract
+
+```js
+{
+  version: "recall_hint_v1",
+  project?: string,
+  entities?: string[],
+  time_relation?: {
+    relation: "before" | "after" | "during" | "latest" | "earliest",
+    anchor?: string
+  },
+  query_facets?: string[]
+}
+```
+
+Bounds:
+
+- `project`: at most 96 code points;
+- `entities`: at most 4 values, each at most 96 code points;
+- `time_relation.anchor`: at most 96 code points;
+- `query_facets`: at most 2 values, each at most 120 code points;
+- unknown fields are rejected by the validator;
+- empty/whitespace-only optional values normalize away;
+- an otherwise valid empty Hint is allowed and means “no expansion”.
+
+`memory_kind`, episode, expected evidence count, date ranges, and other future fields are deliberately excluded from v1 until a concrete consumer exists.
+
+## 4. Producer input boundary
+
+A future Hint producer may consume only:
+
+- the current explicit-search query; and
+- explicitly supplied bounded context from the caller.
+
+It must not scan the full session, memory corpus, hidden system/developer content, tool traces, or arbitrary conversation history on its own.
+
+Bounded caller context may later include short structured values such as an active project name or recent entity names. Q4-A does not define a host adapter for that context and Q4-B may begin with query-only fake providers.
+
+## 5. Field semantics
+
+### `project`
+
+Adds a soft project/entity term to expansion queries. It is never a path filter, namespace filter, or disclosure scope.
+
+### `entities`
+
+Adds explicit entity names useful for resolving underspecified references such as “那个插件”. Entity hints are soft query terms only and do not authorize graph traversal or hard entity matching.
+
+### `time_relation`
+
+Expresses a relation such as “before migration” or “latest configuration”. The producer must not invent an exact date when the input/context provides no date evidence. In v1 the relation is serialized only into expansion-query text; it does not become a hard timestamp predicate.
+
+### `query_facets`
+
+Represents at most two independent retrieval aspects, for example “选择理由” and “限制”. Facets may produce separate expansion queries so multiple evidence aspects can enter the candidate pool.
+
+## 6. Query-plan invariant
+
+The original user query is always retained and searched.
+
+A normalized Hint may produce **0..2 additional queries**. Therefore a Q4 v1 vector search executes at most three query searches in total:
+
+```text
+1 original query
++ 0..2 expansion queries
+= 1..3 total vector queries
+```
+
+Expansion normalization rules:
+
+- trim whitespace;
+- enforce a bounded query length;
+- remove empty expansions;
+- remove exact duplicates;
+- remove expansions equal to the original query;
+- duplicate/empty expansion output is a legal no-op, not a whole-plan failure.
+
+No valid expansion means the existing original-query retrieval path is used unchanged.
+
+## 7. Existing multi-query reuse
+
+The current vector channel already provides useful reusable machinery:
+
+- multiple embedding/search executions;
+- per-query candidate collection;
+- ID deduplication;
+- deterministic tie breaking;
+- bounded RRF fusion;
+- final vector candidate bounding;
+- debug counters/hashes.
+
+However the historical H2 input contract must **not** be promoted unchanged. Its current `vectorQueryPlan` handling requires exactly two distinct non-empty planner queries in addition to the original query, and rejects the whole plan when either expansion is empty, duplicated, or equals the production query. H2 was closed as `INSUFFICIENT` after that strict contract failed on the official dataset.
+
+Q4-B should preserve historical H2 compatibility and introduce an explicit Q4 mode, for example:
+
+```js
+{
+  mode: "recall_hint_v1",
+  queries: [/* 1..2 normalized expansion queries */]
+}
+```
+
+The existing legacy/H2 shape can keep its frozen strict behavior for historical benchmark reproducibility. Q4 mode accepts 1..2 expansions; zero expansions should result in no plan being passed.
+
+## 8. Explicit-search-only seam
+
+Q4-B should attach Hint generation/consumption at the explicit `memory_engine_search` runner, not inside shared `hybridSearch()` policy.
+
+Current call shape:
+
+```text
+memory_engine_search
+  -> createSearchRunner()
+  -> buildHybridSearchRuntime()
+  -> hybridSearch()
+```
+
+Planned Q4-B shape:
+
+```text
+memory_engine_search
+  -> optional injected RecallHint provider (fake in Q4-B)
+  -> validate/normalize RecallHint
+  -> build bounded recall_hint_v1 vector query plan
+  -> buildHybridSearchRuntime(..., { vectorQueryPlan })
+  -> hybridSearch()
+```
+
+`buildHybridSearchRuntime()` currently forwards explicit-search rerank overrides but not `vectorQueryPlan`; Q4-B may add this one explicit override.
+
+AutoRecall also consumes `hybridSearch()`. It must remain unchanged during Q4-A/B: no Hint provider call, no new vector query plan, and no additional provider/network cost on normal chat turns.
+
+## 9. Candidate and cost budgets
+
+Q4 v1 keeps the current downstream product comparison conditions:
+
+- final explicit-search `topK = 3` unless caller requests another already-valid bounded value;
+- explicit rerank candidate depth remains `20`;
+- existing reranker/provider configuration is unchanged;
+- final vector candidate count remains bounded by the existing vector-channel limit;
+- Hint adds at most two vector embedding/search calls;
+- Q4-B uses fake/injected Hint providers only and adds zero real planner/provider calls.
+
+Query expansion does not guarantee preservation of every original-query candidate. Q4-C must explicitly measure cases where expanded fusion displaces a previously useful original-query candidate.
+
+## 10. Failure and authority rules
+
+Any Hint failure is fail-open to **original retrieval**, not fail-open to broader authority:
+
+- provider absent -> original query only;
+- provider throws -> original query only;
+- malformed Hint -> original query only;
+- empty Hint -> original query only;
+- all expansions deduplicate away -> original query only;
+- expansion query embedding/search failure -> preserve the existing vector-path fallback contract; do not grant new fallback authority.
+
+Hint output cannot:
+
+- grant or deny recall;
+- bypass structural/runtime gates;
+- hard-filter FTS/KG/Recent/vector candidates;
+- grant Owner/disclosure capability;
+- set final ordering directly;
+- modify confidence/reinforcement;
+- persist Hint data as memory.
+
+## 11. Q4-B source task
+
+Q4-B is a source-only seam with fake providers. Expected implementation surface:
+
+- add a pure `recall_hint_v1` validator/normalizer;
+- add a pure Hint -> bounded query-plan builder;
+- preserve historical H2 query-plan semantics under its existing shape;
+- add `recall_hint_v1` mode to vector-plan resolution with 1..2 expansions;
+- allow `buildHybridSearchRuntime()` to forward an explicit `vectorQueryPlan` override;
+- add an optional injected RecallHint provider to explicit search only;
+- add focused tests for empty, duplicate, malformed, timeout/throw, 1-expansion, 2-expansion, original-query preservation, and candidate-displacement visibility;
+- do not add a real provider implementation or runtime config switch.
+
+## 12. Q4-C acceptance contract (future, not authorized by Q4-A)
+
+Q4-C must compare Hint off/on using isolated development and acceptance sets and the same downstream retrieval/rerank settings.
+
+Only three product questions matter:
+
+1. **Candidate completeness:** fixed-depth gold evidence coverage and `POOL_MISS` changes;
+2. **Final usefulness:** Recall-any@3, Recall-all@3, and paired improve/regress/unchanged counts;
+3. **Cost:** end-to-end p95, added planner/embedding/search calls or tokens, and failure/fallback rate.
+
+All queries, including Hint failures/fallbacks, remain in aggregate statistics. Protection samples where the original query is already sufficient are required. Existing Q3 datasets are historical/regression evidence and must not be repeatedly tuned and then presented as independent Q4 generalization evidence.
+
+Real provider/planner execution, data egress, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
