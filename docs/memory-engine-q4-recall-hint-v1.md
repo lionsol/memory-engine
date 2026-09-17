@@ -1,6 +1,6 @@
 # memory-engine Q4 — Recall Hint v1
 
-Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE IMPLEMENTED / FOCUSED VERIFIED / PASS_WITH_FINDINGS / Q4-C NOT AUTHORIZED / NO REAL PROVIDER AUTHORIZATION`
+Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 EVALUATION CONTRACT SOURCE IMPLEMENTED / SYNTHETIC SMOKE PASS / Q4-C1 NEXT / NO REAL PROVIDER AUTHORIZATION`
 
 ## 1. Product question
 
@@ -208,9 +208,45 @@ Q4-B is a source-only seam with fake providers. Expected implementation surface:
 - add focused tests for empty, duplicate, malformed, timeout/throw, 1-expansion, 2-expansion, original-query preservation, and candidate-displacement visibility;
 - do not add a real provider implementation or runtime config switch.
 
-## 12. Q4-C acceptance contract (future, not authorized by Q4-A)
+## 12. Q4-C acceptance contract
 
-Q4-C must compare Hint off/on using isolated development and acceptance sets and the same downstream retrieval/rerank settings.
+Q4-C compares Hint off/on using isolated development and acceptance sets under the same downstream retrieval/rerank settings. Q4-C is split into two bounded steps:
+
+- **Q4-C0 — evaluation contract / zero-provider harness:** source-only evaluator, synthetic contract smoke, no product-quality claim;
+- **Q4-C1 — isolated real-effect execution:** frozen development/acceptance manifests, real Hint producer if separately authorized, and no AutoRecall/runtime deployment.
+
+### Q4-C0 implemented contract
+
+`lib/benchmark/q4-recall-hint-evaluation-v1.js` reuses the frozen Q1 `scoreQ1EvidenceRankingAt3()` scorer and fixes:
+
+- candidate depth at `20`;
+- final evidence budget at `topK=3`;
+- one Hint-producer call maximum per case;
+- at most two additional embedding calls and two additional vector searches per case;
+- pool evidence coverage and `POOL_MISS` accounting;
+- Recall-any@3, Recall-all@3, NDCG@3 and evidence-coverage@3;
+- paired improve/regress/unchanged transitions;
+- end-to-end p95 latency;
+- provider calls/tokens, extra vector work, and fallback rate;
+- separate development, acceptance, family, and protection summaries.
+
+Hint failures/fallbacks remain in aggregate statistics. The synthetic smoke is contract evidence only and is not Q4 quality evidence.
+
+The technical stop conditions are deliberately narrow and frozen before a real producer is selected:
+
+1. acceptance pool evidence coverage must not decrease;
+2. acceptance `POOL_MISS` count must not increase;
+3. acceptance Recall-any@3 and Recall-all@3 must not decrease;
+4. paired Recall-all@3 improvements must exceed regressions;
+5. protection samples must show no pool-coverage, `POOL_MISS`, Recall-any@3, or Recall-all@3 regression.
+
+Latency and provider/token cost are always reported, but Q4-C0 does not invent a provider-specific SLA before a real producer exists. Q4-D will decide whether measured quality gain is worth the observed latency/cost.
+
+### Q4-C1 split integrity
+
+Before any real-effect execution, development and acceptance inputs must be frozen as separate manifests with exact SHA-256 identities. The development split may be used to repair implementation defects or tune the producer contract. Once the acceptance manifest is first read for scoring, it must not be used to tune prompts, Hint fields, thresholds, reranker settings, topK, candidate depth, or acceptance gates. Any such change requires a new acceptance set rather than re-labeling the old one as independent evidence.
+
+Protection samples where the original query is already sufficient are mandatory. Existing Q3 datasets remain historical/regression evidence and must not be repeatedly tuned and then presented as independent Q4 generalization evidence.
 
 Only three product questions matter:
 
@@ -218,6 +254,4 @@ Only three product questions matter:
 2. **Final usefulness:** Recall-any@3, Recall-all@3, and paired improve/regress/unchanged counts;
 3. **Cost:** end-to-end p95, added planner/embedding/search calls or tokens, and failure/fallback rate.
 
-All queries, including Hint failures/fallbacks, remain in aggregate statistics. Protection samples where the original query is already sufficient are required. Existing Q3 datasets are historical/regression evidence and must not be repeatedly tuned and then presented as independent Q4 generalization evidence.
-
-Real provider/planner execution, data egress, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
+Real provider/planner execution, data egress, Q4-C1 acceptance execution, AutoRecall integration, live deployment, and runtime/config changes require separate Owner authorization.
