@@ -16,7 +16,7 @@ const {
   normalizeSmartAddText,
   renderSmartAddEntry,
 } = smartAddEntryContract;
-const { withSmartAddFileLock } = smartAddFileLock;
+const { withSmartAddFileLockAsync } = smartAddFileLock;
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const SYNC_MEMORY_INDEX_SCRIPT = resolve(MODULE_DIR, "bin/sync-memory-index.js");
 
@@ -149,7 +149,7 @@ export async function appendSmartAdd({
   }
 
   mkdirSync(fileDir, { recursive: true });
-  const appendResult = withSmartAddFileLock(filePath, () => {
+  const appendResult = await withSmartAddFileLockAsync(filePath, () => {
     const existed = existsSync(filePath);
     const existingContent = existed ? readFileSync(filePath, "utf8") : "";
     const fingerprints = extractSmartAddFingerprints(existingContent);

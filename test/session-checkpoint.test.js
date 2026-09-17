@@ -128,7 +128,7 @@ test("appendSmartAdd serializes concurrent process writers around fingerprint de
 test("agent and checkpoint smart-add writers share the same file lock boundary", () => {
   const agentSource = readFileSync(resolve("smart-add.js"), "utf8");
   const checkpointSource = readFileSync(resolve("lib/checkpoint/smart-add-writer.js"), "utf8");
-  assert.match(agentSource, /withSmartAddFileLock\(filePath/);
+  assert.match(agentSource, /withSmartAddFileLockAsync\(filePath/);
   assert.match(checkpointSource, /withSmartAddFileLock\(filePath/);
 });
 
