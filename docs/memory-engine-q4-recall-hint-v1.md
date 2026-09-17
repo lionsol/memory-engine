@@ -1,6 +1,6 @@
 # memory-engine Q4 — Recall Hint v1
 
-Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 CLOSED / Q4-C1a V2 CORPUS + MANIFEST FROZEN / BASELINE ELIGIBILITY PASS / Q4-C1b DEVELOPMENT REAL-PROVIDER EXECUTION AUTHORIZED / RUNNER SOURCE IMPLEMENTED / AWAITING CLEAN COMMITTED SOURCE`
+Status: `Q4-A CONTRACT FROZEN / Q4-B SOURCE CLOSED / Q4-C0 CLOSED / Q4-C1a V2 CORPUS + MANIFEST FROZEN / BASELINE ELIGIBILITY PASS / Q4-C1b DEVELOPMENT PRODUCER EXECUTION PASS / DEVELOPMENT RETRIEVAL-EFFECT CONTRACT SOURCE IMPLEMENTED / COST BINDING + SEMANTIC EGRESS NOT AUTHORIZED / ACCEPTANCE NOT AUTHORIZED`
 
 ## 1. Product question
 
@@ -281,7 +281,7 @@ The C1a corpus is targeted synthetic product evidence. It is independent of Q3 t
 
 ### Q4-C1b provider contract
 
-The C1b producer contract remains provider-neutral at its generic boundary, while the selected experiment binding is now frozen separately as SiliconFlow `deepseek-ai/DeepSeek-V4-Flash` at `https://api.siliconflow.cn/v1/chat/completions`. The binding does not create a provider call by itself: an execution packet still binds the frozen v2 manifest and a clean source commit, and real egress remains separately unauthorized. The producer sees only the current query plus the C1 bounded caller context; gold IDs, memory text, retrieval results, full session content and tool traces remain explicit egress denials.
+The C1b producer contract remains provider-neutral at its generic boundary, while the selected experiment binding is frozen separately as SiliconFlow `deepseek-ai/DeepSeek-V4-Flash` at `https://api.siliconflow.cn/v1/chat/completions`. Development-only real egress has now executed under the frozen v2 manifest and clean source commit; acceptance egress remains unauthorized. The producer sees only the current query plus the C1 bounded caller context; gold IDs, memory text, retrieval results, full session content and tool traces remain explicit egress denials.
 
 Frozen producer identity:
 
@@ -306,7 +306,7 @@ Frozen execution envelope:
 - the selected SiliconFlow binding uses `CNY`, non-discounted/non-cache-hit prices `¥3/M` input and `¥9/M` output, producing a theoretical full-envelope maximum of `¥0.405504` and a hard experiment cap of `¥0.50`;
 - one frozen acceptance execution, with `acceptance_replay_count=0`.
 
-The selected SiliconFlow adapter is source-only request/response mapping, not a network client. It binds `response_format={type:"json_object"}`, disables thinking for this bounded extraction task, maps provider `prompt_tokens/completion_tokens` into Q4 accounting, and deliberately excludes provider `reasoning_content` from the C1b result. The binding uses the existing `SILICONFLOW_API_KEY` environment-variable name but does not read a credential or issue a request. The current source still contains no new provider HTTP implementation, API-key resolution, `fetch()`, or network side effect. Development output may still be used to adjust the producer before acceptance begins, but any prompt/schema/model/query-plan/gate change after formal acceptance starts invalidates that acceptance run.
+The selected SiliconFlow request/response adapter binds `response_format={type:"json_object"}`, disables thinking for this bounded extraction task, maps provider `prompt_tokens/completion_tokens` into Q4 accounting, and deliberately excludes provider `reasoning_content` from the C1b result. The development execution layer uses the existing `SILICONFLOW_API_KEY` environment-variable name, exact endpoint/model matching, abortable HTTPS, atomic progress persistence, and ambiguous-inflight fail-closed resume. Development output may still be used to adjust the producer before acceptance begins, but any prompt/schema/model/query-plan/gate change after formal acceptance starts invalidates that acceptance run.
 
 The selected pricing basis is the provider's 2026-09-01 DeepSeek-V4-Flash time-of-day schedule, frozen at the more expensive non-discounted interval so packet validity does not depend on execution hour. Provider model revision is `null` because the public API model identifier does not expose a revision-qualified ID.
 
@@ -316,4 +316,28 @@ The source now includes a development-only execution guard, exact-env credential
 
 Because this authorization forbids external disclosure of synthetic memory text, the development run does not add remote embedding/rerank calls. It evaluates real Hint-producer validity, structured-field/expansion behavior, latency, tokens and cost. A production-equivalent candidate-recovery comparison that requires remote vectorization of the synthetic corpus would require a separate egress authorization; this development authorization does not imply it.
 
-The execution packet also requires a clean committed source identity. Therefore real requests must not begin until the development runner/transport source is committed and the preflight confirms the frozen manifest, source commit, provider/model/endpoint, prompt/schema hashes, credential binding and development-only budgets. Acceptance Hint-on execution, AutoRecall integration, live deployment, runtime/config mutation, DB/LanceDB mutation, push and tag remain unauthorized.
+The execution packet requires a clean committed source identity. Development execution used source commit `6e86192acb77839fa50e92ac5f5ba22cc63daa29` after preflight confirmed the frozen manifest, provider/model/endpoint, prompt/schema hashes, credential binding and development-only budgets. Acceptance Hint-on execution, AutoRecall integration, live deployment, runtime/config mutation, DB/LanceDB mutation, push and tag remain unauthorized.
+
+### Q4-C1b development producer result
+
+The first authorized HTTP attempt for `q4c1-entity-01` failed with provider `HTTP 401` because the initially configured credential was not a SiliconFlow `sk-` key. No model usage or cost was returned. Owner then authorized one credential-failure retry, increasing the HTTP-attempt ceiling from `16` to `17` while preserving the successful-case limit (`16`), token budgets, `CNY 0.15` cost cap, egress scope and all other boundaries. The failed-attempt progress record was preserved; the retry run used a separate progress file rather than erasing the ambiguous in-flight evidence.
+
+The retry-authorized development run completed `16/16` frozen development cases successfully with result SHA-256 `c13eef93f369f56c3fc254718479cd4bbaca55a34adecd0726ba7f3ebd3359c5`. All `16` outputs passed strict RecallHint validation. All `4/4` protection cases returned the empty Hint and generated zero expansions. All `12/12` target cases bound the supplied project/entity context; all `4/4` temporal cases preserved the correct before/after relation. The run produced `19` total expansion queries. Field counts were `project=12`, `entities=12`, `time_relation=4`, `query_facets=12`.
+
+Successful-call usage was `5,296` input tokens and `564` output tokens for `CNY 0.020964`. Including the earlier credential-rejected attempt, total HTTP provider attempts were `17`; successful model calls remained `16`, and the failed attempt contributed no accounted model tokens or cost. Successful-call latency was approximately `538ms` minimum, `1,969ms` p50, `7,312ms` p95/maximum, and `3,142ms` mean, all within the frozen `15s` per-request deadline.
+
+Development output contains a few low-specificity but bounded facets such as `plugin`, `settled on`, or `post-migration`; because every such expansion still retains the original query plus the supplied project/entity/temporal context, the development evidence does not justify changing the frozen prompt before retrieval-effect measurement. **Producer qualification is therefore PASS without prompt revision.**
+
+This result is not candidate-recovery evidence. The development authorization explicitly denied external disclosure of synthetic memory records and did not authorize remote embedding or rerank calls, so no production-equivalent Hint-off/Hint-on semantic retrieval comparison was performed. Q4 must not proceed to acceptance producer execution as if retrieval quality were already established; the next product evidence gap is a separately authorized development retrieval-effect measurement under a frozen semantic/rerank profile.
+
+### Q4-C1b development retrieval-effect contract
+
+The completed development Hint outputs are now frozen as source data rather than regenerated for retrieval-effect work. The producer result SHA-256 remains `c13eef93f369f56c3fc254718479cd4bbaca55a34adecd0726ba7f3ebd3359c5`; the normalized `case_id + validated Hint + deterministic query plan` fixture has SHA-256 `c6400bf9933271a48175b6a0be63533e71299b350fe6ba42ce04e69a2504c346`. The fixture contains exactly `16` development cases, `19` expansion queries and `4` empty protection Hints.
+
+Recall Hint expansion is consumed only by the vector channel. Therefore a lexical Hint-on replay would test behavior that the product does not implement and is not valid Q4 evidence. The next valid development diagnostic freezes the production-aligned semantic/rerank path: SiliconFlow `Qwen/Qwen3-Embedding-4B` at dimension `2560`, canonical vector projection v1 with at most `2000` characters per memory, candidate depth `20`, final topK `3`, and the existing SiliconFlow `Qwen/Qwen3-Reranker-0.6B` profile (`4000` code points per candidate, `48000` total, `2500ms`). Baseline and Hint arms must use the same profile and one shared embedding cache.
+
+For the frozen development outputs, the semantic request ceiling is `107` embedding requests: at most `72` synthetic corpus projection inputs + `16` original-query inputs + `19` Hint-expansion inputs. The Hint arm must reuse cached original-query embeddings rather than issuing a second original-query request. Rerank is bounded at `32` requests: at most `16` baseline + `16` Hint. Producer requests are `0`; acceptance cases are `0`.
+
+Embedding egress may contain only synthetic canonical vector-projection text, development original queries and development Hint-expansion queries. Rerank egress may contain only the development original query and bounded canonical candidate text. Gold evidence IDs, case labels, acceptance cases, full session/tool traces and all live memory are denied. Only temporary benchmark Core/Engine/LanceDB/cache artifacts may be created; live Core/Engine/LanceDB and runtime/config mutation remain denied.
+
+The retrieval-effect source contract deliberately leaves billing unresolved as `MUST_BE_FROZEN_BEFORE_EGRESS`. Billing currency, embedding price, rerank price and a total hard cost cap must be confirmed and frozen before any semantic request. This contract itself does not authorize or perform embedding/rerank egress. Acceptance producer execution remains separately unauthorized.
