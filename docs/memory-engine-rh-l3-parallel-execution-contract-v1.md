@@ -1,6 +1,6 @@
 # memory-engine RH-L3 Parallel Execution Qualification Contract v1
 
-Status: `RH-L3 LOCAL QUALIFIED / A+B+C PASS / REAL-HOST NOT AUTHORIZED / RUNTIME FEATURE OFF`
+Status: `RH-L3 LOCAL QUALIFIED / A+B+C PASS / REAL-HOST EXECUTOR VERIFIED / REAL-HOST QUALIFICATION TRANSACTION STOPPED ON OBSERVABILITY GATE / RUNTIME FEATURE OFF`
 
 ## 1. Purpose
 
@@ -363,4 +363,60 @@ RH-L3 is therefore **LOCAL QUALIFIED** across A, B and C. This establishes deter
 
 Live state remains unchanged: installed extension `bd4b177...`, `recallHintRuntimeCanary=ABSENT`, feature off.
 
-The next boundary, if pursued, is one separately authorized real-host execution qualification. It must not reuse or relabel RH-L2-C2 and does not inherit deployment/runtime authority from these local results.
+## 12. RH-L3 real-host execution transaction
+
+Owner authorized exactly one real-host execution transaction. The deterministic probe source was frozen at:
+
+```text
+e40186d9387a33cf51a45cac9e982385b19cd212
+```
+
+The live transaction used exact session `d31f1b79-d9cb-476a-8d4e-f70f892b1500`, one dedicated `memory_engine_search` tool call `call_o2kqj9xkqqudri6qilt2m8z2`, exact query `CedarIndex design decision`, and `top_k=3`. No `memory_engine` or `memory_engine_get` call occurred.
+
+The transaction produced one exact-trace Engine observation, `memory_events.id=640`, with:
+
+```text
+surface = memory_engine_search
+canary_in_scope = true
+canary_reason = session_allowlisted
+requested vector mode = parallel
+expansion_count = 2
+
+actual vector_query_execution = parallel
+vector_query_count = 3
+vector_search_count = 3
+vector_query_candidate_counts = [0,0,0]
+
+result_count = 3
+channel_error_count = 0
+Recall Hint provider telemetry = absent
+```
+
+This is sufficient to verify that the real host entered and completed the three-query parallel vector executor path. The zero vector candidate counts do not invalidate the execution claim; final served results came from non-vector retrieval channels.
+
+The precommitted transaction PASS gate also required persisted `recall_hint.status=probe_applied` and `recall_hint.execution_probe=rh_l3_canonical_v1`. Those fields did not survive the existing hybrid debug sanitizer. `createHybridDebug` did not recognize `probe_applied`, so it rewrote the status to `provider_error`, and it did not project `hint_execution_probe`, so the persisted execution probe token was absent.
+
+Therefore the historical adjudication is:
+
+```text
+REAL-HOST PARALLEL EXECUTOR = VERIFIED
+
+RH-L3 REAL-HOST QUALIFICATION TRANSACTION
+= STOPPED / CONSUMED
+= OBSERVABILITY CONTRACT FAILED
+= NO RETRY / NO REPLAY
+```
+
+This does not relabel the transaction PASS and does not alter RH-L2-C2.
+
+Rollback completed successfully: live source remains `e40186d...`, `recallHintRuntimeCanary=ABSENT`, Gateway connectivity is healthy, and the feature is off.
+
+A post-transaction source-only observability repair was committed at:
+
+```text
+2e75b240bf8d930fd29eb80d3faf37f3504b4c0d
+```
+
+It adds the RH-L3 probe statuses to the bounded debug whitelist and forwards only the fixed `rh_l3_canonical_v1` token. Focused repair tests passed `38/38`; static check passed `825` files; test-integrity scanned `372` files with `0` invalid; strict OpenSpec passed `12/12`; `git diff --check` passed. This repair is not deployed and cannot retroactively repair event `640`.
+
+No additional real-host transaction is authorized by this repair or by this closure.
