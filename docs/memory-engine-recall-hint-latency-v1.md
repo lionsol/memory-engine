@@ -159,3 +159,39 @@ The next valid investigation should separate two questions rather than replay th
 2. **real-provider performance/concurrency** — retain the completed run as evidence that three-way embedding concurrency is accepted by the provider without errors and materially reduces median/p95 semantic latency.
 
 The consumed performance material may be used for post-run analysis and regression evidence, but the exact transaction must not be replayed. `recallHintVectorExecutionMode="parallel"` remains default-off and has no runtime/deployment authority.
+
+## 10. RH-L1-E1 deterministic execution equivalence
+
+RH-L1-E1 isolates the JavaScript scheduling/fusion question from real-provider and ANN-run variability. It reuses the same 12 frozen performance target plans but replaces external embedding, vector search and rerank variability with deterministic local inputs while preserving the real semantic-session path through `hybridSearch()`, `collectVectorCandidates()`, RRF fusion and offline rerank.
+
+The clean-source execution at `c106d1ff80bf602a4d4543ba35c6f7f4910476d4` used:
+
+- deterministic embedding `rh_l1_sha256_sparse_embedding_v1`;
+- deterministic exact cosine store `rh_l1_exact_cosine_store_v1`;
+- deterministic rerank `rh_l1_sha256_rerank_v1`;
+- frozen target-plan identity `8532ff701d2863f93ac2f58dea5bbb093cf6c5304f6aa8e4ab17c53dc777c486`;
+- external provider requests = `0`.
+
+Result: **PASS**. Candidate pool ordering was exactly equal `12/12`; ranked top3 ordering was exactly equal `12/12`; sequential and parallel execution modes were observed as requested; both arms recorded the same `99` embedding requests, `35` cache hits and `12` reranks. CLI result identity is `1cb7743cf6fac77fc4a47ce7956d1581d65a008856db7494b8b56774dcb34f0a`; execution-result identity is `bb6ee37729dee7aa3a95cf379067201247bf6f937f0ad4616f9b938c36bef0a5`.
+
+E1 therefore shows that, for identical deterministic vector-search inputs, the parallel scheduling plus existing deterministic RRF/final-ranking implementation does not itself reorder candidate pools or top3 output.
+
+## 11. RH-L1-E2 frozen-embedding real-LanceDB equivalence
+
+RH-L1-E2 strengthens E1 by restoring the actual local LanceDB implementation while holding embedding vectors and rerank scores deterministic. Both sequential and parallel arms run against **one shared temporary LanceDB session/table and one shared exact-input embedding cache**, so the only relevant difference is the vector-query execution mode. No external provider call occurs.
+
+The clean-source execution at `e9e938aaa0f1eb3af9924512710d5ec4e6c2fcad` again used the frozen 12 target plans and deterministic embedding/rerank inputs, with vector store identity `rh_l1_shared_real_lancedb_v1`.
+
+Result: **PASS**. Candidate pool ordering was exactly equal `12/12`; ranked top3 ordering was exactly equal `12/12`; execution-mode observation was valid. The single shared session recorded `99` embedding requests, `97` cache hits and `24` reranks; external provider requests remained `0`. CLI result identity is `e4b7c68370e0a388aa006788696fe4c2fa807f2002b3da6539d7bbbc85441de4`; execution-result identity is `21281a712fb8bc03952f384465817474c155801c7110de00d7e980357e792a80`.
+
+A negative E2 test also confirms that an ordering-only divergence with identical membership is rejected, and missing required material fails before a semantic session is opened.
+
+## 12. Combined RH-L1 adjudication
+
+The original real-provider transaction remains **STOPPED** under its precommitted ordered-output gate and is not retroactively relabeled. E1/E2 are separate zero-provider diagnostic evidence.
+
+Combined evidence now supports the narrower conclusion that **RH-L1 parallel execution is ordered-output equivalent when numerical retrieval inputs are held fixed**, including when the actual local LanceDB table is queried concurrently. The real-provider run independently confirms material performance benefit and provider concurrency tolerance: pool-vector p50 improved by `52.85%`, full-semantic p50 by `33.63%`, full-semantic p95 by about `49.45%`, with zero provider errors and embedding concurrency reaching `3`.
+
+The remaining one-run ordering variability is therefore not supported as a defect in the JavaScript parallel scheduler, deterministic RRF fusion, or same-table concurrent LanceDB search. The existing evidence still does not uniquely distinguish real-provider floating-point/numeric variation from differences caused by independent vector materialization or ANN execution across separate sessions.
+
+RH-L1 is consequently **execution-equivalence qualified and real-provider latency-benefit confirmed, but not runtime authorized**. Parallel mode remains opt-in/source-only. A production adapter/config rollout, live canary, AutoRecall integration, or default explicit-search activation requires a separate product/runtime authorization and must not reuse the consumed performance transaction as a new acceptance run.
