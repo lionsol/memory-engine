@@ -28,17 +28,17 @@ function memories() {
   }));
 }
 
-function fakeAdapter() {
+function fakeAdapter(usage = {
+  prompt_tokens: 120,
+  completion_tokens: 0,
+  total_tokens: 120,
+}) {
   const adapter = async (_query, documents) => ({
     scores: documents.map((_text, index) => ({
       index,
       score: [0.4, 0.9, 0.2, 0.8][index],
     })),
-    usage: {
-      prompt_tokens: 120,
-      completion_tokens: 0,
-      total_tokens: 120,
-    },
+    usage,
   });
   Object.defineProperty(adapter, "adapterIdentity", {
     value: R3_C1_B_PROVIDER_PROFILE.adapterIdentity,
@@ -47,7 +47,7 @@ function fakeAdapter() {
   return adapter;
 }
 
-async function validCase() {
+async function validCase(usage = undefined) {
   const sourceMemories = memories();
   const reranked = await rerankCanonicalMemories({
     query: "Why that design and what limitation remained?",
@@ -55,7 +55,7 @@ async function validCase() {
     maxCodePointsPerCandidate: R3_C1_B_PROVIDER_PROFILE.maxCodePointsPerCandidate,
     maxTotalCodePoints: R3_C1_B_PROVIDER_PROFILE.maxTotalCodePoints,
     deadlineMs: R3_C1_B_PROVIDER_PROFILE.deadlineMs,
-    adapter: fakeAdapter(),
+    adapter: fakeAdapter(usage),
   });
 
   return buildQ5SelectionSignalCaptureCaseV1({
@@ -179,6 +179,27 @@ test("Q5-A3 fails closed on score/order/model drift and forbidden evaluator fiel
     }),
     /Q5_A3_FORBIDDEN_FIELD/,
   );
+});
+
+test("Q5-A3 accepts the real SiliconFlow bounded usage schema and omits null counters", async () => {
+  const capture = await validCase({
+    input_tokens: 321,
+    output_tokens: null,
+    total_tokens: 321,
+    billed_input_tokens: null,
+    billed_output_tokens: null,
+  });
+
+  const packet = buildQ5SelectionSignalPacketV1({
+    sourceCommit: SOURCE,
+    fixtureSha256: FIXTURE,
+    cases: [capture],
+  });
+
+  assert.deepEqual(packet.cases[0].usage, {
+    input_tokens: 321,
+    total_tokens: 321,
+  });
 });
 
 test("Q5-A3 packet hash drift is rejected independently of semantic validation", async () => {
