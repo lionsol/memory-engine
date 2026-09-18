@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / NO SIMPLE INTERVENTION SELECTED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / REAL SCORE CAPTURE NOT AUTHORIZED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / Q5-A4 REAL SCORE CAPTURE AUTHORIZED + PREPARED / NOT YET EXECUTED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -614,3 +614,51 @@ CONSTRAINED COMPLEMENTARITY EVALUATION = NOT STARTED
 STATISTICAL LTR = NOT SELECTED
 RUNTIME = UNCHANGED
 ```
+
+## 15. Q5-A4 fixed-pool real rerank score-capture transaction
+
+Owner authorized one Q5 fixed-pool rerank score-capture transaction.
+
+The transaction is bounded to the existing Q5 derived fixture:
+
+```text
+fixture_sha256 =
+077b02f16c7bd463eb5f5120930473f653bf5ae37e1a16cdb377e88fd3a6b405
+
+frozen cases = 40
+arms per case = baseline + Hint
+planned provider calls = 80
+
+candidateDepth <= 20
+topK = 3
+```
+
+Provider binding:
+
+```text
+provider = SiliconFlow
+model = Qwen/Qwen3-Reranker-0.6B
+revision = null
+endpoint = existing SiliconFlow rerank adapter binding
+deadline = 2500ms per rerank
+```
+
+The transaction does not authorize embedding calls, Recall Hint producer calls, model training, runtime/config mutation, live DB/LanceDB access, deployment, push or tag.
+
+Execution policy:
+
+```text
+one transaction
+80 planned provider attempts
+no automatic retry
+no resume
+no replay
+
+first provider attempt consumes the transaction
+any provider/capture failure => STOPPED
+partial score packets are not accepted
+```
+
+Before the first external request the runner must persist an attempt marker. A successful transaction must produce exactly one A3 bounded packet containing only hashed query/candidate text identities plus rank/score/projection/adapter metadata. Raw query text, raw candidate text and evaluator/gold fields must not be persisted in the packet.
+
+The execution source must be committed and the worktree clean before provider calls begin.
