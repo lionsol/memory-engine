@@ -39,6 +39,7 @@
     "benchmark:q5:build-fixed-candidate-fixture": "node bin/build-q5-fixed-candidate-fixture-v1.mjs",
     "benchmark:q5:fixed-candidate-attribution": "node bin/run-q5-fixed-candidate-attribution-v1.mjs",
     "benchmark:q5:fixed-candidate-interventions": "node bin/run-q5-fixed-candidate-interventions-v1.mjs",
+    "benchmark:q5:selection-signal-contract": "node bin/run-q5-selection-signal-contract-v1.mjs",
     "benchmark:aml:serve": "node bin/serve-aml-benchmark-v1.js",
     "smoke:quality-baseline": "node bin/run-memory-quality-baseline-smoke.js",
     "smoke:smart-add-duplicates": "node bin/run-smart-add-duplicate-baseline-smoke.js",
