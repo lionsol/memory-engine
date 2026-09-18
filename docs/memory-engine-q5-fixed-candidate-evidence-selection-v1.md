@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / FIXED-POOL TOP3 ORACLE PASS / ATTRIBUTION RESULT FROZEN / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED / NO PROVIDER EGRESS`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / NO SIMPLE INTERVENTION SELECTED / COMPLEMENTARITY MECHANISM SUPPORTED WITH RECALL-ANY TRADEOFF / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED / NO PROVIDER EGRESS`
 
 ## 1. Purpose
 
@@ -351,3 +351,137 @@ It strengthens two narrower hypotheses:
 - C2 multi-facet failures strongly motivate a bounded complementarity/set-aware selection experiment.
 
 This still does **not** select Statistical LTR. The next Q5 decision should compare the smallest interventions that address these observed failure classes while keeping the frozen candidate pools and topK=`3`.
+
+
+## 13. Q5-A2 fixed-pool intervention comparison
+
+Q5-A2 compares two deliberately small interventions on the same frozen fixture. Gold is used only for post-selection evaluation and never enters either selector.
+
+Qualified source:
+
+```text
+da145008fd88da167d5d442d8e6181cd1dde2d64
+```
+
+Clean-source result:
+
+```text
+status = PASS
+mode = Q5_A2_FIXED_POOL_INTERVENTION_COMPARISON
+worktree_clean = true
+fixture_sha256 =
+077b02f16c7bd463eb5f5120930473f653bf5ae37e1a16cdb377e88fd3a6b405
+
+result_sha256 =
+afb98fdd9039ef1334cd41330a9e5d0c7d485b7dd2099af62519f1dd3491e3c1
+
+provider_requests = 0
+model_training_runs = 0
+```
+
+### Intervention A — pre-rerank top3 diagnostic control
+
+`pre_rerank_top3_v1` simply takes the first three candidates from the frozen pre-rerank Hybrid pool. It exists only to test whether the frozen cross-encoder rerank stage is uniformly beneficial.
+
+It is not uniformly beneficial.
+
+```text
+Q4-C1b baseline:
+Recall-all@3 0.3125 -> 0.2500
+paired Recall-all = 0 improved / 1 regressed / 15 unchanged
+paired Recall-any = 0 improved / 4 regressed / 12 unchanged
+
+Q4-C1b Hint:
+Recall-all@3 0.3750 -> 0.6250
+paired Recall-all = 5 improved / 1 regressed / 10 unchanged
+paired Recall-any = 3 improved / 2 regressed / 11 unchanged
+
+Q4-C2 baseline:
+Recall-all@3 0.4583 -> 0.3750
+paired Recall-all = 0 improved / 2 regressed / 22 unchanged
+paired Recall-any = 1 improved / 4 regressed / 19 unchanged
+
+Q4-C2 Hint:
+Recall-all@3 0.5000 -> 0.5833
+paired Recall-all = 5 improved / 3 regressed / 16 unchanged
+paired Recall-any = 5 improved / 4 regressed / 15 unchanged
+```
+
+Conclusion:
+
+```text
+PRE_RERANK_TOP3 = DIAGNOSTIC ONLY / NOT SELECTED
+```
+
+The Hint arms show that the pre-rerank pool order sometimes preserves recovered evidence better than the cross-encoder top3, but the regressions prove that disabling/bypassing reranking is not a valid general fix.
+
+### Intervention B — bounded anchor complementarity mechanism probe
+
+`anchor_complementarity_repair_v1` is a deterministic, product-visible-text-only probe. It triggers only on multi-intent query cues. Among candidates already selected by the frozen reranker, it considers only candidates that have a bounded repeated low-frequency lexical anchor in the first three tokens and a counterpart in the pool. It chooses the anchor/counterpart pair with the best pair-level pre-rerank compactness (`min max(pool-rank pair)`, then `min sum(pool-rank pair)`) and keeps one remaining original top3 candidate.
+
+The rule is intentionally synthetic and narrow. It is not a proposed production parser, entity linker, or general duplicate detector.
+
+Results:
+
+```text
+Q4-C1b baseline:
+Recall-all@3 0.3125 -> 0.3750
+paired Recall-all = 1 improved / 0 regressed / 15 unchanged
+paired Recall-any = 0 improved / 0 regressed / 16 unchanged
+
+Q4-C1b Hint:
+Recall-all@3 0.3750 -> 0.5000
+paired Recall-all = 2 improved / 0 regressed / 14 unchanged
+paired Recall-any = 0 improved / 0 regressed / 16 unchanged
+
+Q4-C2 baseline:
+Recall-all@3 0.4583 -> 0.5000
+paired Recall-all = 1 improved / 0 regressed / 23 unchanged
+paired Recall-any = 0 improved / 3 regressed / 21 unchanged
+
+Q4-C2 Hint:
+Recall-all@3 0.5000 -> 0.6250
+paired Recall-all = 3 improved / 0 regressed / 21 unchanged
+paired Recall-any = 0 improved / 1 regressed / 23 unchanged
+```
+
+On the seven direct Q4->Q5 bridge cases, the complementarity probe repairs `2/7` Recall-all failures and regresses `0/7` Recall-all cases. This is positive mechanism evidence, but it is not sufficient for product selection because C2 shows a measurable Recall-any tradeoff.
+
+Conclusion:
+
+```text
+ANCHOR_COMPLEMENTARITY_REPAIR
+= MECHANISM SUPPORTED
+= RECALL-ANY SAFETY GATE FAILED
+= NOT SELECTED
+```
+
+### A2 product decision
+
+Q5-A2 therefore rejects both simple interventions as a product answer:
+
+```text
+PRE_RERANK_TOP3
+= NOT SELECTED
+
+ANCHOR_COMPLEMENTARITY_REPAIR
+= NOT SELECTED
+
+STATISTICAL LTR
+= STILL NOT SELECTED
+```
+
+The useful result is causal rather than deployable:
+
+- the cross-encoder reranker can both help and hurt recovered evidence;
+- set-aware complementarity can recover additional complete evidence sets;
+- unconstrained complementarity can also discard the only relevant single item and reduce Recall-any;
+- therefore a safe selector needs an explicit individual-relevance constraint or score/margin signal, not diversity alone.
+
+### Signal gap exposed by A2
+
+The frozen Q4 result artifacts preserve candidate-pool order and final rerank top3 IDs, but they do **not** preserve the full per-candidate reranker scores/order for all `20` candidates. Read-only inspection of the retained Q4-C1b/C2 artifact directories found only the final result/attempt JSON files and no additional score-bearing artifact.
+
+Without full frozen reranker scores, Q5 cannot retrospectively test a margin-constrained complementarity rule such as “replace a redundant slot only when the counterpart relevance score is within a bounded margin of the displaced candidate” without making up missing evidence or rerunning the reranker.
+
+The next bounded source/design stage is therefore Q5-A3 Selection-Signal Contract. It should define the minimum future offline evidence required to compare constrained selection safely, while keeping topK=`3`, gold evaluator-only, provider execution separately authorized, and Statistical LTR undecided.
