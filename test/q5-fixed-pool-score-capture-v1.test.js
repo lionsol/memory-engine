@@ -25,9 +25,11 @@ function fakeAdapterFactory({ model }) {
       score: 1 - index / 100,
     })),
     usage: {
-      prompt_tokens: documents.length * 10,
-      completion_tokens: 0,
+      input_tokens: documents.length * 10,
+      output_tokens: null,
       total_tokens: documents.length * 10,
+      billed_input_tokens: documents.length * 10,
+      billed_output_tokens: null,
     },
   });
   Object.defineProperty(adapter, "adapterIdentity", {
@@ -81,6 +83,8 @@ test("Q5 score capture invokes exactly 80 reranks and emits only bounded A3 sign
   assert.equal(result.retry_policy, "NO_RETRY_NO_RESUME_NO_REPLAY");
   assert.equal(result.packet.cases.every(row => row.candidate_count > 0 && row.candidate_count <= 20), true);
   assert.equal(result.packet.cases.every(row => row.candidates.every(candidate => Number.isFinite(candidate.rerank_score))), true);
+  assert.equal(result.provider_usage.input_tokens > 0, true);
+  assert.equal(result.provider_usage.total_tokens > 0, true);
 
   const serialized = JSON.stringify(result.packet);
   assert.equal(serialized.includes("selection rationale:"), false);

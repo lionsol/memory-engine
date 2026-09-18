@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / Q5-A4 REAL SCORE CAPTURE STOPPED + CONSUMED ON LOCAL USAGE-SCHEMA CONTRACT / 1 PROVIDER ATTEMPT / NO REPLAY / POST-TRANSACTION CAPTURE REPAIR SOURCE-QUALIFIED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / POST-A4 CAPTURE REPAIR SOURCE-QUALIFIED / Q5-A5 NEW REAL SCORE CAPTURE AUTHORIZED + PREPARED / NOT YET EXECUTED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -762,13 +762,74 @@ affected flows = 0
 
 This repair is future-facing only. It cannot recreate the discarded first response, cannot produce a historical A4 packet, and does not authorize another real provider transaction.
 
-Current boundary:
+Current boundary after A4 closure:
 
 ```text
 Q5-A4 = STOPPED / CONSUMED
 REAL SCORE PACKET = UNAVAILABLE
-CONSTRAINED COMPLEMENTARITY WITH REAL SCORE MARGINS = BLOCKED
 STATISTICAL LTR = NOT SELECTED
-NEW PROVIDER EXECUTION = NOT AUTHORIZED
+RUNTIME = UNCHANGED
+```
+
+## 16. Q5-A5 independent fixed-pool score-capture transaction
+
+Owner subsequently authorized one new, independent provider execution transaction. Q5-A5 is not a retry/replay/resume of Q5-A4.
+
+It reuses the already repaired A3/A4 source contracts and the same frozen Q5 fixture:
+
+```text
+fixture_sha256 =
+077b02f16c7bd463eb5f5120930473f653bf5ae37e1a16cdb377e88fd3a6b405
+
+frozen cases = 40
+arms = baseline + Hint
+planned provider calls = 80
+candidateDepth <= 20
+topK = 3
+```
+
+Provider binding remains:
+
+```text
+SiliconFlow
+Qwen/Qwen3-Reranker-0.6B
+revision = null
+deadline = 2500ms
+```
+
+Execution policy remains:
+
+```text
+one new transaction
+no automatic retry
+no resume
+no replay
+
+first A5 provider attempt consumes A5
+any provider/capture failure => A5 STOPPED
+A4 remains historically STOPPED/CONSUMED
+```
+
+Before freezing the A5 execution source, the transaction summary was also aligned with the real bounded SiliconFlow usage schema:
+
+```text
+input_tokens
+output_tokens
+total_tokens
+billed_input_tokens
+billed_output_tokens
+```
+
+This does not change A4 history; it only prevents A5 summary telemetry from silently reporting zero input usage.
+
+Q5-A5 authorizes only this offline score-capture transaction. It does not authorize embedding, Hint production, model training, runtime/config mutation, live DB/LanceDB access, deployment, push or tag.
+
+Current pre-execution state:
+
+```text
+Q5-A5 = AUTHORIZED / PREPARED
+REAL PROVIDER EXECUTION = NOT YET STARTED
+topK = 3
+STATISTICAL LTR = NOT SELECTED
 RUNTIME = UNCHANGED
 ```
