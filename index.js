@@ -31,6 +31,7 @@ import { collectIndexedFiles, readIndexedPathState } from "./lib/sync/index-sync
 import { createHybridRuntimeContext } from "./lib/recall/hybrid/runtime-context.js";
 import { createExplicitSearchRerankControlPolicy } from "./lib/recall/hybrid/explicit-search-rerank-control-policy.js";
 import { createExplicitSearchRerankProviderPolicy } from "./lib/recall/hybrid/explicit-search-rerank-provider-policy.js";
+import { createRecallHintRuntimeProviderPolicyV1 } from "./lib/recall/hint/recall-hint-runtime-provider-policy-v1.js";
 import { createMemoryEngineExecute } from "./lib/tools/memory-engine-actions.js";
 import {
   createMemoryEngineGetExecute,
@@ -128,17 +129,24 @@ export default definePluginEntry({
     const kgFailClosedCanary = effectiveRuntimeConfig.kgFailClosedCanary;
     const recentFailClosedMode = effectiveRuntimeConfig.recentFailClosedMode;
     const recentFailClosedCanary = effectiveRuntimeConfig.recentFailClosedCanary;
+    const siliconFlowApiKey = resolveSFKey({
+      cfg: config.embeddingRuntimeConfig,
+      apiConfig: config.memoryEngineConfig,
+    });
     const explicitSearchRerankProviderPolicy = createExplicitSearchRerankProviderPolicy(
       effectiveRuntimeConfig,
       {
-        apiKey: resolveSFKey({
-          cfg: config.embeddingRuntimeConfig,
-          apiConfig: config.memoryEngineConfig,
-        }),
+        apiKey: siliconFlowApiKey,
       },
     );
     const explicitSearchRerankPolicy = explicitSearchRerankProviderPolicy
       || createExplicitSearchRerankControlPolicy(effectiveRuntimeConfig);
+    const recallHintRuntimeProviderPolicy = createRecallHintRuntimeProviderPolicyV1(
+      effectiveRuntimeConfig,
+      {
+        apiKey: siliconFlowApiKey,
+      },
+    );
 
     const autoRecallLifecycle = createAutoRecallHookLifecycle({
       api,
@@ -169,6 +177,7 @@ export default definePluginEntry({
         hybridRetrieval: effectiveRuntimeConfig.hybridRetrieval,
         explicitSearchRerankPolicy,
         recallHintRuntimeCanary: effectiveRuntimeConfig.recallHintRuntimeCanary,
+        recallHintProvider: recallHintRuntimeProviderPolicy?.provider ?? null,
         resolveExplicitSearchRuntimeContext: autoRecallLifecycle.resolveExplicitSearchRuntimeContext,
       },
       telemetry: {

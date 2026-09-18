@@ -56,13 +56,15 @@ test("Recall Hint runtime canary allows only the exact trusted session and prese
   });
 });
 
-test("RH-L2-A production assembly wires only the canary control plane and no Recall Hint provider", () => {
+test("RH-L2-B production assembly wires the provider only through the default-off canary policy", () => {
   const indexSource = readFileSync(new URL("../index.js", import.meta.url), "utf8");
   const manifest = JSON.parse(readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"));
 
+  assert.match(indexSource, /createRecallHintRuntimeProviderPolicyV1/);
   assert.match(indexSource, /recallHintRuntimeCanary:\s*effectiveRuntimeConfig\.recallHintRuntimeCanary/);
+  assert.match(indexSource, /recallHintProvider:\s*recallHintRuntimeProviderPolicy\?\.provider \?\? null/);
   assert.match(indexSource, /resolveExplicitSearchRuntimeContext:\s*autoRecallLifecycle\.resolveExplicitSearchRuntimeContext/);
-  assert.doesNotMatch(indexSource, /recallHintProvider\s*:/);
+  assert.doesNotMatch(indexSource, /createSiliconFlowRecallHintAdapterV1/);
 
   assert.deepEqual(manifest.configSchema.properties.recallHintRuntimeCanary.default, {
     enabled: false,

@@ -9,6 +9,7 @@ import {
   normalizeRecallHintV1,
   validateRecallHintV1,
 } from "../lib/recall/hint/recall-hint-v1.js";
+import { RECALL_HINT_RUNTIME_PROVIDER_RESULT_SCHEMA_V1 } from "../lib/recall/hint/recall-hint-provider-contract-v1.js";
 import { createAutoRecallHookLifecycle } from "../lib/recall/auto-recall-hook-lifecycle.js";
 import { collectVectorCandidates } from "../lib/recall/hybrid/channels/vector.js";
 import { hybridSearch } from "../lib/recall/hybrid-search.js";
@@ -451,7 +452,10 @@ test("Recall Hint provider is injected only for explicit memory_engine_search an
   await executeSearch("tool-1", { query: "original query", top_k: 3 });
 
   assert.equal(calls.provider, 1);
-  assert.deepEqual(calls.args, [{ query: "original query" }]);
+  assert.equal(calls.args.length, 1);
+  assert.equal(calls.args[0].query, "original query");
+  assert.equal(calls.args[0].signal instanceof AbortSignal, true);
+  assert.equal(calls.args[0].signal.aborted, false);
   assert.deepEqual(calls.runtimes[0].runtime.vectorQueryPlan, {
     mode: "recall_hint_v1",
     queries: ["original query reason project:project-a"],
@@ -536,6 +540,48 @@ test("Recall Hint runtime canary permits the exact trusted session and selects p
   assert.equal(observed[0].runtime.recallHintDebug.status, "applied");
   assert.equal(observed[0].runtime.recallHintDebug.hint_canary_in_scope, true);
   assert.equal(observed[0].runtime.recallHintDebug.hint_canary_reason, "session_allowlisted");
+});
+
+test("Recall Hint provider envelope forwards bounded usage and latency into runtime debug", async () => {
+  const observed = [];
+  const context = makeSearchContext({
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-allowed"],
+      vectorExecutionMode: "parallel",
+    },
+    resolveExplicitSearchRuntimeContext: () => ({
+      source: "openclaw_runtime",
+      sessionIdentity: "session-allowed",
+      requestIdentity: "tool-envelope",
+    }),
+    recallHintProvider: () => ({
+      schema: RECALL_HINT_RUNTIME_PROVIDER_RESULT_SCHEMA_V1,
+      hint: {
+        version: "recall_hint_v1",
+        query_facets: ["reason"],
+      },
+      usage: {
+        input_tokens: 321,
+        output_tokens: 45,
+      },
+      latency_ms: 456.75,
+    }),
+    hybridSearch: async (query, options, runtime) => {
+      observed.push({ query, options, runtime });
+      return { results: [], debug: {} };
+    },
+  });
+
+  await createMemoryEngineSearchExecute(context)("tool-envelope", {
+    query: "original query",
+    top_k: 3,
+  });
+
+  assert.equal(observed[0].runtime.recallHintDebug.status, "applied");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_provider_input_tokens, 321);
+  assert.equal(observed[0].runtime.recallHintDebug.hint_provider_output_tokens, 45);
+  assert.equal(observed[0].runtime.recallHintDebug.hint_provider_latency_ms, 456.75);
 });
 
 test("Recall Hint runtime canary fails closed when trusted session context is unavailable", async () => {

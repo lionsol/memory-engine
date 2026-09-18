@@ -274,6 +274,9 @@ test("hybrid observation persists bounded Recall Hint canary state without sessi
         hint_canary_reason: "session_allowlisted",
         hint_vector_execution_mode: "parallel",
         hint_expansion_count: 2,
+        hint_provider_latency_ms: 456.75,
+        hint_provider_input_tokens: 321,
+        hint_provider_output_tokens: 45,
         session_id: "must-not-persist-session",
         query_original: "must not persist query",
       },
@@ -287,6 +290,9 @@ test("hybrid observation persists bounded Recall Hint canary state without sessi
     canary_reason: "session_allowlisted",
     vector_execution_mode: "parallel",
     expansion_count: 2,
+    provider_latency_ms: 456.75,
+    provider_input_tokens: 321,
+    provider_output_tokens: 45,
   });
   const serialized = JSON.stringify(observation);
   assert.equal(serialized.includes("must-not-persist-session"), false);
