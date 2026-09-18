@@ -157,6 +157,41 @@
           }
         }
       },
+      "recallHintRuntimeCanary": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {
+          "enabled": false,
+          "sessionIds": [],
+          "vectorExecutionMode": "sequential"
+        },
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Permit Recall Hint runtime use only inside an exact trusted-session canary scope"
+          },
+          "sessionIds": {
+            "type": "array",
+            "default": [],
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Exact trusted OpenClaw session identities allowed to enter the Recall Hint runtime canary"
+          },
+          "vectorExecutionMode": {
+            "type": "string",
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "default": "sequential",
+            "description": "Recall Hint vector-query execution mode inside the canary; parallel remains opt-in"
+          }
+        }
+      },
       "kgFailClosedMode": {
         "type": "string",
         "enum": [

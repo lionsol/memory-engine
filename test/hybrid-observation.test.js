@@ -260,6 +260,40 @@ test("hybrid observation persists only bounded explicit-search rerank metadata",
   }
 });
 
+test("hybrid observation persists bounded Recall Hint canary state without session or query data", () => {
+  const observation = buildHybridSearchObservation({
+    surface: "memory_engine_search",
+    result: {
+      results: [{ memory_id: "must-not-persist-id" }],
+      debug: {
+        recall_hint: {
+          mode: "recall_hint_v1",
+          status: "applied",
+        },
+        hint_canary_in_scope: true,
+        hint_canary_reason: "session_allowlisted",
+        hint_vector_execution_mode: "parallel",
+        hint_expansion_count: 2,
+        session_id: "must-not-persist-session",
+        query_original: "must not persist query",
+      },
+    },
+  });
+
+  assert.deepEqual(observation.recall_hint, {
+    mode: "recall_hint_v1",
+    status: "applied",
+    canary_in_scope: true,
+    canary_reason: "session_allowlisted",
+    vector_execution_mode: "parallel",
+    expansion_count: 2,
+  });
+  const serialized = JSON.stringify(observation);
+  assert.equal(serialized.includes("must-not-persist-session"), false);
+  assert.equal(serialized.includes("must not persist query"), false);
+  assert.equal(serialized.includes("must-not-persist-id"), false);
+});
+
 test("both explicit search surfaces persist C0 observability while public results stay bounded", async () => {
   const events = [];
   const explicitDebug = {

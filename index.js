@@ -168,6 +168,8 @@ export default definePluginEntry({
         recentFailClosedCanary,
         hybridRetrieval: effectiveRuntimeConfig.hybridRetrieval,
         explicitSearchRerankPolicy,
+        recallHintRuntimeCanary: effectiveRuntimeConfig.recallHintRuntimeCanary,
+        resolveExplicitSearchRuntimeContext: autoRecallLifecycle.resolveExplicitSearchRuntimeContext,
       },
       telemetry: {
         recordMemoryEvent,

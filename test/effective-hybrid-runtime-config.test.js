@@ -444,12 +444,54 @@ test("effective AutoRecall, mode, and canary changes change the fingerprint", ()
     { kgFailClosedCanary: { enabled: true, agentIds: ["edi"], sessionIds: [] } },
     { recentFailClosedMode: "full_fail_closed" },
     { recentFailClosedCanary: { enabled: true, agentIds: ["edi"], sessionIds: [] } },
+    { recallHintRuntimeCanary: { enabled: true, sessionIds: ["session-rh"], vectorExecutionMode: "parallel" } },
   ]) {
     assert.notEqual(
       fingerprint(base),
       fingerprint({ pluginConfig: change }),
       JSON.stringify(change),
     );
+  }
+});
+
+test("Recall Hint runtime canary defaults off and accepts only exact session plus execution-mode fields", () => {
+  const defaults = normalized({});
+  assert.deepEqual(defaults.recallHintRuntimeCanary, {
+    enabled: false,
+    sessionIds: [],
+    vectorExecutionMode: "sequential",
+  });
+
+  const configured = normalized({
+    pluginConfig: {
+      recallHintRuntimeCanary: {
+        enabled: true,
+        sessionIds: ["session-rh"],
+        vectorExecutionMode: "parallel",
+      },
+    },
+  });
+  assert.deepEqual(configured.recallHintRuntimeCanary, {
+    enabled: true,
+    sessionIds: ["session-rh"],
+    vectorExecutionMode: "parallel",
+  });
+
+  for (const recallHintRuntimeCanary of [
+    { enabled: "yes" },
+    { sessionIds: "session-rh" },
+    { vectorExecutionMode: "auto" },
+    { enabled: true, unknown: true },
+  ]) {
+    const result = resolveEffectiveHybridRuntimeConfig({
+      pluginConfig: { recallHintRuntimeCanary },
+    });
+    assert.equal(result.valid, false, JSON.stringify(recallHintRuntimeCanary));
+    assert.deepEqual(result.recallHintRuntimeCanary, {
+      enabled: false,
+      sessionIds: [],
+      vectorExecutionMode: "sequential",
+    });
   }
 });
 

@@ -83,6 +83,13 @@ test("disabled lifecycle registers only natural tool-origin hook and prompt supp
     toolCallId: "tool-1",
   });
 
+  assert.deepEqual(fixture.lifecycle.resolveExplicitSearchRuntimeContext("tool-1"), {
+    source: "openclaw_runtime",
+    sessionIdentity: "session-1",
+    runIdentity: "run-1",
+    requestIdentity: "tool-1",
+  });
+
   const origin = fixture.lifecycle.resolveTrafficOriginContext("tool-1", "memory_engine_search");
   assert.equal(origin.source, "before_tool_call");
   assert.equal(origin.toolCallId, "tool-1");

@@ -407,7 +407,7 @@ test("recall_hint_v1 missing embedding runtime falls back without ReferenceError
   assert.deepEqual(ctx.channels.vector.map(item => item.id), ["manager-original"]);
 });
 
-function makeSearchContext({ recallHintProvider, hybridSearch, recallHintVectorExecutionMode } = {}) {
+function makeSearchContext({ recallHintProvider, hybridSearch, recallHintVectorExecutionMode, recallHintRuntimeCanary, resolveExplicitSearchRuntimeContext } = {}) {
   return createHybridRuntimeContext({
     dataAccess: {
       getLancedbTable: () => null,
@@ -416,6 +416,8 @@ function makeSearchContext({ recallHintProvider, hybridSearch, recallHintVectorE
       recallHintProvider,
       hybridSearch,
       recallHintVectorExecutionMode,
+      recallHintRuntimeCanary,
+      resolveExplicitSearchRuntimeContext,
       calcRealtimeConf: () => 0.8,
       generateEmbedding: async () => [],
     },
@@ -463,7 +465,104 @@ test("Recall Hint provider is injected only for explicit memory_engine_search an
     hint_has_project: true,
     hint_time_relation: null,
     hint_expansion_count: 1,
+    hint_canary_in_scope: true,
+    hint_canary_reason: "legacy_injected_provider",
+    hint_vector_execution_mode: "parallel",
   });
+});
+
+test("Recall Hint runtime canary blocks provider outside the exact trusted session", async () => {
+  let providerCalls = 0;
+  const observed = [];
+  const context = makeSearchContext({
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-allowed"],
+      vectorExecutionMode: "parallel",
+    },
+    resolveExplicitSearchRuntimeContext: () => ({
+      source: "openclaw_runtime",
+      sessionIdentity: "session-other",
+      requestIdentity: "tool-1",
+    }),
+    recallHintProvider: () => {
+      providerCalls += 1;
+      return { version: "recall_hint_v1", query_facets: ["reason"] };
+    },
+    hybridSearch: async (query, options, runtime) => {
+      observed.push({ query, options, runtime });
+      return { results: [], debug: {} };
+    },
+  });
+
+  await createMemoryEngineSearchExecute(context)("tool-1", { query: "original query", top_k: 3 });
+
+  assert.equal(providerCalls, 0);
+  assert.equal(Object.hasOwn(observed[0].runtime, "vectorQueryPlan"), false);
+  assert.equal(observed[0].runtime.recallHintDebug.status, "canary_blocked");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_in_scope, false);
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_reason, "session_not_allowlisted");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_vector_execution_mode, "parallel");
+});
+
+test("Recall Hint runtime canary permits the exact trusted session and selects parallel execution", async () => {
+  let providerCalls = 0;
+  const observed = [];
+  const context = makeSearchContext({
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-allowed"],
+      vectorExecutionMode: "parallel",
+    },
+    resolveExplicitSearchRuntimeContext: () => ({
+      source: "openclaw_runtime",
+      sessionIdentity: "session-allowed",
+      requestIdentity: "tool-2",
+    }),
+    recallHintProvider: () => {
+      providerCalls += 1;
+      return { version: "recall_hint_v1", query_facets: ["reason"] };
+    },
+    hybridSearch: async (query, options, runtime) => {
+      observed.push({ query, options, runtime });
+      return { results: [], debug: {} };
+    },
+  });
+
+  await createMemoryEngineSearchExecute(context)("tool-2", { query: "original query", top_k: 3 });
+
+  assert.equal(providerCalls, 1);
+  assert.equal(observed[0].runtime.recallHintVectorExecutionMode, "parallel");
+  assert.equal(observed[0].runtime.recallHintDebug.status, "applied");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_in_scope, true);
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_reason, "session_allowlisted");
+});
+
+test("Recall Hint runtime canary fails closed when trusted session context is unavailable", async () => {
+  let providerCalls = 0;
+  const observed = [];
+  const context = makeSearchContext({
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-allowed"],
+      vectorExecutionMode: "parallel",
+    },
+    resolveExplicitSearchRuntimeContext: () => null,
+    recallHintProvider: () => {
+      providerCalls += 1;
+      return { version: "recall_hint_v1", query_facets: ["reason"] };
+    },
+    hybridSearch: async (query, options, runtime) => {
+      observed.push({ query, options, runtime });
+      return { results: [], debug: {} };
+    },
+  });
+
+  await createMemoryEngineSearchExecute(context)("tool-3", { query: "original query", top_k: 3 });
+
+  assert.equal(providerCalls, 0);
+  assert.equal(observed[0].runtime.recallHintDebug.status, "canary_blocked");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_reason, "trusted_runtime_context_missing");
 });
 
 test("Recall Hint failures fall back to original-query retrieval without failing explicit search", async () => {
