@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A ATTRIBUTION DESIGN / FIXED TOPK=3 / NO MODEL TRAINING AUTHORIZED / NO PROVIDER EGRESS`
+Status: `Q5-A1 SOURCE QUALIFIED / FIXED-POOL TOP3 ORACLE PASS / ATTRIBUTION RESULT FROZEN / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED / NO PROVIDER EGRESS`
 
 ## 1. Purpose
 
@@ -225,3 +225,129 @@ TOPK =
 ```
 
 No provider, model training, external service, live runtime/config, DB/LanceDB mutation, deployment, push, or tag is authorized by this document.
+
+
+## 12. Q5-A1 source qualification result
+
+Q5-A1 was executed entirely offline from the frozen Q4 synthetic result artifacts. It did not rerun retrieval, embedding, reranking, Hint production, or any live runtime path.
+
+The derived fixture binds:
+
+```text
+Q4-C1b development result:
+source_commit =
+4ee4374c31cd41149298b528958e60f42004dc37
+
+result_sha256 =
+5d51c8258b5842de9be91b074af64931525ad6fd6fa64972326d8136a32fac89
+
+raw result file sha256 =
+fdccf12a52f3fe078e72b4400b559d9b80d6ab364d48810947b15c7832dad391
+
+Q4-C2 holdout result:
+source_commit =
+d5f75bf95006c9557dd4289164c5e41c058cfc72
+
+result_sha256 =
+bf809cd7cc15d737ccce36503f5a036e1e1987870ec558bee10c21f5a035b6d9
+
+raw result file sha256 =
+03c09e9af8641e6c2a082004524957142cfe286aaa1570950e515afd41698878
+```
+
+The self-contained derived fixture contains `40` frozen Q4 cases and `104` synthetic memory records:
+
+```text
+fixture_sha256 =
+077b02f16c7bd463eb5f5120930473f653bf5ae37e1a16cdb377e88fd3a6b405
+```
+
+Qualified Q5 source:
+
+```text
+dd3fb442e03beb73f31745753f2b30c9d5d19acb
+```
+
+Clean-source result:
+
+```text
+status = PASS
+mode = Q5_A_FIXED_CANDIDATE_ATTRIBUTION
+worktree_clean = true
+provider_requests = 0
+model_training_runs = 0
+
+result_sha256 =
+6400fecbf92b5b544e972de59d3fce5dad025299b2fa0cc9e8c82a28f2aa2217
+```
+
+### Fixed-pool oracle findings
+
+Across the four frozen source/arm groups, Q5-A1 found `35` case snapshots where the candidate pool already contained all required evidence but the served top3 remained incomplete.
+
+For all `35/35`:
+
+- the evaluator-only top3 oracle could reach `Recall-all@3=1`;
+- no case required more than three candidate slots;
+- the historical canonical rerank projector preserved all candidate texts without truncation;
+- therefore no observed case is attributed to top3 capacity infeasibility or rank-input information loss.
+
+This is a bounded result about the Q4 synthetic artifacts. It does not establish that real-query evidence sets always fit into top3.
+
+### Q4 -> Q5 bridge
+
+Seven cases are the strongest downstream-selection examples because Hint changed the candidate pool from incomplete to complete while final top3 still remained incomplete:
+
+```text
+Q4-C1b development = 4
+Q4-C2 fresh holdout = 3
+total = 7
+```
+
+Those cases directly demonstrate that candidate recovery and final evidence selection are separable failure stages.
+
+### Attribution distribution
+
+Across all `35` qualifying source/arm snapshots:
+
+```text
+RANK_SELECTION_ERROR = 21
+REDUNDANT_SELECTION = 14
+
+TEMPORAL_VERSION_CONFLICT = 0
+TOP3_CAPACITY_LIMIT = 0
+RANK_INPUT_INFORMATION_LOSS = 0
+MIXED_OR_UNRESOLVED = 0
+```
+
+`RANK_SELECTION_ERROR` is intentionally broad. The frozen Q4 result artifacts do not preserve per-candidate cross-encoder scores, so Q5-A1 does not claim whether the cause is score calibration, model relevance judgment, tie/order behavior, or another rank-local mechanism.
+
+The strongest family-specific pattern is the C2 Hint arm:
+
+```text
+pool-complete / top3-incomplete snapshots = 12
+
+multi_facet:
+8 / 8 -> REDUNDANT_SELECTION
+
+entity_reference:
+4 / 4 -> RANK_SELECTION_ERROR
+```
+
+The C2 multi-facet attribution is deterministic from the frozen synthetic corpus roles: required evidence contains both rationale and limitation roles, while served top3 repeatedly over-selects one role and omits the complementary required role. This is evidence of missing complementarity/set-aware selection in this synthetic family, not a claim about the prevalence of duplicate evidence in real traffic.
+
+The C1b development Hint arm has `9` qualifying snapshots and all remain `RANK_SELECTION_ERROR` under the stricter rule; Q5-A1 does not force every multi-facet miss into the redundancy category when the frozen role evidence is insufficient.
+
+### Current product inference
+
+Q5-A1 weakens two candidate explanations for the observed Q4 synthetic failures:
+
+- increasing topK is not required to solve any of the `35` qualifying snapshots;
+- repairing canonical rerank text projection is not indicated by these artifacts.
+
+It strengthens two narrower hypotheses:
+
+- some entity/temporal failures require better individual candidate selection/ranking;
+- C2 multi-facet failures strongly motivate a bounded complementarity/set-aware selection experiment.
+
+This still does **not** select Statistical LTR. The next Q5 decision should compare the smallest interventions that address these observed failure classes while keeping the frozen candidate pools and topK=`3`.
