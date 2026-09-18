@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / NO SIMPLE INTERVENTION SELECTED / COMPLEMENTARITY MECHANISM SUPPORTED WITH RECALL-ANY TRADEOFF / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED / NO PROVIDER EGRESS`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / NO SIMPLE INTERVENTION SELECTED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / REAL SCORE CAPTURE NOT AUTHORIZED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -485,3 +485,132 @@ The frozen Q4 result artifacts preserve candidate-pool order and final rerank to
 Without full frozen reranker scores, Q5 cannot retrospectively test a margin-constrained complementarity rule such as “replace a redundant slot only when the counterpart relevance score is within a bounded margin of the displaced candidate” without making up missing evidence or rerunning the reranker.
 
 The next bounded source/design stage is therefore Q5-A3 Selection-Signal Contract. It should define the minimum future offline evidence required to compare constrained selection safely, while keeping topK=`3`, gold evaluator-only, provider execution separately authorized, and Statistical LTR undecided.
+
+## 14. Q5-A3 selection-signal contract
+
+Q5-A3 is source-qualified without any real provider call.
+
+Qualified source:
+
+```text
+706275fd041bc290b786076448b34d0f6ff46cce
+```
+
+The contract is implemented by:
+
+```text
+lib/benchmark/q5-selection-signal-contract-v1.js
+bin/run-q5-selection-signal-contract-v1.mjs
+test/q5-selection-signal-contract-v1.test.js
+```
+
+Clean-source qualification result:
+
+```text
+status = PASS
+mode = Q5_A3_SELECTION_SIGNAL_CONTRACT_SOURCE_QUALIFICATION
+
+provider_requests = 0
+model_training_runs = 0
+
+qualification packet_sha256 =
+a4ffc82cf2911bd4a38629a6a5a17d4c67eb9f6a73bdb48c4b3b8899707823b9
+```
+
+The qualification packet is synthetic and proves only that the current canonical rerank source path can satisfy the capture contract. It is not a real Q4/Q5 rerank capture and must not be interpreted as new quality evidence.
+
+### Required future capture signals
+
+For each frozen source/case/arm, a valid capture must contain:
+
+- pre-rerank candidate order/rank for the complete bounded pool;
+- SHA-256 of query text rather than raw query text;
+- SHA-256 of each candidate text rather than raw candidate text;
+- canonical projection lengths and truncation flag;
+- one finite reranker score for every submitted candidate;
+- complete rerank order/rank for every candidate;
+- served top3 as the exact first three reranked IDs;
+- frozen adapter identity;
+- bounded provider usage counters when available;
+- packet/source/fixture SHA identities.
+
+The contract freezes:
+
+```text
+topK = 3
+candidateDepth = 20
+
+reranker =
+SiliconFlow
+Qwen/Qwen3-Reranker-0.6B
+revision = null
+```
+
+### Explicitly forbidden capture content
+
+The packet fails closed if it contains evaluator/product-separation violations, including:
+
+```text
+gold*
+label*
+relevance_label*
+evaluator*
+answer*
+acceptance*
+raw query
+raw candidate/memory text
+documents
+prompt
+```
+
+This preserves the design boundary:
+
+```text
+selection capture = product-visible signals only
+gold/evaluator data = separate scoring phase only
+```
+
+### Source-path feasibility
+
+Q5-A3 directly qualifies against the existing canonical rerank path, not a hypothetical schema. The current source already exposes:
+
+```text
+orderedIds
+scores{id -> finite score}
+adapterIdentity
+usage
+projectionMetadata
+```
+
+Therefore future score capture does not require a new ranking algorithm or a Statistical LTR implementation. It requires only an explicitly authorized offline execution that persists signals the Q4 benchmark previously discarded.
+
+### Gates
+
+Q5-A3 source qualification passed:
+
+```text
+focused A3/rerank/projection = 22/22 PASS
+expanded Q5/Q4/Q1/rerank/projection = 34/34 PASS
+static check = 831 files PASS
+test-integrity = 375 / 0 invalid
+OpenSpec strict = 12/12 PASS
+git diff --check = PASS
+CodeGraph = one directly affected A3 test
+A3-only code-review-graph = risk 0.00 / affected flows 0 / test gaps 0
+```
+
+### Current boundary
+
+The source contract is ready, but **no real score capture is authorized**.
+
+The next executable step would require a separately authorized offline reranker transaction over a frozen candidate set using the historical Qwen3-Reranker-0.6B identity, producing only the A3 bounded capture packet. That transaction would make real provider calls and is therefore outside the authority of Q5-A3 source qualification.
+
+Until such an execution is explicitly authorized:
+
+```text
+Q5-A3 = SOURCE QUALIFIED
+REAL SCORE CAPTURE = NOT AUTHORIZED
+CONSTRAINED COMPLEMENTARITY EVALUATION = NOT STARTED
+STATISTICAL LTR = NOT SELECTED
+RUNTIME = UNCHANGED
+```
