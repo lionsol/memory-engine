@@ -1,6 +1,6 @@
 # memory-engine Recall Hint runtime canary — RH-L2
 
-Status: `RH-L2-A CONTROL SOURCE QUALIFIED / RH-L2-B PROVIDER SOURCE QUALIFIED / RH-L2-C LIVE CANARY STOPPED AT TRUSTED CONTEXT GATE / RH-L2-C1 FACTORY-CONTEXT FIX SOURCE QUALIFIED / LIVE RETRY NOT AUTHORIZED / RUNTIME FEATURE OFF`
+Status: `RH-L2-A CONTROL SOURCE QUALIFIED / RH-L2-B PROVIDER SOURCE QUALIFIED / RH-L2-C FIRST LIVE STOPPED AT TRUSTED CONTEXT GATE / RH-L2-C1 REAL-HOST VERIFIED / RH-L2-C RETRY STOPPED ON EMPTY HINT / RH-L2-C2 PREPARED / LIVE C2 NOT AUTHORIZED / RUNTIME FEATURE OFF`
 
 ## 1. Purpose
 
@@ -175,10 +175,66 @@ Positive/negative integration tests prove:
 
 The enlarged C1 regression passes `203/203`; static check covers `817` files; test-integrity scans `368` files with `0` invalid; strict OpenSpec is `12/12` PASS; `git diff --check` passes. CodeGraph identifies only the tool wrapper and Recall Hint tests as directly affected. code-review-graph reports `0` affected stored flows and risk `0.35`; its helper-level gaps are exercised through the integration tests above.
 
-## 10. Next boundary: RH-L2-C retry
+## 10. RH-L2-C retry result
 
-The first RH-L2-C transaction is consumed and must not be replayed. RH-L2-C1 source qualification does **not** authorize another live canary.
+Owner authorized one new exact-session retry after deploying source `07ad18d802e0179e66431c26bcc3f10fc9237ed3`. The retry used a fresh session and executed exactly one `memory_engine_search` call.
 
-A retry requires a new explicit Owner authorization bound to the clean C1 source commit and a new exact-session transaction. It must preserve the existing provider/model/endpoint/prompt/schema/topK/candidate-depth/reranker contracts, use one exact trusted session, perform no automatic retry, capture only bounded observation fields, and roll back the canary immediately after evidence capture.
+Engine observation `memory_events.id=602` proved that RH-L2-C1 fixed the prior live blocker:
+
+- `recall_hint.mode=recall_hint_v1`;
+- `canary_in_scope=true`;
+- `canary_reason=session_allowlisted`;
+- `vector_execution_mode=parallel`;
+- provider latency `1400.05ms`;
+- provider input `335` tokens;
+- provider output `10` tokens.
+
+The real provider therefore executed successfully inside the exact-session canary. However, the returned Hint was a valid empty Hint:
+
+- `recall_hint.status=empty_hint`;
+- `expansion_count=0`;
+- no multi-query vector execution field was emitted.
+
+The retry is therefore **STOPPED / PARALLEL NOT EXERCISED**, not PASS. It verifies the trusted factory-context fix and the production provider path, but it does not qualify live parallel vector execution.
+
+The transaction executed exactly one search and one observation, had no automatic retry, rolled back `recallHintRuntimeCanary` to absent, and left Gateway healthy. The installed live source remains `07ad18d...` with Recall Hint feature off.
+
+The retry observation still reports `traffic_origin=unknown / missing_trusted_context`. This is now a separate observability defect in the legacy traffic-origin hook path. It does not gate Recall Hint canary authority because RH-L2-C1 uses the trusted plugin-tool factory context directly.
+
+## 11. Q4 bounded-context mismatch and RH-L2-C2 probe
+
+Q4 producer qualification allowed the frozen query plus bounded caller context such as `active_project` and `recent_entities`. The production Recall Hint adapter currently calls the same frozen prompt/schema with `bounded_context={}`. Therefore the live empty Hint is not evidence that the Q4 producer contract regressed; the live runtime supplied less caller context than Q4 development/holdout execution.
+
+RH-L2-C2 is consequently defined as an **execution-only synthetic probe**, not a quality reproduction and not a new Q4 claim. It does not change the prompt, provider, model, schema, topK, candidate depth, reranker or runtime context seam.
+
+The probe is derived from frozen Q4 development case `q4c1-multi-03 / CedarIndex`:
+
+```text
+CedarIndex — 那个方案的选择理由和已知限制分别是什么？
+```
+
+This differs from the original Q4 case only by moving the frozen project anchor into the explicit query because production bounded context is empty. The probe is 33 code points, below the 240-code-point runtime bound.
+
+The frozen Q4 producer output for this case was:
+
+- project: `CedarIndex`;
+- entity: `CedarIndex`;
+- facets: `方案选择理由`, `已知限制`.
+
+Under that already-frozen Hint, the current query-plan builder produces exactly two expansions, yielding the intended original + 2 expansion execution shape for the parallel vector path. C2 does **not** require the live provider to reproduce those exact fields; it requires only a valid non-empty Hint that creates one or two expansions.
+
+## 12. Next boundary: RH-L2-C2 final parallel exercise
+
+RH-L2-C2 is **not authorized** by this preparation work.
+
+A live C2 transaction requires a new explicit Owner authorization bound to the clean source commit and a new exact session. It must:
+
+- execute the frozen CedarIndex probe exactly once;
+- keep `vectorExecutionMode=parallel`;
+- preserve SiliconFlow / DeepSeek-V4-Flash / endpoint / prompt / schema identities;
+- perform no automatic retry or replay;
+- qualify only if `canary_in_scope=true`, `session_allowlisted`, provider telemetry is present, `expansion_count>=1`, and the live vector debug proves `vector_query_execution=parallel`;
+- stop without retry on empty/no-expansion Hint, provider failure, canary block, or missing parallel evidence;
+- remove the canary config immediately after evidence capture.
 
 AutoRecall integration, default explicit-search activation, live DB/LanceDB mutation, push and tag remain outside RH-L2.
