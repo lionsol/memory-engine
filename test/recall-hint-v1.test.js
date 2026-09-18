@@ -475,6 +475,85 @@ test("Recall Hint provider is injected only for explicit memory_engine_search an
   });
 });
 
+test("Recall Hint runtime canary accepts trusted tool-factory session context without before_tool_call registry", async () => {
+  let providerCalls = 0;
+  const observed = [];
+  const context = makeSearchContext({
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-factory"],
+      vectorExecutionMode: "parallel",
+    },
+    resolveExplicitSearchRuntimeContext: () => null,
+    recallHintProvider: () => {
+      providerCalls += 1;
+      return { version: "recall_hint_v1", query_facets: ["reason"] };
+    },
+    hybridSearch: async (query, options, runtime) => {
+      observed.push({ query, options, runtime });
+      return { results: [], debug: {} };
+    },
+  });
+  const executeSearch = createMemoryEngineSearchExecute(context);
+
+  await executeSearch(
+    "tool-factory-1",
+    { query: "original query", top_k: 3 },
+    {
+      source: "openclaw_runtime",
+      sessionIdentity: "session-factory",
+      runIdentity: null,
+      requestIdentity: null,
+    },
+  );
+
+  assert.equal(providerCalls, 1);
+  assert.equal(observed[0].runtime.recallHintDebug.status, "applied");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_in_scope, true);
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_reason, "session_allowlisted");
+  assert.equal(observed[0].runtime.recallHintVectorExecutionMode, "parallel");
+});
+
+test("Recall Hint runtime canary rejects mismatched trusted tool-factory session even if fallback resolver matches", async () => {
+  let providerCalls = 0;
+  const observed = [];
+  const context = makeSearchContext({
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-allowed"],
+      vectorExecutionMode: "parallel",
+    },
+    resolveExplicitSearchRuntimeContext: () => ({
+      source: "openclaw_runtime",
+      sessionIdentity: "session-allowed",
+      requestIdentity: "tool-factory-2",
+    }),
+    recallHintProvider: () => {
+      providerCalls += 1;
+      return { version: "recall_hint_v1", query_facets: ["reason"] };
+    },
+    hybridSearch: async (query, options, runtime) => {
+      observed.push({ query, options, runtime });
+      return { results: [], debug: {} };
+    },
+  });
+  const executeSearch = createMemoryEngineSearchExecute(context);
+
+  await executeSearch(
+    "tool-factory-2",
+    { query: "original query", top_k: 3 },
+    {
+      source: "openclaw_runtime",
+      sessionIdentity: "session-other",
+      requestIdentity: null,
+    },
+  );
+
+  assert.equal(providerCalls, 0);
+  assert.equal(observed[0].runtime.recallHintDebug.status, "canary_blocked");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_reason, "session_not_allowlisted");
+});
+
 test("Recall Hint runtime canary blocks provider outside the exact trusted session", async () => {
   let providerCalls = 0;
   const observed = [];

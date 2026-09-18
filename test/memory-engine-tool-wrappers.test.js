@@ -71,6 +71,66 @@ test("runtime tool registration matches the manifest tool contract exactly", () 
   assert.deepEqual(seen, manifest.contracts.tools);
 });
 
+test("memory_engine_search factory binds only trusted host session context into execution", async () => {
+  const registrations = [];
+  const executorCalls = [];
+  registerMemoryEngineTools({
+    registerTool(tool, options) {
+      registrations.push({ tool, options });
+    },
+  }, {
+    memoryEngine: async () => ({}),
+    memoryEngineSearch: async (...args) => {
+      executorCalls.push(args);
+      return { results: [] };
+    },
+    memoryEngineGet: async () => ({}),
+  });
+
+  const searchRegistration = registrations.find(
+    registration => registration.options?.name === "memory_engine_search",
+  );
+  assert.ok(searchRegistration);
+  assert.equal(typeof searchRegistration.tool, "function");
+
+  const sessionTool = searchRegistration.tool({
+    agentId: "main",
+    sessionId: "session-exact",
+    sessionKey: "agent:main:explicit:session-exact",
+    requesterSenderId: "must-not-propagate",
+    deliveryContext: { channel: "cli" },
+  });
+  await sessionTool.execute("tool-call-1", { query: "query", top_k: 3 });
+
+  assert.equal(executorCalls.length, 1);
+  assert.equal(executorCalls[0][0], "tool-call-1");
+  assert.deepEqual(executorCalls[0][1], { query: "query", top_k: 3 });
+  assert.deepEqual(executorCalls[0][2], {
+    source: "openclaw_runtime",
+    sessionIdentity: "session-exact",
+    runIdentity: null,
+    requestIdentity: null,
+  });
+  assert.equal(JSON.stringify(executorCalls[0][2]).includes("must-not-propagate"), false);
+
+  const sessionKeyOnlyTool = searchRegistration.tool({
+    agentId: "main",
+    sessionKey: "agent:main:explicit:key-only",
+  });
+  await sessionKeyOnlyTool.execute("tool-call-2", { query: "query", top_k: 3 });
+
+  assert.deepEqual(executorCalls[1][2], {
+    source: "openclaw_runtime",
+    sessionIdentity: "agent:main:explicit:key-only",
+    runIdentity: null,
+    requestIdentity: null,
+  });
+
+  const contextlessTool = searchRegistration.tool({});
+  await contextlessTool.execute("tool-call-3", { query: "query", top_k: 3 });
+  assert.equal(executorCalls[2][2], null);
+});
+
 test("cite tool contract binds reinforcement to current-turn Search results", () => {
   const registrations = [];
   registerMemoryEngineTools({

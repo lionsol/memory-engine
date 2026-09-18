@@ -1,6 +1,6 @@
 # memory-engine Recall Hint runtime canary — RH-L2
 
-Status: `RH-L2-A CONTROL SOURCE QUALIFIED / RH-L2-B PROVIDER SOURCE QUALIFIED / DEFAULT-OFF WIRED / ZERO-EGRESS UNTIL CANARY ACTIVATION / EXACT-SESSION FAIL-CLOSED / LIVE RUNTIME CANARY NOT AUTHORIZED`
+Status: `RH-L2-A CONTROL SOURCE QUALIFIED / RH-L2-B PROVIDER SOURCE QUALIFIED / RH-L2-C LIVE CANARY STOPPED AT TRUSTED CONTEXT GATE / RH-L2-C1 FACTORY-CONTEXT FIX SOURCE QUALIFIED / LIVE RETRY NOT AUTHORIZED / RUNTIME FEATURE OFF`
 
 ## 1. Purpose
 
@@ -36,12 +36,12 @@ A canary request is eligible only when all of the following are true:
 1. surface is the dedicated `memory_engine_search` path;
 2. `recallHintRuntimeCanary.enabled === true`;
 3. the configured exact `sessionIds` allowlist is non-empty;
-4. the current tool call can be resolved through the existing `before_tool_call` registry to a trusted OpenClaw runtime session;
+4. the dedicated `memory_engine_search` tool factory receives a trusted OpenClaw `sessionId`/`sessionKey`, or the existing `before_tool_call` registry resolves the current `toolCallId` to a trusted OpenClaw runtime session;
 5. that exact trusted session identity is allowlisted.
 
 Missing context, an empty allowlist, an untrusted context source, a non-matching session, or an invalid execution mode all deny provider authority. Query text, tool params and model-supplied values do not participate in the scope decision.
 
-The lifecycle resolver is read-only: it peeks the existing tool-call scope and returns only bounded runtime identity fields. It does not consume the scope or expose the session identity through search results/observation metadata.
+RH-L2-C1 treats the OpenClaw plugin-tool factory context as the primary trusted session source for the dedicated `memory_engine_search` surface. OpenClaw 2026.7.1-2 defines that factory context as trusted and supplies `sessionId`/`sessionKey`; memory-engine closes over only the minimal session identity and passes it directly to the search executor. The existing lifecycle `before_tool_call` resolver remains a read-only fallback. If a factory context is present, it takes precedence over the fallback so a mismatched trusted factory session cannot be overridden by a different registry result. Query text, tool params, sender-like fields and model output are never accepted as identity.
 
 ## 4. Execution-mode authority
 
@@ -129,20 +129,56 @@ RH-L2-A/B focused verification covers:
 
 The enlarged regression set passes `169/169`; static check covers `817` files; test-integrity scans `368` files with `0` invalid; strict OpenSpec is `12/12` PASS; `git diff --check` passes. CodeGraph keeps the blast radius concentrated around Recall Hint/search/provider/observation paths. code-review-graph reports no affected stored execution flow; its helper-level test-gap hints include functions that are exercised through the positive/negative integration suite but are not associated by the graph parser.
 
-## 8. Next boundary: RH-L2-C live exact-session canary
+## 8. RH-L2-C first live exact-session canary
 
-RH-L2-B is source-qualified, but **no live canary is authorized by that fact**. The next boundary is RH-L2-C and must be separately authorized against an exact clean source commit and an exact runtime/config packet.
+Owner authorized one RH-L2-C live canary against source `4db3e20eaaf7e661ff604e540733a9fad689751f`. The live extension was deployed to that exact source, Gateway remained healthy, and the canary was limited to exact session `f8e20200-4593-4ce3-9435-868facfd9edb` with `vectorExecutionMode=parallel`.
 
-The RH-L2-C authorization packet must precommit at minimum:
+The transaction executed exactly one `memory_engine_search` call with toolCallId `call_at8fxzaj1dhw5g83s7tns49n`. Engine observation `memory_events.id=590` recorded:
 
-- one exact trusted OpenClaw session ID allowlist entry;
-- `recallHintRuntimeCanary.enabled=true` only for that scope;
-- explicit `vectorExecutionMode` (`sequential` or `parallel`);
-- the frozen SiliconFlow/DeepSeek-V4-Flash provider identity above;
-- no provider/model/endpoint/prompt/schema/topK/candidate-depth/reranker changes;
-- no automatic retry;
-- bounded observation fields only;
-- a rollback operation that restores `enabled=false` and removes the canary session;
-- no AutoRecall integration, no default explicit-search activation, no live DB/LanceDB mutation, no push/tag.
+- `recall_hint.status=canary_blocked`;
+- `canary_in_scope=false`;
+- `canary_reason=trusted_runtime_context_missing`;
+- `vector_execution_mode=parallel`;
+- `expansion_count=0`;
+- provider latency/token fields absent.
 
-Source qualification does not authorize config mutation, plugin reload, deployment or provider egress. Those remain RH-L2-C runtime actions.
+Therefore the canary is **STOPPED AT TRUSTED CONTEXT GATE**. Recall Hint provider execution and parallel vector execution were not reached, so the agent's ordinary `memory_engine_search` success does not qualify the canary. Recall Hint provider egress for this transaction was zero.
+
+Deployment and rollback both passed. After evidence capture, `recallHintRuntimeCanary` was removed, config validated, Gateway was healthy, and the installed `4db3e20...` source remained live with the feature off.
+
+The same observation also recorded `traffic_origin=unknown / missing_trusted_context`, showing that the prior control design's shared `before_tool_call` registry did not provide trusted context on this real CLI explicit-session plugin-tool path.
+
+## 9. RH-L2-C1 trusted factory-context binding fix
+
+RH-L2-C1 closes the live blocker without weakening exact-session policy or changing OpenClaw host code.
+
+OpenClaw 2026.7.1-2 declares `OpenClawPluginToolContext` as trusted execution context and supplies `sessionId` / `sessionKey` to plugin-owned tool factories. Before C1, memory-engine registered `memory_engine_search` as a static tool, so this trusted per-session context was discarded and the canary depended solely on the hook registry.
+
+C1 changes only the dedicated `memory_engine_search` registration to a tool factory. The factory:
+
+- prefers exact `sessionId`, then exact `sessionKey`;
+- projects only `source=openclaw_runtime` plus the bounded session identity;
+- does not propagate sender, delivery, query, prompt or arbitrary factory fields;
+- binds the current toolCallId only inside the executor;
+- gives this factory context precedence over the lifecycle fallback;
+- leaves legacy `memory_engine` action-search outside RH-L2 authority.
+
+OpenClaw's descriptor cache is safe for this design: it caches descriptors, while cached-tool execution resolves the plugin factory again with the current tool context. Session-bound tool objects are therefore not reused across different sessions.
+
+Positive/negative integration tests prove:
+
+- exact trusted factory session allows the Recall Hint canary even when the `before_tool_call` resolver is absent;
+- a mismatched factory session is denied even if the fallback resolver claims an allowlisted session;
+- `sessionKey` is a fallback only when `sessionId` is absent;
+- a contextless factory supplies no trusted runtime identity;
+- tool surface and legacy search behavior remain unchanged.
+
+The enlarged C1 regression passes `203/203`; static check covers `817` files; test-integrity scans `368` files with `0` invalid; strict OpenSpec is `12/12` PASS; `git diff --check` passes. CodeGraph identifies only the tool wrapper and Recall Hint tests as directly affected. code-review-graph reports `0` affected stored flows and risk `0.35`; its helper-level gaps are exercised through the integration tests above.
+
+## 10. Next boundary: RH-L2-C retry
+
+The first RH-L2-C transaction is consumed and must not be replayed. RH-L2-C1 source qualification does **not** authorize another live canary.
+
+A retry requires a new explicit Owner authorization bound to the clean C1 source commit and a new exact-session transaction. It must preserve the existing provider/model/endpoint/prompt/schema/topK/candidate-depth/reranker contracts, use one exact trusted session, perform no automatic retry, capture only bounded observation fields, and roll back the canary immediately after evidence capture.
+
+AutoRecall integration, default explicit-search activation, live DB/LanceDB mutation, push and tag remain outside RH-L2.
