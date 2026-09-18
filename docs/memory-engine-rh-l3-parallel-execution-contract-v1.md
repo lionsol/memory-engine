@@ -1,6 +1,6 @@
 # memory-engine RH-L3 Parallel Execution Qualification Contract v1
 
-Status: `RH-L3-A SOURCE QUALIFIED / RH-L3-B LOCAL PARALLEL EXECUTION QUALIFIED / RH-L3-C NOT STARTED / RUNTIME NOT AUTHORIZED`
+Status: `RH-L3 LOCAL QUALIFIED / A+B+C PASS / REAL-HOST NOT AUTHORIZED / RUNTIME FEATURE OFF`
 
 ## 1. Purpose
 
@@ -280,10 +280,87 @@ fused_candidate_ids =
   limitations-only
 ```
 
-This qualifies local parallel fan-out and complete vector-level fusion input on the frozen plan. It does not yet qualify full Hybrid Fusion -> Ranking -> Canonical Projection behavior; that is RH-L3-C.
+This qualifies local parallel fan-out and complete vector-level fusion input on the frozen plan. Full Hybrid Fusion -> Ranking -> Canonical Projection behavior is qualified separately by RH-L3-C below.
 
 Focused RH-L3/Recall Hint/Hybrid/RH-L1 regression passed `53/53`; static check passed `821` files; test-integrity scanned `370` files with `0` invalid; strict OpenSpec passed `12/12`; `git diff --check` passed. CodeGraph found one directly affected test file and a five-symbol impact cone around the execution runner; code-review-graph reported `0` affected stored flows, `0` test gaps and risk `0.00`.
 
 Live state remains unchanged: the installed extension is still `bd4b177...`, `recallHintRuntimeCanary` is absent, and RH-L3-B is not deployed.
 
-RH-L3-C local fusion/ranking/projection qualification is the next boundary. Real-host runtime qualification remains separately authorized.
+## 11. RH-L3-C local fusion / ranking / canonical projection result
+
+RH-L3-C binds the consumed RH-L3-B qualification and the exact RH-L3-A fixture/plan identities, then drives the frozen three-query plan through the production `hybridSearch` path using readonly isolated Core/Engine fixtures and a controlled local vector backend.
+
+Qualified source:
+
+```text
+4dbb9b2b271d483239e7d17e69f0abff66fe58d0
+```
+
+Clean-source CLI result:
+
+```text
+status = PASS
+mode = RH_L3_C_LOCAL_FUSION_RANKING_PROJECTION
+worktree_clean = true
+provider_requests = 0
+
+contract_sha256 =
+cd1662dc7090cab9ef7111e4391a833f54cddaa27b838bead2b0ef05d866beb1
+
+execution_binding_sha256 =
+7c99faecacd01bcebedc132a2ec51f04d7432d84248d61c248778d7bad88a205
+
+upstream_rh_l3_b.source_commit =
+e4400ade955960d006367b5108f6b0da1377819e
+
+upstream_rh_l3_b.contract_sha256 =
+dcb9f45fce0761a49c2e62bcf2fb83ea030a6982ec54c5f5179868b082c7b22b
+
+upstream_rh_l3_b.execution_binding_sha256 =
+4ec698a554608d3951c615165a8a372ba82576b33f8ada709a32b083a914ea3f
+
+upstream_rh_l3_b.result_sha256 =
+c8666d9bb2e455f37376f2a904a60923d6f02423624808eb51d011d78cc15ff5
+
+result_sha256 =
+8ef8bae78cca970f00919627a1dd72b40d62535d0b122414002475032af9b4b4
+```
+
+Execution evidence:
+
+```text
+vector_execution_mode = parallel
+queries_submitted = 3
+queries_completed = 3
+max_active_embeddings = 3
+max_active_searches = 3
+
+fusion_channels = [vector]
+fusion_pool_count = 4
+post_rerank_pool_ids =
+  shared
+  original-only
+  rationale-only
+  limitations-only
+
+top3_memory_ids =
+  shared
+  original-only
+  rationale-only
+
+canonical_projection.requested_count = 3
+canonical_projection.resolved_count = 3
+canonical_projection.dropped_count = 0
+```
+
+The fourth candidate, `limitations-only`, remains present through post-rerank fusion and is removed only by the requested `topK=3` serving boundary. Therefore the expansion-derived candidate is not silently lost inside vector fusion or hybrid ranking.
+
+Canonical user projection is checked against an exact result-field whitelist. The allowed result fields are canonical/retrieval output fields only; `vector_query_*`, execution mode, parallel-control state, query hashes and other internal execution/debug metadata are absent from every served result.
+
+Focused RH-L3/Recall Hint/Hybrid/RH-L1 regression passed `77/77`; static check passed `823` files; test-integrity scanned `371` files with `0` invalid; strict OpenSpec passed `12/12`; `git diff --check` passed. CodeGraph found one directly affected RH-L3-C test file and a five-symbol impact cone around the new runner; code-review-graph reported `0` affected stored flows, `0` test gaps and risk `0.00`.
+
+RH-L3 is therefore **LOCAL QUALIFIED** across A, B and C. This establishes deterministic expansion planning, real local parallel fan-out, complete downstream fusion/ranking flow and bounded canonical projection under controlled inputs. It does not convert RH-L2's consumed live C2 into a PASS and does not establish real-host parallel execution.
+
+Live state remains unchanged: installed extension `bd4b177...`, `recallHintRuntimeCanary=ABSENT`, feature off.
+
+The next boundary, if pursued, is one separately authorized real-host execution qualification. It must not reuse or relabel RH-L2-C2 and does not inherit deployment/runtime authority from these local results.
