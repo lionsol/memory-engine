@@ -31,6 +31,7 @@
     "benchmark:q4:recall-hint:acceptance": "node bin/run-q4-recall-hint-c1b-acceptance-v1.mjs",
     "benchmark:q4:recall-hint:c2-holdout": "node bin/run-q4-recall-hint-c2-holdout-v1.mjs",
     "benchmark:rh-l1:performance": "node bin/run-rh-l1-performance-v1.mjs",
+    "benchmark:rh-l1:deterministic-equivalence": "node bin/run-rh-l1-deterministic-equivalence-v1.mjs",
     "benchmark:aml:serve": "node bin/serve-aml-benchmark-v1.js",
     "smoke:quality-baseline": "node bin/run-memory-quality-baseline-smoke.js",
     "smoke:smart-add-duplicates": "node bin/run-smart-add-duplicate-baseline-smoke.js",
