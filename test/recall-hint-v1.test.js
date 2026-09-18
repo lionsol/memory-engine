@@ -429,6 +429,50 @@ function makeSearchContext({ recallHintProvider, hybridSearch, recallHintVectorE
   });
 }
 
+test("RH-L3 probe debug survives hybrid debug sanitization with exact bounded status and probe token", () => {
+  const debug = createHybridDebug({
+    rawQuery: "query",
+    strippedQuery: "query",
+    normalizedQuery: "query",
+    queryTerms: ["query"],
+    candidateCounts: createCandidateCounts(),
+    minConfidence: 0,
+    lexicalConfidenceThreshold: 0,
+    recallHintDebug: {
+      mode: "recall_hint_v1",
+      status: "probe_applied",
+      hint_entity_count: 1,
+      hint_facet_count: 2,
+      hint_has_project: true,
+      hint_time_relation: null,
+      hint_expansion_count: 2,
+      hint_canary_in_scope: true,
+      hint_canary_reason: "session_allowlisted",
+      hint_vector_execution_mode: "parallel",
+      hint_execution_probe: "rh_l3_canonical_v1",
+    },
+  });
+
+  assert.equal(debug.recall_hint.status, "probe_applied");
+  assert.equal(debug.hint_execution_probe, "rh_l3_canonical_v1");
+
+  const rejected = createHybridDebug({
+    rawQuery: "query",
+    strippedQuery: "query",
+    normalizedQuery: "query",
+    queryTerms: ["query"],
+    candidateCounts: createCandidateCounts(),
+    minConfidence: 0,
+    lexicalConfidenceThreshold: 0,
+    recallHintDebug: {
+      mode: "recall_hint_v1",
+      status: "probe_applied",
+      hint_execution_probe: "arbitrary-probe",
+    },
+  });
+  assert.equal(rejected.hint_execution_probe, null);
+});
+
 test("Recall Hint provider is injected only for explicit memory_engine_search and forwards a bounded plan", async () => {
   const calls = { provider: 0, args: [], runtimes: [] };
   const context = makeSearchContext({
