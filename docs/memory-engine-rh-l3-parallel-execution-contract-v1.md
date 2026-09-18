@@ -1,6 +1,6 @@
 # memory-engine RH-L3 Parallel Execution Qualification Contract v1
 
-Status: `RH-L3 CLOSED WITH FINDINGS / LOCAL A+B+C PASS / REAL-HOST EXECUTOR VERIFIED / REAL-HOST QUALIFICATION TRANSACTION STOPPED ON OBSERVABILITY GATE / POST-TRANSACTION OBSERVABILITY REPAIR SOURCE-QUALIFIED / RUNTIME FEATURE OFF`
+Status: `RH-L3 CLOSED WITH FINDINGS / LOCAL CONTROLLED A+B+C PASS / REAL-HOST PARALLEL PATH OBSERVED / REAL-HOST QUALIFICATION TRANSACTION STOPPED ON OBSERVABILITY GATE / POST-TRANSACTION OBSERVABILITY REPAIR SOURCE-QUALIFIED / RUNTIME FEATURE OFF`
 
 ## 1. Purpose
 
@@ -359,9 +359,9 @@ Canonical user projection is checked against an exact result-field whitelist. Th
 
 Focused RH-L3/Recall Hint/Hybrid/RH-L1 regression passed `77/77`; static check passed `823` files; test-integrity scanned `371` files with `0` invalid; strict OpenSpec passed `12/12`; `git diff --check` passed. CodeGraph found one directly affected RH-L3-C test file and a five-symbol impact cone around the new runner; code-review-graph reported `0` affected stored flows, `0` test gaps and risk `0.00`.
 
-RH-L3 is therefore **LOCAL QUALIFIED** across A, B and C. This establishes deterministic expansion planning, real local parallel fan-out, complete downstream fusion/ranking flow and bounded canonical projection under controlled inputs. It does not convert RH-L2's consumed live C2 into a PASS and does not establish real-host parallel execution.
+RH-L3 local controlled evidence is complete across A, B and C. These source/local gates establish deterministic expansion planning, local parallel fan-out, downstream fusion/ranking flow and bounded canonical projection under controlled inputs; they are not a claim that the entire real-host qualification transaction passed. They do not convert RH-L2's consumed live C2 into a PASS.
 
-Live state remains unchanged: installed extension `bd4b177...`, `recallHintRuntimeCanary=ABSENT`, feature off.
+The later real-host transaction is adjudicated separately below.
 
 ## 12. RH-L3 real-host execution transaction
 
@@ -392,14 +392,14 @@ channel_error_count = 0
 Recall Hint provider telemetry = absent
 ```
 
-This is sufficient to verify that the real host entered and completed the three-query parallel vector executor path. The zero vector candidate counts do not invalidate the execution claim; final served results came from non-vector retrieval channels.
+This is direct evidence that the real host entered and completed the three-query parallel vector path. It supports the execution-path observation but does not override the failed precommitted qualification gate. The zero vector candidate counts do not invalidate the path observation; final served results came from non-vector retrieval channels.
 
 The precommitted transaction PASS gate also required persisted `recall_hint.status=probe_applied` and `recall_hint.execution_probe=rh_l3_canonical_v1`. Those fields did not survive the existing hybrid debug sanitizer. `createHybridDebug` did not recognize `probe_applied`, so it rewrote the status to `provider_error`, and it did not project `hint_execution_probe`, so the persisted execution probe token was absent.
 
 Therefore the historical adjudication is:
 
 ```text
-REAL-HOST PARALLEL EXECUTOR = VERIFIED
+REAL-HOST PARALLEL PATH = OBSERVED
 
 RH-L3 REAL-HOST QUALIFICATION TRANSACTION
 = STOPPED / CONSUMED
@@ -409,7 +409,7 @@ RH-L3 REAL-HOST QUALIFICATION TRANSACTION
 
 This does not relabel the transaction PASS and does not alter RH-L2-C2.
 
-Rollback completed successfully: live source remains `e40186d...`, `recallHintRuntimeCanary=ABSENT`, Gateway connectivity is healthy, and the feature is off.
+Rollback/cleanup completed successfully and was rechecked read-only after closure: live source remains `e40186d9387a33cf51a45cac9e982385b19cd212`; `recallHintRuntimeCanary` is absent, so the RH-L3 probe/canary is not active; Gateway is running with connectivity probe `ok` and admin capability healthy. Pre-existing experimental switches were not reverted by RH-L3 cleanup: `autoRecall.enabled=true` with `topK=3` and nested `cardFirstRuntime.enabled=true`, `explicitSearchRerankProvider.enabled=true`, and `explicitSearchRerankControl.enabled=false`. These retained settings predate/stand outside the RH-L3 transaction and are not authority granted by this report.
 
 A post-transaction source-only observability repair was committed at:
 
