@@ -1,6 +1,6 @@
 # memory-engine RH-L3 Parallel Execution Qualification Contract v1
 
-Status: `RH-L3 LOCAL QUALIFIED / A+B+C PASS / REAL-HOST EXECUTOR VERIFIED / REAL-HOST QUALIFICATION TRANSACTION STOPPED ON OBSERVABILITY GATE / RUNTIME FEATURE OFF`
+Status: `RH-L3 CLOSED WITH FINDINGS / LOCAL A+B+C PASS / REAL-HOST EXECUTOR VERIFIED / REAL-HOST QUALIFICATION TRANSACTION STOPPED ON OBSERVABILITY GATE / POST-TRANSACTION OBSERVABILITY REPAIR SOURCE-QUALIFIED / RUNTIME FEATURE OFF`
 
 ## 1. Purpose
 
@@ -420,3 +420,5 @@ A post-transaction source-only observability repair was committed at:
 It adds the RH-L3 probe statuses to the bounded debug whitelist and forwards only the fixed `rh_l3_canonical_v1` token. Focused repair tests passed `38/38`; static check passed `825` files; test-integrity scanned `372` files with `0` invalid; strict OpenSpec passed `12/12`; `git diff --check` passed. This repair is not deployed and cannot retroactively repair event `640`.
 
 No additional real-host transaction is authorized by this repair or by this closure.
+
+RH-L3 is closed with findings. The executor question is answered; the historical qualification transaction remains STOPPED and is not reopened. Further Recall Hint/runtime work requires a new product/version decision rather than another RH-L3 retry.
