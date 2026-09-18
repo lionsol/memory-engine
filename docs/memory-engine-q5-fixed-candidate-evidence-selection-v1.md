@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / Q5-A4 REAL SCORE CAPTURE AUTHORIZED + PREPARED / NOT YET EXECUTED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / Q5-A4 REAL SCORE CAPTURE STOPPED + CONSUMED ON LOCAL USAGE-SCHEMA CONTRACT / 1 PROVIDER ATTEMPT / NO REPLAY / POST-TRANSACTION CAPTURE REPAIR SOURCE-QUALIFIED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -599,21 +599,9 @@ CodeGraph = one directly affected A3 test
 A3-only code-review-graph = risk 0.00 / affected flows 0 / test gaps 0
 ```
 
-### Current boundary
+### Boundary at A3 source qualification
 
-The source contract is ready, but **no real score capture is authorized**.
-
-The next executable step would require a separately authorized offline reranker transaction over a frozen candidate set using the historical Qwen3-Reranker-0.6B identity, producing only the A3 bounded capture packet. That transaction would make real provider calls and is therefore outside the authority of Q5-A3 source qualification.
-
-Until such an execution is explicitly authorized:
-
-```text
-Q5-A3 = SOURCE QUALIFIED
-REAL SCORE CAPTURE = NOT AUTHORIZED
-CONSTRAINED COMPLEMENTARITY EVALUATION = NOT STARTED
-STATISTICAL LTR = NOT SELECTED
-RUNTIME = UNCHANGED
-```
+At the time Q5-A3 closed, the source contract was ready but no real score capture had yet been authorized. A later Owner authorization opened exactly one Q5-A4 transaction, described below. That later authorization does not retroactively change the A3 source-only result.
 
 ## 15. Q5-A4 fixed-pool real rerank score-capture transaction
 
@@ -662,3 +650,125 @@ partial score packets are not accepted
 Before the first external request the runner must persist an attempt marker. A successful transaction must produce exactly one A3 bounded packet containing only hashed query/candidate text identities plus rank/score/projection/adapter metadata. Raw query text, raw candidate text and evaluator/gold fields must not be persisted in the packet.
 
 The execution source must be committed and the worktree clean before provider calls begin.
+
+### Q5-A4 execution result
+
+The authorized transaction source was frozen at:
+
+```text
+91b274aec64170b91713c3854a24e5aa71312a44
+```
+
+Zero-egress preflight passed before execution:
+
+```text
+fixture_sha256 =
+077b02f16c7bd463eb5f5120930473f653bf5ae37e1a16cdb377e88fd3a6b405
+
+case_count = 40
+planned_provider_calls = 80
+candidateDepth = 20
+topK = 3
+
+provider = siliconflow
+model = Qwen/Qwen3-Reranker-0.6B
+deadline_ms = 2500
+
+credential_available = true
+retry_policy = NO_RETRY_NO_RESUME_NO_REPLAY
+
+embedding_calls = 0
+hint_producer_calls = 0
+model_training_runs = 0
+runtime_mutation = false
+```
+
+The first provider attempt consumed the transaction. Execution then stopped locally during A3 capture validation:
+
+```text
+status = STOPPED
+code = Q5_A3_USAGE_COUNT_INVALID
+
+provider_attempts_started = 1
+planned_provider_calls = 80
+
+retry_policy = NO_RETRY_NO_RESUME_NO_REPLAY
+replay_authorized = false
+
+result.json = absent
+bounded A3 packet = not produced
+```
+
+Attempt evidence:
+
+```text
+/tmp/memory-engine-q5-fixed-pool-rerank-score-capture-v1/
+  91b274aec64170b91713c3854a24e5aa71312a44/
+    attempt.json
+    stop.json
+```
+
+The failure was not a frozen-pool eligibility failure and not an HTTP/model-score validation failure. The real SiliconFlow adapter returns bounded usage fields shaped as:
+
+```text
+input_tokens
+output_tokens
+total_tokens
+billed_input_tokens
+billed_output_tokens
+```
+
+with unavailable counters represented as `null`. The A3 capture contract incorrectly accepted only `prompt_tokens/completion_tokens/total_tokens` and rejected `null` counters. Reaching `Q5_A3_USAGE_COUNT_INVALID` therefore means the first provider response had already passed adapter response/score validation and failed only when the local capture layer normalized provider usage metadata.
+
+Historical adjudication:
+
+```text
+Q5-A4 REAL SCORE CAPTURE
+= STOPPED / CONSUMED
+= 1 PROVIDER ATTEMPT
+= LOCAL CAPTURE USAGE-SCHEMA CONTRACT FAILURE
+= NO RESULT PACKET
+= NO RETRY / NO RESUME / NO REPLAY
+```
+
+No second provider request was issued.
+
+### Post-transaction source-only repair
+
+The capture contract was repaired after the consumed transaction at:
+
+```text
+d0aeb45c4adb018463cf06ffce5e4109b37902dd
+fix(benchmark): accept bounded rerank usage schema
+```
+
+The repair:
+
+- accepts the existing bounded SiliconFlow usage field names;
+- omits unavailable/null usage counters instead of rejecting them;
+- preserves non-negative integer validation for counters that are present;
+- does not change rerank scores, ordering, fixture, topK, provider identity or transaction history.
+
+Repair qualification:
+
+```text
+focused A3/A4/reranker = 20/20 PASS
+static check = 833 files PASS
+test-integrity = 376 / 0 invalid
+OpenSpec strict = 12/12 PASS
+git diff --check = PASS
+affected flows = 0
+```
+
+This repair is future-facing only. It cannot recreate the discarded first response, cannot produce a historical A4 packet, and does not authorize another real provider transaction.
+
+Current boundary:
+
+```text
+Q5-A4 = STOPPED / CONSUMED
+REAL SCORE PACKET = UNAVAILABLE
+CONSTRAINED COMPLEMENTARITY WITH REAL SCORE MARGINS = BLOCKED
+STATISTICAL LTR = NOT SELECTED
+NEW PROVIDER EXECUTION = NOT AUTHORIZED
+RUNTIME = UNCHANGED
+```
