@@ -92,7 +92,7 @@ Each analyzed case should receive one primary attribution plus optional secondar
 Suggested primary labels:
 
 ```text
-RANK_SCORE_ERROR
+RANK_SELECTION_ERROR
 REDUNDANT_SELECTION
 TEMPORAL_VERSION_CONFLICT
 TOP3_CAPACITY_LIMIT
@@ -132,7 +132,7 @@ After the attribution distribution is frozen:
 
 ### If single-item score/rank error dominates
 
-Evaluate the smallest ranking correction first, which may include:
+Treat this as a bounded ranking/selection error unless frozen per-candidate score evidence narrows it further. Evaluate the smallest ranking correction first, which may include:
 
 - existing reranker/profile adjustment;
 - feature calibration;

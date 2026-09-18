@@ -1,0 +1,3419 @@
+{
+  "schema": "memory_engine_q5_fixed_candidate_q4_derived_fixture_v1",
+  "top_k": 3,
+  "candidate_depth": 20,
+  "evidence_mapping": "direct_candidate_id_equals_gold_evidence_id",
+  "rank_input_profile": {
+    "max_code_points_per_candidate": 4000,
+    "max_total_code_points": 48000,
+    "projector": "projectCanonicalRerankTexts",
+    "historical_projector_diff_from_q4_sources": "NONE"
+  },
+  "sources": [
+    {
+      "source_name": "q4_c1b_development",
+      "source_commit": "4ee4374c31cd41149298b528958e60f42004dc37",
+      "source_result_sha256": "5d51c8258b5842de9be91b074af64931525ad6fd6fa64972326d8136a32fac89",
+      "source_result_file_sha256": "fdccf12a52f3fe078e72b4400b559d9b80d6ab364d48810947b15c7832dad391",
+      "corpus_sha256": "834a958fca9fafdd60aaec6d49d4dff2b5d7fa6ec1c2344bf6cc84e8710fad6f",
+      "manifest_sha256": "8a9074dbccbc37f05ae6a26ee17dd810da641baa157cff02d4bf54719e2af247",
+      "memories": [
+        {
+          "id": "mem-entity-01",
+          "text": "AtlasPlugin final decision: exact-match first, then a unique literal prefix; ambiguity fails closed.",
+          "owner_case_id": "q4c1-entity-01",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-02",
+          "text": "BeaconPlugin final decision: canonical lookup first, then bounded local fallback; missing identity stays missing.",
+          "owner_case_id": "q4c1-entity-02",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-03",
+          "text": "CinderPlugin final decision: literal exact ID first, then unique-prefix resolution; wildcard characters stay literal.",
+          "owner_case_id": "q4c1-entity-03",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-04",
+          "text": "DriftPlugin final decision: exact canonical key first, then one deterministic alias; multiple aliases are rejected.",
+          "owner_case_id": "q4c1-entity-04",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-05",
+          "text": "EmberPlugin final decision: exact chunk identity first, then a unique short prefix; ambiguous matches are rejected.",
+          "owner_case_id": "q4c1-entity-05",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-06",
+          "text": "FjordPlugin final decision: exact memory identity first, then one verified compatibility key; collisions are never guessed.",
+          "owner_case_id": "q4c1-entity-06",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-07",
+          "text": "GrovePlugin final decision: direct lookup first, then one bounded fallback query; fallback never changes authority.",
+          "owner_case_id": "q4c1-entity-07",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-08",
+          "text": "HarborPlugin final decision: exact project key first, then a unique normalized key; duplicates fail closed.",
+          "owner_case_id": "q4c1-entity-08",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-09",
+          "text": "IndigoPlugin final decision: canonical ID first, then a unique literal prefix; fuzzy matching is disabled.",
+          "owner_case_id": "q4c1-entity-09",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-10",
+          "text": "JuniperPlugin final decision: exact resolver first, then one deterministic compatibility path; unresolved stays missing.",
+          "owner_case_id": "q4c1-entity-10",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-11",
+          "text": "KestrelPlugin final decision: exact identifier when present, otherwise one unique prefix; missing stays missing.",
+          "owner_case_id": "q4c1-entity-11",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-entity-12",
+          "text": "LumenPlugin final decision: canonical match first, then a unique bounded prefix; ambiguity returns an error.",
+          "owner_case_id": "q4c1-entity-12",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "mem-temporal-01-before",
+          "text": "Before the MeridianStore migration, MeridianStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-01",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-01-after",
+          "text": "After the MeridianStore migration, MeridianStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-01",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-02-before",
+          "text": "Before the NimbusStore migration, NimbusStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-02",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-02-after",
+          "text": "After the NimbusStore migration, NimbusStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-02",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-03-before",
+          "text": "Before the OrbitStore migration, OrbitStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-03",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-03-after",
+          "text": "After the OrbitStore migration, OrbitStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-03",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-04-before",
+          "text": "Before the PrismStore migration, PrismStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-04",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-04-after",
+          "text": "After the PrismStore migration, PrismStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-04",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-05-before",
+          "text": "Before the QuartzStore migration, QuartzStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-05",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-05-after",
+          "text": "After the QuartzStore migration, QuartzStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-05",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-06-before",
+          "text": "Before the RillStore migration, RillStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-06",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-06-after",
+          "text": "After the RillStore migration, RillStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-06",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-07-before",
+          "text": "Before the SolaceStore migration, SolaceStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-07",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-07-after",
+          "text": "After the SolaceStore migration, SolaceStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-07",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-08-before",
+          "text": "Before the TundraStore migration, TundraStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-08",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-08-after",
+          "text": "After the TundraStore migration, TundraStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-08",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-09-before",
+          "text": "Before the UmberStore migration, UmberStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-09",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-09-after",
+          "text": "After the UmberStore migration, UmberStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-09",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-10-before",
+          "text": "Before the ValeStore migration, ValeStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-10",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-10-after",
+          "text": "After the ValeStore migration, ValeStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-10",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-11-before",
+          "text": "Before the WillowStore migration, WillowStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-11",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-11-after",
+          "text": "After the WillowStore migration, WillowStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-11",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-temporal-12-before",
+          "text": "Before the XenonStore migration, XenonStore used one shared attached SQLite store for canonical and derived state.",
+          "owner_case_id": "q4c1-temporal-12",
+          "owner_family": "temporal_relation",
+          "role": "temporal_before"
+        },
+        {
+          "id": "mem-temporal-12-after",
+          "text": "After the XenonStore migration, XenonStore used physically isolated Core and Engine stores with explicit read boundaries.",
+          "owner_case_id": "q4c1-temporal-12",
+          "owner_family": "temporal_relation",
+          "role": "temporal_after"
+        },
+        {
+          "id": "mem-multi-01-rationale",
+          "text": "AlderIndex selection rationale: it preserved deterministic lexical fallback during vector outages.",
+          "owner_case_id": "q4c1-multi-01",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-01-limit",
+          "text": "AlderIndex known limitation: multi-evidence questions can still miss one required evidence item at top3.",
+          "owner_case_id": "q4c1-multi-01",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-02-rationale",
+          "text": "BirchIndex selection rationale: it bounded candidate generation while keeping the original query.",
+          "owner_case_id": "q4c1-multi-02",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-02-limit",
+          "text": "BirchIndex known limitation: extra query expansion can displace a useful original-query candidate.",
+          "owner_case_id": "q4c1-multi-02",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-03-rationale",
+          "text": "CedarIndex selection rationale: it reused one canonical projection path instead of adding a second disclosure path.",
+          "owner_case_id": "q4c1-multi-03",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-03-limit",
+          "text": "CedarIndex known limitation: candidate generation can still miss evidence outside the bounded depth.",
+          "owner_case_id": "q4c1-multi-03",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-04-rationale",
+          "text": "DuneIndex selection rationale: it improved ranking without changing candidate authority.",
+          "owner_case_id": "q4c1-multi-04",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-04-limit",
+          "text": "DuneIndex known limitation: ranking cannot recover evidence that never enters the candidate pool.",
+          "owner_case_id": "q4c1-multi-04",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-05-rationale",
+          "text": "ElmIndex selection rationale: it kept exact identity semantics while allowing bounded compatibility.",
+          "owner_case_id": "q4c1-multi-05",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-05-limit",
+          "text": "ElmIndex known limitation: ambiguous context still needs a caller-supplied entity anchor.",
+          "owner_case_id": "q4c1-multi-05",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-06-rationale",
+          "text": "FernIndex selection rationale: it preserved isolated Core and Engine ownership during retrieval.",
+          "owner_case_id": "q4c1-multi-06",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-06-limit",
+          "text": "FernIndex known limitation: isolated reads do not by themselves solve multi-hop evidence composition.",
+          "owner_case_id": "q4c1-multi-06",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-07-rationale",
+          "text": "GlacierIndex selection rationale: it limited planner influence to candidate expansion.",
+          "owner_case_id": "q4c1-multi-07",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-07-limit",
+          "text": "GlacierIndex known limitation: query expansion adds latency and extra embedding or search calls.",
+          "owner_case_id": "q4c1-multi-07",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-08-rationale",
+          "text": "HeathIndex selection rationale: it kept the serving budget fixed at top3.",
+          "owner_case_id": "q4c1-multi-08",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-08-limit",
+          "text": "HeathIndex known limitation: a fixed top3 budget cannot contain more than three independent evidence items.",
+          "owner_case_id": "q4c1-multi-08",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-09-rationale",
+          "text": "IrisIndex selection rationale: it allowed explicit reranking with atomic control fallback.",
+          "owner_case_id": "q4c1-multi-09",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-09-limit",
+          "text": "IrisIndex known limitation: provider nondeterminism can change low-ranked membership.",
+          "owner_case_id": "q4c1-multi-09",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-10-rationale",
+          "text": "JadeIndex selection rationale: it retained the original retrieval path when the experimental layer failed.",
+          "owner_case_id": "q4c1-multi-10",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-10-limit",
+          "text": "JadeIndex known limitation: fallback preserves correctness but can forfeit the experimental quality gain.",
+          "owner_case_id": "q4c1-multi-10",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-11-rationale",
+          "text": "KnollIndex selection rationale: it reused existing vector fusion instead of introducing a new ranking stack.",
+          "owner_case_id": "q4c1-multi-11",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-11-limit",
+          "text": "KnollIndex known limitation: RRF fusion does not guarantee preservation of every original-query candidate.",
+          "owner_case_id": "q4c1-multi-11",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-multi-12-rationale",
+          "text": "LotusIndex selection rationale: it kept runtime authority separate from source implementation.",
+          "owner_case_id": "q4c1-multi-12",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "mem-multi-12-limit",
+          "text": "LotusIndex known limitation: the design does not authorize AutoRecall or deployment by itself.",
+          "owner_case_id": "q4c1-multi-12",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "mem-protection-01",
+          "text": "What retry budget did MosaicRunner use after the timeout fix? MosaicRunner answer: 2 attempts.",
+          "owner_case_id": "q4c1-protection-01",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-02",
+          "text": "NovaRunner 的 checkpoint 间隔最终固定为多少？ NovaRunner answer: 30 seconds.",
+          "owner_case_id": "q4c1-protection-02",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-03",
+          "text": "What exact candidate depth does OpalRunner use for explicit rerank? OpalRunner answer: 20 candidates.",
+          "owner_case_id": "q4c1-protection-03",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-04",
+          "text": "PineRunner 最终的 topK 是多少？ PineRunner answer: 3.",
+          "owner_case_id": "q4c1-protection-04",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-05",
+          "text": "What hard deadline did QuillRunner use for the bounded adapter? QuillRunner answer: 2500 ms.",
+          "owner_case_id": "q4c1-protection-05",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-06",
+          "text": "RowanRunner 的最大额外查询数量是多少？ RowanRunner answer: 2.",
+          "owner_case_id": "q4c1-protection-06",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-07",
+          "text": "What fallback policy does SageRunner use when the experimental layer fails? SageRunner answer: original-query retrieval.",
+          "owner_case_id": "q4c1-protection-07",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-08",
+          "text": "ThistleRunner 的显式查询候选池上限是多少？ ThistleRunner answer: 20.",
+          "owner_case_id": "q4c1-protection-08",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-09",
+          "text": "What is UmamiRunner's final serving budget? UmamiRunner answer: top 3 results.",
+          "owner_case_id": "q4c1-protection-09",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-10",
+          "text": "VelaRunner 的 provider 每个 case 最多调用几次？ VelaRunner answer: 1 call.",
+          "owner_case_id": "q4c1-protection-10",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-11",
+          "text": "What query-plan mode name does WrenRunner use? WrenRunner answer: recall_hint_v1.",
+          "owner_case_id": "q4c1-protection-11",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "mem-protection-12",
+          "text": "ZephyrRunner 的保护样本要求是什么？ ZephyrRunner answer: zero Recall-all regression.",
+          "owner_case_id": "q4c1-protection-12",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        }
+      ],
+      "cases": [
+        {
+          "case_id": "q4c1-entity-01",
+          "family": "entity_reference",
+          "query": "那个插件最后用了什么回退策略？",
+          "gold_evidence_ids": [
+            "mem-entity-01"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-multi-10-rationale",
+              "mem-protection-07",
+              "mem-multi-01-rationale",
+              "mem-multi-10-limit",
+              "mem-protection-01",
+              "mem-protection-11",
+              "mem-multi-11-rationale",
+              "mem-multi-01-limit",
+              "mem-multi-07-rationale",
+              "mem-multi-05-rationale",
+              "mem-multi-09-rationale",
+              "mem-multi-03-rationale",
+              "mem-multi-12-limit",
+              "mem-entity-08",
+              "mem-entity-06",
+              "mem-entity-01",
+              "mem-entity-11",
+              "mem-multi-02-limit",
+              "mem-multi-06-rationale",
+              "mem-protection-05"
+            ],
+            "ranked_top3_ids": [
+              "mem-entity-01",
+              "mem-entity-08",
+              "mem-entity-06"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-multi-10-rationale",
+              "mem-protection-07",
+              "mem-entity-01",
+              "mem-multi-01-rationale",
+              "mem-protection-01",
+              "mem-multi-10-limit",
+              "mem-multi-12-limit",
+              "mem-protection-11",
+              "mem-multi-11-rationale",
+              "mem-entity-08",
+              "mem-multi-01-limit",
+              "mem-multi-07-rationale",
+              "mem-multi-05-rationale",
+              "mem-multi-09-rationale",
+              "mem-multi-03-rationale",
+              "mem-entity-06",
+              "mem-entity-11",
+              "mem-multi-06-rationale",
+              "mem-multi-02-limit",
+              "mem-protection-05"
+            ],
+            "ranked_top3_ids": [
+              "mem-entity-01",
+              "mem-entity-08",
+              "mem-entity-06"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-entity-05",
+          "family": "entity_reference",
+          "query": "那个插件最后用了什么回退策略？",
+          "gold_evidence_ids": [
+            "mem-entity-05"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-multi-10-rationale",
+              "mem-protection-07",
+              "mem-multi-01-rationale",
+              "mem-multi-10-limit",
+              "mem-protection-01",
+              "mem-protection-11",
+              "mem-multi-11-rationale",
+              "mem-multi-01-limit",
+              "mem-multi-07-rationale",
+              "mem-multi-05-rationale",
+              "mem-multi-09-rationale",
+              "mem-multi-03-rationale",
+              "mem-multi-12-limit",
+              "mem-entity-08",
+              "mem-entity-06",
+              "mem-entity-01",
+              "mem-entity-11",
+              "mem-multi-02-limit",
+              "mem-multi-06-rationale",
+              "mem-protection-05"
+            ],
+            "ranked_top3_ids": [
+              "mem-entity-01",
+              "mem-entity-08",
+              "mem-entity-06"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-multi-10-rationale",
+              "mem-protection-07",
+              "mem-multi-01-rationale",
+              "mem-multi-10-limit",
+              "mem-protection-01",
+              "mem-entity-05",
+              "mem-protection-11",
+              "mem-multi-11-rationale",
+              "mem-multi-01-limit",
+              "mem-multi-07-rationale",
+              "mem-multi-05-rationale",
+              "mem-multi-09-rationale",
+              "mem-entity-08",
+              "mem-multi-03-rationale",
+              "mem-multi-12-limit",
+              "mem-entity-06",
+              "mem-entity-01",
+              "mem-entity-11",
+              "mem-multi-06-rationale",
+              "mem-multi-02-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-entity-01",
+              "mem-entity-05",
+              "mem-entity-08"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-entity-08",
+          "family": "entity_reference",
+          "query": "Which lookup rule did that plugin settle on?",
+          "gold_evidence_ids": [
+            "mem-entity-08"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-entity-07",
+              "mem-entity-02",
+              "mem-multi-04-limit",
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-entity-12",
+              "mem-entity-01",
+              "mem-entity-09",
+              "mem-entity-10",
+              "mem-entity-11",
+              "mem-entity-04",
+              "mem-entity-08",
+              "mem-entity-03",
+              "mem-entity-05",
+              "mem-entity-06",
+              "mem-multi-12-rationale",
+              "mem-multi-01-rationale",
+              "mem-protection-07",
+              "mem-multi-10-rationale",
+              "mem-protection-11"
+            ],
+            "ranked_top3_ids": [
+              "mem-entity-07",
+              "mem-entity-02",
+              "mem-entity-01"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-entity-07",
+              "mem-entity-02",
+              "mem-multi-04-limit",
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-entity-08",
+              "mem-entity-12",
+              "mem-entity-01",
+              "mem-entity-09",
+              "mem-entity-10",
+              "mem-entity-11",
+              "mem-protection-11",
+              "mem-entity-04",
+              "mem-entity-03",
+              "mem-entity-05",
+              "mem-entity-06",
+              "mem-multi-01-rationale",
+              "mem-protection-07",
+              "mem-multi-01-limit",
+              "mem-multi-07-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-entity-07",
+              "mem-entity-02",
+              "mem-entity-01"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-entity-12",
+          "family": "entity_reference",
+          "query": "Which lookup rule did that plugin settle on?",
+          "gold_evidence_ids": [
+            "mem-entity-12"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-entity-07",
+              "mem-entity-02",
+              "mem-multi-04-limit",
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-entity-12",
+              "mem-entity-01",
+              "mem-entity-09",
+              "mem-entity-10",
+              "mem-entity-11",
+              "mem-entity-04",
+              "mem-entity-08",
+              "mem-entity-03",
+              "mem-entity-05",
+              "mem-entity-06",
+              "mem-multi-12-rationale",
+              "mem-multi-01-rationale",
+              "mem-protection-07",
+              "mem-multi-10-rationale",
+              "mem-protection-11"
+            ],
+            "ranked_top3_ids": [
+              "mem-entity-07",
+              "mem-entity-02",
+              "mem-entity-01"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-entity-07",
+              "mem-entity-02",
+              "mem-multi-04-limit",
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-entity-12",
+              "mem-entity-01",
+              "mem-entity-09",
+              "mem-entity-10",
+              "mem-protection-11",
+              "mem-entity-11",
+              "mem-entity-04",
+              "mem-entity-08",
+              "mem-multi-01-rationale",
+              "mem-entity-03",
+              "mem-entity-05",
+              "mem-protection-07",
+              "mem-multi-12-rationale",
+              "mem-multi-12-limit",
+              "mem-multi-01-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-entity-07",
+              "mem-entity-02",
+              "mem-entity-01"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-multi-03",
+          "family": "multi_facet",
+          "query": "那个方案的选择理由和已知限制分别是什么？",
+          "gold_evidence_ids": [
+            "mem-multi-03-rationale",
+            "mem-multi-03-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-multi-08-rationale",
+              "mem-multi-01-limit",
+              "mem-multi-08-limit",
+              "mem-multi-07-rationale",
+              "mem-multi-03-limit",
+              "mem-protection-11",
+              "mem-multi-11-rationale",
+              "mem-multi-03-rationale",
+              "mem-multi-04-limit",
+              "mem-multi-05-rationale",
+              "mem-multi-02-rationale",
+              "mem-protection-07",
+              "mem-multi-09-rationale",
+              "mem-multi-01-rationale",
+              "mem-multi-12-limit",
+              "mem-protection-05",
+              "mem-multi-10-rationale",
+              "mem-multi-04-rationale",
+              "mem-multi-11-limit",
+              "mem-protection-03"
+            ],
+            "ranked_top3_ids": [
+              "mem-multi-07-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-11-limit"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-multi-03-limit",
+              "mem-multi-03-rationale",
+              "mem-multi-01-limit",
+              "mem-multi-07-rationale",
+              "mem-multi-08-rationale",
+              "mem-multi-08-limit",
+              "mem-multi-02-rationale",
+              "mem-multi-11-rationale",
+              "mem-multi-09-rationale",
+              "mem-multi-05-rationale",
+              "mem-multi-10-rationale",
+              "mem-multi-02-limit",
+              "mem-multi-12-limit",
+              "mem-multi-04-limit",
+              "mem-multi-04-rationale",
+              "mem-multi-06-rationale",
+              "mem-multi-10-limit",
+              "mem-protection-11",
+              "mem-multi-12-rationale",
+              "mem-multi-01-rationale"
+            ],
+            "ranked_top3_ids": [
+              "mem-multi-07-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-10-limit"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-multi-06",
+          "family": "multi_facet",
+          "query": "Why did we choose that option, and what limitation remained?",
+          "gold_evidence_ids": [
+            "mem-multi-06-rationale",
+            "mem-multi-06-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-protection-03",
+              "mem-protection-05",
+              "mem-multi-04-limit",
+              "mem-protection-01",
+              "mem-protection-07",
+              "mem-protection-11",
+              "mem-protection-09",
+              "mem-multi-06-rationale",
+              "mem-multi-07-limit",
+              "mem-temporal-03-after",
+              "mem-temporal-02-after",
+              "mem-temporal-03-before",
+              "mem-temporal-09-after",
+              "mem-temporal-06-before",
+              "mem-temporal-11-after",
+              "mem-temporal-09-before",
+              "mem-temporal-12-after",
+              "mem-temporal-12-before",
+              "mem-temporal-01-after",
+              "mem-temporal-01-before"
+            ],
+            "ranked_top3_ids": [
+              "mem-multi-04-limit",
+              "mem-multi-07-limit",
+              "mem-multi-06-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-protection-03",
+              "mem-multi-04-limit",
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-protection-07",
+              "mem-protection-11",
+              "mem-protection-09",
+              "mem-multi-06-rationale",
+              "mem-multi-07-limit",
+              "mem-temporal-06-before",
+              "mem-temporal-09-after",
+              "mem-temporal-09-before",
+              "mem-temporal-12-before",
+              "mem-temporal-11-after",
+              "mem-temporal-12-after",
+              "mem-temporal-01-after",
+              "mem-temporal-01-before",
+              "mem-temporal-02-after",
+              "mem-temporal-02-before",
+              "mem-temporal-03-after"
+            ],
+            "ranked_top3_ids": [
+              "mem-multi-04-limit",
+              "mem-multi-07-limit",
+              "mem-multi-06-rationale"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-multi-07",
+          "family": "multi_facet",
+          "query": "那个方案的选择理由和已知限制分别是什么？",
+          "gold_evidence_ids": [
+            "mem-multi-07-rationale",
+            "mem-multi-07-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-multi-08-rationale",
+              "mem-multi-01-limit",
+              "mem-multi-08-limit",
+              "mem-multi-07-rationale",
+              "mem-multi-03-limit",
+              "mem-protection-11",
+              "mem-multi-11-rationale",
+              "mem-multi-03-rationale",
+              "mem-multi-04-limit",
+              "mem-multi-05-rationale",
+              "mem-multi-02-rationale",
+              "mem-protection-07",
+              "mem-multi-09-rationale",
+              "mem-multi-01-rationale",
+              "mem-multi-12-limit",
+              "mem-protection-05",
+              "mem-multi-10-rationale",
+              "mem-multi-04-rationale",
+              "mem-multi-11-limit",
+              "mem-protection-03"
+            ],
+            "ranked_top3_ids": [
+              "mem-multi-07-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-11-limit"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-multi-07-rationale",
+              "mem-multi-07-limit",
+              "mem-multi-03-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-01-limit",
+              "mem-multi-08-rationale",
+              "mem-multi-11-rationale",
+              "mem-multi-05-rationale",
+              "mem-multi-08-limit",
+              "mem-multi-04-limit",
+              "mem-multi-09-rationale",
+              "mem-multi-10-rationale",
+              "mem-multi-12-limit",
+              "mem-multi-02-rationale",
+              "mem-multi-04-rationale",
+              "mem-multi-10-limit",
+              "mem-protection-11",
+              "mem-multi-01-rationale",
+              "mem-protection-05",
+              "mem-multi-11-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-multi-07-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-11-limit"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-multi-09",
+          "family": "multi_facet",
+          "query": "当时为什么选那个方案，有什么限制？",
+          "gold_evidence_ids": [
+            "mem-multi-09-rationale",
+            "mem-multi-09-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-multi-08-rationale",
+              "mem-multi-11-rationale",
+              "mem-multi-07-rationale",
+              "mem-multi-10-rationale",
+              "mem-multi-01-rationale",
+              "mem-multi-01-limit",
+              "mem-multi-03-rationale",
+              "mem-multi-05-rationale",
+              "mem-protection-11",
+              "mem-multi-09-rationale",
+              "mem-multi-02-rationale",
+              "mem-multi-08-limit",
+              "mem-protection-07",
+              "mem-multi-03-limit",
+              "mem-protection-05",
+              "mem-multi-04-limit",
+              "mem-multi-04-rationale",
+              "mem-multi-12-rationale",
+              "mem-multi-11-limit",
+              "mem-multi-12-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-multi-07-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-02-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-multi-09-rationale",
+              "mem-multi-03-rationale",
+              "mem-multi-09-limit",
+              "mem-multi-08-rationale",
+              "mem-multi-10-rationale",
+              "mem-multi-11-rationale",
+              "mem-multi-07-rationale",
+              "mem-multi-02-rationale",
+              "mem-multi-05-rationale",
+              "mem-multi-06-rationale",
+              "mem-multi-01-limit",
+              "mem-multi-08-limit",
+              "mem-multi-01-rationale",
+              "mem-multi-12-rationale",
+              "mem-multi-04-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-04-limit",
+              "mem-multi-02-limit",
+              "mem-multi-12-limit",
+              "mem-protection-11"
+            ],
+            "ranked_top3_ids": [
+              "mem-multi-07-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-02-rationale"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-protection-04",
+          "family": "protection",
+          "query": "PineRunner 最终的 topK 是多少？",
+          "gold_evidence_ids": [
+            "mem-protection-04"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-protection-04",
+              "mem-protection-03",
+              "mem-protection-08",
+              "mem-protection-05",
+              "mem-protection-11",
+              "mem-multi-04-limit",
+              "mem-protection-10",
+              "mem-protection-07",
+              "mem-protection-01",
+              "mem-multi-01-limit",
+              "mem-protection-06",
+              "mem-protection-02",
+              "mem-multi-04-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-08-limit",
+              "mem-multi-11-rationale",
+              "mem-multi-11-limit",
+              "mem-protection-09",
+              "mem-multi-09-rationale",
+              "mem-multi-08-rationale"
+            ],
+            "ranked_top3_ids": [
+              "mem-protection-04",
+              "mem-protection-09",
+              "mem-protection-03"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-protection-04",
+              "mem-protection-03",
+              "mem-protection-08",
+              "mem-protection-05",
+              "mem-protection-11",
+              "mem-multi-04-limit",
+              "mem-protection-10",
+              "mem-protection-07",
+              "mem-protection-01",
+              "mem-multi-01-limit",
+              "mem-protection-06",
+              "mem-protection-02",
+              "mem-multi-04-rationale",
+              "mem-multi-03-limit",
+              "mem-multi-08-limit",
+              "mem-multi-11-rationale",
+              "mem-multi-11-limit",
+              "mem-protection-09",
+              "mem-multi-09-rationale",
+              "mem-multi-08-rationale"
+            ],
+            "ranked_top3_ids": [
+              "mem-protection-04",
+              "mem-protection-09",
+              "mem-protection-03"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-protection-05",
+          "family": "protection",
+          "query": "What hard deadline did QuillRunner use for the bounded adapter?",
+          "gold_evidence_ids": [
+            "mem-protection-05"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-protection-07",
+              "mem-protection-08",
+              "mem-multi-01-limit",
+              "mem-protection-11",
+              "mem-protection-10",
+              "mem-multi-03-limit",
+              "mem-protection-03",
+              "mem-multi-01-rationale",
+              "mem-multi-08-limit",
+              "mem-multi-02-rationale",
+              "mem-protection-02",
+              "mem-multi-08-rationale",
+              "mem-multi-05-rationale",
+              "mem-protection-04",
+              "mem-multi-10-limit",
+              "mem-multi-07-limit",
+              "mem-multi-04-limit",
+              "mem-multi-12-rationale"
+            ],
+            "ranked_top3_ids": [
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-protection-02"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-protection-07",
+              "mem-protection-08",
+              "mem-multi-01-limit",
+              "mem-protection-11",
+              "mem-protection-10",
+              "mem-multi-03-limit",
+              "mem-protection-03",
+              "mem-multi-01-rationale",
+              "mem-multi-08-limit",
+              "mem-multi-02-rationale",
+              "mem-protection-02",
+              "mem-multi-08-rationale",
+              "mem-multi-05-rationale",
+              "mem-protection-04",
+              "mem-multi-10-limit",
+              "mem-multi-07-limit",
+              "mem-multi-04-limit",
+              "mem-multi-12-rationale"
+            ],
+            "ranked_top3_ids": [
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-protection-02"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-protection-08",
+          "family": "protection",
+          "query": "ThistleRunner 的显式查询候选池上限是多少？",
+          "gold_evidence_ids": [
+            "mem-protection-08"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-protection-08",
+              "mem-protection-03",
+              "mem-protection-05",
+              "mem-protection-06",
+              "mem-protection-04",
+              "mem-protection-11",
+              "mem-multi-03-limit",
+              "mem-protection-10",
+              "mem-multi-02-rationale",
+              "mem-protection-01",
+              "mem-multi-02-limit",
+              "mem-protection-07",
+              "mem-multi-01-limit",
+              "mem-multi-04-limit",
+              "mem-multi-07-limit",
+              "mem-protection-02",
+              "mem-multi-09-rationale",
+              "mem-multi-07-rationale",
+              "mem-multi-11-limit",
+              "mem-multi-08-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-protection-08",
+              "mem-protection-03",
+              "mem-protection-06"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-protection-08",
+              "mem-protection-03",
+              "mem-protection-05",
+              "mem-protection-06",
+              "mem-protection-04",
+              "mem-protection-11",
+              "mem-multi-03-limit",
+              "mem-protection-10",
+              "mem-multi-02-rationale",
+              "mem-protection-01",
+              "mem-multi-02-limit",
+              "mem-protection-07",
+              "mem-multi-01-limit",
+              "mem-multi-04-limit",
+              "mem-multi-07-limit",
+              "mem-protection-02",
+              "mem-multi-09-rationale",
+              "mem-multi-07-rationale",
+              "mem-multi-11-limit",
+              "mem-multi-08-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-protection-08",
+              "mem-protection-03",
+              "mem-protection-06"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-protection-10",
+          "family": "protection",
+          "query": "VelaRunner 的 provider 每个 case 最多调用几次？",
+          "gold_evidence_ids": [
+            "mem-protection-10"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-protection-10",
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-protection-07",
+              "mem-protection-11",
+              "mem-protection-03",
+              "mem-protection-08",
+              "mem-protection-02",
+              "mem-multi-01-rationale",
+              "mem-protection-04",
+              "mem-protection-06",
+              "mem-multi-01-limit",
+              "mem-multi-03-limit",
+              "mem-multi-08-limit",
+              "mem-protection-12",
+              "mem-multi-12-rationale",
+              "mem-multi-08-rationale",
+              "mem-multi-11-rationale",
+              "mem-multi-10-rationale",
+              "mem-multi-07-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-protection-10",
+              "mem-protection-06",
+              "mem-protection-01"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-protection-10",
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-protection-07",
+              "mem-protection-11",
+              "mem-protection-03",
+              "mem-protection-08",
+              "mem-protection-02",
+              "mem-multi-01-rationale",
+              "mem-protection-04",
+              "mem-protection-06",
+              "mem-multi-01-limit",
+              "mem-multi-03-limit",
+              "mem-multi-08-limit",
+              "mem-protection-12",
+              "mem-multi-12-rationale",
+              "mem-multi-08-rationale",
+              "mem-multi-11-rationale",
+              "mem-multi-10-rationale",
+              "mem-multi-07-limit"
+            ],
+            "ranked_top3_ids": [
+              "mem-protection-10",
+              "mem-protection-06",
+              "mem-protection-01"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-temporal-06",
+          "family": "temporal_relation",
+          "query": "What configuration did it use after the migration?",
+          "gold_evidence_ids": [
+            "mem-temporal-06-after"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-temporal-02-after",
+              "mem-temporal-01-after",
+              "mem-protection-01",
+              "mem-temporal-03-after",
+              "mem-temporal-07-after",
+              "mem-temporal-04-after",
+              "mem-temporal-09-after",
+              "mem-temporal-06-after",
+              "mem-temporal-12-after",
+              "mem-temporal-11-after",
+              "mem-temporal-05-after",
+              "mem-temporal-10-after",
+              "mem-temporal-08-after",
+              "mem-protection-05",
+              "mem-temporal-01-before",
+              "mem-temporal-07-before",
+              "mem-protection-03",
+              "mem-temporal-03-before",
+              "mem-temporal-06-before",
+              "mem-temporal-09-before"
+            ],
+            "ranked_top3_ids": [
+              "mem-temporal-02-after",
+              "mem-temporal-03-after",
+              "mem-temporal-04-after"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-protection-01",
+              "mem-temporal-01-after",
+              "mem-temporal-02-after",
+              "mem-temporal-03-after",
+              "mem-temporal-06-after",
+              "mem-temporal-07-after",
+              "mem-temporal-09-after",
+              "mem-temporal-04-after",
+              "mem-temporal-05-after",
+              "mem-temporal-12-after",
+              "mem-temporal-11-after",
+              "mem-temporal-10-after",
+              "mem-temporal-08-after",
+              "mem-protection-05",
+              "mem-temporal-01-before",
+              "mem-temporal-07-before",
+              "mem-temporal-06-before",
+              "mem-temporal-03-before",
+              "mem-temporal-09-before",
+              "mem-temporal-12-before"
+            ],
+            "ranked_top3_ids": [
+              "mem-temporal-02-after",
+              "mem-temporal-03-after",
+              "mem-temporal-10-after"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-temporal-08",
+          "family": "temporal_relation",
+          "query": "迁移之后用的是什么存储模式？",
+          "gold_evidence_ids": [
+            "mem-temporal-08-after"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-temporal-07-before",
+              "mem-temporal-01-before",
+              "mem-temporal-02-after",
+              "mem-temporal-06-before",
+              "mem-temporal-09-before",
+              "mem-temporal-07-after",
+              "mem-temporal-01-after",
+              "mem-temporal-12-before",
+              "mem-temporal-09-after",
+              "mem-temporal-11-before",
+              "mem-temporal-03-before",
+              "mem-temporal-04-before",
+              "mem-temporal-06-after",
+              "mem-temporal-10-before",
+              "mem-temporal-02-before",
+              "mem-temporal-03-after",
+              "mem-temporal-11-after",
+              "mem-temporal-04-after",
+              "mem-temporal-05-after",
+              "mem-protection-11"
+            ],
+            "ranked_top3_ids": [
+              "mem-temporal-01-after",
+              "mem-temporal-02-after",
+              "mem-temporal-06-after"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-temporal-08-after",
+              "mem-temporal-08-before",
+              "mem-temporal-01-before",
+              "mem-temporal-07-before",
+              "mem-temporal-02-after",
+              "mem-temporal-09-before",
+              "mem-temporal-06-before",
+              "mem-temporal-01-after",
+              "mem-temporal-09-after",
+              "mem-temporal-12-before",
+              "mem-temporal-04-before",
+              "mem-temporal-07-after",
+              "mem-temporal-06-after",
+              "mem-temporal-03-before",
+              "mem-temporal-11-before",
+              "mem-temporal-10-before",
+              "mem-temporal-03-after",
+              "mem-temporal-02-before",
+              "mem-temporal-11-after",
+              "mem-temporal-04-after"
+            ],
+            "ranked_top3_ids": [
+              "mem-temporal-01-after",
+              "mem-temporal-06-after",
+              "mem-temporal-02-after"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-temporal-11",
+          "family": "temporal_relation",
+          "query": "What configuration did it use before the migration?",
+          "gold_evidence_ids": [
+            "mem-temporal-11-before"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-temporal-01-before",
+              "mem-temporal-03-before",
+              "mem-temporal-07-before",
+              "mem-temporal-09-before",
+              "mem-temporal-02-before",
+              "mem-temporal-12-before",
+              "mem-temporal-06-before",
+              "mem-temporal-04-before",
+              "mem-temporal-10-before",
+              "mem-temporal-05-before",
+              "mem-temporal-11-before",
+              "mem-temporal-08-before",
+              "mem-temporal-02-after",
+              "mem-temporal-01-after",
+              "mem-protection-01",
+              "mem-protection-05",
+              "mem-temporal-03-after",
+              "mem-temporal-09-after",
+              "mem-temporal-07-after",
+              "mem-temporal-04-after"
+            ],
+            "ranked_top3_ids": [
+              "mem-temporal-02-before",
+              "mem-temporal-10-before",
+              "mem-temporal-04-before"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-temporal-01-before",
+              "mem-temporal-07-before",
+              "mem-temporal-03-before",
+              "mem-temporal-09-before",
+              "mem-temporal-12-before",
+              "mem-temporal-06-before",
+              "mem-temporal-04-before",
+              "mem-temporal-11-before",
+              "mem-temporal-02-before",
+              "mem-temporal-10-before",
+              "mem-temporal-05-before",
+              "mem-temporal-08-before",
+              "mem-temporal-01-after",
+              "mem-temporal-02-after",
+              "mem-protection-05",
+              "mem-protection-01",
+              "mem-temporal-03-after",
+              "mem-temporal-11-after",
+              "mem-temporal-09-after",
+              "mem-temporal-04-after"
+            ],
+            "ranked_top3_ids": [
+              "mem-temporal-02-before",
+              "mem-temporal-10-before",
+              "mem-temporal-04-before"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c1-temporal-12",
+          "family": "temporal_relation",
+          "query": "迁移之后用的是什么存储模式？",
+          "gold_evidence_ids": [
+            "mem-temporal-12-after"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "mem-temporal-07-before",
+              "mem-temporal-01-before",
+              "mem-temporal-02-after",
+              "mem-temporal-06-before",
+              "mem-temporal-09-before",
+              "mem-temporal-07-after",
+              "mem-temporal-01-after",
+              "mem-temporal-12-before",
+              "mem-temporal-09-after",
+              "mem-temporal-11-before",
+              "mem-temporal-03-before",
+              "mem-temporal-04-before",
+              "mem-temporal-06-after",
+              "mem-temporal-10-before",
+              "mem-temporal-02-before",
+              "mem-temporal-03-after",
+              "mem-temporal-11-after",
+              "mem-temporal-04-after",
+              "mem-temporal-05-after",
+              "mem-protection-11"
+            ],
+            "ranked_top3_ids": [
+              "mem-temporal-01-after",
+              "mem-temporal-02-after",
+              "mem-temporal-06-after"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "mem-temporal-12-before",
+              "mem-temporal-12-after",
+              "mem-temporal-02-after",
+              "mem-temporal-01-before",
+              "mem-temporal-01-after",
+              "mem-temporal-07-before",
+              "mem-temporal-09-before",
+              "mem-temporal-06-before",
+              "mem-temporal-07-after",
+              "mem-temporal-03-after",
+              "mem-temporal-09-after",
+              "mem-temporal-04-before",
+              "mem-temporal-03-before",
+              "mem-temporal-06-after",
+              "mem-temporal-04-after",
+              "mem-temporal-05-after",
+              "mem-temporal-10-before",
+              "mem-temporal-11-before",
+              "mem-temporal-02-before",
+              "mem-temporal-11-after"
+            ],
+            "ranked_top3_ids": [
+              "mem-temporal-01-after",
+              "mem-temporal-06-after",
+              "mem-temporal-02-after"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "source_name": "q4_c2_holdout",
+      "source_commit": "d5f75bf95006c9557dd4289164c5e41c058cfc72",
+      "source_result_sha256": "bf809cd7cc15d737ccce36503f5a036e1e1987870ec558bee10c21f5a035b6d9",
+      "source_result_file_sha256": "03c09e9af8641e6c2a082004524957142cfe286aaa1570950e515afd41698878",
+      "corpus_sha256": "cd4842fee339736f7eecd49ce525a3534fe971d83ff1d06fcc672ff3df113a13",
+      "manifest_sha256": "05adda04c8b9250cef4791995dbb03742155e177d881204c0d4e55224168b0f9",
+      "memories": [
+        {
+          "id": "q4c2-mem-entity-01",
+          "text": "AmberRelay final compatibility decision: exact canonical identity first, then one verified legacy key; collisions return no result.",
+          "owner_case_id": "q4c2-entity-01",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "q4c2-mem-entity-02",
+          "text": "BerylRelay final compatibility decision: direct project binding first, then a unique normalized alias; ambiguous aliases fail closed.",
+          "owner_case_id": "q4c2-entity-02",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "q4c2-mem-entity-03",
+          "text": "CobaltRelay final compatibility decision: exact resolver first, then one bounded compatibility lookup; missing remains missing.",
+          "owner_case_id": "q4c2-entity-03",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "q4c2-mem-entity-04",
+          "text": "DeltaRelay final compatibility decision: canonical key first, then a single deterministic migration alias; multiple matches are rejected.",
+          "owner_case_id": "q4c2-entity-04",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "q4c2-mem-entity-05",
+          "text": "EcruRelay final compatibility decision: exact record identity first, then one verified short key; fuzzy matching stays disabled.",
+          "owner_case_id": "q4c2-entity-05",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "q4c2-mem-entity-06",
+          "text": "FlintRelay final compatibility decision: direct namespace lookup first, then a unique literal compatibility key; wildcard characters stay literal.",
+          "owner_case_id": "q4c2-entity-06",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "q4c2-mem-entity-07",
+          "text": "GarnetRelay final compatibility decision: canonical binding first, then one bounded legacy route; fallback never changes authorization.",
+          "owner_case_id": "q4c2-entity-07",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "q4c2-mem-entity-08",
+          "text": "HelixRelay final compatibility decision: exact component ID first, then a unique normalized compatibility ID; duplicates fail closed.",
+          "owner_case_id": "q4c2-entity-08",
+          "owner_family": "entity_reference",
+          "role": "entity_fact"
+        },
+        {
+          "id": "q4c2-mem-multi-01-rationale",
+          "text": "IonLedger selection rationale: it preserved deterministic original-query retrieval while adding bounded semantic expansion.",
+          "owner_case_id": "q4c2-multi-01",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "q4c2-mem-multi-01-limit",
+          "text": "IonLedger remaining limitation: recovered candidates can still remain below the final top3 after reranking.",
+          "owner_case_id": "q4c2-multi-01",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "q4c2-mem-multi-02-rationale",
+          "text": "JasperLedger selection rationale: it kept candidate authority in retrieval instead of moving it into the planner.",
+          "owner_case_id": "q4c2-multi-02",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "q4c2-mem-multi-02-limit",
+          "text": "JasperLedger remaining limitation: bounded expansion adds embedding and vector-search latency.",
+          "owner_case_id": "q4c2-multi-02",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "q4c2-mem-multi-03-rationale",
+          "text": "KryptonLedger selection rationale: it reused the canonical projection path instead of introducing a second memory representation.",
+          "owner_case_id": "q4c2-multi-03",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "q4c2-mem-multi-03-limit",
+          "text": "KryptonLedger remaining limitation: multi-evidence questions can still lose one required item in the serving budget.",
+          "owner_case_id": "q4c2-multi-03",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "q4c2-mem-multi-04-rationale",
+          "text": "MicaLedger selection rationale: it kept provider-backed ranking behind an explicit bounded adapter.",
+          "owner_case_id": "q4c2-multi-04",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "q4c2-mem-multi-04-limit",
+          "text": "MicaLedger remaining limitation: cross-encoder ranking cannot recover evidence that never enters the bounded pool.",
+          "owner_case_id": "q4c2-multi-04",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "q4c2-mem-multi-05-rationale",
+          "text": "NacreLedger selection rationale: it maintained physical Core and Engine separation during benchmark retrieval.",
+          "owner_case_id": "q4c2-multi-05",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "q4c2-mem-multi-05-limit",
+          "text": "NacreLedger remaining limitation: underspecified context still depends on the caller supplying a reliable entity anchor.",
+          "owner_case_id": "q4c2-multi-05",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "q4c2-mem-multi-06-rationale",
+          "text": "OnyxLedger selection rationale: it preserved the fixed final serving budget while expanding only the candidate pool.",
+          "owner_case_id": "q4c2-multi-06",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "q4c2-mem-multi-06-limit",
+          "text": "OnyxLedger remaining limitation: a fixed top3 budget cannot preserve every independently relevant evidence item.",
+          "owner_case_id": "q4c2-multi-06",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "q4c2-mem-multi-07-rationale",
+          "text": "PyriteLedger selection rationale: it allowed semantic recovery without granting the Hint hard-filter authority.",
+          "owner_case_id": "q4c2-multi-07",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "q4c2-mem-multi-07-limit",
+          "text": "PyriteLedger remaining limitation: provider scoring can reorder low-ranked candidates even when candidate coverage improves.",
+          "owner_case_id": "q4c2-multi-07",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "q4c2-mem-multi-08-rationale",
+          "text": "SiennaLedger selection rationale: it kept failure fallback on the original retrieval path rather than inventing replacement evidence.",
+          "owner_case_id": "q4c2-multi-08",
+          "owner_family": "multi_facet",
+          "role": "multi_rationale"
+        },
+        {
+          "id": "q4c2-mem-multi-08-limit",
+          "text": "SiennaLedger remaining limitation: candidate expansion does not itself authorize AutoRecall, deployment, or disclosure.",
+          "owner_case_id": "q4c2-multi-08",
+          "owner_family": "multi_facet",
+          "role": "multi_limit"
+        },
+        {
+          "id": "q4c2-mem-protection-01",
+          "text": "What exact topK does AuroraGuard use for final serving? AuroraGuard answer: 3.",
+          "owner_case_id": "q4c2-protection-01",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "q4c2-mem-protection-02",
+          "text": "BasaltGuard 的候选深度固定为多少？ BasaltGuard answer: 20.",
+          "owner_case_id": "q4c2-protection-02",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "q4c2-mem-protection-03",
+          "text": "What maximum expansion count does CirrusGuard allow per query? CirrusGuard answer: 2.",
+          "owner_case_id": "q4c2-protection-03",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "q4c2-mem-protection-04",
+          "text": "DahliaGuard 的 rerank deadline 是多少？ DahliaGuard answer: 2500 ms.",
+          "owner_case_id": "q4c2-protection-04",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "q4c2-mem-protection-05",
+          "text": "What embedding dimension does EchoGuard require? EchoGuard answer: 2560.",
+          "owner_case_id": "q4c2-protection-05",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "q4c2-mem-protection-06",
+          "text": "FableGuard 的失败回退路径是什么？ FableGuard answer: original-query retrieval.",
+          "owner_case_id": "q4c2-protection-06",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "q4c2-mem-protection-07",
+          "text": "What vector search depth does GroveGuard use before final ranking? GroveGuard answer: 50.",
+          "owner_case_id": "q4c2-protection-07",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        },
+        {
+          "id": "q4c2-mem-protection-08",
+          "text": "HarborGuard 的保护样本要求是什么？ HarborGuard answer: no Recall-all regression.",
+          "owner_case_id": "q4c2-protection-08",
+          "owner_family": "protection",
+          "role": "protection_fact"
+        }
+      ],
+      "cases": [
+        {
+          "case_id": "q4c2-entity-01",
+          "family": "entity_reference",
+          "query": "那个模块最后选了什么兼容策略？",
+          "gold_evidence_ids": [
+            "q4c2-mem-entity-01"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-entity-08",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-02"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-entity-02",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-entity-04"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-04"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-entity-02",
+          "family": "entity_reference",
+          "query": "Which compatibility policy did that component end up using?",
+          "gold_evidence_ids": [
+            "q4c2-mem-entity-02"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-protection-07"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-entity-06"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-protection-05"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-entity-06"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-entity-03",
+          "family": "entity_reference",
+          "query": "那个服务最后采用了哪种回退规则？",
+          "gold_evidence_ids": [
+            "q4c2-mem-entity-03"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-05-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-06"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-04-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-06"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-entity-04",
+          "family": "entity_reference",
+          "query": "What fallback rule did that module finally settle on?",
+          "gold_evidence_ids": [
+            "q4c2-mem-entity-04"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-multi-08-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-04"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-entity-03"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-04"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-entity-05",
+          "family": "entity_reference",
+          "query": "那个模块最后选了什么兼容策略？",
+          "gold_evidence_ids": [
+            "q4c2-mem-entity-05"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-entity-08",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-07"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-entity-04"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-04"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-entity-06",
+          "family": "entity_reference",
+          "query": "Which compatibility policy did that component end up using?",
+          "gold_evidence_ids": [
+            "q4c2-mem-entity-06"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-protection-07"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-entity-06"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-protection-03"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-entity-06"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-entity-07",
+          "family": "entity_reference",
+          "query": "那个服务最后采用了哪种回退规则？",
+          "gold_evidence_ids": [
+            "q4c2-mem-entity-07"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-05-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-07",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-01-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-06"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-entity-08",
+          "family": "entity_reference",
+          "query": "What fallback rule did that module finally settle on?",
+          "gold_evidence_ids": [
+            "q4c2-mem-entity-08"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-entity-03",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-entity-04",
+              "q4c2-mem-multi-08-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-04"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-02",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-entity-08",
+              "q4c2-mem-entity-06",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-entity-03"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-entity-08"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-multi-01",
+          "family": "multi_facet",
+          "query": "当时为什么选那个实现，代价是什么？",
+          "gold_evidence_ids": [
+            "q4c2-mem-multi-01-rationale",
+            "q4c2-mem-multi-01-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-entity-02"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-05-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-entity-02"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-05-rationale"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-multi-02",
+          "family": "multi_facet",
+          "query": "Why was that design selected, and what tradeoff remained?",
+          "gold_evidence_ids": [
+            "q4c2-mem-multi-02-rationale",
+            "q4c2-mem-multi-02-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-08-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-entity-05"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-rationale"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-multi-03",
+          "family": "multi_facet",
+          "query": "那个方案的选择理由和主要限制分别是什么？",
+          "gold_evidence_ids": [
+            "q4c2-mem-multi-03-rationale",
+            "q4c2-mem-multi-03-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-protection-05"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-02-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-protection-03"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-02-rationale"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-multi-04",
+          "family": "multi_facet",
+          "query": "What justified that approach, and what limitation was left?",
+          "gold_evidence_ids": [
+            "q4c2-mem-multi-04-rationale",
+            "q4c2-mem-multi-04-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-limit"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-03-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-limit"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-multi-05",
+          "family": "multi_facet",
+          "query": "当时为什么选那个实现，代价是什么？",
+          "gold_evidence_ids": [
+            "q4c2-mem-multi-05-rationale",
+            "q4c2-mem-multi-05-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-entity-02"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-05-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-entity-01",
+              "q4c2-mem-protection-07"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-05-rationale"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-multi-06",
+          "family": "multi_facet",
+          "query": "Why was that design selected, and what tradeoff remained?",
+          "gold_evidence_ids": [
+            "q4c2-mem-multi-06-rationale",
+            "q4c2-mem-multi-06-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-08-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-entity-05"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-rationale"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-multi-07",
+          "family": "multi_facet",
+          "query": "那个方案的选择理由和主要限制分别是什么？",
+          "gold_evidence_ids": [
+            "q4c2-mem-multi-07-rationale",
+            "q4c2-mem-multi-07-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-protection-05"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-02-rationale"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-05"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-02-rationale"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-multi-08",
+          "family": "multi_facet",
+          "query": "What justified that approach, and what limitation was left?",
+          "gold_evidence_ids": [
+            "q4c2-mem-multi-08-rationale",
+            "q4c2-mem-multi-08-limit"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-entity-07"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-limit"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-03-rationale",
+              "q4c2-mem-multi-04-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-multi-05-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-04-limit"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-protection-01",
+          "family": "protection",
+          "query": "What exact topK does AuroraGuard use for final serving?",
+          "gold_evidence_ids": [
+            "q4c2-mem-protection-01"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-05-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-entity-05"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-05-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-entity-05"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-protection-02",
+          "family": "protection",
+          "query": "BasaltGuard 的候选深度固定为多少？",
+          "gold_evidence_ids": [
+            "q4c2-mem-protection-02"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-protection-08",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-04-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-protection-08",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-04-limit"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-05"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-protection-03",
+          "family": "protection",
+          "query": "What maximum expansion count does CirrusGuard allow per query?",
+          "gold_evidence_ids": [
+            "q4c2-mem-protection-03"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-protection-08"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-protection-05"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-protection-08"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-protection-07"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-protection-04",
+          "family": "protection",
+          "query": "DahliaGuard 的 rerank deadline 是多少？",
+          "gold_evidence_ids": [
+            "q4c2-mem-protection-04"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-04",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-07-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-04",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-01-limit"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-04",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-07-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-04",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-02"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-protection-05",
+          "family": "protection",
+          "query": "What embedding dimension does EchoGuard require?",
+          "gold_evidence_ids": [
+            "q4c2-mem-protection-05"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-protection-08",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-protection-06"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-07"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-protection-08",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-protection-06"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-02"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-protection-06",
+          "family": "protection",
+          "query": "FableGuard 的失败回退路径是什么？",
+          "gold_evidence_ids": [
+            "q4c2-mem-protection-06"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-08",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-05-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-08"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-08",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-entity-07",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-multi-05-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-06",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-08"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-protection-07",
+          "family": "protection",
+          "query": "What vector search depth does GroveGuard use before final ranking?",
+          "gold_evidence_ids": [
+            "q4c2-mem-protection-07"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-02"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-01"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-multi-06-rationale",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-02-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-04-rationale",
+              "q4c2-mem-multi-01-limit",
+              "q4c2-mem-protection-02"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-01"
+            ]
+          }
+        },
+        {
+          "case_id": "q4c2-protection-08",
+          "family": "protection",
+          "query": "HarborGuard 的保护样本要求是什么？",
+          "gold_evidence_ids": [
+            "q4c2-mem-protection-08"
+          ],
+          "baseline": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-08",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-06-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-08",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-05"
+            ]
+          },
+          "hint": {
+            "candidate_pool_ids": [
+              "q4c2-mem-protection-08",
+              "q4c2-mem-protection-05",
+              "q4c2-mem-protection-07",
+              "q4c2-mem-protection-01",
+              "q4c2-mem-protection-06",
+              "q4c2-mem-protection-03",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-multi-02-limit",
+              "q4c2-mem-multi-06-limit",
+              "q4c2-mem-protection-04",
+              "q4c2-mem-multi-01-rationale",
+              "q4c2-mem-multi-08-limit",
+              "q4c2-mem-multi-07-rationale",
+              "q4c2-mem-multi-05-rationale",
+              "q4c2-mem-multi-08-rationale",
+              "q4c2-mem-multi-03-limit",
+              "q4c2-mem-multi-07-limit",
+              "q4c2-mem-multi-04-limit",
+              "q4c2-mem-entity-05",
+              "q4c2-mem-multi-06-rationale"
+            ],
+            "ranked_top3_ids": [
+              "q4c2-mem-protection-08",
+              "q4c2-mem-protection-02",
+              "q4c2-mem-protection-05"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "fixture_sha256": "077b02f16c7bd463eb5f5120930473f653bf5ae37e1a16cdb377e88fd3a6b405"
+}
