@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / POST-A4 CAPTURE REPAIR SOURCE-QUALIFIED / Q5-A5 NEW REAL SCORE CAPTURE AUTHORIZED + PREPARED / NOT YET EXECUTED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / POST-A4 CAPTURE REPAIR SOURCE-QUALIFIED / Q5-A5 REAL SCORE CAPTURE PASS / 80 OF 80 PROVIDER CALLS / BOUNDED SCORE PACKET FROZEN / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -824,12 +824,124 @@ This does not change A4 history; it only prevents A5 summary telemetry from sile
 
 Q5-A5 authorizes only this offline score-capture transaction. It does not authorize embedding, Hint production, model training, runtime/config mutation, live DB/LanceDB access, deployment, push or tag.
 
-Current pre-execution state:
+### Q5-A5 execution result
+
+The A5 execution source was frozen at:
 
 ```text
-Q5-A5 = AUTHORIZED / PREPARED
-REAL PROVIDER EXECUTION = NOT YET STARTED
+78f2e029039587040d4f62b4447ed3ddccd15bd5
+```
+
+Clean-worktree zero-egress preflight passed with the exact frozen transaction:
+
+```text
+fixture_sha256 =
+077b02f16c7bd463eb5f5120930473f653bf5ae37e1a16cdb377e88fd3a6b405
+
+case_count = 40
+planned_provider_calls = 80
+candidateDepth = 20
 topK = 3
+
+provider = siliconflow
+model = Qwen/Qwen3-Reranker-0.6B
+revision = null
+deadline_ms = 2500
+
+credential_available = true
+retry_policy = NO_RETRY_NO_RESUME_NO_REPLAY
+
+embedding_calls = 0
+hint_producer_calls = 0
+model_training_runs = 0
+runtime_mutation = false
+```
+
+A5 then completed successfully:
+
+```text
+status = PASS
+mode = REAL_FIXED_POOL_RERANK_SCORE_CAPTURE
+
+provider_attempts = 80
+provider_successes = 80
+provider_attempt_cap = 80
+
+retry_policy = NO_RETRY_NO_RESUME_NO_REPLAY
+stop.json = absent
+```
+
+The bounded selection-signal packet contains exactly one row for every frozen case/arm:
+
+```text
+packet case-arms = 80
+unique case-arms = 80
+candidate_count per case-arm = 20
+all rerank scores finite = true
+
+packet_sha256 =
+a148f6f2c5d378442714c8ba3ce6a853e4f895e0d37385f9e075a57f523b8257
+```
+
+The transaction result file is:
+
+```text
+/tmp/memory-engine-q5-fixed-pool-rerank-score-capture-v1/
+  78f2e029039587040d4f62b4447ed3ddccd15bd5/
+    attempt.json
+    result.json
+```
+
+and its file SHA-256 is:
+
+```text
+de260944c8ed1792c930e0d7e370bce6e7ee36c382ce4e015d1bb763aa382ea2
+```
+
+The bounded packet is also frozen in-repository for reproducible offline analysis:
+
+```text
+test/fixtures/q5-fixed-pool-rerank-score-capture-v1.json
+
+pretty-printed file sha256 =
+7642921262fdd165a2fff2e4a4c51b8b7f9f973e920c0824e9d4f74e171b44cb
+```
+
+The packet passes the A3 validator and contains no forbidden raw query/candidate text, gold, evaluator, answer or acceptance fields. It persists query/candidate text identities only as SHA-256 plus bounded rank/score/projection/provider metadata.
+
+Provider usage preserved by the real adapter is:
+
+```text
+input_tokens = 163336
+billed_input_tokens = 163336
+output_tokens = 0
+billed_output_tokens = 0
+```
+
+Per-case bounded usage did not report `total_tokens`, so the execution wrapper's numeric aggregate `total_tokens=0` must not be interpreted as zero total consumption; the authoritative available usage measure is the reported input/billed-input count above.
+
+Historical adjudication:
+
+```text
+Q5-A5 REAL SCORE CAPTURE
+= PASS
+= 80 / 80 PROVIDER CALLS SUCCESSFUL
+= BOUNDED REAL SCORE PACKET FROZEN
+= NO RETRY USED
+= RUNTIME UNCHANGED
+
+Q5-A4
+= REMAINS STOPPED / CONSUMED
+```
+
+A5 supplies the previously missing full per-candidate score/order evidence. It does not itself select a constrained-complementarity rule, does not select Statistical LTR, and does not authorize another provider transaction.
+
+Next boundary:
+
+```text
+REAL SCORE PACKET = AVAILABLE
+MARGIN-CONSTRAINED FIXED-POOL SELECTION = NOT YET EVALUATED
 STATISTICAL LTR = NOT SELECTED
+NEW PROVIDER EXECUTION = NOT AUTHORIZED
 RUNTIME = UNCHANGED
 ```
