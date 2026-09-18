@@ -1,6 +1,6 @@
 # memory-engine RH-L3 Parallel Execution Qualification Contract v1
 
-Status: `RH-L3-A SOURCE QUALIFIED / RH-L3-B NOT STARTED / RUNTIME NOT AUTHORIZED`
+Status: `RH-L3-A SOURCE QUALIFIED / RH-L3-B LOCAL PARALLEL EXECUTION QUALIFIED / RH-L3-C NOT STARTED / RUNTIME NOT AUTHORIZED`
 
 ## 1. Purpose
 
@@ -221,4 +221,69 @@ f5e2d878fb5323af9fa2a857e7188eca360a2e5ac12a6efa1cc37644dc33d242
 
 Focused RH-L3-A / Recall Hint / Hybrid / RH-L1 regression passed `50/50`; static check passed `819` files; test-integrity scanned `369` files with `0` invalid; strict OpenSpec passed `12/12`; `git diff --check` passed. CodeGraph found one directly affected test file and a five-symbol impact cone around the new contract builder; code-review-graph reported `0` affected stored flows, `0` test gaps and risk `0.00`.
 
-RH-L3-A is therefore **SOURCE QUALIFIED**. RH-L3-B local parallel vector execution qualification is the next boundary. It remains source/local-only unless separately expanded; real-host runtime qualification still requires a distinct Owner authorization.
+RH-L3-A is therefore **SOURCE QUALIFIED**.
+
+## 10. RH-L3-B local parallel vector execution result
+
+RH-L3-B reuses the exact RH-L3-A fixture and plan identities and drives the production `collectVectorCandidates` path with `recallHintVectorExecutionMode=parallel` against a controlled local embedding/vector backend. No provider, live runtime, live DB or live LanceDB is involved.
+
+The controlled backend uses a three-party barrier at both embedding and vector-search stages. A sequential executor would block at the first barrier and fail; PASS therefore requires structural sibling overlap rather than timing-based inference.
+
+Qualified source:
+
+```text
+e4400ade955960d006367b5108f6b0da1377819e
+```
+
+Clean-source CLI result:
+
+```text
+status = PASS
+mode = RH_L3_B_LOCAL_PARALLEL_VECTOR_EXECUTION
+worktree_clean = true
+provider_requests = 0
+
+contract_sha256 =
+dcb9f45fce0761a49c2e62bcf2fb83ea030a6982ec54c5f5179868b082c7b22b
+
+execution_binding_sha256 =
+4ec698a554608d3951c615165a8a372ba82576b33f8ada709a32b083a914ea3f
+
+upstream_fixture_sha256 =
+346efb8983d46d27fe1b9a538b25d2fc2315c275e3bdc2573173de61efe7e0d4
+
+upstream_plan_sha256 =
+49f37a0054636c6dfce26c95929115615038f25e91702621f3e2700d5baa2462
+
+result_sha256 =
+c8666d9bb2e455f37376f2a904a60923d6f02423624808eb51d011d78cc15ff5
+```
+
+Execution evidence:
+
+```text
+vector_execution_mode = parallel
+queries_submitted = 3
+queries_completed = 3
+embedding_submitted/completed = 3/3
+search_submitted/completed = 3/3
+max_active_embeddings = 3
+max_active_searches = 3
+fusion_input_query_count = 3
+fusion_input_candidate_counts = [2,2,2]
+raw_row_count = 6
+unique_candidate_count = 4
+fused_candidate_ids =
+  shared
+  original-only
+  rationale-only
+  limitations-only
+```
+
+This qualifies local parallel fan-out and complete vector-level fusion input on the frozen plan. It does not yet qualify full Hybrid Fusion -> Ranking -> Canonical Projection behavior; that is RH-L3-C.
+
+Focused RH-L3/Recall Hint/Hybrid/RH-L1 regression passed `53/53`; static check passed `821` files; test-integrity scanned `370` files with `0` invalid; strict OpenSpec passed `12/12`; `git diff --check` passed. CodeGraph found one directly affected test file and a five-symbol impact cone around the execution runner; code-review-graph reported `0` affected stored flows, `0` test gaps and risk `0.00`.
+
+Live state remains unchanged: the installed extension is still `bd4b177...`, `recallHintRuntimeCanary` is absent, and RH-L3-B is not deployed.
+
+RH-L3-C local fusion/ranking/projection qualification is the next boundary. Real-host runtime qualification remains separately authorized.
