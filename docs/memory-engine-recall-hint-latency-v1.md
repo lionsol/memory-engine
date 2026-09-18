@@ -1,6 +1,6 @@
 # memory-engine Recall Hint latency track — RH-L1 Parallel Vector Execution
 
-Status: `SOURCE IMPLEMENTED / OPT-IN ONLY / LOCAL CONCURRENCY VERIFIED / REPOSITORY REGRESSION CLEAN EXCEPT KNOWN LOCO MO FIXTURE ABSENCE / REAL PROVIDER PERFORMANCE NOT AUTHORIZED / NO RUNTIME AUTHORITY`
+Status: `SOURCE IMPLEMENTED / OPT-IN ONLY / LOCAL CONCURRENCY VERIFIED / PERFORMANCE PACKET SOURCE READY / OWNER AUTHORIZED / EXECUTION PENDING CLEAN BINDING / NO RUNTIME AUTHORITY`
 
 ## 1. Why this track exists
 
@@ -99,3 +99,38 @@ The performance packet must precommit:
 - no retry/resume/replay unless separately authorized.
 
 Until that packet exists and is explicitly authorized, `recallHintVectorExecutionMode="parallel"` remains source-only and default-off.
+
+## 8. RH-L1 real-provider sequential-vs-parallel performance packet
+
+The Owner has authorized one RH-L1 real-provider performance qualification. This authorization is performance-only: it does not authorize a new quality claim, producer execution, live runtime activation, deployment, AutoRecall integration, or mutation of live Core/Engine/LanceDB.
+
+The packet reuses the **source-frozen Q4-C1b development Hint outputs** rather than generating new Hints. It selects the 12 development rows with non-empty vector query plans (entity-reference, multi-facet and temporal diagnostic rows) and freezes exactly 19 expansion queries. This material is used only because its query plans are already source-frozen and producer-independent; no acceptance case or C2 quality holdout is reopened.
+
+Across those 12 target cases there are 31 logical original/expansion query inputs but only 27 distinct exact strings because four original-query strings repeat across synthetic cases. With the required exact-input cache, each independent semantic session therefore has a frozen real-provider ceiling of:
+
+- 72 synthetic canonical corpus embeddings;
+- 27 distinct target original/expansion embeddings;
+- **99 embedding requests total**;
+- **12 rerank requests total**;
+- producer requests = **0**.
+
+The sequential and parallel arms use completely independent temporary SQLite/Lance materializations and independent embedding caches. Their combined transaction ceiling is **198 embeddings + 24 reranks**. Under the existing conservative maximum-token accounting, the per-session theoretical upper bound is below USD 0.095 and the two-arm theoretical maximum is **USD 0.18874368**; the hard transaction cap is **USD 0.19**.
+
+To reduce temporal provider-load bias, case execution order is precommitted: even-index cases execute sequential then parallel, odd-index cases execute parallel then sequential. The two arms are never intentionally run concurrently with each other.
+
+Qualification gates are frozen before real execution:
+
+- candidate pool IDs must be exactly equal for sequential and parallel on all 12 cases;
+- final ranked top3 IDs must be exactly equal on all 12 cases;
+- observed embedding and rerank request counts must match between arms and match the frozen 99/12 per-session counts;
+- sequential embedding provider concurrency must remain at most 1;
+- parallel embedding provider concurrency must reach at least 2;
+- pool-vector p50 latency must improve by at least **20%**;
+- full semantic p50 latency must improve by at least **10%**;
+- full semantic p95 may regress by at most **20%**;
+- provider errors = 0;
+- automatic retry/resume/replay = 0.
+
+The real provider surface remains SiliconFlow only, reusing the existing frozen Q4 semantic profile: Qwen3-Embedding-4B at dimension 2560 and Qwen3-Reranker-0.6B with candidate depth 20 / final topK 3. Egress is limited to synthetic canonical projection text, the 12 frozen development queries, the 19 frozen expansion queries, and bounded synthetic candidate text for rerank. Gold evidence IDs, acceptance cases, full sessions, tool traces, live memory and any Recall Hint producer request are denied.
+
+Execution requires a clean source commit and an exact `execution_binding_sha256`. Preflight is zero-egress and does not create an attempt marker. The provider-capable path creates one exclusive `CONSUMED` attempt marker before egress; any PASS, STOPPED, provider failure or environment failure consumes the authorization. There is no automatic retry, resume or replay.
