@@ -35,6 +35,7 @@
     "benchmark:rh-l1:lancedb-equivalence": "node bin/run-rh-l1-lancedb-equivalence-v1.mjs",
     "benchmark:rh-l3:expansion-contract": "node bin/run-rh-l3-expansion-contract-v1.mjs",
     "benchmark:rh-l3:parallel-execution": "node bin/run-rh-l3-parallel-execution-v1.mjs",
+    "benchmark:rh-l3:fusion-projection": "node bin/run-rh-l3-fusion-projection-v1.mjs",
     "benchmark:aml:serve": "node bin/serve-aml-benchmark-v1.js",
     "smoke:quality-baseline": "node bin/run-memory-quality-baseline-smoke.js",
     "smoke:smart-add-duplicates": "node bin/run-smart-add-duplicate-baseline-smoke.js",
