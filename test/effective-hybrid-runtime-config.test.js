@@ -460,6 +460,7 @@ test("Recall Hint runtime canary defaults off and accepts only exact session plu
     enabled: false,
     sessionIds: [],
     vectorExecutionMode: "sequential",
+    executionProbe: null,
   });
 
   const configured = normalized({
@@ -468,6 +469,7 @@ test("Recall Hint runtime canary defaults off and accepts only exact session plu
         enabled: true,
         sessionIds: ["session-rh"],
         vectorExecutionMode: "parallel",
+        executionProbe: "rh_l3_canonical_v1",
       },
     },
   });
@@ -475,12 +477,15 @@ test("Recall Hint runtime canary defaults off and accepts only exact session plu
     enabled: true,
     sessionIds: ["session-rh"],
     vectorExecutionMode: "parallel",
+    executionProbe: "rh_l3_canonical_v1",
   });
 
   for (const recallHintRuntimeCanary of [
     { enabled: "yes" },
     { sessionIds: "session-rh" },
     { vectorExecutionMode: "auto" },
+    { enabled: true, vectorExecutionMode: "parallel", executionProbe: "unknown_probe" },
+    { enabled: true, vectorExecutionMode: "sequential", executionProbe: "rh_l3_canonical_v1" },
     { enabled: true, unknown: true },
   ]) {
     const result = resolveEffectiveHybridRuntimeConfig({
@@ -491,6 +496,7 @@ test("Recall Hint runtime canary defaults off and accepts only exact session plu
       enabled: false,
       sessionIds: [],
       vectorExecutionMode: "sequential",
+      executionProbe: null,
     });
   }
 });

@@ -81,6 +81,18 @@ test("RH-L2-B policy is null by default and does not require a credential while 
   }), null);
 });
 
+test("RH-L3 deterministic execution probe suppresses Recall Hint provider construction", () => {
+  assert.equal(createRecallHintRuntimeProviderPolicyV1({
+    valid: true,
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-rh-l3"],
+      vectorExecutionMode: "parallel",
+      executionProbe: "rh_l3_canonical_v1",
+    },
+  }), null);
+});
+
 test("RH-L2-B fake transport receives one bounded JSON request and returns a normalized telemetry envelope", async () => {
   const calls = [];
   const adapter = createSiliconFlowRecallHintAdapterV1({

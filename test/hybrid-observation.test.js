@@ -300,6 +300,54 @@ test("hybrid observation persists bounded Recall Hint canary state without sessi
   assert.equal(serialized.includes("must-not-persist-id"), false);
 });
 
+test("hybrid observation persists bounded RH-L3 actual parallel execution evidence without query content", () => {
+  const observation = buildHybridSearchObservation({
+    surface: "memory_engine_search",
+    result: {
+      results: [],
+      debug: {
+        recall_hint: {
+          mode: "recall_hint_v1",
+          status: "probe_applied",
+        },
+        hint_canary_in_scope: true,
+        hint_canary_reason: "session_allowlisted",
+        hint_vector_execution_mode: "parallel",
+        hint_execution_probe: "rh_l3_canonical_v1",
+        hint_expansion_count: 2,
+        vector_query_execution: "parallel",
+        vector_query_count: 3,
+        vector_search_count: 3,
+        vector_query_candidate_counts: [2, 0, 1],
+        vector_query_input_sha256s: [
+          "must-not-persist-query-hash-a",
+          "must-not-persist-query-hash-b",
+          "must-not-persist-query-hash-c",
+        ],
+        query_original: "must not persist query",
+      },
+    },
+  });
+
+  assert.equal(observation.vector_query_execution, "parallel");
+  assert.equal(observation.vector_query_count, 3);
+  assert.equal(observation.vector_search_count, 3);
+  assert.deepEqual(observation.vector_query_candidate_counts, [2, 0, 1]);
+  assert.deepEqual(observation.recall_hint, {
+    mode: "recall_hint_v1",
+    status: "probe_applied",
+    canary_in_scope: true,
+    canary_reason: "session_allowlisted",
+    vector_execution_mode: "parallel",
+    expansion_count: 2,
+    execution_probe: "rh_l3_canonical_v1",
+  });
+
+  const serialized = JSON.stringify(observation);
+  assert.equal(serialized.includes("must-not-persist-query-hash"), false);
+  assert.equal(serialized.includes("must not persist query"), false);
+});
+
 test("both explicit search surfaces persist C0 observability while public results stay bounded", async () => {
   const events = [];
   const explicitDebug = {

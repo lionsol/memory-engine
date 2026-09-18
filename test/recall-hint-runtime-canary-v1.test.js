@@ -12,6 +12,8 @@ test("Recall Hint runtime canary is default-off and requires an exact trusted se
     enabled: false,
     in_scope: false,
     provider_allowed: false,
+    probe_allowed: false,
+    execution_probe: null,
     vector_execution_mode: "sequential",
     reason: "disabled",
     session_id_present: false,
@@ -50,10 +52,49 @@ test("Recall Hint runtime canary allows only the exact trusted session and prese
     enabled: true,
     in_scope: true,
     provider_allowed: true,
+    probe_allowed: false,
+    execution_probe: null,
     vector_execution_mode: "parallel",
     reason: "session_allowlisted",
     session_id_present: true,
   });
+});
+
+test("RH-L3 deterministic runtime probe is exact-session and disables the Recall Hint provider", () => {
+  const decision = evaluateRecallHintRuntimeCanaryV1({
+    config: {
+      enabled: true,
+      sessionIds: ["session-rh-l3"],
+      vectorExecutionMode: "parallel",
+      executionProbe: "rh_l3_canonical_v1",
+    },
+    runtimeContext: {
+      source: "openclaw_runtime",
+      sessionIdentity: "session-rh-l3",
+    },
+  });
+
+  assert.equal(decision.in_scope, true);
+  assert.equal(decision.provider_allowed, false);
+  assert.equal(decision.probe_allowed, true);
+  assert.equal(decision.execution_probe, "rh_l3_canonical_v1");
+  assert.equal(decision.vector_execution_mode, "parallel");
+
+  const outside = evaluateRecallHintRuntimeCanaryV1({
+    config: {
+      enabled: true,
+      sessionIds: ["session-rh-l3"],
+      vectorExecutionMode: "parallel",
+      executionProbe: "rh_l3_canonical_v1",
+    },
+    runtimeContext: {
+      source: "openclaw_runtime",
+      sessionIdentity: "session-other",
+    },
+  });
+  assert.equal(outside.probe_allowed, false);
+  assert.equal(outside.provider_allowed, false);
+  assert.equal(outside.reason, "session_not_allowlisted");
 });
 
 test("RH-L2-B production assembly wires the provider only through the default-off canary policy", () => {
@@ -70,6 +111,7 @@ test("RH-L2-B production assembly wires the provider only through the default-of
     enabled: false,
     sessionIds: [],
     vectorExecutionMode: "sequential",
+    executionProbe: null,
   });
   assert.equal(
     manifest.configSchema.properties.recallHintRuntimeCanary.properties.sessionIds.uniqueItems,

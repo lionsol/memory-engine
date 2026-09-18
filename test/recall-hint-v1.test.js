@@ -514,6 +514,88 @@ test("Recall Hint runtime canary accepts trusted tool-factory session context wi
   assert.equal(observed[0].runtime.recallHintVectorExecutionMode, "parallel");
 });
 
+test("RH-L3 deterministic runtime probe injects the frozen plan without calling the Recall Hint provider", async () => {
+  let providerCalls = 0;
+  const observed = [];
+  const context = makeSearchContext({
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-rh-l3"],
+      vectorExecutionMode: "parallel",
+      executionProbe: "rh_l3_canonical_v1",
+    },
+    resolveExplicitSearchRuntimeContext: () => null,
+    recallHintProvider: () => {
+      providerCalls += 1;
+      throw new Error("provider must not run in deterministic probe mode");
+    },
+    hybridSearch: async (query, options, runtime) => {
+      observed.push({ query, options, runtime });
+      return { results: [], debug: {} };
+    },
+  });
+
+  await createMemoryEngineSearchExecute(context)(
+    "tool-rh-l3",
+    { query: "CedarIndex design decision", top_k: 3 },
+    {
+      source: "openclaw_runtime",
+      sessionIdentity: "session-rh-l3",
+    },
+  );
+
+  assert.equal(providerCalls, 0);
+  assert.equal(observed.length, 1);
+  assert.deepEqual(observed[0].runtime.vectorQueryPlan, {
+    mode: "recall_hint_v1",
+    queries: [
+      "CedarIndex design decision rationale project:CedarIndex entities:CedarIndex",
+      "CedarIndex design decision limitations project:CedarIndex entities:CedarIndex",
+    ],
+  });
+  assert.equal(observed[0].runtime.recallHintVectorExecutionMode, "parallel");
+  assert.equal(observed[0].runtime.recallHintDebug.status, "probe_applied");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_expansion_count, 2);
+  assert.equal(observed[0].runtime.recallHintDebug.hint_execution_probe, "rh_l3_canonical_v1");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_canary_in_scope, true);
+});
+
+test("RH-L3 deterministic runtime probe fails closed on query mismatch and never falls through to provider", async () => {
+  let providerCalls = 0;
+  const observed = [];
+  const context = makeSearchContext({
+    recallHintRuntimeCanary: {
+      enabled: true,
+      sessionIds: ["session-rh-l3"],
+      vectorExecutionMode: "parallel",
+      executionProbe: "rh_l3_canonical_v1",
+    },
+    recallHintProvider: () => {
+      providerCalls += 1;
+      return { version: "recall_hint_v1", query_facets: ["should-not-run"] };
+    },
+    hybridSearch: async (query, options, runtime) => {
+      observed.push({ query, options, runtime });
+      return { results: [], debug: {} };
+    },
+  });
+
+  await createMemoryEngineSearchExecute(context)(
+    "tool-rh-l3-mismatch",
+    { query: "CedarIndex design decision?", top_k: 3 },
+    {
+      source: "openclaw_runtime",
+      sessionIdentity: "session-rh-l3",
+    },
+  );
+
+  assert.equal(providerCalls, 0);
+  assert.equal(Object.hasOwn(observed[0].runtime, "vectorQueryPlan"), false);
+  assert.equal(observed[0].runtime.recallHintDebug.status, "probe_query_mismatch");
+  assert.equal(observed[0].runtime.recallHintDebug.hint_expansion_count, 0);
+  assert.equal(observed[0].runtime.recallHintDebug.hint_execution_probe, "rh_l3_canonical_v1");
+});
+
 test("Recall Hint runtime canary rejects mismatched trusted tool-factory session even if fallback resolver matches", async () => {
   let providerCalls = 0;
   const observed = [];
