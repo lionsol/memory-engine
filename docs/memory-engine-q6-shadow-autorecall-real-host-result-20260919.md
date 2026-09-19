@@ -110,12 +110,25 @@ The host startup validator nevertheless rejected `autoRecall.shadow` as an addit
 The accepted finding is:
 
 ```text
-HOST PLUGIN-METADATA / CONFIG-SCHEMA PUBLICATION MISMATCH
+SOURCEPATH / INSTALLPATH SCHEMA SPLIT-BRAIN
+STALE INSTALLED-EXTENSION MANIFEST PROVEN
 ```
 
-Existing OpenClaw 2026.7.1-2 repository audits show that plugin metadata can flow through the host `installed_plugin_index`, registry snapshots, and discovery/runtime-loading paths. The consumed Q6-D transaction does not prove which concrete host metadata surface supplied the stale schema. In particular, it does not yet prove whether the stale source was the extension `installPath`, persisted installed-plugin index, registry snapshot/discovery state, or another publication/cache layer.
+Read-only follow-up proved:
 
-That attribution must remain a read-only diagnosis until separately reviewed.
+```text
+repo manifest SHA256 = 0ea09bfea5bb5d1f3532ed22c9e0ae9c1cfe64abd785f00a1458b8481b0b0a27
+repo autoRecall.shadow = present
+
+installPath manifest SHA256 = 346969a530ac8b6931bd4ec9d624016ca36ae394d47a79f9058bf037f602a735
+installPath autoRecall.shadow = absent
+```
+
+The installPath hash exactly matches the historical pre-Q6 manifest from `e40186d...`.
+
+Existing OpenClaw 2026.7.1-2 repository audits show that plugin metadata can flow through the host `installed_plugin_index`, registry snapshots, and discovery/runtime-loading paths. The stale installed-extension manifest is now proven. What remains unproven is which metadata path the Gateway config validator actually consumed: the stale `installPath` manifest directly, a persisted installed-plugin index entry derived from it, registry snapshot/discovery state, or another host publication/cache layer.
+
+That validator-path attribution must remain a read-only diagnosis until separately reviewed.
 
 ## Evidence limitations
 
