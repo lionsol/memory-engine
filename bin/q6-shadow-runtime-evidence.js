@@ -12,7 +12,8 @@ Usage:
   node bin/q6-shadow-runtime-evidence.js \
     --db <engine.sqlite> \
     --since-id <integer> \
-    --session-id <exact-session-id> \
+    --session-id <exact-runtime-session-id> \
+    [--session-id <additional-runtime-session-id>] \
     [--turns-sent <0..6>] \
     [--json]
 
@@ -21,7 +22,7 @@ Reads memory_events only. No database writes are performed.
 }
 
 function parseArgs(argv) {
-  const out = { json: false, turnsSent: 0 };
+  const out = { json: false, turnsSent: 0, sessionIds: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--json") {
@@ -32,7 +33,7 @@ function parseArgs(argv) {
     if (!value) throw new Error(`missing value for ${arg}`);
     if (arg === "--db") out.db = value;
     else if (arg === "--since-id") out.sinceId = Number(value);
-    else if (arg === "--session-id") out.sessionId = value;
+    else if (arg === "--session-id") out.sessionIds.push(value);
     else if (arg === "--turns-sent") out.turnsSent = Number(value);
     else throw new Error(`unknown argument: ${arg}`);
     i += 1;
@@ -41,13 +42,17 @@ function parseArgs(argv) {
   if (!Number.isSafeInteger(out.sinceId) || out.sinceId < 0) {
     throw new Error("--since-id must be a non-negative integer");
   }
-  if (typeof out.sessionId !== "string" || !out.sessionId.trim()) {
+  if (
+    out.sessionIds.length === 0 ||
+    out.sessionIds.some(value => typeof value !== "string" || !value.trim())
+  ) {
     throw new Error("--session-id is required");
   }
   if (!Number.isSafeInteger(out.turnsSent) || out.turnsSent < 0 || out.turnsSent > 6) {
     throw new Error("--turns-sent must be an integer from 0 to 6");
   }
-  out.sessionId = out.sessionId.trim();
+  out.sessionIds = [...new Set(out.sessionIds.map(value => value.trim()))];
+  out.sessionId = out.sessionIds[0];
   out.db = resolve(out.db);
   return out;
 }
@@ -150,7 +155,7 @@ function unknownKeys(object, allowed) {
   return Object.keys(object).filter(key => !allowed.has(key));
 }
 
-function validateEnvelope(event) {
+function validateEnvelope(event, boundSessionIds) {
   const envelope = event.metadata;
   const violations = [];
   const prefix = `event:${event.id}`;
@@ -160,7 +165,7 @@ function validateEnvelope(event) {
   }
   if (envelope.mode !== "shadow") violations.push(`${prefix}:mode_not_shadow`);
   if (envelope.apply_suppressed !== true) violations.push(`${prefix}:apply_not_suppressed`);
-  if (event.session_id !== event.boundSessionId) violations.push(`${prefix}:foreign_session`);
+  if (!boundSessionIds.has(event.session_id)) violations.push(`${prefix}:foreign_session`);
 
   const decisions = Array.isArray(envelope.candidate_decisions)
     ? envelope.candidate_decisions
@@ -228,13 +233,13 @@ function main() {
     metadata: parseMetadata(row.metadata_json),
   }));
   const q6Events = events
-    .filter(event => event.event_type === "auto_recall_debug" && isQ6Envelope(event.metadata))
-    .map(event => ({ ...event, boundSessionId: options.sessionId }));
-  const boundQ6 = q6Events.filter(event => event.session_id === options.sessionId);
-  const foreignQ6 = q6Events.filter(event => event.session_id !== options.sessionId);
+    .filter(event => event.event_type === "auto_recall_debug" && isQ6Envelope(event.metadata));
+  const boundSessionIds = new Set(options.sessionIds);
+  const boundQ6 = q6Events.filter(event => boundSessionIds.has(event.session_id));
+  const foreignQ6 = q6Events.filter(event => !boundSessionIds.has(event.session_id));
 
   const violations = [];
-  for (const event of boundQ6) violations.push(...validateEnvelope(event));
+  for (const event of boundQ6) violations.push(...validateEnvelope(event, boundSessionIds));
   for (const event of foreignQ6) violations.push(`event:${event.id}:foreign_q6_shadow_decision`);
 
   const traceIds = new Set(boundQ6.map(event => event.trace_id).filter(Boolean));
@@ -295,6 +300,7 @@ function main() {
     schema: "memory_engine_q6_shadow_autorecall_real_host_evidence_v1",
     mode: "read_only_post_baseline",
     session_id: options.sessionId,
+    session_ids: options.sessionIds,
     since_event_id: options.sinceId,
     turns_sent: options.turnsSent,
     post_baseline_event_count: events.length,

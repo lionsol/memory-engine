@@ -237,7 +237,7 @@ test("manifest exposes strict agent and trigger defaults plus optional compatibi
   assert.equal(shadow.properties.enabled.default, false);
   assert.deepEqual(shadow.properties.sessionAllowlist.default, []);
   assert.equal(shadow.properties.sessionAllowlist.uniqueItems, true);
-  assert.match(shadow.properties.sessionAllowlist.description, /exact session ids/i);
+  assert.match(shadow.properties.sessionAllowlist.description, /session identities/i);
 });
 
 test("runtime gate supports camel-case config overrides", () => {

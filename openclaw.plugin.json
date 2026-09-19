@@ -149,7 +149,7 @@
                   "type": "string",
                   "minLength": 1
                 },
-                "description": "Exact session IDs that suppress AutoRecall apply/injection while preserving the current decision path"
+                "description": "Exact OpenClaw session identities (runtime session IDs or stable session keys) that suppress AutoRecall apply/injection while preserving the current decision path"
               }
             }
           }

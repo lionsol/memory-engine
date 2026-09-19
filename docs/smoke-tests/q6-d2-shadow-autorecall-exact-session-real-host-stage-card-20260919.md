@@ -1,8 +1,8 @@
 # Q6-D2 Exact-Session Real-Host Shadow Observation Stage Card — 2026-09-19
 
-> **Status: OWNER AUTHORIZED / ONE-SHOT RUNTIME EXECUTION / SOURCE PACKET QUALIFIED**
+> **Status: STOPPED / CONSUMED / CLEAN CLOSEOUT / STABLE-SESSION-KEY IDENTITY FINDING**
 >
-> Owner authorization was granted on 2026-09-19 for exactly one Q6-D2 exact-session real-host shadow observation transaction. The authorization is non-reusable after the execution-consumed boundary and does not authorize Q6-E, Q7, plugin installation, registry repair, retrieval/rerank changes, memory-data mutation, push, or tag.
+> Q6-D2 consumed its one-shot authorization on 2026-09-19. One genuine natural turn reached AutoRecall under a refreshed runtime session ID but produced no Q6 shadow envelope because shadow authorization was bound to the stale runtime session ID instead of the stable OpenClaw session key. Closeout passed. The packet is permanently disabled and must not be replayed.
 
 ## 1. Decision
 
@@ -228,7 +228,7 @@ shadow activation=0
 runtime/config mutation=0
 ```
 
-This is a packet harness defect, not a Q6 runtime result. The existing one-shot Owner authorization remains unconsumed. The repair must execute the exact embedded `max_event_id()` snippet against a temporary SQLite fixture before the packet is rebound.
+This was a packet harness defect, not a Q6 runtime result. The one-shot Owner authorization remained unconsumed at that point; the expression was repaired and behavior-tested against temporary SQLite before the consumed transaction below.
 
 ## 9. Activation sequence
 
@@ -415,14 +415,14 @@ Current status:
 
 ```text
 Q6-D2 =
-OWNER AUTHORIZED
-SOURCE PACKET QUALIFIED
-ONE-SHOT RUNTIME EXECUTION AUTHORIZED
+STOPPED / CONSUMED / CLEAN CLOSEOUT
+STABLE-SESSION-KEY IDENTITY FINDING
+NO RUNTIME SHADOW DECISION EVIDENCE
 ```
 
-The authorization applies only to the exact session binding in Section 6 and only to the committed packet bound to this Stage Card. Once the packet logs `EXECUTION_COUNT_CONSUMED=1`, any retry or successor requires a new Owner authorization.
+The one-shot authorization is consumed and non-reusable. The final result is recorded in `docs/memory-engine-q6-d2-shadow-autorecall-result-20260919.md`.
 
-No authority is inherited from Q6-D or Q6-R1, and no authority flows forward to Q6-E or Q7.
+Q6-D3 is the source-only successor and requires separate runtime authorization. No authority flows forward to Q6-E or Q7.
 
 ## 17. Roadmap after D2
 

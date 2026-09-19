@@ -2,9 +2,9 @@
 set -Eeuo pipefail
 
 # Q6-D2 exact-session real-host shadow observation.
-# OWNER-AUTHORIZED ONE-SHOT PACKET.
-# Authorization is frozen to the exact execution-time session values documented in the Stage Card.
-EXECUTION_AUTHORIZED=true
+# CONSUMED/CLOSED PACKET. DO NOT REPLAY.
+# Q6-D2 consumed its one-shot authorization on 2026-09-19 and closed with a stable-session-key identity finding.
+EXECUTION_AUTHORIZED=false
 
 REPO="$HOME/.openclaw/workspace/plugins/memory-engine"
 STAGE_REL="docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-stage-card-20260919.md"

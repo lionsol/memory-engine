@@ -165,6 +165,19 @@ test("Q6 shadow scope is exact-session and disabled by default", () => {
   );
 });
 
+test("Q6 shadow scope accepts a stable exact session key when runtime sessionId rotates", () => {
+  const stableKey = "agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500";
+  const result = resolveAutoRecallShadowScope({
+    shadow: { enabled: true, sessionAllowlist: [stableKey] },
+  }, "acd96a23-5472-4b88-a2cd-f15277d3e58b", stableKey);
+
+  assert.equal(result.active, true);
+  assert.equal(result.reason, "shadow_session_key_allowlisted");
+  assert.equal(result.sessionId, "acd96a23-5472-4b88-a2cd-f15277d3e58b");
+  assert.equal(result.sessionKey, stableKey);
+  assert.equal(result.scopeIdentity, stableKey);
+});
+
 test("Q6 shadow envelope is bounded and excludes card or memory content", () => {
   const memory = candidate();
   const directCard = directCardSelection(memory);
@@ -378,6 +391,56 @@ test("exact-session Q6 shadow matches active card decision but suppresses apply 
     serializedEvents.includes("SECRET_CARD_SUMMARY_SHOULD_NOT_ENTER_Q6_ENVELOPE"),
     false,
   );
+});
+
+test("stable-key Q6 shadow survives runtime sessionId refresh and records the refreshed event sessionId", async () => {
+  const memory = candidate();
+  const stableKey = "agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500";
+  const refreshedSessionId = "acd96a23-5472-4b88-a2cd-f15277d3e58b";
+  let searchCalls = 0;
+
+  const fixture = createLifecycle({
+    autoRecallConfig: activeConfig({
+      shadow: { enabled: true, sessionAllowlist: [stableKey] },
+    }),
+    hybridSearch: async () => {
+      searchCalls += 1;
+      return {
+        results: [memory],
+        debug: {
+          query_stripped: "这个session创建的时间是？",
+          strict_count: 1,
+          fallback_count: 0,
+          post_rerank_topK: [{ id: memory.id, score: memory.final_score }],
+        },
+      };
+    },
+    evaluateDirectCardBoundary: async () => directCardSelection(memory),
+  });
+
+  const result = await beforePrompt(fixture)({
+    prompt: "这个session创建的时间是？",
+    runId: "run-stable-key-shadow",
+    sessionId: refreshedSessionId,
+    senderIsOwner: true,
+  }, {
+    agentId: "edi",
+    trigger: "user",
+    runId: "run-stable-key-shadow",
+    sessionId: refreshedSessionId,
+    sessionKey: stableKey,
+  });
+
+  assert.equal(result, undefined);
+  assert.equal(searchCalls, 1);
+  const q6Event = fixture.events.find(
+    event => event.event_type === "auto_recall_debug" &&
+      event.metadata_json?.debug_type === "q6_shadow_decision",
+  );
+  assert.ok(q6Event);
+  assert.equal(q6Event.session_id, refreshedSessionId);
+  assert.equal(q6Event.metadata_json.apply_suppressed, true);
+  assert.equal(fixture.events.some(event => event.event_type === "memory_injected"), false);
 });
 
 test("non-shadow sessions retain the active card-first path", async () => {

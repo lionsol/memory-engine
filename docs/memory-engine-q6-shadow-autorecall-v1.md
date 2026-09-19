@@ -462,7 +462,7 @@ It does not retroactively make Q6-D pass. A bounded finding remains: the host-ow
 
 ### Q6-D2 — successor exact-session real-host shadow observation
 
-Status: `OWNER AUTHORIZED / SOURCE PACKET QUALIFIED / ONE-SHOT RUNTIME EXECUTION AUTHORIZED`.
+Status: `STOPPED / CONSUMED / CLEAN CLOSEOUT / STABLE-SESSION-KEY IDENTITY FINDING`.
 
 Q6-D2 is frozen in `docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` with packet `docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh`.
 
@@ -470,9 +470,15 @@ It does not reinstall the plugin. Preactivation requires the repaired Q6-R1 publ
 
 After preflight, D2 changes only `autoRecall.shadow={enabled:true,sessionAllowlist:[exactSession]}`, stops Gateway, validates that temporary config while Gateway is stopped, then starts the real-host shadow runtime. It permits at most six genuine natural user turns and uses the existing bounded `q6-shadow-runtime-evidence.js` read-only event analyzer. Mandatory closeout restores the exact pre-transaction config bytes and re-proves Gateway health plus repo/installPath/registry Q6 parity.
 
-Owner authorization permits exactly one execution through the committed packet. The transaction is frozen to session `d31f1b79-d9cb-476a-8d4e-f70f892b1500` / `agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500`; preflight must re-prove that binding. The first authorized invocation stopped preactivation on a malformed embedded `max_event_id()` Node expression before `PREFLIGHT_PASS`; result evidence recorded `execution_count_consumed=0`, so no authority was consumed. The repaired packet now executes that exact snippet against temporary SQLite in tests. The authorization becomes non-reusable only after `EXECUTION_COUNT_CONSUMED=1` and does not inherit or grant Q6-E/Q7 authority.
+The first authorized invocation stopped preactivation on a malformed embedded `max_event_id()` Node expression with `execution_count_consumed=0`; it was repaired and rebound. The next invocation crossed `EXECUTION_COUNT_CONSUMED=1`, activated shadow against runtime session ID `d31f...`, then observed one genuine user turn reaching AutoRecall under refreshed runtime session ID `acd96...` while the stable key remained `agent:main:explicit:d31f...`. No Q6 shadow envelope was emitted, so D2 stopped on `no_new_shadow_decision`; exact-byte closeout passed. The one-shot authority is consumed and the D2 packet is permanently disabled. Final report: `docs/memory-engine-q6-d2-shadow-autorecall-result-20260919.md`.
 
-Q6-E remains not ready until useful D2 runtime observation evidence exists.
+### Q6-D3 — stable session-key shadow scope
+
+Status: `SOURCE IMPLEMENTED / FOCUSED VERIFIED / RUNTIME EXECUTION NOT AUTHORIZED`.
+
+D3 keeps the existing `autoRecall.shadow.sessionAllowlist` config shape but extends each exact entry to mean either a runtime session ID or a stable OpenClaw session key. The hook now resolves both identities independently, prefers an exact session-key match for shadow authorization, and still records runtime events under the current runtime session ID. Legacy exact-ID scope remains compatible. The read-only Q6 evidence helper now accepts repeated `--session-id` arguments so one stable-key transaction can aggregate a bounded set of rotated runtime IDs while still treating all other Q6 envelopes as foreign-scope violations.
+
+D3 source contract: `docs/smoke-tests/q6-d3-stable-session-key-shadow-stage-card-20260919.md`. It is not deployed and grants no runtime/config/plugin-install authority. Q6-E remains not ready until useful stable-key real-host shadow evidence exists.
 
 ### Q6-E — product decision
 

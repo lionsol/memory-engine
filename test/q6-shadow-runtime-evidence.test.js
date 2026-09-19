@@ -105,16 +105,17 @@ function q6Envelope(overrides = {}) {
 }
 
 function runCli(dbPath, sessionId, turnsSent = 1) {
+  const sessionIds = Array.isArray(sessionId) ? sessionId : [sessionId];
+  const args = [
+    CLI,
+    "--db", dbPath,
+    "--since-id", "0",
+  ];
+  for (const value of sessionIds) args.push("--session-id", value);
+  args.push("--turns-sent", String(turnsSent), "--json");
   const result = spawnSync(
     process.execPath,
-    [
-      CLI,
-      "--db", dbPath,
-      "--since-id", "0",
-      "--session-id", sessionId,
-      "--turns-sent", String(turnsSent),
-      "--json",
-    ],
+    args,
     { encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr);
@@ -172,6 +173,54 @@ test("Q6-D evidence CLI reports bounded passing shadow traces", () => {
       1,
     );
     assert.deepEqual(report.direct_card_boundary_error_counts, {});
+  } finally {
+    try { fixture.db.close(); } catch {}
+    rmSync(fixture.dir, { recursive: true, force: true });
+  }
+});
+
+test("Q6-D evidence CLI accepts bounded runtime sessionId rotation for one stable session key", () => {
+  const fixture = makeDb();
+  try {
+    insert(fixture.db, {
+      event_type: "auto_recall_debug",
+      session_id: "runtime-session-old",
+      trace_id: "trace-1",
+      source: "autoRecall",
+      metadata_json: q6Envelope({ would_inject_count: 0, direct_card_selected_count: 0, would_inject_ids: [], candidate_decisions: [] }),
+    });
+    insert(fixture.db, {
+      event_type: "recall_completed",
+      session_id: "runtime-session-old",
+      trace_id: "trace-1",
+      injected_count: 0,
+      source: "autoRecall",
+    });
+    insert(fixture.db, {
+      event_type: "auto_recall_debug",
+      session_id: "runtime-session-new",
+      trace_id: "trace-2",
+      source: "autoRecall",
+      metadata_json: q6Envelope({ would_inject_count: 0, direct_card_selected_count: 0, would_inject_ids: [], candidate_decisions: [] }),
+    });
+    insert(fixture.db, {
+      event_type: "recall_completed",
+      session_id: "runtime-session-new",
+      trace_id: "trace-2",
+      injected_count: 0,
+      source: "autoRecall",
+    });
+    fixture.db.close();
+
+    const report = runCli(
+      fixture.dbPath,
+      ["runtime-session-old", "runtime-session-new"],
+      2,
+    );
+    assert.deepEqual(report.session_ids, ["runtime-session-old", "runtime-session-new"]);
+    assert.equal(report.shadow_decisions, 2);
+    assert.equal(report.foreign_q6_shadow_decision_count, 0);
+    assert.equal(report.mechanism_pass, true);
   } finally {
     try { fixture.db.close(); } catch {}
     rmSync(fixture.dir, { recursive: true, force: true });
