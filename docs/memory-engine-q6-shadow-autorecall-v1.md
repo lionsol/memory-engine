@@ -395,17 +395,22 @@ Q6-B performs no real provider call, live runtime/config mutation, DB/LanceDB mu
 
 ### Q6-C — offline qualification
 
-Not authorized by Q6-A.
+Status: `PASS_WITH_FINDINGS / OFFLINE QUALIFIED / MECHANISM PASS / NO POLICY CHANGE`.
 
-Target:
+Q6-C reuses the Q6-B active-vs-shadow mechanism tests and adds a side-effect-free in-memory evaluator over the frozen v2-B5 AutoRecall, v2-C2 Selective Recall, and retrieval-disclosure v2 fixtures.
 
-- active-vs-shadow decision equivalence;
-- shadow side-effect zero checks;
-- privacy checks;
-- component-level quality diagnostics using existing frozen synthetic evidence;
-- decide whether an additional small fresh synthetic fixture is necessary only if existing fixtures cannot answer a concrete remaining question.
+Qualified findings:
 
-Do not create a large new benchmark by default.
+- active/shadow decision equivalence and zero-apply semantics remain source-qualified;
+- both 48-row turn-label fixtures retain `24/24` expected-YES search eligibility with zero structural false negatives;
+- both fixtures also retain `24/24` expected-NO search eligibility, confirming that the candidate-first structural layer intentionally does not provide no-recall precision;
+- the 48-candidate disclosure fixture contains `18` expected CARD and `30` expected NONE cases;
+- selector-only component behavior is `TP=18 / FP=23 / TN=7 / FN=0`, proving selector/retrieval evidence alone is not sufficient disclosure authority;
+- the historical capability-constrained synthetic component is `TP=18 / FP=0 / TN=30 / FN=0`, with zero unsafe/irrelevant selections, supporting retention of an independent capability/authority layer;
+- these component rates are not a replay of the current production DIRECT_CARD boundary and are not production prevalence estimates;
+- no additional fresh synthetic fixture is required now because the remaining evidence gap is runtime candidate/would-inject prevalence and latency, not another synthetic classification question.
+
+Q6-C does not authorize Q6-D or any runtime/config/telemetry mutation. Report: `docs/memory-engine-q6-shadow-autorecall-offline-qualification-v1.md`.
 
 ### Q6-D — optional exact-session real-host shadow observation
 
