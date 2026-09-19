@@ -57,6 +57,7 @@
     "smoke:console-annotation-handoff": "node --test test/console-reports.test.js test/console-annotations.test.js test/smoke-tests-index-doc.test.js test/report-archived-raw-log-rescue-review-queue-labels.test.js test/build-archived-raw-log-rescue-review-queue.test.js",
     "version:status": "node bin/version-status.js",
     "version:check": "node bin/version-status.js --check",
-    "sync-index": "node bin/sync-memory-index.js --force"
+    "sync-index": "node bin/sync-memory-index.js --force",
+    "benchmark:q5:b3-analysis-plan": "node bin/run-q5-b3-fixed-pool-analysis-plan-v1.mjs"
   }
 }
