@@ -1,7 +1,7 @@
 # Q6 Shadow AutoRecall Contract v1
 
 Date: 2026-09-19
-Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / RUNTIME EXECUTION NOT AUTHORIZED
+Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / Q6-C PASS_WITH_FINDINGS + OFFLINE QUALIFIED / Q6-D OWNER AUTHORIZED + STAGE CARD FROZEN / OPERATOR EXECUTION PENDING
 
 ## 1. Decision context
 
@@ -412,20 +412,15 @@ Qualified findings:
 
 Q6-C does not authorize Q6-D or any runtime/config/telemetry mutation. Report: `docs/memory-engine-q6-shadow-autorecall-offline-qualification-v1.md`.
 
-### Q6-D — optional exact-session real-host shadow observation
+### Q6-D — exact-session real-host shadow observation
 
-Separate explicit Owner authorization required.
+Status: `OWNER AUTHORIZED / STAGE CARD FROZEN / OPERATOR EXECUTION PENDING`.
 
-Target:
+The bounded transaction is frozen in `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` against Q6 runtime source `4f79a8c78fb68bb92294ea78a755293c8b62cbc4` with `MAX_EXECUTIONS=1`, one exact `main` session, at most six genuine natural turns, transient four-file overlay deployment, exact config restoration, and mandatory runtime rollback to the pre-Q6 source at closeout.
 
-- exact session only;
-- no prompt injection;
-- bounded content-free telemetry;
-- finite turns/executions;
-- no new provider family;
-- no AutoRecall/topK global mutation beyond the exact bound control needed for the transaction.
+Q6-D authorizes bounded content-free Q6 shadow telemetry and existing runtime events needed for trace correlation. It does not authorize prompt injection, reinforcement authority, topK/retrieval changes, a second comparison retrieval, a new provider/model, persistent shadow activation or leaving the Q6 candidate deployed after the transaction.
 
-Runtime observation measures prevalence/shape/latency. Without labels it is **not** a false-positive ground truth study.
+Runtime observation measures only the observed candidate/would-inject/withholding/latency/error shape. Without independent labels it is **not** a false-positive ground-truth study or a production prevalence probability estimate.
 
 ### Q6-E — product decision
 
@@ -472,11 +467,11 @@ Statistical LTR =
 NOT SELECTED
 
 runtime execution =
-NOT AUTHORIZED
+Q6-D ONE EXACT-SESSION TRANSACTION AUTHORIZED / OPERATOR EXECUTION PENDING
 
 persistent shadow telemetry =
-NOT AUTHORIZED
+BOUNDED Q6-D TRACE EVIDENCE AUTHORIZED / PERSISTENT SHADOW ACTIVATION NOT AUTHORIZED
 
 live user-memory sampling =
-NOT AUTHORIZED
+ONLY THE AUTHORIZED EXACT-SESSION NATURAL RUNTIME READ PATH / NO BULK EXPORT OR TRAINING
 ```
