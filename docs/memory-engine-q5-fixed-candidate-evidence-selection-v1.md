@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 REAL SCORE CAPTURE PASS / 512 OF 512 PROVIDER CALLS / BOUNDED PACKET FROZEN / Q5-B3-A ANALYSIS PLAN SOURCE QUALIFIED / FINAL SPLIT SEALED / B3-B READY + NOT STARTED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `PASS_WITH_FINDINGS / CLOSED / NO NEW PRODUCT INTERVENTION / Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 REAL SCORE CAPTURE PASS / 512 OF 512 PROVIDER CALLS / BOUNDED PACKET FROZEN / Q5-B3-A ANALYSIS PLAN SOURCE QUALIFIED / Q5-B3-B PASS_WITH_FINDINGS + DEVELOPMENT/VALIDATION ANALYSIS COMPLETE / Q5-B3-C PRODUCT INTERPRETATION CLOSED / Q5-B3-D NO-GO + CLOSED / NO SAFE DEVELOPMENT CONFIG / FINAL SPLIT SEALED + NOT CONSUMED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -1670,12 +1670,594 @@ Q5-B0 = SOURCE QUALIFIED / 1,970 CASE EVIDENCE CORPUS FROZEN
 Q5-B1 = SOURCE QUALIFIED / 512 CASE CAPTURE POPULATION FROZEN
 Q5-B2 = PASS / REAL SCORE PACKET FROZEN
 Q5-B3-A = SOURCE QUALIFIED / FINAL SPLIT SEALED
-Q5-B3-B = READY / NOT STARTED
+Q5-B3-B = PASS_WITH_FINDINGS / DEVELOPMENT + VALIDATION OFFLINE ANALYSIS COMPLETE
 
-FINAL_EVALUATION = SEALED
+FINAL_EVALUATION = SEALED / NOT CONSUMED
 NEW PROVIDER EXECUTION = NOT AUTHORIZED
 MODEL TRAINING = NOT AUTHORIZED
 STATISTICAL LTR = NOT SELECTED
+PAIR/SET ALGORITHM = NOT SELECTED
+THRESHOLD = NOT SELECTED
 LIVE USER/MEMORY SAMPLING = NOT AUTHORIZED
 RUNTIME = UNCHANGED
 ```
+
+
+## 24. Q5-B3-B development + validation offline analysis
+
+Q5-B3-B executed the source-qualified B3-A analysis plan against the frozen B2 real score packet and the historical frozen LoCoMo evaluator material. The analysis consumed only the `development` and `validation` splits.
+
+Source implementation:
+
+```text
+lib/benchmark/q5-b3-development-validation-analysis-v1.js
+bin/run-q5-b3-development-validation-analysis-v1.mjs
+test/q5-b3-development-validation-analysis-v1.test.js
+```
+
+Frozen input identities:
+
+```text
+B3-A plan_sha256 =
+f5172f9c82e27b5e04654d16c1a3c913dcd5f91928ee04ad127c016a04467b15
+
+B2 packet_sha256 =
+ebf1cadc0204fb2e81e2603f8d1027785446d03cafd64c1e3ad434b4c8fcd598
+```
+
+Offline result identity:
+
+```text
+result_sha256 =
+6faba982cc421742666c98be5380c665e5bae9b8157c75f17d9a913ebf9b2af0
+
+provider_requests = 0
+model_training_runs = 0
+final_evaluation_consumed = false
+threshold_selection_performed = false
+pair_set_algorithm_selected = false
+statistical_ltr_selected = false
+runtime_mutation = false
+```
+
+The analysis recomputes LoCoMo evidence coverage through the existing source-offset evaluator semantics. Its bounded top3 oracle is cross-checked per case against the existing scorer on the observed control and rerank selections, and it fails closed on semantic drift.
+
+### Development result
+
+The selected development population is deliberately balanced rather than distribution-representative:
+
+```text
+cases = 256
+recoverable_rank_miss = 128
+protect = 128
+
+control:
+Recall-any@3 = 0.53515625
+Recall-all@3 = 0.50000000
+evidence coverage@3 = 0.51692708
+
+Qwen3-0.6B rerank:
+Recall-any@3 = 0.91796875
+Recall-all@3 = 0.89453125
+evidence coverage@3 = 0.90690104
+
+recoverable fixed = 104 / 128
+recoverable still incomplete = 24 / 128
+protect preserved = 125 / 128
+protect regressions = 3 / 128
+
+pool gold complete = 256 / 256
+actual top3 feasible = 256 / 256
+residual selection failures = 27
+```
+
+For the 27 residual feasible selection failures:
+
+```text
+single-swap repairable = 25 / 27
+requires at least two additions = 2 / 27
+successful single-swap cases with a redundant displaced served item = 25 / 25
+
+best repair candidate rerank rank:
+4 = 8
+5 = 5
+6-10 = 11
+11-20 = 1
+
+best repair candidate score - weakest served score:
+median = -0.00858808
+p25 = -0.07564330
+p75 = -0.00238174
+```
+
+### Validation result
+
+The validation population is also deliberately balanced:
+
+```text
+cases = 128
+recoverable_rank_miss = 64
+protect = 64
+
+control:
+Recall-any@3 = 0.50781250
+Recall-all@3 = 0.50000000
+evidence coverage@3 = 0.50390625
+
+Qwen3-0.6B rerank:
+Recall-any@3 = 0.92968750
+Recall-all@3 = 0.92187500
+evidence coverage@3 = 0.92578125
+
+recoverable fixed = 55 / 64
+recoverable still incomplete = 9 / 64
+protect preserved = 63 / 64
+protect regressions = 1 / 64
+
+pool gold complete = 128 / 128
+actual top3 feasible = 128 / 128
+residual selection failures = 10
+```
+
+For all 10 residual validation failures:
+
+```text
+single-swap repairable = 10 / 10
+successful single-swap cases with a redundant displaced served item = 10 / 10
+
+best repair candidate rerank rank:
+4 = 2
+5 = 1
+6-10 = 4
+11-20 = 3
+
+best repair candidate score - weakest served score:
+median = -0.05002818
+p25 = -0.20642710
+p75 = -0.02113002
+```
+
+### Representation and attribution findings
+
+Across the analyzed development/validation population:
+
+```text
+candidate projection truncation cases = 0
+served truncated candidates = 0
+best single-swap repair candidates truncated = 0
+```
+
+Therefore the observed residual failure is not explained by the frozen projection truncation boundary.
+
+The residual pattern does **not** support reducing the problem to one scalar-score calibration defect. In all 35 residual cases that are repairable with one replacement, a complete top3 can be obtained by replacing a served candidate that is redundant with respect to already-covered evaluator evidence, while the omitted complementary candidate is ranked below the weakest served item by the independent reranker score. The observed failure therefore contains both:
+
+```text
+independent relevance under-ranking
++
+served-set complementarity / redundancy
+```
+
+This is an attribution finding, not authorization for a set-aware selector. B3-B selects no pair/set algorithm, score threshold, learned model, or Statistical LTR branch.
+
+### B3-B adjudication
+
+```text
+Q5-B3-B =
+PASS_WITH_FINDINGS
+DEVELOPMENT + VALIDATION OFFLINE ANALYSIS COMPLETE
+
+FINAL_EVALUATION =
+SEALED / NOT CONSUMED
+
+NEW PROVIDER EXECUTION = 0
+MODEL TRAINING = 0
+RUNTIME / CONFIG / DB / LANCEDB MUTATION = 0
+STATISTICAL LTR = NOT SELECTED
+PAIR/SET ALGORITHM = NOT SELECTED
+THRESHOLD = NOT SELECTED
+```
+
+The aggregate Recall numbers above must not be presented as production-distribution estimates because development and validation were intentionally balanced between `recoverable_rank_miss` and `protect`. They are diagnostic selection-population results.
+
+The next bounded step is a product interpretation/design decision using these findings. It must decide whether the evidence justifies a minimal product-visible complementarity experiment, a narrower reranker correction experiment, or closing the branch without another intervention. That decision occurs before any final-evaluation consumption. The sealed `final_evaluation` split still requires separate explicit one-shot authority.
+
+
+## 25. Q5-B3-C product interpretation / intervention decision
+
+B3-C reviews the frozen B3-B development/validation result together with the earlier Q5-A2/A6 intervention evidence. It is a product decision stage only. It does not consume `final_evaluation`, execute a provider, train a model, or change runtime behavior.
+
+### Decision-critical evidence
+
+B3-B establishes three facts on the balanced LoCoMo development/validation selection population:
+
+```text
+Qwen3-0.6B already repairs most recoverable rank misses:
+development = 104 / 128
+validation  = 55 / 64
+
+protect regressions remain small:
+development = 3 / 128
+validation  = 1 / 64
+
+residual feasible selection failures:
+development = 27
+validation  = 10
+
+single-swap repairable:
+development = 25 / 27
+validation  = 10 / 10
+
+successful single-swap cases where a served item
+redundant with respect to already-covered evaluator evidence
+can be displaced:
+35 / 35
+```
+
+At the same time, every best single-swap repair candidate is scored below the weakest currently served candidate by the independent reranker. The validation median repair-score gap is approximately `-0.0500`, and some required complementary candidates are much farther below the cutoff.
+
+Earlier Q5-A6 already established that a monotonic rule based only on counterpart/displaced reranker score ratio or additive score margin does not transfer safely across the frozen synthetic development/holdout evidence.
+
+B3-B also found zero candidate projection truncation in the analyzed development/validation population, so projection truncation is not the current first observed loss.
+
+### Route comparison
+
+#### Broad reranker/profile correction — not selected
+
+A broad reranker correction is not the next experiment.
+
+The existing Qwen3-0.6B reranker already resolves most selected recoverable failures while preserving almost all protect cases. The remaining failures have a repeated set-level structure: a lower-scored complementary candidate can replace an evaluator-redundant served candidate.
+
+Changing the reranker profile/model globally before testing whether product-visible set structure can identify those cases would target a broader component than the observed residual failure requires and risks disturbing the large already-correct population.
+
+This does not prove the reranker is optimal. It means the present causal evidence does not justify making reranker/profile retuning the first next intervention.
+
+#### Statistical LTR / learned set scorer — not selected
+
+Statistical LTR remains premature.
+
+B3-B supplies benchmark labels and per-candidate scores, but it has not yet shown that a stable product-visible feature family separates safe complementarity repairs from harmful replacements. Development and validation are deliberately outcome-balanced rather than representative traffic, and the historical FTS-only candidate path is explicitly not production-equivalent.
+
+Training a learned ranker/set scorer now would therefore skip the simpler question of whether the residual failure is observable from deterministic product-visible signals.
+
+#### Close Q5 without another intervention — not selected yet
+
+Closing the selection branch immediately would discard a repeated residual structure seen independently in both development and validation.
+
+Because one additional deterministic offline feasibility probe can test the missing product-observability question without provider calls, model training, final-split consumption, or runtime mutation, the evidence justifies that probe before closing Q5.
+
+### Selected next branch
+
+```text
+Q5-B3-C =
+PRODUCT INTERPRETATION CLOSED
+
+SELECTED NEXT QUESTION =
+CAN PRODUCT-VISIBLE PAIR/SET SIGNALS IDENTIFY
+SAFE COMPLEMENTARITY REPAIRS?
+
+NEXT BOUNDED WORK =
+Q5-B3-D PRODUCT-VISIBLE PAIR/SET SIGNAL FEASIBILITY PROBE
+
+NOT SELECTED =
+BROAD RERANKER/PROFILE RETUNE
+STATISTICAL LTR
+LEARNED SET SCORER
+FINAL-EVALUATION CONSUMPTION
+RUNTIME ACTIVATION
+```
+
+B3-C selects only the question and experiment family. It does **not** select a production selector or a threshold.
+
+### B3-D boundary
+
+B3-D, if executed, remains offline and limited to the existing development/validation population.
+
+Allowed selector-side inputs are product-visible signals already present in the frozen path, for example:
+
+```text
+canonical candidate text
+query text
+pre-rerank rank
+rerank score / rerank rank
+bounded candidate-source metadata only when it is already product-visible
+```
+
+Evaluator gold/evidence mappings may be used only for offline labels and scoring. They must not enter a selector feature or proposal.
+
+The first probe should stay deterministic and small. It may test only these three predeclared signal families:
+
+```text
+1. candidate-to-candidate text redundancy / containment
+2. incremental query-term coverage or novelty of an omitted candidate
+3. rerank score/rank as a guard or diagnostic, not as the sole signal
+```
+
+No embedding call, LLM call, new reranker call, semantic model, learned feature, or open-ended feature search is part of B3-D. Development may freeze at most one deterministic combination of these families.
+
+LoCoMo source-offset overlap may be reported as benchmark-specific diagnostic evidence, but it must not become the primary product rule because the frozen FTS chunk path is not production-equivalent.
+
+Development may be used to freeze the threshold(s) for that one deterministic combination. The development objective is to maximize paired Recall-all improvement subject to zero paired Recall-any regression and zero protect regression versus the frozen Qwen3-0.6B rerank top3. Validation must then be evaluated once without validation-informed retuning.
+
+The B3-D validation success condition, also paired against the frozen Qwen3-0.6B rerank top3, is:
+
+```text
+validation Recall-all improvements > 0
+AND
+validation Recall-any regressions = 0
+AND
+validation protect regressions = 0
+```
+
+If no bounded product-visible signal family reaches that condition, the default interpretation should be to close the deterministic complementarity branch rather than escalating automatically to Statistical LTR.
+
+If a bounded signal family does reach that condition, B3-D still does not authorize production use. It only creates evidence for a later decision on whether the sealed one-shot `final_evaluation` split is worth consuming.
+
+Current boundary:
+
+```text
+Q5-B3-B = PASS_WITH_FINDINGS / DEVELOPMENT + VALIDATION COMPLETE
+Q5-B3-C = CLOSED / PRODUCT-VISIBLE PAIR/SET FEASIBILITY SELECTED
+Q5-B3-D = NO-GO / CLOSED / NO SAFE DEVELOPMENT CONFIG
+
+FINAL_EVALUATION = SEALED / NOT CONSUMED
+NEW PROVIDER EXECUTION = NOT AUTHORIZED
+MODEL TRAINING = NOT AUTHORIZED
+STATISTICAL LTR = NOT SELECTED
+RUNTIME / CONFIG / DB / LANCEDB = UNCHANGED
+```
+
+
+## 26. Q5-B3-D product-visible pair/set signal feasibility result
+
+B3-D executed the single bounded deterministic swap family selected by B3-C. Selector-side features use only product-visible query/candidate text plus frozen rerank score/rank. Evaluator evidence remains outside the selector and is used only for offline scoring.
+
+Frozen signal family:
+
+```text
+candidate-to-candidate signal =
+Unicode-token overlap coefficient
+
+omitted-candidate novelty signal =
+incremental query terms versus the two kept served candidates
+
+rerank guard =
+candidate-minus-displaced score
++
+candidate rerank rank
+```
+
+The finite development threshold grid was predeclared as:
+
+```text
+min redundancy gain = {0, 0.05, 0.10}
+min candidate-minus-displaced score = {-0.05, -0.25, -1.0}
+max omitted candidate rerank rank = {5, 10, 20}
+
+total development configurations = 27
+```
+
+Candidates pools with fewer than three candidates are valid no-op cases rather than selector errors.
+
+### Development safety gate
+
+The development objective required:
+
+```text
+paired Recall-any regressions = 0
+AND
+protect regressions = 0
+```
+
+before any configuration could be frozen for validation.
+
+Result:
+
+```text
+development configurations evaluated = 27
+safe development configurations = 0
+selected configuration = NONE
+```
+
+The best unsafe development configuration, retained only as a diagnostic, was:
+
+```text
+min redundancy gain = 0
+min score gap = -0.05
+max candidate rank = 10
+
+applied = 93 / 256
+
+paired Recall-any:
+improved = 6
+regressed = 19
+unchanged = 231
+
+paired Recall-all:
+improved = 5
+regressed = 19
+unchanged = 232
+
+protect regressions = 8
+mean evidence coverage delta = -0.0533854167
+```
+
+This fails the B3-C development safety gate by a wide margin. The product-visible lexical complementarity signals tested here do not safely distinguish beneficial swaps from harmful replacement of already-useful evidence.
+
+### Validation and final boundary
+
+Because no development configuration satisfied the frozen safety gate, no configuration was eligible to be frozen. Therefore the qualified B3-D transaction does **not** execute an intervention on validation:
+
+```text
+validation intervention =
+NOT RUN / NO SAFE DEVELOPMENT CONFIG
+
+validation-informed retuning = false
+final_evaluation = SEALED / NOT CONSUMED
+```
+
+During implementation verification, an earlier fallback defect temporarily selected the best unsafe development configuration when the safe set was empty and therefore produced one validation observation. That run is invalid and non-decision evidence: it violated the frozen development gate, was excluded from the qualified result, and no threshold or selector rule was changed based on its validation outcome. The corrected implementation fails closed when the safe development set is empty.
+
+Qualified deterministic result:
+
+```text
+source B3-B result SHA256 =
+6faba982cc421742666c98be5380c665e5bae9b8157c75f17d9a913ebf9b2af0
+
+result SHA256 =
+f224b4205526b89f059c28155add2317160a59ab4b40a5a22861ec181e813495
+
+provider requests = 0
+embedding requests = 0
+reranker requests = 0
+LLM requests = 0
+model training runs = 0
+runtime mutation = false
+```
+
+### B3-D adjudication
+
+```text
+Q5-B3-D =
+NO-GO / CLOSED
+
+DETERMINISTIC PRODUCT-VISIBLE COMPLEMENTARITY =
+NO SAFE DEVELOPMENT CONFIG
+
+VALIDATION INTERVENTION =
+NOT RUN
+
+FINAL_EVALUATION =
+SEALED / NOT CONSUMED
+
+STATISTICAL LTR =
+NOT SELECTED
+```
+
+This result does not prove that every learned or semantic set-aware selector would fail. It establishes a narrower product conclusion: the bounded deterministic product-visible lexical complementarity family selected by B3-C does not meet the development safety gate, so this branch should close rather than expanding feature search, tuning against validation, consuming final, or escalating automatically to Statistical LTR.
+
+This B3-D result supplied the final input to the Q5 closure/product adjudication recorded below. Broad reranker retuning remained unjustified, Statistical LTR remained unselected, and the bounded deterministic complementarity branch closed without consuming `final_evaluation`.
+
+
+## 27. Q5 closure / product adjudication
+
+Q5 is closed with findings and **no new product intervention selected**.
+
+The stage answered the fixed-candidate question at three levels:
+
+```text
+1. Is top3 evidence loss materially attributable to ranking/selection
+   after the required evidence is already present in the pool?
+   YES.
+
+2. Does the frozen Qwen3-0.6B reranker recover a large share of those
+   rank misses while preserving most protect cases?
+   YES.
+
+3. Is there sufficient evidence for an additional bounded product rule
+   beyond that reranker?
+   NO.
+```
+
+### Evidence retained by the closure
+
+B3-B showed that the frozen reranker repaired most selected recoverable rank misses:
+
+```text
+development = 104 / 128
+validation  = 55 / 64
+```
+
+The residual feasible failures exhibited a repeated mixed structure:
+
+```text
+independent relevance under-ranking
++
+served-set redundancy / missing complementarity
+```
+
+However, the subsequent intervention evidence did not justify another product selector:
+
+```text
+Q5-A6:
+simple monotonic scalar score-margin guards = NO-GO
+
+Q5-B3-D:
+bounded deterministic product-visible lexical complementarity =
+NO SAFE DEVELOPMENT CONFIG / NO-GO
+```
+
+The B3-D safety failure is decisive for this branch. All 27 predeclared development configurations failed the zero-Recall-any-regression / zero-protect-regression gate. No configuration was eligible for validation qualification.
+
+### Why final_evaluation is not consumed
+
+The sealed `final_evaluation` split exists to evaluate a frozen candidate intervention after development/validation selection. Q5 ends with **no candidate intervention that passed the development gate**.
+
+Therefore consuming final now would answer no qualified product question and would only spend a one-shot benchmark partition. Q5 closes with:
+
+```text
+FINAL_EVALUATION =
+SEALED / NOT CONSUMED
+```
+
+This is deliberate evidence conservation, not an incomplete Q5 acceptance run.
+
+### Product decision
+
+```text
+Q5 =
+PASS_WITH_FINDINGS / CLOSED
+
+PRODUCT RESULT =
+KEEP THE QUALIFIED FIXED-POOL RERANK EVIDENCE
+NO ADDITIONAL FIXED-CANDIDATE SELECTION RULE SELECTED
+
+BROAD RERANKER / PROFILE RETUNE =
+NOT JUSTIFIED BY Q5 RESIDUAL EVIDENCE
+
+DETERMINISTIC COMPLEMENTARITY SELECTOR =
+NO-GO / CLOSED
+
+STATISTICAL LTR =
+NOT SELECTED
+
+LEARNED SET SCORER =
+NOT SELECTED
+
+FINAL_EVALUATION =
+SEALED / NOT CONSUMED
+
+TOP_K =
+UNCHANGED AT 3
+
+RUNTIME / CONFIG / DB / LANCEDB =
+UNCHANGED BY Q5
+```
+
+Q5 does not claim that Statistical LTR, another reranker, or a semantic set-aware model can never improve selection. It establishes that the evidence gathered in this stage does not justify escalating to those mechanisms now.
+
+### Evidence limitations carried forward
+
+The closure retains the following limits:
+
+- the broader B-stage corpus is LoCoMo benchmark evidence, not live user traffic;
+- development/validation diagnostic populations are deliberately balanced and are not distribution estimates;
+- the preserved candidate path is historical FTS-only and is not production-equivalent hybrid retrieval;
+- B3-D tested one bounded deterministic product-visible lexical complementarity family, not every possible set-aware method;
+- the invalid early B3-D fallback validation observation remains non-decision evidence.
+
+These limitations prevent Q5 findings from being generalized into a universal ranking claim.
+
+### Next roadmap state
+
+Q5 does not grant Q6 execution authority.
+
+The next roadmap item is:
+
+```text
+Q6 SHADOW AUTORECALL =
+NEXT DESIGN DECISION / NOT AUTHORIZED
+```
+
+Q6 entry should first define what "shadow" means under the current architecture, what data would be recorded, how candidate retrieval and injection decisions are separated, and what offline/runtime boundary is acceptable. It must account for the separately recorded pre-existing experimental AutoRecall state rather than assuming the historical default state still describes the live host.
+
+No shadow recording, new telemetry persistence, AutoRecall/topK mutation, deployment, live user-memory sampling, or runtime activation is authorized by closing Q5.
