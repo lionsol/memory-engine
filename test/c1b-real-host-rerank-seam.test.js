@@ -48,6 +48,19 @@ test("provider switch is trusted-plugin scoped and conflicts fail closed", () =>
   assert.equal(createExplicitSearchRerankProviderPolicy(conflicted, { apiKey: "test-key" }), null);
 });
 
+test("enabled rerank provider disables only its policy when the credential is unavailable", () => {
+  const warnings = [];
+  const policy = createExplicitSearchRerankProviderPolicy(validConfig({
+    pluginConfig: { explicitSearchRerankProvider: { enabled: true } },
+  }), {
+    apiKey: "",
+    onCredentialMissing: code => warnings.push(code),
+  });
+
+  assert.equal(policy, null);
+  assert.deepEqual(warnings, ["SILICONFLOW_RERANK_API_KEY_REQUIRED"]);
+});
+
 test("accepted 0.6B provider policy is fixed to the production-shaped explicit-search profile", async () => {
   let captured = null;
   const config = validConfig({

@@ -46,8 +46,12 @@ function createUpdateRuntime(ids, overrides = {}) {
         if (query.includes("WHERE chunk_id = ?")) {
           return {
             all(value) {
-              const match = [...rows.keys()].find(id => id === String(value));
-              return match ? [{ chunk_id: match }] : [];
+              const match = rows.get(String(value));
+              if (!match) return [];
+              if (query.includes("COALESCE(is_archived, 0) = 0") && Number(match.is_archived || 0) !== 0) {
+                return [];
+              }
+              return [{ chunk_id: match.chunk_id }];
             },
           };
         }
@@ -55,11 +59,13 @@ function createUpdateRuntime(ids, overrides = {}) {
           return {
             all(pattern) {
               const prefix = literalPrefixFromGlob(pattern);
-              return [...rows.keys()]
-                .filter(id => id.startsWith(prefix))
-                .sort()
+              return [...rows.values()]
+                .filter(row => row.chunk_id.startsWith(prefix))
+                .filter(row => !query.includes("COALESCE(is_archived, 0) = 0")
+                  || Number(row.is_archived || 0) === 0)
+                .sort((left, right) => left.chunk_id.localeCompare(right.chunk_id))
                 .slice(0, 2)
-                .map(chunk_id => ({ chunk_id }));
+                .map(row => ({ chunk_id: row.chunk_id }));
             },
           };
         }
@@ -68,8 +74,13 @@ function createUpdateRuntime(ids, overrides = {}) {
       if (query.startsWith("UPDATE memory_confidence SET")) {
         return {
           run(...args) {
-            updated.push(args.at(-1));
+            const id = String(args.at(-1));
+            const row = rows.get(id);
+            const blockedArchived = query.includes("COALESCE(is_archived, 0) = 0")
+              && Number(row?.is_archived || 0) !== 0;
             updates.push({ query, args });
+            if (blockedArchived || !row) return { changes: 0 };
+            updated.push(id);
             return { changes: 1 };
           },
         };
@@ -195,6 +206,31 @@ test("memory_engine update gives an exact id precedence over longer ids sharing 
   assert.deepEqual(updated, ["exact-id"]);
 });
 
+test("memory_engine update excludes archived rows at lookup and final mutation", async () => {
+  const archivedId = "archived-update-id";
+  const { runtime, updated, queries } = createUpdateRuntime([archivedId], {
+    rows: {
+      [archivedId]: {
+        is_archived: 1,
+      },
+    },
+  });
+  const execute = createMemoryEngineExecute(runtime);
+
+  const result = await execute("update-archived", {
+    action: "update",
+    chunk_id: archivedId,
+    hit: true,
+  });
+
+  assert.deepEqual(result, { error: "no match" });
+  assert.deepEqual(updated, []);
+  assert.equal(
+    queries.some(query => query.includes("WHERE chunk_id = ? AND COALESCE(is_archived, 0) = 0")),
+    true,
+  );
+});
+
 test("classification-only update settles elapsed confidence under old decay parameters before changing category", async () => {
   const id = "classification-decay-id";
   const nowSec = 1_800_000_000;
@@ -229,6 +265,7 @@ test("classification-only update settles elapsed confidence under old decay para
   assert.match(updates[0].query, /last_confidence_update = \?/);
   assert.match(updates[0].query, /category = \?/);
   assert.match(updates[0].query, /base_tau = \?/);
+  assert.match(updates[0].query, /WHERE chunk_id = \? AND COALESCE\(is_archived, 0\) = 0/);
   assert.doesNotMatch(updates[0].query, /initial_confidence = \?/);
   const expectedSettled = 0.8 * Math.exp(-1);
   assert.ok(Math.abs(updates[0].args[0] - expectedSettled) < 1e-12);

@@ -73,6 +73,41 @@ test("dead stale owner is reclaimed through its exact owner marker", () => {
   }
 });
 
+test("live stale owner is never reclaimed", () => {
+  const { dir, filePath } = makeTarget();
+  const lease = acquireSmartAddFileLock(filePath);
+  const lockPath = lockPathFor(filePath);
+  try {
+    const ownerPath = ownerFilePath(lockPath);
+    const old = new Date(Date.now() - 5000);
+    utimesSync(ownerPath, old, old);
+
+    assert.equal(tryReclaimStaleLock(lockPath, 1000), false);
+    assert.equal(existsSync(lockPath), true);
+  } finally {
+    releaseSmartAddFileLock(lease);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("malformed stale owner metadata fails closed instead of breaking a live lock", () => {
+  const { dir, filePath } = makeTarget();
+  const lease = acquireSmartAddFileLock(filePath);
+  const lockPath = lockPathFor(filePath);
+  try {
+    const ownerPath = ownerFilePath(lockPath);
+    writeFileSync(ownerPath, "{not-json");
+    const old = new Date(Date.now() - 5000);
+    utimesSync(ownerPath, old, old);
+
+    assert.equal(tryReclaimStaleLock(lockPath, 1000), false);
+    assert.equal(existsSync(lockPath), true);
+  } finally {
+    releaseSmartAddFileLock(lease);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("competing stale reapers can claim an owner only once", async () => {
   const { dir, filePath } = makeTarget();
   const lease = acquireSmartAddFileLock(filePath);
@@ -187,6 +222,34 @@ test("async lock wait keeps the event loop responsive", async () => {
   }
 });
 
+test("ambiguous lock directory fails closed and exposes bounded timeout diagnostics", async () => {
+  const { dir, filePath } = makeTarget();
+  const holder = acquireSmartAddFileLock(filePath);
+  const lockPath = lockPathFor(filePath);
+  try {
+    writeFileSync(resolve(lockPath, "owner-extra.json"), JSON.stringify({
+      token: "extra",
+      pid: 99999999,
+    }));
+
+    await assert.rejects(
+      acquireSmartAddFileLockAsync(filePath, { waitMs: 25, retryMs: 5 }),
+      error => {
+        assert.equal(error?.code, SMART_ADD_FILE_LOCK_TIMEOUT);
+        assert.equal(error?.lockRecordState, "ambiguous");
+        assert.equal(error?.lockOwnerRecordCount, 2);
+        assert.equal(error?.lockClaimRecordCount, 0);
+        assert.equal(error?.lockOwnerMetadataValid, null);
+        return true;
+      },
+    );
+    assert.equal(existsSync(lockPath), true);
+  } finally {
+    releaseSmartAddFileLock(holder);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("lock timeout exposes bounded diagnostic context", async () => {
   const { dir, filePath } = makeTarget();
   const holder = acquireSmartAddFileLock(filePath);
@@ -200,6 +263,10 @@ test("lock timeout exposes bounded diagnostic context", async () => {
         assert.equal(Number.isFinite(error?.waitedMs), true);
         assert.equal(error.waitedMs >= 25, true);
         assert.equal(Number.isFinite(error?.lockAgeMs), true);
+        assert.equal(error?.lockRecordState, "owner");
+        assert.equal(error?.lockOwnerRecordCount, 1);
+        assert.equal(error?.lockClaimRecordCount, 0);
+        assert.equal(error?.lockOwnerMetadataValid, true);
         return true;
       },
     );

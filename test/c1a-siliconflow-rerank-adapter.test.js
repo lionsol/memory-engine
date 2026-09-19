@@ -128,21 +128,43 @@ test("token preflight is local and rejects query, document, and pair limits", ()
   }), /SILICONFLOW_RERANK_PAIR_TOKEN_LIMIT/);
 });
 
-test("malformed provider JSON becomes generic invalid_response for atomic fallback", async () => {
-  const adapter = createSiliconFlowRerankAdapter({
-    apiKey: "key",
-    tokenCounter,
-    transport: async () => ({ status: 200, headers: {}, body: "{not-json" }),
-  });
-  const result = await rerankCandidates({
-    query: "query",
-    candidates: [{ id: "a", text: "doc" }],
-    deadlineMs: 100,
-    adapter,
-  });
-  assert.equal(result.status, "fallback");
-  assert.equal(result.reason, "invalid_response");
-  assert.deepEqual(result.orderedIds, ["a"]);
+test("provider response validation keeps atomic fallback while exposing only bounded adapter error codes", async () => {
+  const cases = [
+    ["{not-json", "SILICONFLOW_RERANK_RESPONSE_JSON_INVALID"],
+    [JSON.stringify({ nope: [] }), "SILICONFLOW_RERANK_RESULTS_INVALID"],
+    [response([{ index: 0, relevance_score: 1 }]), "SILICONFLOW_RERANK_RESULT_COUNT_MISMATCH"],
+    [response([
+      { index: 0, relevance_score: 1 },
+      { index: 0, relevance_score: 2 },
+    ]), "SILICONFLOW_RERANK_INDEX_DUPLICATE"],
+    [response([
+      { index: 0, relevance_score: 1 },
+      { index: 2, relevance_score: 2 },
+    ]), "SILICONFLOW_RERANK_INDEX_OUT_OF_RANGE"],
+    [{ results: [
+      { index: 0, relevance_score: 1 },
+      { index: 1, relevance_score: Number.NaN },
+    ] }, "SILICONFLOW_RERANK_SCORE_INVALID"],
+  ];
+
+  for (const [body, expectedCode] of cases) {
+    const adapter = createSiliconFlowRerankAdapter({
+      apiKey: "key",
+      tokenCounter,
+      transport: async () => ({ status: 200, headers: {}, body }),
+    });
+    const result = await rerankCandidates({
+      query: "query",
+      candidates: [{ id: "a", text: "doc-a" }, { id: "b", text: "doc-b" }],
+      deadlineMs: 100,
+      adapter,
+    });
+    assert.equal(result.status, "fallback");
+    assert.equal(result.reason, "invalid_response");
+    assert.equal(result.adapterErrorCode, expectedCode);
+    assert.deepEqual(result.orderedIds, ["a", "b"]);
+    assert.deepEqual(result.scores, { a: null, b: null });
+  }
 });
 
 test("HTTP 4xx/429/5xx failures do not echo provider bodies or credentials", async () => {
@@ -171,6 +193,25 @@ test("HTTP 4xx/429/5xx failures do not echo provider bodies or credentials", asy
 test("default Qwen3 counter uses a conservative UTF-8 byte upper bound", async () => {
   assert.equal(qwen3Utf8ByteTokenUpperBound("abc"), 3);
   assert.equal(qwen3Utf8ByteTokenUpperBound("中文"), Buffer.byteLength("中文", "utf8"));
+
+  const ascii4000 = "a".repeat(4000);
+  const cjk2731 = "中".repeat(2731);
+  const emoji2049 = "😀".repeat(2049);
+  assert.doesNotThrow(() => preflightSiliconFlowRerankInput({
+    query: "q",
+    documents: [ascii4000],
+    tokenCounter: qwen3Utf8ByteTokenUpperBound,
+  }));
+  assert.throws(() => preflightSiliconFlowRerankInput({
+    query: "q",
+    documents: [cjk2731],
+    tokenCounter: qwen3Utf8ByteTokenUpperBound,
+  }), /SILICONFLOW_RERANK_DOCUMENT_TOKEN_LIMIT/);
+  assert.throws(() => preflightSiliconFlowRerankInput({
+    query: "q",
+    documents: [emoji2049],
+    tokenCounter: qwen3Utf8ByteTokenUpperBound,
+  }), /SILICONFLOW_RERANK_DOCUMENT_TOKEN_LIMIT/);
   const adapter = createSiliconFlowRerankAdapter({
     apiKey: "key",
     transport: async () => ({

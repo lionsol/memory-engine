@@ -352,6 +352,29 @@ test("adapter failures atomically fall back to the same valid-pool control order
   }
 });
 
+test("bounded adapter error code survives atomic fallback into explicit-search debug", async () => {
+  const result = await executeDirect({
+    ids: [IDS.a, IDS.b],
+    topK: 2,
+    profile: policy(2, {
+      candidateDepth: 2,
+      adapter: async () => ({
+        scores: null,
+        adapterErrorCode: "SILICONFLOW_RERANK_INDEX_DUPLICATE",
+      }),
+    }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.results.map(item => item.memory_id), [IDS.a, IDS.b]);
+  assert.equal(result.debug.rerank.status, "fallback");
+  assert.equal(result.debug.rerank.reason, "invalid_response");
+  assert.equal(
+    result.debug.rerank.adapter_error_code,
+    "SILICONFLOW_RERANK_INDEX_DUPLICATE",
+  );
+});
+
 test("observed adapter identity is bounded before it reaches debug diagnostics", async () => {
   const matchingWithExtras = await executeDirect({
     ids: [IDS.a],

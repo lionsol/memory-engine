@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 
 import { collectFtsCandidates } from "../lib/recall/hybrid/channels/fts.js";
 import {
@@ -985,6 +986,32 @@ test("vector manager fallback excludes archived managed candidates before channe
   assert.equal(ctx.candidateCounts.vector_raw, 2);
   assert.equal(ctx.candidateCounts.vector_after_conf_filter, 1);
   assert.deepEqual(ctx.channels.vector.map(row => row.id), ["active-manager"]);
+});
+
+test("historical bounded multi-query keeps already-trimmed H2 inputs byte-identical", async () => {
+  const embeddedQueries = [];
+  const queries = ["query", "planner query one", "planner query two"];
+  const ctx = makeBaseCtx({
+    strippedQuery: queries[0],
+    vectorQueryPlan: { queries: queries.slice(1) },
+    generateEmbeddingRuntime: async query => {
+      embeddedQueries.push(query);
+      return [0.1, 0.2, 0.3];
+    },
+    getLancedbTableRuntime: () => ({
+      search: () => ({
+        limit() { return this; },
+        execute: async () => [],
+      }),
+    }),
+  });
+
+  await collectVectorCandidates(ctx);
+
+  const sha256 = value => createHash("sha256").update(value).digest("hex");
+  assert.deepEqual(embeddedQueries, queries);
+  assert.deepEqual(ctx.debug.vector_query_input_sha256s, queries.map(sha256));
+  assert.equal(ctx.debug.vector_query_mode, "bounded_multi_query");
 });
 
 test("bounded multi-query Lance fusion excludes archived managed candidates before RRF", async () => {

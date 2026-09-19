@@ -137,6 +137,9 @@ export default definePluginEntry({
       effectiveRuntimeConfig,
       {
         apiKey: siliconFlowApiKey,
+        onCredentialMissing: code => {
+          console.warn(`[memory-engine] explicit-search rerank provider disabled: ${code}`);
+        },
       },
     );
     const explicitSearchRerankPolicy = explicitSearchRerankProviderPolicy
@@ -145,6 +148,9 @@ export default definePluginEntry({
       effectiveRuntimeConfig,
       {
         apiKey: siliconFlowApiKey,
+        onCredentialMissing: code => {
+          console.warn(`[memory-engine] recall-hint provider disabled: ${code}`);
+        },
       },
     );
 

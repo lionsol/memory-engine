@@ -131,7 +131,7 @@ Q4-B should preserve historical H2 compatibility and introduce an explicit Q4 mo
 }
 ```
 
-The existing legacy/H2 shape can keep its frozen strict behavior for historical benchmark reproducibility. Q4 mode accepts 1..2 expansions; zero expansions should result in no plan being passed.
+The existing legacy/H2 shape keeps its frozen strict behavior for historical benchmark reproducibility. The shared vector executor now normalizes accepted query strings with `trim()` before embedding and before computing `vector_query_input_sha256s`; valid H2 planner output was already required to be trimmed, so compliant frozen H2 inputs remain byte-identical and retain the same hashes. This compatibility statement does not broaden the H2 input contract. Q4 mode accepts 1..2 expansions; zero expansions should result in no plan being passed.
 
 ## 8. Explicit-search-only seam
 

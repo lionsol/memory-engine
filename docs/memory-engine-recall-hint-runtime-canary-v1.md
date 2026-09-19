@@ -82,7 +82,7 @@ Frozen runtime bounds:
 
 The adapter sends one OpenAI-compatible JSON request with `temperature=0`, `enable_thinking=false`, `response_format=json_object`, `stream=false`, then validates strict Recall Hint v1 output. It exposes only normalized Hint plus bounded input/output token counts and latency. Credential material is never included in adapter identity, debug or observation.
 
-Production assembly now wires `recallHintProvider` through `createRecallHintRuntimeProviderPolicyV1`. That policy returns `null` unless all of the following hold before adapter construction: effective runtime config is valid, `recallHintRuntimeCanary.enabled === true`, and the exact-session allowlist is non-empty. Therefore the default configuration still creates no Recall Hint provider and performs no Recall Hint model egress. If a future canary is enabled without a credential, adapter construction fails closed with a credential error rather than falling through to an uncredentialed or alternate provider.
+Production assembly now wires `recallHintProvider` through `createRecallHintRuntimeProviderPolicyV1`. That policy returns `null` unless all of the following hold before adapter construction: effective runtime config is valid, `recallHintRuntimeCanary.enabled === true`, and the exact-session allowlist is non-empty. Therefore the default configuration still creates no Recall Hint provider and performs no Recall Hint model egress. If an enabled canary has no credential, only the Recall Hint provider policy is disabled and production assembly emits a bounded startup warning; the rest of memory-engine continues loading and the search path observes `provider_absent`. No uncredentialed or alternate provider is selected.
 
 ## 6. Bounded observation
 
@@ -119,7 +119,7 @@ RH-L2-A/B focused verification covers:
 - parallel mode selected only inside scope;
 - lifecycle `before_tool_call` session binding;
 - production policy is `null` while disabled/empty-scope and does not require a credential;
-- enabled canary with missing credential fails closed;
+- enabled canary with missing credential disables only the provider policy, emits a bounded startup warning, and preserves the ordinary search path;
 - exact provider/model/endpoint plus Q4 prompt/schema hash identity reuse;
 - single-request fake transport with no automatic retry;
 - query/prompt/response/token bounds;

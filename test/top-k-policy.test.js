@@ -105,7 +105,10 @@ test("public tool schemas share the exported production top_k contract", () => {
   const registrations = [];
   registerMemoryEngineTools({
     registerTool(tool, options) {
-      registrations.push({ tool, options });
+      const resolved = typeof tool === "function"
+        ? tool({ sessionId: "top-k-schema-test" })
+        : tool;
+      registrations.push({ tool: resolved, options });
     },
   }, {
     memoryEngine: async () => ({}),
@@ -123,6 +126,9 @@ test("public tool schemas share the exported production top_k contract", () => {
       default: PRODUCTION_DEFAULT_TOP_K,
     });
   }
+
+  const broadRegistration = registrations.find(item => item.tool?.name === "memory_engine");
+  assert.equal(Object.hasOwn(broadRegistration.tool.parameters.properties, "deep"), false);
 
   const manifest = JSON.parse(readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"));
   const manifestTopK = manifest.configSchema.properties.autoRecall.properties.topK;

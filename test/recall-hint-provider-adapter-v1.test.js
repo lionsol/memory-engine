@@ -236,11 +236,15 @@ test("RH-L2-B provider deadline rejects even when an injected transport ignores 
   assert.equal(sawAbort, true);
 });
 
-test("RH-L2-B enabled canary fails closed when its credential is unavailable", () => {
-  assert.throws(
-    () => createRecallHintRuntimeProviderPolicyV1(enabledConfig(), { apiKey: "" }),
-    /RECALL_HINT_SF_API_KEY_REQUIRED/,
-  );
+test("RH-L2-B enabled canary disables only the provider policy when its credential is unavailable", () => {
+  const warnings = [];
+  const policy = createRecallHintRuntimeProviderPolicyV1(enabledConfig(), {
+    apiKey: "",
+    onCredentialMissing: code => warnings.push(code),
+  });
+
+  assert.equal(policy, null);
+  assert.deepEqual(warnings, ["RECALL_HINT_SF_API_KEY_REQUIRED"]);
 });
 
 test("RH-L2-B policy constructs the adapter only for an enabled non-empty canary", async () => {
