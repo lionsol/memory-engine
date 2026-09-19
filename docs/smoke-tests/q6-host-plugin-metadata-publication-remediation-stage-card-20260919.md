@@ -1,8 +1,8 @@
 # Q6-R1 Host Plugin Metadata Publication Remediation Stage Card — 2026-09-19
 
-> **Status: OWNER AUTHORIZED / ONE-SHOT RUNTIME EXECUTION / SOURCE PACKET + ROLLBACK QUALIFIED**
+> **Status: PASS_WITH_FINDINGS / CLOSED / PUBLICATION CONVERGED / ONE-SHOT AUTHORIZATION CONSUMED**
 >
-> Owner authorization was granted on 2026-09-19 for exactly one Q6-R1 host plugin metadata publication remediation transaction. This authorizes only the bounded install/recovery operations defined by this card and its bound execution packet. It does not authorize Q6-D replay, shadow activation, natural turns, Q6-D2/Q6-E/Q7, memory-data mutation, push, or tag.
+> Owner authorization was granted on 2026-09-19 for exactly one Q6-R1 host plugin metadata publication remediation transaction. That transaction executed once and is now consumed/non-reusable. Publication convergence passed and rollback was not needed. Q6-D replay, shadow activation, natural turns, Q6-D2/Q6-E/Q7, push, and tag remain unauthorized.
 
 ## 1. Decision
 
@@ -446,7 +446,7 @@ It does **not** qualify the Q6 real-host shadow mechanism.
 
 ## 14. Roadmap after Q6-R1
 
-If the authorized Q6-R1 transaction passes:
+The authorized Q6-R1 transaction completed `PASS_WITH_FINDINGS / CLOSED`:
 
 ```text
 Q6-D remains consumed and closed.
@@ -470,9 +470,9 @@ No successor runtime stage inherits Q6-R1 authority.
 
 ```text
 Q6-R1 =
-OWNER AUTHORIZED
-SOURCE PACKET + ROLLBACK QUALIFIED
-ONE-SHOT RUNTIME EXECUTION AUTHORIZED
+PASS_WITH_FINDINGS / CLOSED
+PUBLICATION CONVERGED
+ONE-SHOT AUTHORIZATION CONSUMED
 
 selected forward mechanism =
 ONE HOST-OWNED FORCE INSTALL FROM CURRENT REPO
