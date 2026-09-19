@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 PROVIDER EXECUTION NOT AUTHORIZED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 SCORE-CAPTURE SOURCE QUALIFIED + ZERO-EGRESS PREFLIGHT PASS / PROVIDER EXECUTION NOT AUTHORIZED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -1275,18 +1275,109 @@ candidateDepth <= 20
 topK = 3
 ```
 
+## 21. Q5-B2 score-capture source qualification
+
+Q5-B2 now has a source-qualified, one-shot execution path, but no real provider execution has been authorized.
+
+Qualified source:
+
+```text
+79cb320b13e5e43f0946969378e7d71e8c91efa1
+```
+
+The execution source binds the exact B1 manifest, reloads the historical frozen LoCoMo material, and fails closed before provider adapter creation unless every selected case reproduces:
+
+```text
+case_id / sample_id
+query_sha256
+candidate_count
+ordered_candidate_ids_sha256
+canonical_texts_sha256
+control_top3_sha256
+canonical reprojection identity
+SiliconFlow Qwen3 token-limit preflight
+```
+
+The runner freezes:
+
+```text
+provider = siliconflow
+model = Qwen/Qwen3-Reranker-0.6B
+revision = null
+
+planned provider attempts = 512
+provider attempt cap = 512
+retry policy = NO_RETRY_NO_RESUME_NO_REPLAY
+
+deadline = 5000ms
+candidateDepth <= 20
+topK = 3
+
+embedding calls = 0
+candidate generation runs = 0
+Hint producer calls = 0
+model training runs = 0
+runtime mutation = false
+```
+
+The 5000ms deadline and token eligibility use the existing C1A/Qwen3 provider contract rather than the shorter A5 transaction profile. Per-case local preflight enforces:
+
+```text
+maxQueryTokens = 4096
+maxDocumentTokens = 8192
+maxPairTokens = 12288
+specialTokenReservePerPair = 256
+```
+
+### Clean-source zero-egress preflight
+
+On clean source `79cb320b...`, B2 preflight returned:
+
+```text
+status = PASS
+worktree_clean = true
+
+source_b1_manifest_sha256 =
+a4e3cadb8af68f2ec6a3016e42757a0025f6b1e81edf841aafff099a64d43d77
+
+planned_provider_calls = 512
+provider_attempt_cap = 512
+
+split counts:
+development = 256
+validation = 128
+final_evaluation = 128
+
+candidate_count_total = 9,734
+
+estimated_input_tokens_upper_bound =
+17,162,046
+
+credential_available = true
+deadline_ms = 5000
+```
+
+`estimated_input_tokens_upper_bound` is the conservative UTF-8 byte-based Qwen3 request-token upper bound including repeated query/pair reserve accounting. It is **not** an expected billed-token count or cost estimate.
+
+Preflight created no transaction evidence:
+
+```text
+attempt.json = absent
+result.json = absent
+stop.json = absent
+```
+
+The future executor is one-shot: the first real provider attempt would consume that source-bound transaction; any provider/capture failure would stop immediately, and no retry/resume/replay is permitted without a new Owner authorization.
+
+B2 tests use only a fake adapter and establish exact 512-call behavior, first-failure stop semantics, pre-egress material/hash rejection, and bounded score packet output without raw query/candidate text or gold/evaluator fields.
+
 ### Current Q5-B boundary
-
-A future Q5-B2 transaction would need to reload the already frozen LoCoMo material by B1 case ID, verify the B1 hashes, and capture complete Qwen3 per-candidate score/order signals for exactly 512 cases. It would not require embedding, candidate generation, Recall Hint production or model training.
-
-However, it would make real provider calls and is **not authorized** by B0/B1 source qualification.
-
-Current state:
 
 ```text
 Q5-B0 = SOURCE QUALIFIED / 1,970 CASE EVIDENCE CORPUS FROZEN
 Q5-B1 = SOURCE QUALIFIED / 512 CASE CAPTURE POPULATION FROZEN
-Q5-B2 PROVIDER EXECUTION = NOT AUTHORIZED
+Q5-B2 = SOURCE QUALIFIED / ZERO-EGRESS PREFLIGHT PASS
+Q5-B2 REAL PROVIDER EXECUTION = NOT AUTHORIZED
 
 NEW PROVIDER CALLS = 0
 MODEL TRAINING = NOT AUTHORIZED
