@@ -1,6 +1,6 @@
 # Q6-D Exact-Session Real-Host Shadow Observation Stage Card — 2026-09-19
 
-> **Status: REBOUND TO OBSERVED LIVE Q6 SOURCE / OWNER EXECUTION AUTHORIZED / OPERATOR EXECUTION PENDING**
+> **Status: STOPPED / CONSUMED / CLEAN CLOSEOUT / NO RUNTIME SHADOW EVIDENCE**
 >
 > Owner authorization received in the project session on 2026-09-19 for exactly one Q6-D exact-session real-host shadow observation transaction. This card narrows that authorization; it does not widen it.
 
@@ -172,6 +172,49 @@ MAX_EXECUTIONS remaining = 1
 ```
 
 These stops authorize only bounded packet/binding repair. They do not authorize a second runtime transaction after a post-mutation stop.
+
+### Consumed execution result — 2026-09-19
+
+The next attempt passed preflight:
+
+```text
+17:58:56 +08:00 PREFLIGHT_BEGIN
+17:59:13 +08:00 PREFLIGHT_PASS base_event_id=728
+```
+
+The packet then wrote the exact-session `autoRecall.shadow` config and attempted the authorized Gateway reload. OpenClaw rejected the config before Gateway startup completed:
+
+```text
+plugins.entries.memory-engine.config.autoRecall:
+invalid config: must not have additional properties: "shadow"
+```
+
+No natural user turn was sent and no Q6 shadow decision trace was produced. Because the temporary config had already been written, this crossed the mutation boundary and consumed the single authorized execution.
+
+Mandatory closeout ran and passed:
+
+```text
+17:59:33 +08:00 CLOSEOUT_BEGIN
+18:00:22 +08:00 CLOSEOUT_PASS
+```
+
+Independent operator verification confirmed:
+
+```text
+result.outcome=STOPPED
+result.turns_sent=0
+result.closeout_ok=true
+Q6-D executions_consumed=1/1
+MAX_EXECUTIONS remaining=0
+current config SHA == pre-config SHA
+active sourcePath == /home/lionsol/.openclaw/workspace/plugins/memory-engine
+Gateway Runtime=running
+Gateway Connectivity probe=ok
+```
+
+The frozen Q6 repository manifest does contain `autoRecall.shadow`, so the accepted finding is a host plugin-metadata/config-schema publication mismatch. This evidence does **not** prove which concrete publication surface was stale. Possible host surfaces include the installed extension copy, `installed_plugin_index`, registry snapshot/discovery state, or another OpenClaw metadata path. Attribution requires read-only diagnosis only.
+
+Q6-D is now `STOPPED / CONSUMED / CLEAN CLOSEOUT / NO RUNTIME SHADOW EVIDENCE`. No retry is authorized by this Stage Card.
 
 ## 7. Authorized runtime sequence
 

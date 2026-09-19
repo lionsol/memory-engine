@@ -1,7 +1,7 @@
 # Q6 Shadow AutoRecall Contract v1
 
 Date: 2026-09-19
-Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / Q6-C PASS_WITH_FINDINGS + OFFLINE QUALIFIED / Q6-D OWNER AUTHORIZED + LIVE BINDING REBOUND TO REPO-PATH Q6 SOURCE + EXECUTION PACKET REPAIRED/SOURCE-QUALIFIED / 0 EXECUTIONS CONSUMED / OPERATOR EXECUTION PENDING
+Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / Q6-C PASS_WITH_FINDINGS + OFFLINE QUALIFIED / Q6-D STOPPED + CONSUMED + CLEAN CLOSEOUT / NO RUNTIME SHADOW EVIDENCE / HOST PLUGIN-METADATA-SCHEMA MISMATCH FINDING
 
 ## 1. Decision context
 
@@ -414,13 +414,15 @@ Q6-C does not authorize Q6-D or any runtime/config/telemetry mutation. Report: `
 
 ### Q6-D — exact-session real-host shadow observation
 
-Status: `OWNER AUTHORIZED / LIVE BINDING REBOUND TO REPO-PATH Q6 SOURCE / EXECUTION PACKET REPAIRED + SOURCE-QUALIFIED / 0 EXECUTIONS CONSUMED / OPERATOR EXECUTION PENDING`.
+Status: `STOPPED / CONSUMED / CLEAN CLOSEOUT / NO RUNTIME SHADOW EVIDENCE / HOST PLUGIN-METADATA-SCHEMA MISMATCH FINDING`.
 
 The bounded transaction is frozen in `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` against Q6 runtime source `4f79a8c78fb68bb92294ea78a755293c8b62cbc4` with `MAX_EXECUTIONS=1`, one exact `main` session and at most six genuine natural turns. Preflight proved the active plugin `sourcePath` is already `/home/lionsol/.openclaw/workspace/plugins/memory-engine` and all four Q6 runtime target files already match the frozen Q6 hashes. Therefore the rebound transaction performs **no plugin install, overlay construction or sourcePath mutation**; it only applies the exact-session shadow config, reloads Gateway, observes bounded evidence, restores the exact pre-config, reloads again and verifies the same repo-path Q6 hashes. The operator packet is `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh`; it uses `bin/q6-shadow-runtime-evidence.js` for read-only bounded post-baseline evidence and deliberately does not manufacture user traffic or invoke memory tools.
 
 Q6-D authorizes bounded content-free Q6 shadow telemetry and existing runtime events needed for trace correlation. It does not authorize prompt injection, reinforcement authority, topK/retrieval changes, a second comparison retrieval, a new provider/model, persistent shadow activation, plugin installation or sourcePath mutation.
 
-Runtime observation measures only the observed candidate/would-inject/withholding/latency/error shape. Without independent labels it is **not** a false-positive ground-truth study or a production prevalence probability estimate.
+The authorized runtime observation did not reach a natural turn. Preflight passed at `base_event_id=728`, but after writing the exact-session shadow config, Gateway startup rejected `plugins.entries.memory-engine.config.autoRecall.shadow` as an additional property. The transaction therefore ended `STOPPED`, consumed `1/1`, recorded `turns_sent=0`, and produced no Q6 shadow decision trace. Mandatory closeout restored the exact pre-transaction config bytes and Gateway health.
+
+Repository source `openclaw.plugin.json` at the frozen Q6 source does declare `autoRecall.shadow`, while the host startup validator did not accept it. The Q6-D finding is therefore a **host plugin-metadata/config-schema publication mismatch**. Existing OpenClaw 2026.7.1-2 audits already show that startup metadata may flow through `installed_plugin_index`, registry snapshots and discovery; however, this transaction does not prove which concrete host metadata surface was stale. That attribution remains a read-only diagnosis task. Runtime observation metrics such as candidate prevalence, `would_inject`, withholding reasons and latency remain unavailable. Final Q6-D result: `docs/memory-engine-q6-shadow-autorecall-real-host-result-20260919.md`.
 
 ### Q6-E — product decision
 
@@ -467,10 +469,10 @@ Statistical LTR =
 NOT SELECTED
 
 runtime execution =
-Q6-D ONE EXACT-SESSION TRANSACTION AUTHORIZED / 0 EXECUTIONS CONSUMED / OPERATOR EXECUTION PENDING
+Q6-D ONE EXACT-SESSION TRANSACTION CONSUMED / STOPPED / CLEAN CLOSEOUT / NO RETRY AUTHORITY
 
 persistent shadow telemetry =
-BOUNDED Q6-D TRACE EVIDENCE AUTHORIZED / PERSISTENT SHADOW ACTIVATION NOT AUTHORIZED
+Q6-D TRANSACTION CONSUMED WITH NO TRACE EVIDENCE / PERSISTENT SHADOW ACTIVATION NOT AUTHORIZED
 
 live user-memory sampling =
 ONLY THE AUTHORIZED EXACT-SESSION NATURAL RUNTIME READ PATH / NO BULK EXPORT OR TRAINING
