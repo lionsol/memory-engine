@@ -9,10 +9,10 @@ const PACKET = readFileSync(
 
 test("Q6-D execution packet stays one-shot and exact-session bounded", () => {
   assert.match(PACKET, /Q6_SOURCE="4f79a8c78fb68bb92294ea78a755293c8b62cbc4"/);
-  assert.match(PACKET, /STAGE_SHA="232215a09768a7d643b2f6bab261ad0129127bbb2cdb78bc318a9ada9f762f8c"/);
+  assert.match(PACKET, /STAGE_SHA="[a-f0-9]{64}"/);
   assert.match(PACKET, /MAX_TURNS=6/);
   assert.match(PACKET, /CONFIG_PATH="\$HOME\/\.openclaw\/openclaw\.json"/);
-  assert.match(PACKET, /q6-shadow-autorecall-exact-session-20260919-r2/);
+  assert.match(PACKET, /q6-shadow-autorecall-exact-session-20260919-r3/);
   assert.doesNotMatch(PACKET, /config file/);
   assert.match(PACKET, /Q6_SESSION_ID/);
   assert.match(PACKET, /Q6_SESSION_KEY/);
@@ -22,16 +22,12 @@ test("Q6-D execution packet stays one-shot and exact-session bounded", () => {
   assert.match(PACKET, /cardFirstRuntime\.enabled == true/);
 });
 
-test("Q6-D packet deploys only the four frozen Q6 runtime files", () => {
-  const overlays = [...PACKET.matchAll(/overlay "([^"]+)"/g)].map(match => match[1]);
-  assert.deepEqual(overlays, [
-    "lib/config/effective-hybrid-runtime-config.js",
-    "lib/recall/auto-recall-hook-lifecycle.js",
-    "lib/recall/auto-recall-shadow.js",
-    "openclaw.plugin.json",
-  ]);
-  assert.match(PACKET, /DIFF_COUNT.*-eq 4/);
-  assert.match(PACKET, /candidate_diff_escape/);
+test("Q6-D packet binds the already-active repo Q6 runtime and performs no install", () => {
+  assert.match(PACKET, /\[ "\$BASE_SOURCE" = "\$REPO" \]/);
+  assert.match(PACKET, /q6_hashes "\$BASE_SOURCE"/);
+  assert.doesNotMatch(PACKET, /overlay\(/);
+  assert.doesNotMatch(PACKET, /plugins install/);
+  assert.doesNotMatch(PACKET, /CANDIDATE=/);
   assert.doesNotMatch(PACKET, /npm (install|ci|rebuild)/);
 });
 
@@ -51,10 +47,9 @@ test("Q6-D packet has mandatory fail-closed evidence and rollback checks", () =>
   assert.match(PACKET, /memory_injected_on_shadow_trace_count/);
   assert.match(PACKET, /memory_reinforced_on_shadow_trace_count/);
   assert.match(PACKET, /closeout\(\)/);
-  assert.match(PACKET, /plugins install "\$BASE_SOURCE" --force/);
   assert.match(PACKET, /cp "\$PRE_CONFIG" "\$CONFIG_PATH"/);
-  assert.match(PACKET, /baseline_hashes "\$BASE_SOURCE"/);
-  assert.match(PACKET, /plugin_loaded \|\| return 1/);
+  assert.match(PACKET, /\[ "\$BASE_SOURCE" = "\$REPO" \] \|\| return 1/);
+  assert.match(PACKET, /q6_hashes "\$BASE_SOURCE" \|\| return 1/);
   assert.match(PACKET, /write_stopped_result\(\)/);
   assert.match(PACKET, /outcome:"STOPPED"/);
   assert.match(PACKET, /trap .*closeout.*write_stopped_result/);

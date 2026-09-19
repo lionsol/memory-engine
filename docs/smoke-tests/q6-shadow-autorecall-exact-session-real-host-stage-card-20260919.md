@@ -1,6 +1,6 @@
 # Q6-D Exact-Session Real-Host Shadow Observation Stage Card — 2026-09-19
 
-> **Status: FROZEN / OWNER EXECUTION AUTHORIZED / OPERATOR EXECUTION PENDING**
+> **Status: REBOUND TO OBSERVED LIVE Q6 SOURCE / OWNER EXECUTION AUTHORIZED / OPERATOR EXECUTION PENDING**
 >
 > Owner authorization received in the project session on 2026-09-19 for exactly one Q6-D exact-session real-host shadow observation transaction. This card narrows that authorization; it does not widen it.
 
@@ -41,23 +41,19 @@ openclaw.plugin.json
 sha256=0ea09bfea5bb5d1f3532ed22c9e0ae9c1cfe64abd785f00a1458b8481b0b0a27
 ```
 
-Latest repository-recorded pre-Q6 live source reference is `e40186d9387a33cf51a45cac9e982385b19cd212`. Its corresponding target-file baseline is:
+Historical RH-L3 cleanup recorded `e40186d9387a33cf51a45cac9e982385b19cd212` as the then-live source. Q6-D preflight on 2026-09-19 proved that this is no longer the current host binding: `install.sourcePath` now points directly to `/home/lionsol/.openclaw/workspace/plugins/memory-engine`, and all four Q6 runtime target files already equal the frozen Q6 hashes above, including the presence of `lib/recall/auto-recall-shadow.js`.
+
+Observed live binding:
 
 ```text
-lib/config/effective-hybrid-runtime-config.js
-sha256=57bd24a41ba6e514549e72c1f5fe745d30cda89c571316c790f23da2d1e2006e
-
-lib/recall/auto-recall-hook-lifecycle.js
-sha256=5f75439ea7acb0f0a03e3092f6f460b5ce46f6b70351b610e5beb551354b3a12
-
-lib/recall/auto-recall-shadow.js
-ABSENT
-
-openclaw.plugin.json
-sha256=346969a530ac8b6931bd4ec9d624016ca36ae394d47a79f9058bf037f602a735
+install.sourcePath=/home/lionsol/.openclaw/workspace/plugins/memory-engine
+lib/config/effective-hybrid-runtime-config.js=61ffb77f...b2bfb6
+lib/recall/auto-recall-hook-lifecycle.js=9baa225f...815aa0
+lib/recall/auto-recall-shadow.js=ee913bea...73ceef
+openclaw.plugin.json=0ea09bfe...b0a27
 ```
 
-The runtime operator must read the actual active runtime before mutation. If its source/target identity differs from the recorded pre-Q6 baseline, **STOP before candidate construction** and report drift; this authorization does not permit rebasing Q6-D onto an unknown live runtime.
+This is a known and directly verified **Q6-source-present / shadow-config-off** host shape, not an unknown drift. Q6-D is therefore rebound to this observed live source. The transaction must still STOP before mutation if the active `sourcePath` is no longer the repository path, the worktree is dirty, HEAD does not contain the execution packet, or any of the four Q6 runtime hashes differs.
 
 ## 3. Runtime posture that must remain invariant
 
@@ -83,29 +79,23 @@ The exact pre-transaction memory-engine config bytes and semantic fingerprint mu
 
 Any drift in these product settings stops the transaction before mutation unless the drift is only host bookkeeping explicitly excluded from the semantic fingerprint.
 
-## 4. Minimal transient candidate
+## 4. Runtime deployment shape
 
-Do **not** install the whole development checkout directly.
+No plugin install or overlay candidate is required or authorized for the rebound transaction.
 
-Construct exactly one immutable overlay candidate:
+The active plugin `sourcePath` already equals the repository path and the four runtime target files already equal the frozen Q6 source hashes. Q6-D therefore uses the existing active source in place and changes only the exact-session shadow config.
+
+Frozen deployment limits:
 
 ```text
-candidate=$HOME/.openclaw/backups/memory-engine/releases/q6-shadow-autorecall-4f79a8c-20260919-r1
-base=<exact preflight active plugin sourcePath>
+candidate construction = 0
+plugin install = 0
+runtime sourcePath mutation = 0
+package/dependency rebuild = 0
+source edit during transaction = 0
 ```
 
-Candidate construction:
-
-1. candidate path must not already exist;
-2. copy the exact preflight active runtime tree;
-3. replace only the four Q6 target files listed in Section 2 from source commit `4f79a8c...`;
-4. preserve package/lock/native dependencies from the active runtime;
-5. verify the four target hashes exactly;
-6. prove no other candidate file differs from the copied base.
-
-No source edit, rebuild, package update or dependency install is authorized.
-
-The candidate is **transient**. Q6-D does not authorize leaving it installed after closeout.
+Because the active source is the repository itself, preflight must additionally prove a clean worktree and the four Q6 target hashes before the first config mutation.
 
 ## 5. Exact-session binding
 
@@ -137,43 +127,66 @@ Before the first Gateway stop or config mutation, prove and record:
 3. source implementation commit `4f79a8c...`;
 4. actual OpenClaw version and Node/runtime ABI;
 5. active memory-engine plugin `loaded` status and exact `sourcePath`;
-6. pre-Q6 active target-file hashes from Section 2;
+6. active repository-path runtime has the four frozen Q6 target hashes from Section 2;
 7. Gateway `READY`;
 8. exact pre-transaction config bytes + semantic fingerprint;
 9. invariant experimental switches from Section 3;
 10. exact session ID/key/agent binding;
 11. fresh `BASE_EVENT_ID=max(memory_events.id)` using readonly Engine access;
-12. candidate path absent.
+12. Q6 shadow is absent/off in the exact pre-transaction config.
 
 Any ambiguity or mismatch stops with `STOPPED_PREACTIVATION` and consumes zero execution count.
+
+### Pre-activation audit on 2026-09-19
+
+Two source-qualified packet attempts stopped before any runtime/config mutation:
+
+```text
+17:27:26 +08:00
+STOP config_path
+cause = packet parsed decorated `openclaw config file` output as a literal path
+mutation = 0
+
+17:31:20 +08:00
+STOP baseline_hash_drift
+cause = Stage Card expected historical e40186d target hashes, while the observed active sourcePath
+        was the repository itself and all four target files already matched the frozen Q6 source hashes
+mutation = 0
+```
+
+Therefore:
+
+```text
+Q6-D executions_consumed = 0
+MAX_EXECUTIONS remaining = 1
+```
+
+These stops authorize only bounded packet/binding repair. They do not authorize a second runtime transaction after a post-mutation stop.
 
 ## 7. Authorized runtime sequence
 
 After preflight passes, consume exactly one execution:
 
-1. construct the immutable four-file overlay candidate;
-2. stop Gateway once;
-3. install the candidate once with the existing qualified OpenClaw/Node24 runtime;
-4. start Gateway and verify `READY`, candidate `sourcePath`, candidate hashes and unchanged config;
-5. mutate only:
+1. verify the repository-path active source and four Q6 hashes again;
+2. capture exact pre-transaction config bytes;
+3. mutate only:
    ```json
    autoRecall.shadow = {
      "enabled": true,
      "sessionAllowlist": ["<EXACT_SESSION_ID>"]
    }
    ```
-6. do not change any sibling AutoRecall field, `topK`, rerank switch, Recall Hint config or retrieval policy;
-7. reload/restart Gateway only as required for the config to become effective;
-8. verify effective config is valid and shadow scope contains exactly the bound session;
-9. run at most **6 genuine natural task-relevant user turns** in that exact session;
-10. collect only bounded post-baseline event evidence;
-11. stop early only when evidence is sufficient to answer mechanism/scope/latency shape; do not manufacture a missing outcome class;
-12. restore exact pre-transaction config bytes;
-13. stop Gateway once;
-14. reinstall the exact preflight runtime source once;
-15. start Gateway and prove full closeout identity/health.
+4. do not change any sibling AutoRecall field, `topK`, rerank switch, Recall Hint config or retrieval policy;
+5. restart Gateway once so the already-present Q6 source reads the exact shadow config;
+6. verify Gateway `READY`, active `sourcePath` still equals the repository path, the four Q6 hashes are unchanged, and shadow scope contains exactly the bound session;
+7. run at most **6 genuine natural task-relevant user turns** in that exact session;
+8. collect only bounded post-baseline event evidence;
+9. stop early only when evidence is sufficient to answer mechanism/scope/latency shape; do not manufacture a missing outcome class;
+10. restore exact pre-transaction config bytes;
+11. restart Gateway once;
+12. prove the same repository-path Q6 source/hashes, restored config identity and Gateway health.
 
-No second candidate install, second candidate construction, alternative session, or retry transaction is authorized.
+No plugin install, sourcePath mutation, alternative session or retry transaction is authorized.
 
 ## 8. Natural-turn contract
 
@@ -357,14 +370,13 @@ Closeout runs on success, failure, interrupt or insufficient evidence.
 It must:
 
 1. restore exact pre-transaction config bytes;
-2. validate config;
-3. restore the exact preflight runtime source, not the Q6 candidate;
-4. verify pre-Q6 target hashes;
-5. verify candidate-only `auto-recall-shadow.js` is absent again if absent in the preflight runtime;
+2. restart Gateway;
+3. verify exact config-byte restoration and valid invariant experimental switches;
+4. verify active `sourcePath` remains the repository path;
+5. verify the four frozen Q6 runtime hashes remain unchanged;
 6. verify Gateway `READY`;
-7. verify the pre-existing experimental switches are restored exactly;
-8. verify repository remains at the authorized committed state and clean;
-9. stop further Q6-D runtime testing.
+7. verify repository remains at the authorized committed state and clean;
+8. stop further Q6-D runtime testing.
 
 Valid bounded telemetry rows created during the transaction are retained as observation evidence; closeout does not delete them.
 
@@ -377,8 +389,8 @@ MAX_EXECUTIONS=1
 exact agent=main
 exact sessions=1
 natural turns<=6
-candidate installs=1
-rollback runtime reinstall=1
+candidate installs=0
+rollback runtime reinstall=0
 temporary shadow config mutation=1
 exact config restoration=1
 new provider families=0

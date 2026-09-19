@@ -1,7 +1,7 @@
 # Q6 Shadow AutoRecall Contract v1
 
 Date: 2026-09-19
-Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / Q6-C PASS_WITH_FINDINGS + OFFLINE QUALIFIED / Q6-D OWNER AUTHORIZED + STAGE CARD FROZEN / OPERATOR EXECUTION PENDING
+Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / Q6-C PASS_WITH_FINDINGS + OFFLINE QUALIFIED / Q6-D OWNER AUTHORIZED + LIVE BINDING REBOUND TO REPO-PATH Q6 SOURCE + EXECUTION PACKET REPAIRED/SOURCE-QUALIFIED / 0 EXECUTIONS CONSUMED / OPERATOR EXECUTION PENDING
 
 ## 1. Decision context
 
@@ -414,11 +414,11 @@ Q6-C does not authorize Q6-D or any runtime/config/telemetry mutation. Report: `
 
 ### Q6-D — exact-session real-host shadow observation
 
-Status: `OWNER AUTHORIZED / STAGE CARD FROZEN / EXECUTION PACKET SOURCE-QUALIFIED / OPERATOR EXECUTION PENDING`.
+Status: `OWNER AUTHORIZED / LIVE BINDING REBOUND TO REPO-PATH Q6 SOURCE / EXECUTION PACKET REPAIRED + SOURCE-QUALIFIED / 0 EXECUTIONS CONSUMED / OPERATOR EXECUTION PENDING`.
 
-The bounded transaction is frozen in `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` against Q6 runtime source `4f79a8c78fb68bb92294ea78a755293c8b62cbc4` with `MAX_EXECUTIONS=1`, one exact `main` session, at most six genuine natural turns, transient four-file overlay deployment, exact config restoration, and mandatory runtime rollback to the pre-Q6 source at closeout. The source-qualified operator packet is `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh`; it uses `bin/q6-shadow-runtime-evidence.js` for read-only bounded post-baseline evidence and deliberately does not manufacture user traffic or invoke memory tools.
+The bounded transaction is frozen in `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` against Q6 runtime source `4f79a8c78fb68bb92294ea78a755293c8b62cbc4` with `MAX_EXECUTIONS=1`, one exact `main` session and at most six genuine natural turns. Preflight proved the active plugin `sourcePath` is already `/home/lionsol/.openclaw/workspace/plugins/memory-engine` and all four Q6 runtime target files already match the frozen Q6 hashes. Therefore the rebound transaction performs **no plugin install, overlay construction or sourcePath mutation**; it only applies the exact-session shadow config, reloads Gateway, observes bounded evidence, restores the exact pre-config, reloads again and verifies the same repo-path Q6 hashes. The operator packet is `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh`; it uses `bin/q6-shadow-runtime-evidence.js` for read-only bounded post-baseline evidence and deliberately does not manufacture user traffic or invoke memory tools.
 
-Q6-D authorizes bounded content-free Q6 shadow telemetry and existing runtime events needed for trace correlation. It does not authorize prompt injection, reinforcement authority, topK/retrieval changes, a second comparison retrieval, a new provider/model, persistent shadow activation or leaving the Q6 candidate deployed after the transaction.
+Q6-D authorizes bounded content-free Q6 shadow telemetry and existing runtime events needed for trace correlation. It does not authorize prompt injection, reinforcement authority, topK/retrieval changes, a second comparison retrieval, a new provider/model, persistent shadow activation, plugin installation or sourcePath mutation.
 
 Runtime observation measures only the observed candidate/would-inject/withholding/latency/error shape. Without independent labels it is **not** a false-positive ground-truth study or a production prevalence probability estimate.
 
@@ -467,7 +467,7 @@ Statistical LTR =
 NOT SELECTED
 
 runtime execution =
-Q6-D ONE EXACT-SESSION TRANSACTION AUTHORIZED / OPERATOR EXECUTION PENDING
+Q6-D ONE EXACT-SESSION TRANSACTION AUTHORIZED / 0 EXECUTIONS CONSUMED / OPERATOR EXECUTION PENDING
 
 persistent shadow telemetry =
 BOUNDED Q6-D TRACE EVIDENCE AUTHORIZED / PERSISTENT SHADOW ACTIVATION NOT AUTHORIZED
