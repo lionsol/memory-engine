@@ -195,6 +195,11 @@ test("Q6 shadow envelope is bounded and excludes card or memory content", () => 
   assert.deepEqual(envelope.would_inject_ids, ["abcdef1234567890"]);
   assert.equal(envelope.candidate_decisions[0].would_inject, true);
   assert.equal(envelope.candidate_decisions[0].capability, "CARD_DISCLOSABLE");
+  assert.deepEqual(envelope.timings, {
+    retrieval_ms: 0,
+    decision_ms: 0,
+    total_ms: 0,
+  });
   const serialized = JSON.stringify(envelope);
   assert.equal(serialized.includes(memory.text), false);
   assert.equal(serialized.includes(directCard.selected[0].card.summary), false);
@@ -340,6 +345,11 @@ test("exact-session Q6 shadow matches active card decision but suppresses apply 
   assert.deepEqual(q6Event.metadata_json.would_inject_ids, activeInjected);
   assert.equal(q6Event.metadata_json.would_inject_count, 1);
   assert.equal(q6Event.metadata_json.apply_suppressed, true);
+  assert.deepEqual(q6Event.metadata_json.timings, {
+    retrieval_ms: 0,
+    decision_ms: 0,
+    total_ms: 0,
+  });
 
   const completed = shadow.events.find(event => event.event_type === "recall_completed");
   assert.equal(completed.injected_count, 0);
