@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 SCORE-CAPTURE SOURCE QUALIFIED + ZERO-EGRESS PREFLIGHT PASS / PROVIDER EXECUTION AUTHORIZED + PREPARED / NOT YET EXECUTED / Q5-B3-A ANALYSIS PLAN SOURCE QUALIFIED / FINAL SPLIT SEALED / B3-B WAITING FOR REAL B2 PACKET / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 REAL SCORE CAPTURE PASS / 512 OF 512 PROVIDER CALLS / BOUNDED PACKET FROZEN / Q5-B3-A ANALYSIS PLAN SOURCE QUALIFIED / FINAL SPLIT SEALED / B3-B READY + NOT STARTED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -1527,6 +1527,153 @@ Q5-B3-A = SOURCE QUALIFIED / FINAL SPLIT SEALED
 Q5-B3-B = NOT STARTED / WAITING FOR REAL B2 PACKET
 
 NEW PROVIDER CALLS = 0
+MODEL TRAINING = NOT AUTHORIZED
+STATISTICAL LTR = NOT SELECTED
+LIVE USER/MEMORY SAMPLING = NOT AUTHORIZED
+RUNTIME = UNCHANGED
+```
+
+
+## 23. Q5-B2 real provider execution result
+
+Owner authorized one Q5-B2 real provider execution transaction. It executed on clean source:
+
+```text
+9e6154e761a4d6301a021d8e785d20e144da6232
+```
+
+The clean zero-egress preflight bound:
+
+```text
+source_b1_manifest_sha256 =
+a4e3cadb8af68f2ec6a3016e42757a0025f6b1e81edf841aafff099a64d43d77
+
+planned_provider_calls = 512
+provider_attempt_cap = 512
+
+split counts:
+development = 256
+validation = 128
+final_evaluation = 128
+
+candidate_count_total = 9,734
+estimated_input_tokens_upper_bound = 17,162,046
+
+provider = siliconflow
+model = Qwen/Qwen3-Reranker-0.6B
+revision = null
+deadline_ms = 5000
+retry_policy = NO_RETRY_NO_RESUME_NO_REPLAY
+```
+
+The transaction completed successfully:
+
+```text
+status = PASS
+mode = REAL_FIXED_POOL_RERANK_SCORE_CAPTURE
+
+provider_attempts = 512
+provider_successes = 512
+provider_attempt_cap = 512
+
+stop.json = absent
+```
+
+The bounded score packet contains:
+
+```text
+case_count = 512
+unique_case_ids = 512
+
+split counts:
+development = 256
+validation = 128
+final_evaluation = 128
+
+candidate_count_total = 9,734
+candidate_count_min = 1
+candidate_count_max = 20
+all rerank scores finite = true
+contains_gold_fields = false
+
+packet_sha256 =
+ebf1cadc0204fb2e81e2603f8d1027785446d03cafd64c1e3ad434b4c8fcd598
+```
+
+Transaction artifacts:
+
+```text
+/tmp/memory-engine-q5-b2-fixed-pool-score-capture-v1/
+  9e6154e761a4d6301a021d8e785d20e144da6232/
+    attempt.json
+    result.json
+```
+
+No `stop.json` exists.
+
+The transaction result file SHA-256 is:
+
+```text
+459ca83cfe33a3eaef099e68ffcb4509c61c5a986d59cafc338d8a747c5998b5
+```
+
+The bounded packet is frozen in-repository as:
+
+```text
+test/fixtures/q5-b2-real-score-capture-v1.json
+
+pretty-file sha256 =
+3f43e979901ee618d53cdbc577c498570b8451c1797da781992918cf04a8c9be
+```
+
+A recursive field audit found zero forbidden raw/evaluator fields:
+
+```text
+raw query = absent
+raw candidate/memory text = absent
+gold fields = absent
+evaluator fields = absent
+answer fields = absent
+acceptance fields = absent
+```
+
+Reported real provider usage:
+
+```text
+input_tokens = 4,114,281
+billed_input_tokens = 4,114,281
+output_tokens = 0
+billed_output_tokens = 0
+```
+
+Per-case bounded usage did not report a reliable aggregate `total_tokens`; therefore wrapper `total_tokens=0` must not be interpreted as zero total consumption. The authoritative available usage measure is the reported input/billed-input count above.
+
+During orchestration, one additional runner invocation encountered the already-present attempt marker and was rejected with `Q5_B2_TRANSACTION_ALREADY_CONSUMED` before any provider call. Final provider attempts remained exactly `512`, confirming the guard prevented duplicate egress.
+
+Historical adjudication:
+
+```text
+Q5-B2 REAL SCORE CAPTURE
+= PASS
+= 512 / 512 PROVIDER CALLS SUCCESSFUL
+= NO RETRY USED
+= BOUNDED REAL SCORE PACKET FROZEN
+= RUNTIME UNCHANGED
+```
+
+The B2 packet now satisfies the B3-A required product-signal input. It does not unseal `final_evaluation` and does not itself authorize B3-B final consumption, model training, Statistical LTR, live user/memory sampling, runtime changes, or further provider execution.
+
+Current boundary:
+
+```text
+Q5-B0 = SOURCE QUALIFIED / 1,970 CASE EVIDENCE CORPUS FROZEN
+Q5-B1 = SOURCE QUALIFIED / 512 CASE CAPTURE POPULATION FROZEN
+Q5-B2 = PASS / REAL SCORE PACKET FROZEN
+Q5-B3-A = SOURCE QUALIFIED / FINAL SPLIT SEALED
+Q5-B3-B = READY / NOT STARTED
+
+FINAL_EVALUATION = SEALED
+NEW PROVIDER EXECUTION = NOT AUTHORIZED
 MODEL TRAINING = NOT AUTHORIZED
 STATISTICAL LTR = NOT SELECTED
 LIVE USER/MEMORY SAMPLING = NOT AUTHORIZED
