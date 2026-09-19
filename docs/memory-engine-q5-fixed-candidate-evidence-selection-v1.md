@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 SCORE-CAPTURE SOURCE QUALIFIED + ZERO-EGRESS PREFLIGHT PASS / PROVIDER EXECUTION NOT AUTHORIZED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 SCORE-CAPTURE SOURCE QUALIFIED + ZERO-EGRESS PREFLIGHT PASS / PROVIDER EXECUTION NOT AUTHORIZED / Q5-B3-A ANALYSIS PLAN SOURCE QUALIFIED / FINAL SPLIT SEALED / B3-B WAITING FOR REAL B2 PACKET / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -1378,6 +1378,153 @@ Q5-B0 = SOURCE QUALIFIED / 1,970 CASE EVIDENCE CORPUS FROZEN
 Q5-B1 = SOURCE QUALIFIED / 512 CASE CAPTURE POPULATION FROZEN
 Q5-B2 = SOURCE QUALIFIED / ZERO-EGRESS PREFLIGHT PASS
 Q5-B2 REAL PROVIDER EXECUTION = NOT AUTHORIZED
+
+NEW PROVIDER CALLS = 0
+MODEL TRAINING = NOT AUTHORIZED
+STATISTICAL LTR = NOT SELECTED
+LIVE USER/MEMORY SAMPLING = NOT AUTHORIZED
+RUNTIME = UNCHANGED
+```
+
+
+## 22. Q5-B3-A fixed-pool analysis plan
+
+Q5-B3-A source-qualifies the downstream analysis contract without fabricating or substituting a real B2 score packet.
+
+Qualified source:
+
+```text
+57136f1920f416c2531078f3007adfaf368f95ac
+```
+
+Clean-source result:
+
+```text
+status = PASS
+mode = Q5_B3_FIXED_POOL_ANALYSIS_PLAN
+worktree_clean = true
+provider_requests = 0
+model_training_runs = 0
+
+source_b0_manifest_sha256 =
+f9262cd548c8a145da32da20f46a53872cab0310661d5b3a3055f5925ca9afe0
+
+source_b1_manifest_sha256 =
+a4e3cadb8af68f2ec6a3016e42757a0025f6b1e81edf841aafff099a64d43d77
+
+plan_sha256 =
+f5172f9c82e27b5e04654d16c1a3c913dcd5f91928ee04ad127c016a04467b15
+```
+
+The plan binds all `512` B1-selected cases back to B0 and fails closed unless each case preserves:
+
+```text
+case_id
+sample_id
+split
+query_sha256
+candidate_count
+ordered_candidate_ids_sha256
+canonical_texts_sha256
+control_top3_sha256
+```
+
+Population:
+
+```text
+development = 256
+validation = 128
+final_evaluation = 128
+unique LoCoMo samples = 10
+```
+
+### Final split sealing
+
+B3-A makes `final_evaluation` sealed by default:
+
+```text
+exploration_splits = development + validation
+final_outcomes_visible_by_default = false
+final_consumption_requires_explicit_one_shot_authority = true
+```
+
+The source contract also rejects accidental result envelopes containing fields such as:
+
+```text
+final_metrics
+final_outcomes
+final_case_results
+final_evaluation_results
+```
+
+before explicit final-consumption authority exists.
+
+This is deliberately stricter than merely documenting that final should not be inspected. The default analysis path is machine-bound not to surface final outcomes.
+
+### Evaluator boundary
+
+LoCoMo evidence labels are turn-level while the fixed candidate pool contains chunk IDs. Therefore B3-A explicitly freezes:
+
+```text
+direct_candidate_id_equals_gold_id = false
+```
+
+and requires the existing evaluator mapping:
+
+```text
+scoreLocomoChunkCase
+evaluateLocomoChunkEvidenceCoverage
+```
+
+The future B2 packet remains product-signal-only:
+
+```text
+contains_gold_fields = false
+evaluator join key = case_id
+gold source = historical LoCoMo material, evaluator-only
+```
+
+This prevents the Q4 direct-ID evidence assumption from being incorrectly reused for LoCoMo.
+
+### Planned pre-final analysis outputs
+
+Once a real B2 packet exists, B3-B may compute on development/validation only:
+
+```text
+rerank top3 Recall-any@3
+rerank top3 Recall-all@3
+rerank top3 evidence coverage@3
+pool gold completeness
+top3 budget feasibility
+selection-failure counts
+protect regressions
+score/rank distributions
+pair/set signal diagnostics
+```
+
+B3-A does not select a pair/set algorithm, threshold or model family.
+
+### Qualification gates
+
+```text
+focused B0/B1/B2/B3 = 20/20 PASS
+static check = 844 files PASS
+test-integrity = 382 / 0 invalid
+OpenSpec strict = 12/12 PASS
+git diff --check = PASS
+CodeGraph = one directly affected B3 test
+code-review-graph = risk 0.00 / affected flows 0 / test gaps 0
+```
+
+### Current Q5-B boundary
+
+```text
+Q5-B0 = SOURCE QUALIFIED / 1,970 CASE EVIDENCE CORPUS FROZEN
+Q5-B1 = SOURCE QUALIFIED / 512 CASE CAPTURE POPULATION FROZEN
+Q5-B2 = SOURCE QUALIFIED / ZERO-EGRESS PREFLIGHT PASS
+Q5-B2 REAL PROVIDER EXECUTION = NOT AUTHORIZED
+Q5-B3-A = SOURCE QUALIFIED / FINAL SPLIT SEALED
+Q5-B3-B = NOT STARTED / WAITING FOR REAL B2 PACKET
 
 NEW PROVIDER CALLS = 0
 MODEL TRAINING = NOT AUTHORIZED
