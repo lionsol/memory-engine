@@ -1,7 +1,7 @@
 # Q6 Shadow AutoRecall Contract v1
 
 Date: 2026-09-19
-Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / Q6-C PASS_WITH_FINDINGS + OFFLINE QUALIFIED / Q6-D STOPPED + CONSUMED + CLEAN CLOSEOUT / NO RUNTIME SHADOW EVIDENCE / HOST PLUGIN-METADATA-SCHEMA MISMATCH FINDING
+Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / Q6-C PASS_WITH_FINDINGS + OFFLINE QUALIFIED / Q6-D STOPPED + CONSUMED / Q6-R1 PASS_WITH_FINDINGS + CLOSED / Q6-D2 STOPPED + CONSUMED / Q6-D3 PASS_WITH_FINDINGS + CLOSED + STABLE-KEY MECHANISM QUALIFIED / Q6-E READY FOR PRODUCT DECISION + NOT STARTED
 
 ## 1. Decision context
 
@@ -474,11 +474,11 @@ The first authorized invocation stopped preactivation on a malformed embedded `m
 
 ### Q6-D3 — stable session-key shadow scope
 
-Status: `OWNER AUTHORIZED / SOURCE IMPLEMENTED / EXECUTION PACKET QUALIFIED / ONE-SHOT DEPLOYMENT + STABLE-KEY OBSERVATION AUTHORIZED`.
+Status: `PASS_WITH_FINDINGS / CLOSED / STABLE-KEY MECHANISM QUALIFIED / AUTHORIZATION CONSUMED`.
 
 D3 keeps the existing `autoRecall.shadow.sessionAllowlist` config shape but extends each exact entry to mean either a runtime session ID or a stable OpenClaw session key. The hook now resolves both identities independently, prefers an exact session-key match for shadow authorization, and still records runtime events under the current runtime session ID. Legacy exact-ID scope remains compatible. The read-only Q6 evidence helper now accepts repeated `--session-id` arguments so one stable-key transaction can aggregate a bounded set of rotated runtime IDs while still treating all other Q6 envelopes as foreign-scope violations.
 
-D3 source/transaction contract: `docs/smoke-tests/q6-d3-stable-session-key-shadow-stage-card-20260919.md`; execution packet: `docs/smoke-tests/q6-d3-stable-session-key-shadow-execution-packet-20260919.sh`. D3 remains not deployed at authorization time. The Owner-authorized packet may perform exactly one host-owned publication from the D3 repo source, activate shadow for the single stable key `agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500`, observe at most six genuine natural turns while re-resolving any runtime session-ID rotation, then restore the D3 default-off config. If publication/activation cannot be qualified before `SHADOW_ACTIVE`, it may perform at most one coherent rollback from the immutable pre-D3 extension snapshot. Q6-E remains not ready until useful stable-key real-host shadow evidence exists.
+D3 source/transaction contract: `docs/smoke-tests/q6-d3-stable-session-key-shadow-stage-card-20260919.md`; execution packet: `docs/smoke-tests/q6-d3-stable-session-key-shadow-execution-packet-20260919.sh`; final result: `docs/memory-engine-q6-d3-stable-session-key-result-20260919.md`. The one-shot transaction published D3, activated shadow for the stable key `agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500`, and observed one genuine natural search turn with exactly one Q6 shadow decision, `mechanism_pass=true`, zero foreign decisions, zero shadow-trace injection/reinforcement, and clean closeout. The machine transaction then stopped because the operator pressed Enter for slot 2 without sending a second chat turn; this is recorded as a packet/operator-protocol finding rather than a mechanism failure. D3 remains installed with shadow default-off. Q6-E is now ready for product decision but is not started automatically.
 
 ### Q6-E — product decision
 

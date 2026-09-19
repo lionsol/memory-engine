@@ -2,16 +2,16 @@
 set -Eeuo pipefail
 
 # Q6-D3 stable-session-key deployment + real-host shadow observation.
-# OWNER-AUTHORIZED ONE-SHOT PACKET.
-# Authorization is non-reusable after the explicit execution-consumed boundary.
-EXECUTION_AUTHORIZED=true
+# CONSUMED/CLOSED PACKET. DO NOT REPLAY.
+# Q6-D3 closed PASS_WITH_FINDINGS on 2026-09-19 after one qualified real-host natural turn.
+EXECUTION_AUTHORIZED=false
 
 REPO="$HOME/.openclaw/workspace/plugins/memory-engine"
 STAGE_REL="docs/smoke-tests/q6-d3-stable-session-key-shadow-stage-card-20260919.md"
 STAGE="$REPO/$STAGE_REL"
 PACKET_REL="docs/smoke-tests/q6-d3-stable-session-key-shadow-execution-packet-20260919.sh"
 PACKET="$REPO/$PACKET_REL"
-EXPECTED_STAGE_SHA="75b86fbb4e7830e1d02ffea1fd27edc7675f882521c38fecaea913996e7e302f"
+EXPECTED_STAGE_SHA="ab1b7172389b927ad2e2105681da8c4fc088b4771f5faad9c22bd5597bdd44f2"
 D3_SOURCE_COMMIT="24e7daa958c6b589fe273937e0edf53912716228"
 
 NODE="$HOME/.local/node24/bin/node"

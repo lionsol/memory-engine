@@ -12,9 +12,9 @@ const PACKET_PATH = new URL(
 );
 const PACKET = readFileSync(PACKET_PATH, "utf8");
 
-test("Q6-D3 packet records one-shot Owner authorization but tests never execute it", () => {
-  assert.match(PACKET, /^EXECUTION_AUTHORIZED=true$/m);
-  assert.match(PACKET, /OWNER-AUTHORIZED ONE-SHOT PACKET/);
+test("Q6-D3 packet is permanently hard-disabled after the consumed transaction", () => {
+  assert.match(PACKET, /^EXECUTION_AUTHORIZED=false$/m);
+  assert.match(PACKET, /CONSUMED\/CLOSED PACKET/);
   assert.match(PACKET, /STOP=Q6_D3_RUNTIME_NOT_AUTHORIZED/);
 
   const syntax = spawnSync("bash", ["-n", PACKET_PATH.pathname], {

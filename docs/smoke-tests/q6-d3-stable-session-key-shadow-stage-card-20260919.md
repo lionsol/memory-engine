@@ -1,8 +1,8 @@
 # Q6-D3 Stable Session-Key Shadow Scope Stage Card — 2026-09-19
 
-> **Status: OWNER AUTHORIZED / SOURCE IMPLEMENTED / ONE-SHOT DEPLOYMENT + STABLE-KEY OBSERVATION**
+> **Status: PASS_WITH_FINDINGS / CLOSED / STABLE-KEY MECHANISM QUALIFIED / AUTHORIZATION CONSUMED**
 >
-> Owner authorization was granted on 2026-09-19 for exactly one Q6-D3 deployment + stable-session-key real-host observation transaction. It authorizes one host-owned D3 publication, one exact stable-key shadow observation of at most six genuine natural turns, mandatory closeout, and at most one coherent rollback if publication/activation cannot be qualified. It does not authorize Q6-E, Q7, new provider families, memory-data mutation, push, or tag.
+> Q6-D3 executed once on 2026-09-19. D3 publication succeeded, one genuine natural turn produced one bounded Q6 shadow decision with mechanism/apply-suppression pass, and closeout restored D3 default-off. The machine transaction later stopped only because the operator pressed Enter at slot 2 without sending a second OpenClaw turn; this is an operator-protocol finding, not a stable-key mechanism failure. The one-shot authorization is consumed and non-reusable.
 
 ## 1. Decision
 
@@ -268,9 +268,7 @@ These are source identities only. They are not claims about the currently loaded
 
 ## 12. Deployment state
 
-D3 is **not deployed at authorization time**.
-
-The current installed extension remains the Q6-R1/Q6-D2 runtime. The authorized Q6-D3 transaction may publish D3 exactly once through the host-owned plugin lifecycle before stable-key shadow observation.
+D3 was **not deployed at authorization time**. The authorized transaction published D3 successfully. After closeout, D3 remains installed with `autoRecall.shadow` absent/off and Gateway healthy.
 
 Therefore:
 
@@ -333,14 +331,15 @@ Current status:
 
 ```text
 Q6-D3 =
-OWNER AUTHORIZED
-SOURCE IMPLEMENTED / FOCUSED VERIFIED
-ONE-SHOT DEPLOYMENT + STABLE-KEY OBSERVATION AUTHORIZED
+PASS_WITH_FINDINGS / CLOSED
+STABLE-KEY MECHANISM QUALIFIED
+D3 INSTALLED / SHADOW DEFAULT-OFF
+ONE-SHOT AUTHORIZATION CONSUMED
 ```
 
-The authorization applies only to the exact stable key and bounded transaction described above. It becomes non-reusable once the committed packet crosses its explicit execution-consumed boundary.
+Machine transaction outcome was `STOPPED / CONSUMED / CLEAN CLOSEOUT` because slot 2 was confirmed with Enter without a second user turn. Human adjudication counts one genuine natural turn and one matching Q6 shadow decision, so the mechanism verdict is PASS with an operator-protocol finding. Final report: `docs/memory-engine-q6-d3-stable-session-key-result-20260919.md`.
 
-Q6-E and Q7 remain unauthorized. Push/tag remain unauthorized.
+Q6-E is ready for product decision but is not started automatically. Q7 remains unauthorized. Push/tag remain unauthorized.
 
 ## 15. Product interpretation
 
@@ -348,4 +347,4 @@ D3 is an identity-model correction, not a new recall policy.
 
 It does not change the Q6-C conclusion and does not make any positive product-policy decision.
 
-Q6-E remains not ready until stable-key real-host shadow evidence is collected.
+Stable-key real-host shadow evidence is now collected. Q6-E is `READY FOR PRODUCT DECISION / NOT STARTED`.
