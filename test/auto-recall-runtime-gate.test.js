@@ -229,6 +229,15 @@ test("manifest exposes strict agent and trigger defaults plus optional compatibi
   assert.match(autoRecall.properties.agentAllowlist.description, /controlled runtime verification/i);
   assert.match(autoRecall.properties.sessionAllowlist.description, /exact session ids/i);
   assert.match(autoRecall.properties.triggerAllowlist.description, /user-only/i);
+
+  const shadow = autoRecall.properties.shadow;
+  assert.equal(shadow.type, "object");
+  assert.equal(shadow.additionalProperties, false);
+  assert.deepEqual(shadow.default, { enabled: false, sessionAllowlist: [] });
+  assert.equal(shadow.properties.enabled.default, false);
+  assert.deepEqual(shadow.properties.sessionAllowlist.default, []);
+  assert.equal(shadow.properties.sessionAllowlist.uniqueItems, true);
+  assert.match(shadow.properties.sessionAllowlist.description, /exact session ids/i);
 });
 
 test("runtime gate supports camel-case config overrides", () => {

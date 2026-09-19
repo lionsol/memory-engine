@@ -1,7 +1,7 @@
 # Q6 Shadow AutoRecall Contract v1
 
 Date: 2026-09-19
-Status: Q6-A DESIGN CONTRACT FROZEN / SOURCE IMPLEMENTATION NOT STARTED / RUNTIME EXECUTION NOT AUTHORIZED
+Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / RUNTIME EXECUTION NOT AUTHORIZED
 
 ## 1. Decision context
 
@@ -364,17 +364,34 @@ Q6-A = DESIGN CONTRACT FROZEN
 
 ### Q6-B — source-only decision/apply seam
 
-Not authorized by Q6-A.
+Status: `SOURCE IMPLEMENTED / FOCUSED VERIFIED / DEFAULT OFF / NO RUNTIME AUTHORITY`.
 
-Target:
+Implemented source behavior:
 
-- add default-off exact-session shadow config;
-- factor the current path enough to expose one decision envelope;
-- preserve active behavior;
-- add content-free projection;
-- use injected/fake retrieval and canonical dependencies only.
+- `autoRecall.shadow = { enabled:false, sessionAllowlist:[] }` is present in the manifest and effective config;
+- enabled shadow requires `autoRecall.enabled=true`, card-first runtime enabled, and a non-empty exact-session allowlist;
+- malformed, duplicate, unknown-field, empty-scope, non-card-first, or inactive-AutoRecall shadow configuration invalidates effective config and normalizes shadow to disabled;
+- exact-session scope is case-sensitive and cannot widen the existing trusted AutoRecall runtime gate;
+- `memory_engine_q6_shadow_autorecall_decision_v1` projects bounded structural decisions only;
+- the envelope includes the full returned candidate gate decision sequence, while DIRECT_CARD capability/selection is attached only to candidates that actually passed the gate;
+- exact-session shadow reuses the existing candidate-first retrieval, candidate gate and DIRECT_CARD decision once, then returns no `prependContext`;
+- shadow writes no actual `memory_injected` event, does not populate turn-state injected/reinforcement IDs, and a later fabricated `cited_memory_ids` line cannot create reinforcement authority;
+- non-shadow sessions retain the prior active path;
+- a test-only injected DIRECT_CARD boundary permits active/shadow equivalence verification without provider, DB, canonical-store or runtime mutation.
 
-No real provider or live runtime execution is required.
+Source verification:
+
+```text
+Q6-focused config/lifecycle/privacy suite = 60/60 PASS
+static-check = 851 files PASS
+test-integrity = 386 scanned / 0 invalid
+OpenSpec strict = 12/12 PASS
+git diff --check = PASS
+```
+
+An expanded AutoRecall/Card regression excluding the native DIRECT_CARD DB-boundary suite reached `232 PASS / 3 ENVIRONMENT_FAILURE`; the three failures are pre-existing real-SQLite tests in `test/auto-recall.test.js` blocked because the installed `better-sqlite3.node` was built for Node module ABI `137` while the current test process requires ABI `127`. The DIRECT_CARD real-DB boundary suite is blocked by the same environment mismatch. Q6-B does not rebuild native modules or rewrite those tests.
+
+Q6-B performs no real provider call, live runtime/config mutation, DB/LanceDB mutation, deployment, or live user-memory sampling.
 
 ### Q6-C — offline qualification
 

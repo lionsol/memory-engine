@@ -127,6 +127,31 @@
                 "description": "Enable experimental AutoRecall-agent-gated card-first prompt supplement"
               }
             }
+          },
+          "shadow": {
+            "type": "object",
+            "additionalProperties": false,
+            "default": {
+              "enabled": false,
+              "sessionAllowlist": []
+            },
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "default": false,
+                "description": "Enable Q6 AutoRecall decision-only shadow mode for exact allowlisted sessions"
+              },
+              "sessionAllowlist": {
+                "type": "array",
+                "default": [],
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "Exact session IDs that suppress AutoRecall apply/injection while preserving the current decision path"
+              }
+            }
           }
         }
       },

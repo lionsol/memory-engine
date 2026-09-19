@@ -440,6 +440,13 @@ test("effective AutoRecall, mode, and canary changes change the fingerprint", ()
     { autoRecall: { triggerAllowlist: ["manual"] } },
     { autoRecall: { chatTypeAllowlist: ["other"] } },
     { autoRecall: { messageRoleAllowlist: ["assistant"] } },
+    {
+      autoRecall: {
+        enabled: true,
+        cardFirstRuntime: { enabled: true },
+        shadow: { enabled: true, sessionAllowlist: ["q6-shadow-session"] },
+      },
+    },
     { kgFailClosedMode: "full_fail_closed" },
     { kgFailClosedCanary: { enabled: true, agentIds: ["edi"], sessionIds: [] } },
     { recentFailClosedMode: "full_fail_closed" },
@@ -498,6 +505,46 @@ test("Recall Hint runtime canary defaults off and accepts only exact session plu
       vectorExecutionMode: "sequential",
       executionProbe: null,
     });
+  }
+});
+
+test("Q6 AutoRecall shadow config is default-off, exact-session scoped, and card-first only", () => {
+  const defaults = normalized({});
+  assert.deepEqual(defaults.autoRecall.shadow, {
+    enabled: false,
+    sessionAllowlist: [],
+  });
+
+  const configured = normalized({
+    pluginConfig: {
+      autoRecall: {
+        enabled: true,
+        cardFirstRuntime: { enabled: true },
+        shadow: {
+          enabled: true,
+          sessionAllowlist: ["q6-shadow-session"],
+        },
+      },
+    },
+  });
+  assert.deepEqual(configured.autoRecall.shadow, {
+    enabled: true,
+    sessionAllowlist: ["q6-shadow-session"],
+  });
+
+  for (const autoRecall of [
+    { shadow: "enabled" },
+    { shadow: { enabled: "yes", sessionAllowlist: ["q6-shadow-session"] } },
+    { shadow: { enabled: true, sessionAllowlist: [] } },
+    { shadow: { enabled: true, sessionAllowlist: "q6-shadow-session" } },
+    { shadow: { enabled: true, sessionAllowlist: ["q6-shadow-session", "q6-shadow-session"] } },
+    { enabled: true, cardFirstRuntime: { enabled: true }, shadow: { enabled: true, sessionAllowlist: ["q6-shadow-session"], unknown: true } },
+    { cardFirstRuntime: { enabled: true }, shadow: { enabled: true, sessionAllowlist: ["q6-shadow-session"] } },
+    { enabled: true, shadow: { enabled: true, sessionAllowlist: ["q6-shadow-session"] } },
+  ]) {
+    const result = resolveEffectiveHybridRuntimeConfig({ pluginConfig: { autoRecall } });
+    assert.equal(result.valid, false, JSON.stringify(autoRecall));
+    assert.equal(result.autoRecall.shadow.enabled, false, JSON.stringify(result.errors));
   }
 });
 
