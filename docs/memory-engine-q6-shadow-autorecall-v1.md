@@ -424,6 +424,44 @@ The authorized runtime observation did not reach a natural turn. Preflight passe
 
 Repository source `openclaw.plugin.json` at the frozen Q6 source does declare `autoRecall.shadow`, while the host startup validator did not accept it. Read-only follow-up then proved `/home/lionsol/.openclaw/extensions/memory-engine/openclaw.plugin.json` is still the historical pre-Q6 manifest (`346969a5...`) and lacks `shadow`, while the repo manifest is Q6 hash `0ea09bfe...`. The Q6-D finding is therefore a proven **sourcePath/installPath schema split-brain / stale installed-extension manifest**. Existing OpenClaw 2026.7.1-2 audits show startup metadata may flow through `installed_plugin_index`, registry snapshots and discovery. Corrected read-only state-DB inspection using persisted `pluginId` proved `installed_plugin_index.plugins[]` contains `memory-engine` metadata bound to `/home/lionsol/.openclaw/extensions/memory-engine/openclaw.plugin.json` with the historical pre-Q6 manifest hash `346969a5...` and `rootDir` at the installed extension, while the install record itself points `sourcePath` at the Q6 repo. The Q6-D root cause is therefore proven: **sourcePath/installPath schema split-brain with persisted registry metadata pinned to the stale installPath manifest**. No further validator-path attribution is required before remediation design. Runtime observation metrics such as candidate prevalence, `would_inject`, withholding reasons and latency remain unavailable. Final Q6-D result: `docs/memory-engine-q6-shadow-autorecall-real-host-result-20260919.md`.
 
+### Q6-R1 — host plugin metadata publication remediation
+
+Status: `DESIGN FROZEN / SOURCE-ONLY / RUNTIME EXECUTION NOT AUTHORIZED`.
+
+Q6-R1 exists only because Q6-D proved a host publication split-brain: repo source already carries the Q6 manifest, while the installed extension and persisted registry metadata are still pinned to the historical pre-Q6 manifest. The remediation contract is frozen in `docs/smoke-tests/q6-host-plugin-metadata-publication-remediation-stage-card-20260919.md`.
+
+Selected forward mechanism:
+
+```text
+ONE HOST-OWNED FORCE INSTALL FROM CURRENT REPO
+```
+
+The proposed live command is:
+
+```bash
+openclaw plugins install "$REPO" --force
+```
+
+but this Stage Card grants no execution authority. A future transaction must separately bind the committed Stage Card, exact repo/Q6 hashes, current stale installPath/registry baseline, config semantic-equivalence policy, rollback snapshot and rollback procedure.
+
+Q6-R1 explicitly rejects registry-refresh-only repair, manual manifest copy, direct `installed_plugin_index` writes and `doctor --fix`. It authorizes zero shadow activations, zero natural turns and no Core/Engine/LanceDB mutation.
+
+A Q6-R1 PASS would prove only publication/schema convergence:
+
+```text
+repo manifest hash
+=
+installPath manifest hash
+=
+persisted memory-engine manifestHash
+=
+0ea09bfe...
+```
+
+It would not retroactively make Q6-D pass.
+
+After Q6-R1, a new Q6-D2 exact-session real-host shadow observation may be designed, but it would require a separate Stage Card and separate Owner authorization. Q6-E remains not ready until runtime observation evidence exists.
+
 ### Q6-E — product decision
 
 Possible outcomes include:
