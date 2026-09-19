@@ -11,7 +11,7 @@ OPENCLAW="/home/lionsol/.local/bin/openclaw"
 NODE="/home/lionsol/.local/node24/bin/node"
 ENGINE_DB="$HOME/.openclaw/memory/memory-engine/memory-engine.sqlite"
 CANDIDATE="$HOME/.openclaw/backups/memory-engine/releases/q6-shadow-autorecall-4f79a8c-20260919-r1"
-EVIDENCE_DIR="$HOME/.openclaw/backups/memory-engine/qualification-evidence/q6-shadow-autorecall-exact-session-20260919-r1"
+EVIDENCE_DIR="$HOME/.openclaw/backups/memory-engine/qualification-evidence/q6-shadow-autorecall-exact-session-20260919-r2"
 MAX_TURNS=6
 
 : "$Q6_SESSION_ID"
@@ -19,7 +19,7 @@ MAX_TURNS=6
 SESSION_ID="$Q6_SESSION_ID"
 SESSION_KEY="$Q6_SESSION_KEY"
 
-CONFIG_PATH=""
+CONFIG_PATH="$HOME/.openclaw/openclaw.json"
 BASE_SOURCE=""
 BASE_EVENT_ID=""
 PRE_CONFIG="$EVIDENCE_DIR/openclaw-pre.json"
@@ -170,7 +170,6 @@ PACKET_COMMIT="$(git -C "$REPO" log -1 --format=%H -- "$PACKET_REL")"
 [ "$("$NODE" -p 'process.versions.modules')" = "137" ] || { log "STOP node_abi"; exit 1; }
 [ "$SESSION_KEY" != "agent:main:main" ] || { log "STOP default_session"; exit 1; }
 
-CONFIG_PATH="$("$OPENCLAW" config file)"
 [ -f "$CONFIG_PATH" ] || { log "STOP config_path"; exit 1; }
 [ -f "$ENGINE_DB" ] || { log "STOP engine_db"; exit 1; }
 BASE_SOURCE="$(source_path)"

@@ -11,6 +11,9 @@ test("Q6-D execution packet stays one-shot and exact-session bounded", () => {
   assert.match(PACKET, /Q6_SOURCE="4f79a8c78fb68bb92294ea78a755293c8b62cbc4"/);
   assert.match(PACKET, /STAGE_SHA="232215a09768a7d643b2f6bab261ad0129127bbb2cdb78bc318a9ada9f762f8c"/);
   assert.match(PACKET, /MAX_TURNS=6/);
+  assert.match(PACKET, /CONFIG_PATH="\$HOME\/\.openclaw\/openclaw\.json"/);
+  assert.match(PACKET, /q6-shadow-autorecall-exact-session-20260919-r2/);
+  assert.doesNotMatch(PACKET, /config file/);
   assert.match(PACKET, /Q6_SESSION_ID/);
   assert.match(PACKET, /Q6_SESSION_KEY/);
   assert.match(PACKET, /SESSION_KEY.*agent:main:main/);
