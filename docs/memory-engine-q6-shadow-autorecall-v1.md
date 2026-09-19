@@ -1,7 +1,7 @@
 # Q6 Shadow AutoRecall Contract v1
 
 Date: 2026-09-19
-Status: Q6-A DESIGN CONTRACT FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / DEFAULT OFF / Q6-C PASS_WITH_FINDINGS + OFFLINE QUALIFIED / Q6-D STOPPED + CONSUMED / Q6-R1 PASS_WITH_FINDINGS + CLOSED / Q6-D2 STOPPED + CONSUMED / Q6-D3 PASS_WITH_FINDINGS + CLOSED + STABLE-KEY MECHANISM QUALIFIED / Q6-E READY FOR PRODUCT DECISION + NOT STARTED
+Status: Q6 PASS_WITH_FINDINGS + CLOSED + NO NEW PRODUCT INTERVENTION / Q6-A DESIGN FROZEN / Q6-B SOURCE IMPLEMENTED + FOCUSED VERIFIED / Q6-C OFFLINE QUALIFIED + NO POLICY CHANGE / Q6-D STOPPED + CONSUMED / Q6-R1 PASS_WITH_FINDINGS + CLOSED / Q6-D2 STOPPED + CONSUMED / Q6-D3 PASS_WITH_FINDINGS + CLOSED + STABLE-KEY MECHANISM QUALIFIED / Q6-E PASS_WITH_FINDINGS + CLOSED / Q7 NOT STARTED + NO SELECTED CANDIDATE
 
 ## 1. Decision context
 
@@ -482,17 +482,31 @@ D3 source/transaction contract: `docs/smoke-tests/q6-d3-stable-session-key-shado
 
 ### Q6-E — product decision
 
-Possible outcomes include:
+Status: `PASS_WITH_FINDINGS / CLOSED / KEEP CURRENT POLICY / NO NEW PRODUCT INTERVENTION`.
+
+Decision record: `docs/memory-engine-q6-e-product-decision-20260919.md`.
+
+Q6-E selects:
 
 ```text
 KEEP CURRENT CANDIDATE-FIRST POLICY
-TUNE EXISTING PRODUCT-VISIBLE GATE
-CHANGE SHADOW/ACTIVE CONTROL SEMANTICS
-COLLECT BETTER LABELED EVIDENCE
-CLOSE WITH FINDINGS / NO CHANGE
+KEEP CURRENT CARD-FIRST / DIRECT_CARD AUTHORITY
+KEEP topK=3
+
+KEEP D3 SHADOW DIAGNOSTIC INSTALLED DEFAULT-OFF
+
+NO STRUCTURAL GATE RETUNE
+NO DISCLOSURE THRESHOLD RETUNE
+NO LEARNED RECALL POLICY
+NO STATISTICAL LTR
+NO NEW PROVIDER/MODEL
+NO NEW SYNTHETIC HOLDOUT
+NO Q7 CANARY
 ```
 
-Q6 does not automatically escalate to Statistical LTR or a learned recall model.
+The D3 real-host turn is sufficient to qualify the stable-key shadow mechanism, but not to estimate production prevalence, injection precision, false-positive rate, representative latency percentiles or end-to-end answer-quality gain. Its `8574ms` total latency is retained as a non-blocking performance finding, not as authority for retrieval/gate/timeout changes.
+
+Q6 therefore closes `PASS_WITH_FINDINGS / NO NEW PRODUCT INTERVENTION`. Q7 is `NOT STARTED / NO SELECTED CANDIDATE / NOT AUTHORIZED`.
 
 ## 13. Relationship to existing experimental activation
 
