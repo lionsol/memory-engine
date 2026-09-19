@@ -2,9 +2,9 @@
 set -Eeuo pipefail
 
 # Q6-R1 Host Plugin Metadata Publication Remediation
-# OWNER-AUTHORIZED ONE-SHOT PACKET.
-# This authorization is non-reusable once the execution-consumed boundary is crossed.
-EXECUTION_AUTHORIZED=true
+# CONSUMED/CLOSED PACKET. DO NOT REPLAY.
+# Q6-R1 consumed its one-shot authorization and closed PASS_WITH_FINDINGS on 2026-09-19.
+EXECUTION_AUTHORIZED=false
 
 REPO="$HOME/.openclaw/workspace/plugins/memory-engine"
 STAGE_REL="docs/smoke-tests/q6-host-plugin-metadata-publication-remediation-stage-card-20260919.md"

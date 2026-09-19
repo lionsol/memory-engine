@@ -1,8 +1,8 @@
 # Q6-D3 Stable Session-Key Shadow Scope Stage Card — 2026-09-19
 
-> **Status: SOURCE IMPLEMENTED / FOCUSED VERIFIED / RUNTIME EXECUTION NOT AUTHORIZED**
+> **Status: OWNER AUTHORIZED / SOURCE IMPLEMENTED / ONE-SHOT DEPLOYMENT + STABLE-KEY OBSERVATION**
 >
-> Q6-D3 repairs the exact-session identity model exposed by the consumed Q6-D2 transaction. It is source-only at this stage and grants no deployment, Gateway, config, DB, provider, push or tag authority.
+> Owner authorization was granted on 2026-09-19 for exactly one Q6-D3 deployment + stable-session-key real-host observation transaction. It authorizes one host-owned D3 publication, one exact stable-key shadow observation of at most six genuine natural turns, mandatory closeout, and at most one coherent rollback if publication/activation cannot be qualified. It does not authorize Q6-E, Q7, new provider families, memory-data mutation, push, or tag.
 
 ## 1. Decision
 
@@ -268,9 +268,9 @@ These are source identities only. They are not claims about the currently loaded
 
 ## 12. Deployment state
 
-D3 is **not deployed**.
+D3 is **not deployed at authorization time**.
 
-The current installed extension remains the Q6-R1/Q6-D2 runtime until a separately authorized host-owned publication transaction occurs.
+The current installed extension remains the Q6-R1/Q6-D2 runtime. The authorized Q6-D3 transaction may publish D3 exactly once through the host-owned plugin lifecycle before stable-key shadow observation.
 
 Therefore:
 
@@ -280,13 +280,13 @@ repo D3 source != installed extension
 
 is expected after the D3 source commit and must not be misclassified as an accidental split-brain.
 
-A future D3 real-host transaction must explicitly publish the D3 source through a host-owned plugin lifecycle before attempting stable-key shadow observation.
+The authorized D3 transaction must explicitly publish the D3 source through one host-owned `plugins install <repo> --force` lifecycle before attempting stable-key shadow observation. It must snapshot the pre-D3 managed extension first and may use that immutable snapshot for at most one coherent host-owned rollback if publication/activation fails before a usable D3 shadow runtime is reached.
 
 Manual file copy and direct registry writes remain forbidden.
 
-## 13. Future real-host observation shape
+## 13. Authorized real-host observation shape
 
-A future separately authorized D3 live transaction should bind exactly one stable key:
+The authorized D3 live transaction binds exactly one stable key:
 
 ```text
 agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500
@@ -303,9 +303,29 @@ The shadow config should use:
 }
 ```
 
-Before each evidence collection step, the packet should resolve the current runtime session ID associated with that stable key and append any newly observed runtime ID to the bounded correlation set.
+Before each evidence collection step, the packet must resolve the current runtime session ID associated with that stable key and append any newly observed runtime ID to the bounded correlation set.
 
-At most six genuine natural turns remain sufficient.
+At most six genuine natural turns are permitted. The packet itself must not synthesize user traffic.
+
+Transaction bounds:
+
+```text
+MAX_EXECUTIONS=1
+MAX_FORWARD_INSTALLS=1
+MAX_ROLLBACK_INSTALLS=1
+MAX_TURNS=6
+shadow stable keys=1
+provider-family expansion=0
+evaluation-provider calls=0
+manual registry writes=0
+manual installPath file copy=0
+Core/Engine/LanceDB direct mutation=0
+push/tag=0
+```
+
+The execution is consumed only after preflight has proved the current Q6-R1/D2 installed baseline, stable-key binding, config invariants, event baseline and rollback snapshot readiness. After consumption, any STOP/PASS/rollback outcome is non-reusable without new Owner authorization.
+
+If D3 publication succeeds but observation later stops, closeout restores the post-install D3 default-off config and keeps D3 installed. If publication or activation cannot be qualified before `SHADOW_ACTIVE`, the packet may use its single rollback allowance to restore a coherent pre-D3 managed extension and exact pre-transaction config.
 
 ## 14. Authorization boundary
 
@@ -313,23 +333,14 @@ Current status:
 
 ```text
 Q6-D3 =
-SOURCE IMPLEMENTED
-FOCUSED VERIFIED
-RUNTIME EXECUTION NOT AUTHORIZED
+OWNER AUTHORIZED
+SOURCE IMPLEMENTED / FOCUSED VERIFIED
+ONE-SHOT DEPLOYMENT + STABLE-KEY OBSERVATION AUTHORIZED
 ```
 
-Generic continuation does not authorize:
+The authorization applies only to the exact stable key and bounded transaction described above. It becomes non-reusable once the committed packet crosses its explicit execution-consumed boundary.
 
-- plugin install/update;
-- Gateway stop/start;
-- live shadow config;
-- natural-turn observation;
-- Core/Engine/LanceDB mutation;
-- Q6-E;
-- Q7;
-- push/tag.
-
-Any D3 live transaction requires a new explicit Owner authorization after a source-qualified execution packet exists.
+Q6-E and Q7 remain unauthorized. Push/tag remain unauthorized.
 
 ## 15. Product interpretation
 

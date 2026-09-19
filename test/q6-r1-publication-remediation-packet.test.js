@@ -8,9 +8,9 @@ const PACKET_PATH = new URL(
 );
 const PACKET = readFileSync(PACKET_PATH, "utf8");
 
-test("Q6-R1 packet records explicit one-shot Owner authorization without executing it", () => {
-  assert.match(PACKET, /^EXECUTION_AUTHORIZED=true$/m);
-  assert.match(PACKET, /OWNER-AUTHORIZED ONE-SHOT PACKET/);
+test("Q6-R1 packet is permanently hard-disabled after the consumed remediation", () => {
+  assert.match(PACKET, /^EXECUTION_AUTHORIZED=false$/m);
+  assert.match(PACKET, /CONSUMED\/CLOSED PACKET/);
   assert.match(PACKET, /STOP=Q6_R1_RUNTIME_NOT_AUTHORIZED/);
 });
 

@@ -474,11 +474,11 @@ The first authorized invocation stopped preactivation on a malformed embedded `m
 
 ### Q6-D3 — stable session-key shadow scope
 
-Status: `SOURCE IMPLEMENTED / FOCUSED VERIFIED / RUNTIME EXECUTION NOT AUTHORIZED`.
+Status: `OWNER AUTHORIZED / SOURCE IMPLEMENTED / EXECUTION PACKET QUALIFIED / ONE-SHOT DEPLOYMENT + STABLE-KEY OBSERVATION AUTHORIZED`.
 
 D3 keeps the existing `autoRecall.shadow.sessionAllowlist` config shape but extends each exact entry to mean either a runtime session ID or a stable OpenClaw session key. The hook now resolves both identities independently, prefers an exact session-key match for shadow authorization, and still records runtime events under the current runtime session ID. Legacy exact-ID scope remains compatible. The read-only Q6 evidence helper now accepts repeated `--session-id` arguments so one stable-key transaction can aggregate a bounded set of rotated runtime IDs while still treating all other Q6 envelopes as foreign-scope violations.
 
-D3 source contract: `docs/smoke-tests/q6-d3-stable-session-key-shadow-stage-card-20260919.md`. It is not deployed and grants no runtime/config/plugin-install authority. Q6-E remains not ready until useful stable-key real-host shadow evidence exists.
+D3 source/transaction contract: `docs/smoke-tests/q6-d3-stable-session-key-shadow-stage-card-20260919.md`; execution packet: `docs/smoke-tests/q6-d3-stable-session-key-shadow-execution-packet-20260919.sh`. D3 remains not deployed at authorization time. The Owner-authorized packet may perform exactly one host-owned publication from the D3 repo source, activate shadow for the single stable key `agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500`, observe at most six genuine natural turns while re-resolving any runtime session-ID rotation, then restore the D3 default-off config. If publication/activation cannot be qualified before `SHADOW_ACTIVE`, it may perform at most one coherent rollback from the immutable pre-D3 extension snapshot. Q6-E remains not ready until useful stable-key real-host shadow evidence exists.
 
 ### Q6-E — product decision
 
