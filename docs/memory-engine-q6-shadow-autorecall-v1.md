@@ -426,7 +426,7 @@ Repository source `openclaw.plugin.json` at the frozen Q6 source does declare `a
 
 ### Q6-R1 — host plugin metadata publication remediation
 
-Status: `DESIGN FROZEN / SOURCE-ONLY / RUNTIME EXECUTION NOT AUTHORIZED`.
+Status: `DESIGN FROZEN / SOURCE PACKET + ROLLBACK QUALIFIED / RUNTIME EXECUTION NOT AUTHORIZED`.
 
 Q6-R1 exists only because Q6-D proved a host publication split-brain: repo source already carries the Q6 manifest, while the installed extension and persisted registry metadata are still pinned to the historical pre-Q6 manifest. The remediation contract is frozen in `docs/smoke-tests/q6-host-plugin-metadata-publication-remediation-stage-card-20260919.md`.
 
@@ -442,7 +442,7 @@ The proposed live command is:
 openclaw plugins install "$REPO" --force
 ```
 
-but this Stage Card grants no execution authority. A future transaction must separately bind the committed Stage Card, exact repo/Q6 hashes, current stale installPath/registry baseline, config semantic-equivalence policy, rollback snapshot and rollback procedure.
+but this Stage Card grants no execution authority. The source-qualified packet is `docs/smoke-tests/q6-host-plugin-metadata-publication-remediation-execution-packet-20260919.sh`; it is hard-disabled with `EXECUTION_AUTHORIZED=false`, uses `bin/q6-r1-registry-evidence.js` for bounded read-only registry evidence, and binds exact repo/Q6 hashes, the stale installPath/registry baseline, config semantic-equivalence policy, one forward install, one coherent rollback install and zero shadow activation. A future live transaction still requires a separate Owner authorization and source revision that flips the execution gate.
 
 Q6-R1 explicitly rejects registry-refresh-only repair, manual manifest copy, direct `installed_plugin_index` writes and `doctor --fix`. It authorizes zero shadow activations, zero natural turns and no Core/Engine/LanceDB mutation.
 

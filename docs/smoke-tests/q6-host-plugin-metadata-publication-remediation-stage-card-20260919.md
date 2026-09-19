@@ -36,15 +36,28 @@ sha256=0ea09bfea5bb5d1f3532ed22c9e0ae9c1cfe64abd785f00a1458b8481b0b0a27
 autoRecall.shadow=present
 ```
 
-### Installed extension manifest
+### Installed extension pre-Q6 runtime
+
+Read-only follow-up proved the installed extension is still the historical pre-Q6 runtime shape:
 
 ```text
-path=/home/lionsol/.openclaw/extensions/memory-engine/openclaw.plugin.json
+openclaw.plugin.json
 sha256=346969a530ac8b6931bd4ec9d624016ca36ae394d47a79f9058bf037f602a735
-autoRecall.shadow=absent
+
+lib/config/effective-hybrid-runtime-config.js
+sha256=57bd24a41ba6e514549e72c1f5fe745d30cda89c571316c790f23da2d1e2006e
+
+lib/recall/auto-recall-hook-lifecycle.js
+sha256=5f75439ea7acb0f0a03e3092f6f460b5ce46f6b70351b610e5beb551354b3a12
+
+lib/recall/auto-recall-shadow.js
+ABSENT
+
+autoRecall.shadow schema
+ABSENT
 ```
 
-The installed hash exactly matches the historical pre-Q6 manifest from `e40186d...`.
+The installed manifest hash exactly matches the historical pre-Q6 manifest from `e40186d...`.
 
 ### Persisted OpenClaw registry metadata
 
@@ -221,7 +234,7 @@ A future execution packet must prove, before the first mutation:
 
 1. Stage Card commit/SHA and clean repository worktree.
 2. Current repo path and frozen Q6 hashes from Section 3.
-3. Current installed extension manifest is still exactly `346969a5...` and lacks `autoRecall.shadow`.
+3. Current installed extension still exactly matches the frozen pre-Q6 runtime state from Section 2: manifest/config/lifecycle hashes match and `auto-recall-shadow.js` is absent.
 4. Current persisted install record still has repo `sourcePath` and extension `installPath`.
 5. Current persisted plugin metadata still has:
    - `pluginId=memory-engine`;
@@ -230,9 +243,10 @@ A future execution packet must prove, before the first mutation:
 6. Gateway is healthy.
 7. Current config satisfies Section 5 and shadow is absent/off.
 8. Exact pre-config bytes and semantic fingerprint are captured.
-9. A bounded immutable rollback snapshot of the current installed extension can be created under the approved backup root.
-10. No Core/Engine/LanceDB write path is required.
-11. The execution packet has a source-reviewed rollback procedure and passes shell/static tests.
+9. A bounded immutable rollback snapshot of the current installed extension can be created under `$HOME/.openclaw/backups/memory-engine/q6-r1/`.
+10. Static OpenClaw 2026.7.1-2 source review proves local-path `plugins install <path> --force` persists `sourcePath=<path>` and copies to the normal extension `installPath`; `--link` instead sets both sourcePath/installPath to the linked path and cannot be combined with `--force`.
+11. No Core/Engine/LanceDB write path is required.
+12. The execution packet has a source-reviewed rollback procedure and passes shell/static tests.
 
 Any mismatch stops pre-mutation.
 
@@ -269,15 +283,24 @@ CORE_ENGINE_LANCE_MUTATIONS=0
 
 A successful Q6-R1 must prove all of the following.
 
-### Publication parity
+### Publication and runtime parity
 
 ```text
 repo manifest SHA=0ea09bfe...
 installPath manifest SHA=0ea09bfe...
 persisted manifestHash=0ea09bfe...
+
+installPath effective-hybrid-runtime-config.js
+=61ffb77f...
+
+installPath auto-recall-hook-lifecycle.js
+=9baa225f...
+
+installPath auto-recall-shadow.js
+=ee913bea...
 ```
 
-The installed extension manifest must contain the exact Q6 `autoRecall.shadow` schema.
+The installed extension manifest must contain the exact Q6 `autoRecall.shadow` schema, and the three Q6 runtime implementation files must match the frozen repo hashes.
 
 ### Registry identity
 
@@ -321,20 +344,48 @@ A source-only validation fixture may additionally prove that the repaired instal
 
 Rollback is mandatory on any post-mutation failure.
 
-The execution packet must freeze a concrete rollback implementation before runtime authorization. It may not directly edit SQLite.
-
-The rollback target is the pre-Q6-R1 safe host state:
+Static review of OpenClaw 2026.7.1-2 closes the rollback mechanics question:
 
 ```text
-shadow absent/off
-Gateway healthy
-pre-Q6 installPath manifest/registry metadata accepted by the normal config
-sourcePath remains a trusted bounded source
+ordinary local-path install:
+  sourcePath = exact install input path
+  installPath = managed extensions target
+
+--link local-path install:
+  sourcePath = linked input path
+  installPath = linked input path
+  --force + --link = rejected
 ```
 
-A rollback implementation may use the immutable pre-transaction installed-extension snapshot plus host-owned registry refresh/republication only if source review proves that sequence restores a valid plugin record without widening config or runtime behavior.
+Therefore the already-proven split-brain pre-state (`sourcePath=repo` but old bytes/manifest at extension installPath) cannot and should not be reconstructed as an "exact rollback" through the host lifecycle. Recreating it would deliberately restore the defect Q6-R1 exists to remove.
 
-If exact rollback mechanics cannot be source-qualified before execution, Q6-R1 runtime execution must remain unauthorized.
+The rollback target is instead one **coherent safe old runtime**:
+
+```text
+ROLLBACK_SNAPSHOT = immutable copy of the pre-Q6-R1 installed extension
+rollback manifest hash = 346969a5...
+rollback sourcePath = ROLLBACK_SNAPSHOT
+rollback installPath = /home/lionsol/.openclaw/extensions/memory-engine
+persisted manifestHash = 346969a5...
+shadow absent/off
+normal config valid
+Gateway healthy
+```
+
+Concrete rollback implementation:
+
+1. while still pre-forward-install, create one rollback snapshot under `$HOME/.openclaw/backups/memory-engine/q6-r1/<transaction-id>/rollback-extension` using metadata-preserving copy;
+2. prove its `openclaw.plugin.json` hash is exactly `346969a5...` and that it is not the live extension path;
+3. after any forward-install mutation failure, keep Gateway stopped;
+4. run exactly one host-owned `openclaw plugins install "$ROLLBACK_SNAPSHOT" --force`;
+5. verify installPath manifest and persisted plugin manifestHash both return to `346969a5...` and persisted `sourcePath` equals the rollback snapshot;
+6. start Gateway;
+7. verify normal config semantic equivalence, shadow absent/off, Gateway health, version `1.0.0`, and no unexpected product-setting changes;
+8. stop further work and report `ROLLED_BACK`.
+
+No direct SQLite write, manual live-extension copy-back, `--link`, or `doctor --fix` is permitted.
+
+This rollback intentionally restores a coherent safe old runtime, not the defective sourcePath/installPath split-brain.
 
 ## 11. Stop conditions
 
