@@ -462,7 +462,7 @@ It does not retroactively make Q6-D pass. A bounded finding remains: the host-ow
 
 ### Q6-D2 — successor exact-session real-host shadow observation
 
-Status: `DESIGN FROZEN / SOURCE PACKET QUALIFIED / RUNTIME EXECUTION NOT AUTHORIZED`.
+Status: `OWNER AUTHORIZED / SOURCE PACKET QUALIFIED / ONE-SHOT RUNTIME EXECUTION AUTHORIZED`.
 
 Q6-D2 is frozen in `docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` with packet `docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh`.
 
@@ -470,7 +470,7 @@ It does not reinstall the plugin. Preactivation requires the repaired Q6-R1 publ
 
 After preflight, D2 changes only `autoRecall.shadow={enabled:true,sessionAllowlist:[exactSession]}`, stops Gateway, validates that temporary config while Gateway is stopped, then starts the real-host shadow runtime. It permits at most six genuine natural user turns and uses the existing bounded `q6-shadow-runtime-evidence.js` read-only event analyzer. Mandatory closeout restores the exact pre-transaction config bytes and re-proves Gateway health plus repo/installPath/registry Q6 parity.
 
-The source-qualified packet remains hard-disabled with `EXECUTION_AUTHORIZED=false`. Generic continuation does not authorize it. A live D2 transaction requires new explicit Owner authorization and does not inherit Q6-D or Q6-R1 authority.
+Owner authorization now permits exactly one execution through the committed packet. The transaction is frozen to session `d31f1b79-d9cb-476a-8d4e-f70f892b1500` / `agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500`; preflight must re-prove that binding. The authorization is non-reusable after `EXECUTION_COUNT_CONSUMED=1` and does not inherit or grant Q6-E/Q7 authority.
 
 Q6-E remains not ready until useful D2 runtime observation evidence exists.
 

@@ -1,8 +1,8 @@
 # Q6-D2 Exact-Session Real-Host Shadow Observation Stage Card — 2026-09-19
 
-> **Status: DESIGN FROZEN / SOURCE-ONLY / RUNTIME EXECUTION NOT AUTHORIZED**
+> **Status: OWNER AUTHORIZED / ONE-SHOT RUNTIME EXECUTION / SOURCE PACKET QUALIFIED**
 >
-> Q6-D2 is a successor observation stage after Q6-R1 repaired the host plugin publication split-brain. It does not inherit Q6-D or Q6-R1 runtime authority.
+> Owner authorization was granted on 2026-09-19 for exactly one Q6-D2 exact-session real-host shadow observation transaction. The authorization is non-reusable after the execution-consumed boundary and does not authorize Q6-E, Q7, plugin installation, registry repair, retrieval/rerank changes, memory-data mutation, push, or tag.
 
 ## 1. Decision
 
@@ -146,14 +146,16 @@ The exact pre-transaction config bytes are the rollback/closeout authority.
 
 Q6-D2 uses exactly one explicit `agentId=main` session.
 
-The source-only packet does not hard-code a session. A future separately authorized operator invocation must provide:
+The authorized transaction is frozen to exactly this existing non-default `main` explicit session:
 
-```bash
-Q6_D2_SESSION_ID=<exact sessionId>
-Q6_D2_SESSION_KEY=<exact session key>
+```text
+Q6_D2_SESSION_ID=d31f1b79-d9cb-476a-8d4e-f70f892b1500
+Q6_D2_SESSION_KEY=agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500
 ```
 
-Preflight must prove the exact pair exists in:
+Read-only authorization-time inspection proved this exact pair exists. OpenClaw 2026.7.1-2 has no empty-session creation command; creating a new session would require an agent turn and is intentionally avoided.
+
+The packet still receives these values through environment bindings and preflight must re-prove the exact pair exists in:
 
 ```bash
 openclaw sessions --agent main --json
@@ -399,20 +401,14 @@ Current status:
 
 ```text
 Q6-D2 =
-DESIGN FROZEN
-SOURCE-ONLY
-RUNTIME EXECUTION NOT AUTHORIZED
+OWNER AUTHORIZED
+SOURCE PACKET QUALIFIED
+ONE-SHOT RUNTIME EXECUTION AUTHORIZED
 ```
 
-Generic `continue` does not authorize D2 runtime execution.
+The authorization applies only to the exact session binding in Section 6 and only to the committed packet bound to this Stage Card. Once the packet logs `EXECUTION_COUNT_CONSUMED=1`, any retry or successor requires a new Owner authorization.
 
-A future execution requires explicit Owner authorization for:
-
-```text
-Q6-D2 exact-session real-host shadow observation
-```
-
-No authority is inherited from Q6-D or Q6-R1.
+No authority is inherited from Q6-D or Q6-R1, and no authority flows forward to Q6-E or Q7.
 
 ## 17. Roadmap after D2
 

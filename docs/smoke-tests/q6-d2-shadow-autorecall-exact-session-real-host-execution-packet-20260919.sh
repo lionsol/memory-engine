@@ -2,16 +2,16 @@
 set -Eeuo pipefail
 
 # Q6-D2 exact-session real-host shadow observation.
-# Source-qualified only. Runtime execution remains disabled until a separate Owner
-# authorization flips this literal gate in a new committed revision.
-EXECUTION_AUTHORIZED=false
+# OWNER-AUTHORIZED ONE-SHOT PACKET.
+# Authorization is frozen to the exact execution-time session values documented in the Stage Card.
+EXECUTION_AUTHORIZED=true
 
 REPO="$HOME/.openclaw/workspace/plugins/memory-engine"
 STAGE_REL="docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-stage-card-20260919.md"
 STAGE="$REPO/$STAGE_REL"
 PACKET_REL="docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh"
 PACKET="$REPO/$PACKET_REL"
-EXPECTED_STAGE_SHA="dab944078af2d17f9003d4b4c9c27da187aedd9a9590ad9db7f87c3f5d460a55"
+EXPECTED_STAGE_SHA="ac1ced252f80616c2448960c75f6c51b953284693a105ce9c362549c36ee4114"
 
 NODE="$HOME/.local/node24/bin/node"
 OPENCLAW_JS="$HOME/.local/lib/node_modules/openclaw/dist/index.js"
@@ -30,6 +30,8 @@ SHADOW_SHA="ee913beacc1b1ac103283846a82c0e19252240b9faa3e628e4acc21f3173ceef"
 
 MAX_EXECUTIONS=1
 MAX_TURNS=6
+AUTHORIZED_SESSION_ID="d31f1b79-d9cb-476a-8d4e-f70f892b1500"
+AUTHORIZED_SESSION_KEY="agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500"
 
 if [ "$EXECUTION_AUTHORIZED" != "true" ]; then
   echo "STOP=Q6_D2_RUNTIME_NOT_AUTHORIZED"
@@ -277,6 +279,8 @@ done
 [ -d "$INSTALL_PATH" ] || { echo "STOP=INSTALL_PATH_MISSING"; exit 1; }
 [ -n "$SESSION_ID" ] || { echo "STOP=SESSION_ID_MISSING"; exit 1; }
 [ -n "$SESSION_KEY" ] || { echo "STOP=SESSION_KEY_MISSING"; exit 1; }
+[ "$SESSION_ID" = "$AUTHORIZED_SESSION_ID" ] || { echo "STOP=SESSION_ID_NOT_AUTHORIZED"; exit 1; }
+[ "$SESSION_KEY" = "$AUTHORIZED_SESSION_KEY" ] || { echo "STOP=SESSION_KEY_NOT_AUTHORIZED"; exit 1; }
 [ "$SESSION_KEY" != "agent:main:main" ] || { echo "STOP=DEFAULT_SESSION_FORBIDDEN"; exit 1; }
 case "$SESSION_KEY" in
   agent:main:*) ;;

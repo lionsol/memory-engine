@@ -9,16 +9,16 @@ const PACKET_PATH = new URL(
 );
 const PACKET = readFileSync(PACKET_PATH, "utf8");
 
-test("Q6-D2 packet is hard-disabled pending separate runtime authorization", () => {
-  assert.match(PACKET, /^EXECUTION_AUTHORIZED=false$/m);
+test("Q6-D2 packet records explicit one-shot Owner authorization without executing it", () => {
+  assert.match(PACKET, /^EXECUTION_AUTHORIZED=true$/m);
+  assert.match(PACKET, /OWNER-AUTHORIZED ONE-SHOT PACKET/);
   assert.match(PACKET, /STOP=Q6_D2_RUNTIME_NOT_AUTHORIZED/);
 
-  const result = spawnSync("bash", [PACKET_PATH.pathname], {
+  const syntax = spawnSync("bash", ["-n", PACKET_PATH.pathname], {
     encoding: "utf8",
     env: process.env,
   });
-  assert.equal(result.status, 64);
-  assert.match(result.stdout, /STOP=Q6_D2_RUNTIME_NOT_AUTHORIZED/);
+  assert.equal(syntax.status, 0, syntax.stderr || syntax.stdout);
 });
 
 test("Q6-D2 packet binds stage, packet commit, clean worktree and explicit Node24", () => {
@@ -34,6 +34,10 @@ test("Q6-D2 packet binds stage, packet commit, clean worktree and explicit Node2
 test("Q6-D2 packet requires exact main session binding supplied at execution time", () => {
   assert.match(PACKET, /SESSION_ID="\$Q6_D2_SESSION_ID"/);
   assert.match(PACKET, /SESSION_KEY="\$Q6_D2_SESSION_KEY"/);
+  assert.match(PACKET, /AUTHORIZED_SESSION_ID="d31f1b79-d9cb-476a-8d4e-f70f892b1500"/);
+  assert.match(PACKET, /AUTHORIZED_SESSION_KEY="agent:main:explicit:d31f1b79-d9cb-476a-8d4e-f70f892b1500"/);
+  assert.match(PACKET, /SESSION_ID_NOT_AUTHORIZED/);
+  assert.match(PACKET, /SESSION_KEY_NOT_AUTHORIZED/);
   assert.match(PACKET, /DEFAULT_SESSION_FORBIDDEN/);
   assert.match(PACKET, /SESSION_KEY_NOT_MAIN/);
   assert.match(PACKET, /sessions --agent main --json/);
