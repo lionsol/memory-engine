@@ -11,7 +11,7 @@ STAGE_REL="docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-stag
 STAGE="$REPO/$STAGE_REL"
 PACKET_REL="docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh"
 PACKET="$REPO/$PACKET_REL"
-EXPECTED_STAGE_SHA="ac1ced252f80616c2448960c75f6c51b953284693a105ce9c362549c36ee4114"
+EXPECTED_STAGE_SHA="56a18aece3682d80e1456708f3bf96549099446a36bbd4e148cbcc01662b31d5"
 
 NODE="$HOME/.local/node24/bin/node"
 OPENCLAW_JS="$HOME/.local/lib/node_modules/openclaw/dist/index.js"
@@ -166,7 +166,7 @@ registry_q6_ok() {
 }
 
 max_event_id() {
-  "$NODE" -e 'const {DatabaseSync}=require("node:sqlite"); const db=new DatabaseSync(process.argv[1],{readOnly:true}); try{process.stdout.write(String(Number(db.prepare("SELECT COALESCE(MAX(id),0) id FROM memory_events").get().id||0))}finally{db.close()}' "$ENGINE_DB"
+  "$NODE" -e 'const {DatabaseSync}=require("node:sqlite"); const db=new DatabaseSync(process.argv[1],{readOnly:true}); try{process.stdout.write(String(Number(db.prepare("SELECT COALESCE(MAX(id),0) id FROM memory_events").get().id||0)))}finally{db.close()}' "$ENGINE_DB"
 }
 
 collect_evidence() {

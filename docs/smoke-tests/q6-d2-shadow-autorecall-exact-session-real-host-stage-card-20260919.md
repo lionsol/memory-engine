@@ -216,6 +216,20 @@ STOPPED_PREACTIVATION
 execution_count_consumed=0
 ```
 
+### Authorization-time preactivation stop — 2026-09-19 20:36 +08:00
+
+The first authorized packet invocation stopped during `max_event_id()` before `PREFLIGHT_PASS` and before the execution-consumed boundary because the embedded Node expression was missing one closing parenthesis:
+
+```text
+outcome=STOPPED_PREACTIVATION
+execution_count_consumed=0
+turns_sent=0
+shadow activation=0
+runtime/config mutation=0
+```
+
+This is a packet harness defect, not a Q6 runtime result. The existing one-shot Owner authorization remains unconsumed. The repair must execute the exact embedded `max_event_id()` snippet against a temporary SQLite fixture before the packet is rebound.
+
 ## 9. Activation sequence
 
 After all preactivation gates pass:

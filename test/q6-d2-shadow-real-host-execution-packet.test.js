@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 const PACKET_PATH = new URL(
   "../docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh",
@@ -19,6 +22,32 @@ test("Q6-D2 packet records explicit one-shot Owner authorization without executi
     env: process.env,
   });
   assert.equal(syntax.status, 0, syntax.stderr || syntax.stdout);
+});
+
+test("Q6-D2 packet executes its exact max_event_id embedded Node snippet", () => {
+  const match = PACKET.match(/max_event_id\(\) \{\n\s+"\$NODE" -e '([^']+)' "\$ENGINE_DB"\n\}/);
+  assert.ok(match, "embedded max_event_id snippet not found");
+
+  const dir = mkdtempSync(join(tmpdir(), "q6-d2-max-event-"));
+  const dbPath = join(dir, "engine.sqlite");
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.exec("CREATE TABLE memory_events (id INTEGER PRIMARY KEY)");
+    db.exec("INSERT INTO memory_events(id) VALUES (2), (7)");
+  } finally {
+    db.close();
+  }
+
+  try {
+    const result = spawnSync(process.execPath, ["-e", match[1], dbPath], {
+      encoding: "utf8",
+      env: process.env,
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(result.stdout, "7");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("Q6-D2 packet binds stage, packet commit, clean worktree and explicit Node24", () => {
