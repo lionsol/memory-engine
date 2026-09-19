@@ -414,9 +414,9 @@ Q6-C does not authorize Q6-D or any runtime/config/telemetry mutation. Report: `
 
 ### Q6-D — exact-session real-host shadow observation
 
-Status: `OWNER AUTHORIZED / STAGE CARD FROZEN / OPERATOR EXECUTION PENDING`.
+Status: `OWNER AUTHORIZED / STAGE CARD FROZEN / EXECUTION PACKET SOURCE-QUALIFIED / OPERATOR EXECUTION PENDING`.
 
-The bounded transaction is frozen in `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` against Q6 runtime source `4f79a8c78fb68bb92294ea78a755293c8b62cbc4` with `MAX_EXECUTIONS=1`, one exact `main` session, at most six genuine natural turns, transient four-file overlay deployment, exact config restoration, and mandatory runtime rollback to the pre-Q6 source at closeout.
+The bounded transaction is frozen in `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` against Q6 runtime source `4f79a8c78fb68bb92294ea78a755293c8b62cbc4` with `MAX_EXECUTIONS=1`, one exact `main` session, at most six genuine natural turns, transient four-file overlay deployment, exact config restoration, and mandatory runtime rollback to the pre-Q6 source at closeout. The source-qualified operator packet is `docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh`; it uses `bin/q6-shadow-runtime-evidence.js` for read-only bounded post-baseline evidence and deliberately does not manufacture user traffic or invoke memory tools.
 
 Q6-D authorizes bounded content-free Q6 shadow telemetry and existing runtime events needed for trace correlation. It does not authorize prompt injection, reinforcement authority, topK/retrieval changes, a second comparison retrieval, a new provider/model, persistent shadow activation or leaving the Q6 candidate deployed after the transaction.
 
