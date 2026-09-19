@@ -6,11 +6,11 @@ STAGE="$REPO/docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-stage
 PACKET_REL="docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh"
 PACKET="$REPO/$PACKET_REL"
 Q6_SOURCE="4f79a8c78fb68bb92294ea78a755293c8b62cbc4"
-STAGE_SHA="4659f48424a7db670d098ce4b11d5fd1cb5c4b1f281188a1ce997083f77ce3eb"
+STAGE_SHA="a7fc302667f406a2d331884455b3c42e2e9e1e2eedb625cc20ab8bbe6d5e50a4"
 OPENCLAW="/home/lionsol/.local/bin/openclaw"
 NODE="/home/lionsol/.local/node24/bin/node"
 ENGINE_DB="$HOME/.openclaw/memory/memory-engine/memory-engine.sqlite"
-EVIDENCE_DIR="$HOME/.openclaw/backups/memory-engine/qualification-evidence/q6-shadow-autorecall-exact-session-20260919-r3"
+EVIDENCE_DIR="$HOME/.openclaw/backups/memory-engine/qualification-evidence/q6-shadow-autorecall-exact-session-20260919-r4"
 MAX_TURNS=6
 
 : "$Q6_SESSION_ID"
@@ -150,7 +150,15 @@ config_invariants "$CONFIG_PATH" || { log "STOP config_drift"; exit 1; }
 
 "$OPENCLAW" sessions --agent main --json >"$EVIDENCE_DIR/sessions-pre.json"
 chmod 600 "$EVIDENCE_DIR/sessions-pre.json"
-jq -e --arg sid "$SESSION_ID" --arg key "$SESSION_KEY"   'any(.[]?; .sessionId==$sid and .key==$key)' "$EVIDENCE_DIR/sessions-pre.json" >/dev/null ||
+jq -e --arg sid "$SESSION_ID" --arg key "$SESSION_KEY" '
+  (
+    if type == "array" then .
+    elif ((.sessions? | type) == "array") then .sessions
+    else []
+    end
+  )
+  | any(.[]?; (type == "object") and .sessionId == $sid and .key == $key)
+' "$EVIDENCE_DIR/sessions-pre.json" >/dev/null ||
   { log "STOP session_binding"; exit 1; }
 
 cp "$CONFIG_PATH" "$PRE_CONFIG"; chmod 600 "$PRE_CONFIG"

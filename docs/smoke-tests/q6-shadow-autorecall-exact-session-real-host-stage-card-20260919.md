@@ -139,7 +139,7 @@ Any ambiguity or mismatch stops with `STOPPED_PREACTIVATION` and consumes zero e
 
 ### Pre-activation audit on 2026-09-19
 
-Two source-qualified packet attempts stopped before any runtime/config mutation:
+Three source-qualified packet attempts stopped before any runtime/config mutation:
 
 ```text
 17:27:26 +08:00
@@ -151,6 +151,11 @@ mutation = 0
 STOP baseline_hash_drift
 cause = Stage Card expected historical e40186d target hashes, while the observed active sourcePath
         was the repository itself and all four target files already matched the frozen Q6 source hashes
+mutation = 0
+
+17:47:50 +08:00
+STOP session_binding
+cause = packet assumed top-level sessions JSON array; current OpenClaw returns an object envelope containing sessions[]
 mutation = 0
 ```
 
