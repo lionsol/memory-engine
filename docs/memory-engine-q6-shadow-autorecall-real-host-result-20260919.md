@@ -126,9 +126,19 @@ installPath autoRecall.shadow = absent
 
 The installPath hash exactly matches the historical pre-Q6 manifest from `e40186d...`.
 
-Existing OpenClaw 2026.7.1-2 repository audits show that plugin metadata can flow through the host `installed_plugin_index`, registry snapshots, and discovery/runtime-loading paths. The stale installed-extension manifest is now proven. A direct read-only query of `state/openclaw.sqlite` additionally showed `installed_plugin_index.installRecords["memory-engine"]` is current. An initial `plugins_json` parser incorrectly looked for `id`; repository audit confirms persisted plugin records use `pluginId`, so the earlier claim that `memory-engine` plugin metadata was absent is withdrawn. What remains unproven is which metadata path the Gateway config validator actually consumed: the stale `installPath` manifest directly, persisted plugin metadata, registry snapshot/derived discovery state, or another host publication/cache layer.
+Existing OpenClaw 2026.7.1-2 repository audits show that plugin metadata flows through the host `installed_plugin_index`, registry snapshots, and discovery/runtime-loading paths. The stale installed-extension manifest is proven. A corrected direct read-only query of `state/openclaw.sqlite` using the persisted identity field `pluginId` further proved the index contains this exact `memory-engine` plugin metadata:
 
-That validator-path attribution must remain a read-only diagnosis until separately reviewed.
+```text
+pluginId = memory-engine
+manifestPath = /home/lionsol/.openclaw/extensions/memory-engine/openclaw.plugin.json
+manifestHash = 346969a530ac8b6931bd4ec9d624016ca36ae394d47a79f9058bf037f602a735
+rootDir = /home/lionsol/.openclaw/extensions/memory-engine
+origin = global
+enabled = true
+packageVersion = 1.0.0
+```
+
+The same index row separately records `sourcePath=/home/lionsol/.openclaw/workspace/plugins/memory-engine`. This proves the host metadata is split-brain: installation identity points at the current repo source, while persisted plugin/schema metadata is pinned to the pre-Q6 installed extension manifest. That is sufficient to explain the Gateway config validator rejecting `autoRecall.shadow`. Root-cause attribution is closed; the remaining work is remediation design and separately authorized publication/runtime repair.
 
 ## Evidence limitations
 
@@ -153,6 +163,6 @@ Do not replay Q6-D under the consumed authorization. The consumed execution pack
 
 Do not infer a product policy change from this failure.
 
-Before any successor runtime transaction, perform a bounded read-only diagnosis of the host plugin metadata/config-schema publication path and prove which schema OpenClaw will validate for `memory-engine`.
+Before any successor runtime transaction, design and separately authorize a bounded remediation that republishes/synchronizes the installed plugin metadata so the host validates the Q6 manifest rather than the pre-Q6 installPath manifest.
 
 Q6-E remains not ready because the intended runtime-shaped observation evidence was not obtained.
