@@ -460,7 +460,19 @@ persisted memory-engine manifestHash
 
 It does not retroactively make Q6-D pass. A bounded finding remains: the host-owned install lifecycle loaded/registered the plugin and crossed Engine/LanceDB initialization paths, while transaction-level pre/post storage identities were not captured; actual memory-data mutation and zero mutation are therefore both unproven. Final result: `docs/memory-engine-q6-r1-host-plugin-metadata-remediation-result-20260919.md`.
 
-After Q6-R1, a new Q6-D2 exact-session real-host shadow observation may be designed, but it would require a separate Stage Card and separate Owner authorization. Q6-E remains not ready until runtime observation evidence exists.
+### Q6-D2 — successor exact-session real-host shadow observation
+
+Status: `DESIGN FROZEN / SOURCE PACKET QUALIFIED / RUNTIME EXECUTION NOT AUTHORIZED`.
+
+Q6-D2 is frozen in `docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-stage-card-20260919.md` with packet `docs/smoke-tests/q6-d2-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh`.
+
+It does not reinstall the plugin. Preactivation requires the repaired Q6-R1 publication state to remain converged across repo source, managed installPath and persisted registry metadata; the four Q6 runtime hashes must match in both repo and installPath. One exact non-default `main` session is supplied only at execution time through `Q6_D2_SESSION_ID` / `Q6_D2_SESSION_KEY` and must be verified against `openclaw sessions --agent main --json` before execution consumption.
+
+After preflight, D2 changes only `autoRecall.shadow={enabled:true,sessionAllowlist:[exactSession]}`, stops Gateway, validates that temporary config while Gateway is stopped, then starts the real-host shadow runtime. It permits at most six genuine natural user turns and uses the existing bounded `q6-shadow-runtime-evidence.js` read-only event analyzer. Mandatory closeout restores the exact pre-transaction config bytes and re-proves Gateway health plus repo/installPath/registry Q6 parity.
+
+The source-qualified packet remains hard-disabled with `EXECUTION_AUTHORIZED=false`. Generic continuation does not authorize it. A live D2 transaction requires new explicit Owner authorization and does not inherit Q6-D or Q6-R1 authority.
+
+Q6-E remains not ready until useful D2 runtime observation evidence exists.
 
 ### Q6-E — product decision
 
