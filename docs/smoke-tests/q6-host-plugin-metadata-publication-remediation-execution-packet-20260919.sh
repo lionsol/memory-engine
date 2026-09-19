@@ -2,17 +2,16 @@
 set -Eeuo pipefail
 
 # Q6-R1 Host Plugin Metadata Publication Remediation
-# SOURCE-QUALIFIED PACKET ONLY.
-# Live execution remains disabled until a separate Owner authorization flips this
-# literal gate in a new committed revision.
-EXECUTION_AUTHORIZED=false
+# OWNER-AUTHORIZED ONE-SHOT PACKET.
+# This authorization is non-reusable once the execution-consumed boundary is crossed.
+EXECUTION_AUTHORIZED=true
 
 REPO="$HOME/.openclaw/workspace/plugins/memory-engine"
 STAGE_REL="docs/smoke-tests/q6-host-plugin-metadata-publication-remediation-stage-card-20260919.md"
 STAGE="$REPO/$STAGE_REL"
 PACKET_REL="docs/smoke-tests/q6-host-plugin-metadata-publication-remediation-execution-packet-20260919.sh"
 PACKET="$REPO/$PACKET_REL"
-EXPECTED_STAGE_SHA="2805e5bda0f83ef85443272d0e056180c43bec386e468dd94aeba9b938519bec"
+EXPECTED_STAGE_SHA="c8b34dba9e3d2fae9f26c7533010135c08cb27315f386a4866ad0b40b5097fae"
 
 NODE="$HOME/.local/node24/bin/node"
 OPENCLAW_JS="$HOME/.local/lib/node_modules/openclaw/dist/index.js"

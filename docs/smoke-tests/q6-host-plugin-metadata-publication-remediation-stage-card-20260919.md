@@ -1,8 +1,8 @@
 # Q6-R1 Host Plugin Metadata Publication Remediation Stage Card — 2026-09-19
 
-> **Status: DESIGN FROZEN / SOURCE-ONLY / RUNTIME EXECUTION NOT AUTHORIZED**
+> **Status: OWNER AUTHORIZED / ONE-SHOT RUNTIME EXECUTION / SOURCE PACKET + ROLLBACK QUALIFIED**
 >
-> This Stage Card defines a successor remediation after the consumed Q6-D transaction. It does not authorize plugin installation, registry refresh, Gateway stop/start, config mutation, runtime shadow activation, DB mutation, push, or tag.
+> Owner authorization was granted on 2026-09-19 for exactly one Q6-R1 host plugin metadata publication remediation transaction. This authorizes only the bounded install/recovery operations defined by this card and its bound execution packet. It does not authorize Q6-D replay, shadow activation, natural turns, Q6-D2/Q6-E/Q7, memory-data mutation, push, or tag.
 
 ## 1. Decision
 
@@ -230,7 +230,7 @@ Direct writes to `installed_plugin_index` are forbidden.
 
 ## 7. Preflight contract
 
-A future execution packet must prove, before the first mutation:
+The authorized execution packet must prove, before the first mutation:
 
 1. Stage Card commit/SHA and clean repository worktree.
 2. Current repo path and frozen Q6 hashes from Section 3.
@@ -252,9 +252,9 @@ Any mismatch stops pre-mutation.
 
 ## 8. Proposed one-shot runtime transaction
 
-Execution is **not authorized by this Stage Card**.
+Execution is **authorized exactly once** under the Owner authorization recorded above, and only through the committed execution packet bound to this Stage Card.
 
-If later separately authorized, the transaction may perform at most:
+The transaction may perform at most:
 
 1. capture bounded pre-state evidence;
 2. create one immutable rollback snapshot of the current installed extension;
@@ -446,7 +446,7 @@ It does **not** qualify the Q6 real-host shadow mechanism.
 
 ## 14. Roadmap after Q6-R1
 
-If Q6-R1 later passes under separate authorization:
+If the authorized Q6-R1 transaction passes:
 
 ```text
 Q6-D remains consumed and closed.
@@ -470,9 +470,9 @@ No successor runtime stage inherits Q6-R1 authority.
 
 ```text
 Q6-R1 =
-DESIGN FROZEN
-SOURCE-ONLY
-RUNTIME EXECUTION NOT AUTHORIZED
+OWNER AUTHORIZED
+SOURCE PACKET + ROLLBACK QUALIFIED
+ONE-SHOT RUNTIME EXECUTION AUTHORIZED
 
 selected forward mechanism =
 ONE HOST-OWNED FORCE INSTALL FROM CURRENT REPO

@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 
 const PACKET_PATH = new URL(
   "../docs/smoke-tests/q6-host-plugin-metadata-publication-remediation-execution-packet-20260919.sh",
@@ -9,16 +8,10 @@ const PACKET_PATH = new URL(
 );
 const PACKET = readFileSync(PACKET_PATH, "utf8");
 
-test("Q6-R1 packet is hard-disabled until a separate source authorization revision", () => {
-  assert.match(PACKET, /^EXECUTION_AUTHORIZED=false$/m);
+test("Q6-R1 packet records explicit one-shot Owner authorization without executing it", () => {
+  assert.match(PACKET, /^EXECUTION_AUTHORIZED=true$/m);
+  assert.match(PACKET, /OWNER-AUTHORIZED ONE-SHOT PACKET/);
   assert.match(PACKET, /STOP=Q6_R1_RUNTIME_NOT_AUTHORIZED/);
-
-  const result = spawnSync("bash", [PACKET_PATH.pathname], {
-    encoding: "utf8",
-    env: process.env,
-  });
-  assert.equal(result.status, 64);
-  assert.match(result.stdout, /STOP=Q6_R1_RUNTIME_NOT_AUTHORIZED/);
 });
 
 test("Q6-R1 packet binds Node24, stage identity, one forward install and one rollback install", () => {
