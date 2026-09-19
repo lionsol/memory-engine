@@ -43,6 +43,7 @@
     "benchmark:q5:fixed-pool-score-capture": "node bin/run-q5-fixed-pool-rerank-score-capture-v1.mjs",
     "benchmark:q5:margin-constrained-selection": "node bin/run-q5-margin-constrained-selection-v1.mjs",
     "benchmark:q5:b0-evidence-entry": "node bin/run-q5-b0-real-fixed-pool-evidence-entry-v1.mjs",
+    "benchmark:q5:b1-score-capture-manifest": "node bin/run-q5-b1-score-capture-manifest-v1.mjs",
     "benchmark:aml:serve": "node bin/serve-aml-benchmark-v1.js",
     "smoke:quality-baseline": "node bin/run-memory-quality-baseline-smoke.js",
     "smoke:smart-add-duplicates": "node bin/run-smart-add-duplicate-baseline-smoke.js",
