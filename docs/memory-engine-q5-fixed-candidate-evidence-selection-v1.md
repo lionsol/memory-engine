@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 INTERVENTION COMPARISON SOURCE QUALIFIED / Q5-A3 SELECTION-SIGNAL CONTRACT SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / POST-A4 CAPTURE REPAIR SOURCE-QUALIFIED / Q5-A5 REAL SCORE CAPTURE PASS / 80 OF 80 PROVIDER CALLS / BOUNDED SCORE PACKET FROZEN / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 SOURCE QUALIFIED + NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN CONSTRAINTS SOURCE QUALIFIED + NO-GO / Q5-B REAL FIXED-POOL EVIDENCE ENTRY DESIGN / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -943,5 +943,146 @@ REAL SCORE PACKET = AVAILABLE
 MARGIN-CONSTRAINED FIXED-POOL SELECTION = NOT YET EVALUATED
 STATISTICAL LTR = NOT SELECTED
 NEW PROVIDER EXECUTION = NOT AUTHORIZED
+RUNTIME = UNCHANGED
+```
+
+
+## 17. Q5-A6 margin-constrained fixed-pool selection
+
+Q5-A6 uses only the frozen Q4-derived fixture and the frozen A5 real-score packet. It performs no provider execution and no model training.
+
+Qualified source:
+
+```text
+70d2e1f2d50fb41cc904a2d871f6e758c67caf72
+```
+
+Clean-source result:
+
+```text
+status = PASS
+mode = Q5_A6_MARGIN_CONSTRAINED_FIXED_POOL_SELECTION
+worktree_clean = true
+
+fixture_sha256 =
+077b02f16c7bd463eb5f5120930473f653bf5ae37e1a16cdb377e88fd3a6b405
+
+score_packet_sha256 =
+a148f6f2c5d378442714c8ba3ce6a853e4f895e0d37385f9e075a57f523b8257
+
+result_sha256 =
+b19b49d961205b937a4d87e8c45b1ad79a3c50e23f83eb5dc765e99b81063ea9
+
+provider_requests = 0
+model_training_runs = 0
+```
+
+A6 evaluates two monotonic individual-relevance constraints over the same bounded complementarity proposal used in A2:
+
+```text
+counterpart_to_displaced_ratio
+counterpart_minus_displaced_score
+```
+
+Threshold selection is development-only. Q4-C1b development chooses among thresholds with zero paired Recall-any regression, then maximizes paired Recall-all improvements, minimizes Recall-all regressions, and finally chooses the strictest threshold. C2 outcomes do not participate in threshold selection.
+
+### Development-selected ratio constraint
+
+```text
+counterpart / displaced score >=
+0.9789796214932476
+
+C1b development:
+applied = 3 / 6 proposals
+Recall-any = 0 improved / 0 regressed / 6 unchanged
+Recall-all = 3 improved / 0 regressed / 3 unchanged
+
+C2 at frozen development threshold:
+applied = 0 / 16 proposals
+Recall-any = 0 improved / 0 regressed / 16 unchanged
+Recall-all = 0 improved / 0 regressed / 16 unchanged
+```
+
+### Development-selected additive-margin constraint
+
+```text
+counterpart_score - displaced_score >=
+-0.020735740661621094
+
+C1b development:
+applied = 3 / 6 proposals
+Recall-any = 0 improved / 0 regressed / 6 unchanged
+Recall-all = 3 improved / 0 regressed / 3 unchanged
+
+C2 at frozen development threshold:
+applied = 0 / 16 proposals
+Recall-any = 0 improved / 0 regressed / 16 unchanged
+Recall-all = 0 improved / 0 regressed / 16 unchanged
+```
+
+For both scalar constraint families, an exhaustive threshold sweep over the frozen C2 proposal values finds:
+
+```text
+exists threshold with:
+  C2 Recall-any regressions = 0
+  and C2 Recall-all improvements > 0
+
+result = false
+```
+
+This is the key A6 finding. The real reranker score packet shows that complementary evidence can receive a much lower single-candidate relevance score than the candidate it would need to replace. The development improvements have counterpart/displaced score ratios near `0.979–0.990`, while several C2 completeness improvements require counterparts with ratios far below that range. Conversely, relaxing the scalar constraint enough to admit those C2 counterparts also admits cases that lose the only relevant selected item and regress Recall-any.
+
+A6 therefore does **not** freeze a product threshold. It also does not introduce a post-hoc arm-specific or C2-informed threshold after observing the holdout outcomes.
+
+Historical adjudication:
+
+```text
+Q5-A6 SCALAR MARGIN CONSTRAINTS
+= SOURCE QUALIFIED
+= DEVELOPMENT GAIN REPRODUCED
+= C2 TRANSFER = NONE AT DEVELOPMENT-SELECTED THRESHOLDS
+= NO MONOTONIC RATIO/MARGIN THRESHOLD WITH C2 SAFE GAIN
+= PRODUCT RULE NO-GO
+```
+
+Interpretation is bounded to the Q4 synthetic fixed-pool evidence. A6 does not prove that all set-aware selectors fail. It proves that **a monotonic guard built only from the individual reranker score of the counterpart versus the displaced item is insufficient on this frozen evidence**.
+
+## 18. Q5-B real fixed-pool evidence entry design
+
+Q5 has now exhausted the useful conclusions available from repeatedly tuning small heuristics on the 40-case Q4 synthetic fixture:
+
+- A1 showed the failures are selection failures rather than top3 capacity or projection loss;
+- A2 showed complementarity can improve Recall-all but can regress Recall-any;
+- A5 supplied the missing real per-candidate rerank scores;
+- A6 showed simple scalar score margins cannot resolve that tradeoff without losing C2 gain.
+
+The next stage should therefore **not** add another heuristic to the same synthetic cases and should not jump directly to Statistical LTR.
+
+Q5-B is an evidence-entry stage for a broader fixed-pool selection corpus. Before selecting a pair/set-aware algorithm, Q5-B should freeze a larger labeled population with:
+
+- fixed candidate pools produced independently of evaluator labels;
+- complete product-visible pre-rerank order and canonical projection identity;
+- complete per-candidate rerank score/order using a frozen model/profile;
+- final served top3;
+- evaluator-only required-evidence mapping kept outside the product signal packet;
+- explicit case-level split/isolation if any fitting or threshold selection will occur;
+- enough non-synthetic or independently sourced cases to estimate whether redundancy/complementarity failures are material outside the Q4 synthetic families.
+
+Existing LongMemEval/LoCoMo evidence may be used as controlled benchmark evidence where its provenance and gold boundaries satisfy the contract, but it must not be mislabeled as representative real-user traffic. Live/user-memory sampling is not authorized by this design.
+
+Q5-B should answer two questions before any model-family decision:
+
+1. Does the `RANK_SELECTION_ERROR` versus `REDUNDANT_SELECTION` split persist at materially larger scale?
+2. Are product-visible pair/set signals sufficient to improve Recall-all without measurable Recall-any regression, or is supervised learning/set-aware scoring justified by the data?
+
+Current boundary:
+
+```text
+Q5-A6 = CLOSED / SCALAR MARGIN NO-GO
+Q5-B = REAL FIXED-POOL EVIDENCE ENTRY DESIGN
+NEW PROVIDER EXECUTION = NOT AUTHORIZED
+MODEL TRAINING = NOT AUTHORIZED
+STATISTICAL LTR = NOT SELECTED
+LIVE USER/MEMORY SAMPLING = NOT AUTHORIZED
 RUNTIME = UNCHANGED
 ```
