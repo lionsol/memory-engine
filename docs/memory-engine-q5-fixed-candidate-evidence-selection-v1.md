@@ -1,6 +1,6 @@
 # memory-engine Q5 — Fixed-Candidate Evidence Selection Attribution v1
 
-Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 SOURCE QUALIFIED + NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN CONSTRAINTS SOURCE QUALIFIED + NO-GO / Q5-B REAL FIXED-POOL EVIDENCE ENTRY DESIGN / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
+Status: `Q5-A1 SOURCE QUALIFIED / Q5-A2 NO SIMPLE INTERVENTION SELECTED / Q5-A3 SOURCE QUALIFIED / Q5-A4 STOPPED + CONSUMED / Q5-A5 REAL SCORE CAPTURE PASS / Q5-A6 SCALAR MARGIN NO-GO / Q5-B0 LOCO MO FIXED-POOL EVIDENCE ENTRY SOURCE QUALIFIED / Q5-B1 512-CASE SCORE-CAPTURE POPULATION FROZEN / Q5-B2 PROVIDER EXECUTION NOT AUTHORIZED / FIXED TOPK=3 / STATISTICAL LTR NOT SELECTED / NO MODEL TRAINING AUTHORIZED`
 
 ## 1. Purpose
 
@@ -1081,6 +1081,214 @@ Current boundary:
 Q5-A6 = CLOSED / SCALAR MARGIN NO-GO
 Q5-B = REAL FIXED-POOL EVIDENCE ENTRY DESIGN
 NEW PROVIDER EXECUTION = NOT AUTHORIZED
+MODEL TRAINING = NOT AUTHORIZED
+STATISTICAL LTR = NOT SELECTED
+LIVE USER/MEMORY SAMPLING = NOT AUTHORIZED
+RUNTIME = UNCHANGED
+```
+
+
+## 19. Q5-B0 LoCoMo fixed-pool evidence entry
+
+Q5-B0 imports the preserved 1,970-case LoCoMo frozen candidate population without rerunning retrieval and without any provider call.
+
+Qualified source:
+
+```text
+910afe16df59a4d77125384afe6ad2298947298c
+```
+
+Clean-source result:
+
+```text
+status = PASS
+mode = Q5_B0_REAL_FIXED_POOL_EVIDENCE_ENTRY
+worktree_clean = true
+provider_requests = 0
+model_training_runs = 0
+
+manifest_sha256 =
+f9262cd548c8a145da32da20f46a53872cab0310661d5b3a3055f5925ca9afe0
+```
+
+Frozen repository fixture:
+
+```text
+test/fixtures/q5-b0-real-fixed-pool-evidence-entry-v1.json
+
+pretty-file sha256 =
+c26f9a2feb69296f0cf6bcd48ae2c035abaf55550c153fe6a2597f314042fb05
+```
+
+The source material is bound to the historical frozen LoCoMo candidate artifacts:
+
+```text
+benchmark = LoCoMo
+source_profile = q3_locomo_chunk_fts_only_v1
+candidate_generation = frozen_fts_only_not_production_hybrid
+production_equivalent_candidate_generation = false
+candidateDepth = 20
+topK = 3
+
+candidate_manifest_sha256 =
+47c7d5f601e5a7ac11efc26e5ac7a3f0b0b7b9082875377768b965e6a5dba789
+
+overlay_sha256 =
+608c7da6fb91e818628dea29669cd247c6c11666239c38f30dfa776af91a6567
+
+control_score_sha256 =
+4823571187ed8900ec3a089cc3a63edfdde1f61357cf6ff1fafdba8c71cb3f28
+```
+
+This boundary is important: B0 is a larger controlled fixed-pool benchmark, **not** evidence that the historical FTS-only candidate distribution is production-equivalent to the current hybrid/semantic product path.
+
+### Sample-level split
+
+Q5-B0 prevents conversation-level leakage by assigning whole LoCoMo `sample_id` groups rather than individual QA cases.
+
+The 10 samples are deterministically split by SHA-256 into `6/2/2` sample groups:
+
+```text
+development:
+6 samples / 1,156 cases
+
+validation:
+2 samples / 386 cases
+
+final_evaluation:
+2 samples / 428 cases
+```
+
+No sample crosses a split.
+
+The final split is a benchmark final partition, not a fully blinded external test: B0 itself records diagnostic labels for governance. Any later threshold/model selection must therefore avoid using final outcomes until a one-shot evaluation stage and must not describe this partition as an untouched external holdout.
+
+### Larger selection-failure population
+
+Across all 1,970 cases:
+
+```text
+protect = 888
+recoverable_rank_miss = 433
+candidate_miss = 550
+top3_budget_infeasible = 99
+```
+
+`recoverable_rank_miss` has the Q5-relevant structure:
+
+```text
+control Recall-all@3 = 0
+gold evidence count <= 3
+gold complete in top20 = true
+```
+
+so the fixed pool contains sufficient evidence and top3 has enough slots, yet the control top3 is incomplete.
+
+By split:
+
+```text
+development recoverable_rank_miss = 257
+validation recoverable_rank_miss = 90
+final_evaluation recoverable_rank_miss = 86
+```
+
+B0 therefore expands the observable selection-failure population from Q4's small synthetic set to hundreds of benchmark-derived cases, while retaining the explicit caveat that candidate generation is historical FTS-only.
+
+The frozen B0 manifest persists no raw query, no raw candidate text and no evidence IDs. It stores only bounded identities/hashes plus gold-derived aggregate classification required for offline population governance. `egress_decision=UNKNOWN`; B0 grants no provider authority.
+
+## 20. Q5-B1 bounded score-capture population
+
+Q5-B1 freezes a bounded population for a future Qwen3 score capture. It does not execute the provider.
+
+Qualified source:
+
+```text
+933874cf934085be08d47e1a54283eb7c3f4e7d2
+```
+
+Clean-source result:
+
+```text
+status = PASS
+mode = Q5_B1_SCORE_CAPTURE_MANIFEST
+worktree_clean = true
+provider_requests = 0
+model_training_runs = 0
+
+manifest_sha256 =
+a4e3cadb8af68f2ec6a3016e42757a0025f6b1e81edf841aafff099a64d43d77
+```
+
+Frozen repository fixture:
+
+```text
+test/fixtures/q5-b1-score-capture-manifest-v1.json
+
+pretty-file sha256 =
+3bbb77c2d12e0f76cbffca650dcc5eb78dc630a59d74bd2822441ad8f316afa2
+```
+
+The capture population is:
+
+```text
+development = 256
+  128 recoverable_rank_miss
+  128 protect
+
+validation = 128
+  64 recoverable_rank_miss
+  64 protect
+
+final_evaluation = 128
+  unconditional deterministic hash sample
+
+TOTAL = 512 cases
+```
+
+Development and validation deliberately balance recoverable selection failures against protection cases. Candidate-miss and top3-budget-infeasible cases are excluded from these design populations because reranking cannot repair missing candidates or an insufficient serving budget.
+
+Final selection is different: the 128 final cases are sampled by case-id hash without using diagnostic stratum, category, gold count or gold completeness. This prevents B1's final-case selection itself from being outcome-conditioned. The final partition remains `ONE_SHOT_BENCHMARK_FINAL / NOT_A_FULLY_BLINDED_EXTERNAL_TEST` because B0 diagnostic metadata already exists.
+
+The B1 capture manifest intentionally removes all gold-derived fields from each provider-facing row. It includes only:
+
+```text
+case_id
+sample_id
+split
+selection_reason
+query_sha256
+candidate_count
+ordered_candidate_ids_sha256
+canonical_texts_sha256
+control_top3_sha256
+```
+
+It contains no raw query, candidate text, evidence IDs, diagnostic stratum, category, gold count or gold-completeness flag.
+
+Future score-capture binding is frozen to:
+
+```text
+provider = siliconflow
+model = Qwen/Qwen3-Reranker-0.6B
+revision = null
+candidateDepth <= 20
+topK = 3
+```
+
+### Current Q5-B boundary
+
+A future Q5-B2 transaction would need to reload the already frozen LoCoMo material by B1 case ID, verify the B1 hashes, and capture complete Qwen3 per-candidate score/order signals for exactly 512 cases. It would not require embedding, candidate generation, Recall Hint production or model training.
+
+However, it would make real provider calls and is **not authorized** by B0/B1 source qualification.
+
+Current state:
+
+```text
+Q5-B0 = SOURCE QUALIFIED / 1,970 CASE EVIDENCE CORPUS FROZEN
+Q5-B1 = SOURCE QUALIFIED / 512 CASE CAPTURE POPULATION FROZEN
+Q5-B2 PROVIDER EXECUTION = NOT AUTHORIZED
+
+NEW PROVIDER CALLS = 0
 MODEL TRAINING = NOT AUTHORIZED
 STATISTICAL LTR = NOT SELECTED
 LIVE USER/MEMORY SAMPLING = NOT AUTHORIZED
