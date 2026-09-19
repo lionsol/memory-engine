@@ -6,11 +6,11 @@ STAGE="$REPO/docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-stage
 PACKET_REL="docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh"
 PACKET="$REPO/$PACKET_REL"
 Q6_SOURCE="4f79a8c78fb68bb92294ea78a755293c8b62cbc4"
-STAGE_SHA="a7fc302667f406a2d331884455b3c42e2e9e1e2eedb625cc20ab8bbe6d5e50a4"
+STAGE_SHA="7db42fe75f7ec79d21acd201a5296369e0764fb6a547d97d072b6294f9a3e2bd"
 OPENCLAW="/home/lionsol/.local/bin/openclaw"
 NODE="/home/lionsol/.local/node24/bin/node"
 ENGINE_DB="$HOME/.openclaw/memory/memory-engine/memory-engine.sqlite"
-EVIDENCE_DIR="$HOME/.openclaw/backups/memory-engine/qualification-evidence/q6-shadow-autorecall-exact-session-20260919-r4"
+EVIDENCE_DIR="$HOME/.openclaw/backups/memory-engine/qualification-evidence/q6-shadow-autorecall-exact-session-20260919-r5"
 MAX_TURNS=6
 
 : "$Q6_SESSION_ID"
@@ -87,7 +87,7 @@ config_invariants() {
 max_event_id() {
   "$NODE" -e 'const {DatabaseSync}=require("node:sqlite");
     const db=new DatabaseSync(process.argv[1],{readOnly:true});
-    try{process.stdout.write(String(Number(db.prepare("SELECT COALESCE(MAX(id),0) id FROM memory_events").get().id||0))}finally{db.close()}' "$ENGINE_DB"
+    try{process.stdout.write(String(Number(db.prepare("SELECT COALESCE(MAX(id),0) id FROM memory_events").get().id||0)))}finally{db.close()}' "$ENGINE_DB"
 }
 
 evidence() {

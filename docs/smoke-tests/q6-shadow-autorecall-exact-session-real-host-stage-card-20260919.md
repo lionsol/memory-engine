@@ -139,7 +139,7 @@ Any ambiguity or mismatch stops with `STOPPED_PREACTIVATION` and consumes zero e
 
 ### Pre-activation audit on 2026-09-19
 
-Three source-qualified packet attempts stopped before any runtime/config mutation:
+Four source-qualified packet attempts stopped before any runtime/config mutation:
 
 ```text
 17:27:26 +08:00
@@ -156,6 +156,11 @@ mutation = 0
 17:47:50 +08:00
 STOP session_binding
 cause = packet assumed top-level sessions JSON array; current OpenClaw returns an object envelope containing sessions[]
+mutation = 0
+
+17:54:11 +08:00
+STOP during BASE_EVENT_ID preflight
+cause = packet max_event_id() embedded Node snippet had a missing closing parenthesis
 mutation = 0
 ```
 

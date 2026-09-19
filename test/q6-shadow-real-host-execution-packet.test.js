@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
 
 const PACKET = readFileSync(
   new URL("../docs/smoke-tests/q6-shadow-autorecall-exact-session-real-host-execution-packet-20260919.sh", import.meta.url),
@@ -12,7 +16,7 @@ test("Q6-D execution packet stays one-shot and exact-session bounded", () => {
   assert.match(PACKET, /STAGE_SHA="[a-f0-9]{64}"/);
   assert.match(PACKET, /MAX_TURNS=6/);
   assert.match(PACKET, /CONFIG_PATH="\$HOME\/\.openclaw\/openclaw\.json"/);
-  assert.match(PACKET, /q6-shadow-autorecall-exact-session-20260919-r4/);
+  assert.match(PACKET, /q6-shadow-autorecall-exact-session-20260919-r5/);
   assert.doesNotMatch(PACKET, /config file/);
   assert.match(PACKET, /Q6_SESSION_ID/);
   assert.match(PACKET, /Q6_SESSION_KEY/);
@@ -22,6 +26,33 @@ test("Q6-D execution packet stays one-shot and exact-session bounded", () => {
   assert.match(PACKET, /\.sessionId == \$sid and \.key == \$key/);
   assert.match(PACKET, /autoRecall\.topK == 3/);
   assert.match(PACKET, /cardFirstRuntime\.enabled == true/);
+});
+
+test("Q6-D packet max_event_id node snippet executes against readonly SQLite", () => {
+  const match = PACKET.match(
+    /max_event_id\(\) \{\n  "\$NODE" -e '([\s\S]*?)' "\$ENGINE_DB"\n\}/,
+  );
+  assert.ok(match, "max_event_id node snippet must be extractable");
+
+  const dir = mkdtempSync(join(tmpdir(), "q6-max-event-id-"));
+  const dbPath = join(dir, "engine.sqlite");
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.exec("CREATE TABLE memory_events (id INTEGER PRIMARY KEY)");
+    db.exec("INSERT INTO memory_events (id) VALUES (2), (7), (5)");
+  } finally {
+    db.close();
+  }
+
+  try {
+    const result = spawnSync(process.execPath, ["-e", match[1], dbPath], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "7");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("Q6-D packet binds the already-active repo Q6 runtime and performs no install", () => {
