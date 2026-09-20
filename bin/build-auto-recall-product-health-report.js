@@ -24,6 +24,7 @@ function parseArgs(argv = []) {
     qualityReview: null,
     thresholds: null,
     checkedAt: undefined,
+    windowStart: undefined,
     out: null,
     pretty: false,
     help: false,
@@ -37,6 +38,7 @@ function parseArgs(argv = []) {
     else if (arg === "--quality-review") { options.qualityReview = readValue(argv, index, arg); index += 1; }
     else if (arg === "--thresholds") { options.thresholds = readValue(argv, index, arg); index += 1; }
     else if (arg === "--checked-at") { options.checkedAt = readValue(argv, index, arg); index += 1; }
+    else if (arg === "--window-start") { options.windowStart = readValue(argv, index, arg); index += 1; }
     else if (arg === "--out") { options.out = readValue(argv, index, arg); index += 1; }
     else throw new Error(`unknown argument: ${arg}`);
   }
@@ -75,7 +77,14 @@ function loadProductEventsFromDb(dbPath) {
 }
 
 function usage() {
-  return `Usage:\n  node bin/build-auto-recall-product-health-report.js\n    (--db <engine.sqlite> | --events <events.json|events.jsonl>)\n    [--quality-review <review.json>] [--thresholds <thresholds.json>]\n    [--checked-at <canonical-UTC-ISO>] [--out <report.json>] [--pretty]\n\nThe command is read-only. Missing, stale, or undersized quality review evidence returns status=not_evaluated rather than healthy.`;
+  return `Usage:
+  node bin/build-auto-recall-product-health-report.js
+    (--db <engine.sqlite> | --events <events.json|events.jsonl>)
+    [--quality-review <review.json>] [--thresholds <thresholds.json>]
+    [--checked-at <canonical-UTC-ISO>] [--window-start <canonical-UTC-ISO>]
+    [--out <report.json>] [--pretty]
+
+The command is read-only. Missing, stale, or undersized quality review evidence returns status=not_evaluated rather than healthy.`;
 }
 
 function exitCode(status) {
@@ -95,6 +104,7 @@ async function buildAutoRecallProductHealthCli(argv = process.argv.slice(2)) {
     qualityReview: options.qualityReview ? loadJson(options.qualityReview, "quality review") : undefined,
     thresholds: options.thresholds ? loadJson(options.thresholds, "product health thresholds") : undefined,
     checkedAt: options.checkedAt,
+    windowStart: options.windowStart,
   });
   const output = `${JSON.stringify(report, null, options.pretty ? 2 : 0)}\n`;
   if (options.out) writeFileSync(options.out, output, "utf8");

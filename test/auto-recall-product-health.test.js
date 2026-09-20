@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { buildAutoRecallProductHealthReport } from "../lib/recall/hybrid/auto-recall-product-health.js";
+
+const require = createRequire(import.meta.url);
+const { buildAutoRecallProductHealthCli, parseArgs } = require("../bin/build-auto-recall-product-health-report.js");
 
 const CHECKED_AT = "2026-07-20T02:00:00.000Z";
 
@@ -51,6 +58,17 @@ function healthyEvents(overrides = {}) {
     }),
     row("recall_completed", { latency_ms: overrides.latency_ms ?? 100, metadata_json: {} }),
   ];
+}
+
+function aggregateDebug(traceId, overrides = {}) {
+  return row("auto_recall_debug", {
+    trace_id: traceId,
+    metadata_json: {
+      gate_decisions: [],
+      rejected_candidates: [],
+      ...overrides,
+    },
+  });
 }
 
 test("product health is healthy only with complete telemetry and fresh quality review", () => {
@@ -182,4 +200,258 @@ test("incomplete trace prevents product health evaluation", () => {
   assert.equal(report.status, "not_evaluated");
   assert.ok(report.blockers.includes("incomplete_auto_recall_trace_present"));
   assert.ok(report.blockers.includes("no_completed_auto_recall_trace"));
+});
+
+test("aggregate gate decisions alone authorize a matching injection", () => {
+  const events = [
+    row("recall_started", { trace_id: "trace-aggregate" }),
+    aggregateDebug("trace-aggregate", {
+      vector_ms: 12,
+      gate_decisions: [{
+        id: "memory-1",
+        injected: true,
+        allowed: true,
+        rejection_reason: null,
+        rejected_reason: null,
+        reinforcement_allowed: true,
+        deny_reasons: [],
+      }],
+    }),
+    row("memory_injected", { trace_id: "trace-aggregate", memory_id: "memory-1" }),
+    row("recall_completed", { trace_id: "trace-aggregate", latency_ms: 100, metadata_json: {} }),
+  ];
+  const report = buildAutoRecallProductHealthReport({
+    events,
+    qualityReview: qualityReview({ sampled_injection_keys: ["trace-aggregate:memory-1"] }),
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.telemetry.injected_without_allowed_gate_count, 0);
+  assert.deepEqual(report.reconstruction.gate, {
+    decision_trace_count: 1,
+    pass_trace_count: 1,
+    full_reject_trace_count: 0,
+    unknown_trace_count: 0,
+    rejection_reason_counts: {},
+  });
+});
+
+test("aggregate full-reject gate evidence reconstructs bounded rejection reasons", () => {
+  const traceId = "trace-full-reject";
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_started", { trace_id: traceId }),
+      aggregateDebug(traceId, {
+        gate_decisions: [
+          { id: "memory-raw", injected: false, allowed: true, rejected_reason: "raw_log_low_coverage_no_exact" },
+          { id: "memory-episodic", injected: false, allowed: true, rejection_reason: "episodic_final_score_below_minimum" },
+          { id: "memory-policy", injected: false, allowed: false, reason: "policy_scope_denied" },
+        ],
+      }),
+      row("recall_completed", { trace_id: traceId, latency_ms: 100, metadata_json: {} }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.reconstruction.gate.full_reject_trace_count, 1);
+  assert.deepEqual(report.reconstruction.gate.rejection_reason_counts, {
+    episodic_final_score_below_minimum: 1,
+    policy_scope_denied: 1,
+    raw_log_low_coverage_no_exact: 1,
+  });
+});
+
+test("aggregate gate evidence takes precedence over individual evidence", () => {
+  const traceId = "trace-no-double-count";
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_started", { trace_id: traceId }),
+      aggregateDebug(traceId, {
+        gate_decisions: [{ id: "memory-1", injected: true, allowed: true }],
+      }),
+      row("auto_recall_debug", {
+        trace_id: traceId,
+        memory_id: "memory-1",
+        metadata_json: {
+          debug_type: "gate_decision",
+          injected: false,
+          allowed: false,
+          rejected_reason: "should_not_be_counted",
+        },
+      }),
+      row("memory_injected", { trace_id: traceId, memory_id: "memory-1" }),
+      row("recall_completed", { trace_id: traceId, latency_ms: 100, metadata_json: {} }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.telemetry.injected_without_allowed_gate_count, 0);
+  assert.equal(report.reconstruction.gate.decision_trace_count, 1);
+  assert.equal(report.reconstruction.gate.pass_trace_count, 1);
+  assert.deepEqual(report.reconstruction.gate.rejection_reason_counts, {});
+});
+
+test("execution-only latency excludes explicitly skipped completions", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_completed", {
+        trace_id: "trace-explicit-skip",
+        latency_ms: 9000,
+        metadata_json: { skipped: true, skip_reason: "short_input" },
+      }),
+      row("recall_started", { trace_id: "trace-executed" }),
+      row("recall_completed", { trace_id: "trace-executed", latency_ms: 100, metadata_json: {} }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.telemetry.p95_auto_recall_latency_ms, 9000);
+  assert.deepEqual(report.reconstruction.executed_completed_hook_latency_ms, {
+    sample_count: 1,
+    p50: 100,
+    p95: 100,
+    max: 100,
+  });
+  assert.equal(report.reconstruction.explicitly_skipped_completed_count, 1);
+});
+
+test("started and completed traces populate execution latency with nearest-rank p50 and p95", () => {
+  const events = [10, 20, 30].flatMap((latency, index) => [
+    row("recall_started", { trace_id: `trace-latency-${index}` }),
+    row("recall_completed", {
+      trace_id: `trace-latency-${index}`,
+      latency_ms: latency,
+      metadata_json: {},
+    }),
+  ]);
+  const report = buildAutoRecallProductHealthReport({ events, checkedAt: CHECKED_AT });
+  assert.deepEqual(report.reconstruction.executed_completed_hook_latency_ms, {
+    sample_count: 3,
+    p50: 20,
+    p95: 30,
+    max: 30,
+  });
+});
+
+test("started without completed is incomplete and excluded from execution percentile", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [row("recall_started", { trace_id: "trace-incomplete" })],
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.reconstruction.executed_started_count, 1);
+  assert.equal(report.reconstruction.executed_completed_count, 0);
+  assert.equal(report.reconstruction.executed_incomplete_count, 1);
+  assert.deepEqual(report.reconstruction.executed_completed_hook_latency_ms, {
+    sample_count: 0,
+    p50: null,
+    p95: null,
+    max: null,
+  });
+});
+
+test("completion without started is unclassified unless skip is explicit", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_completed", { trace_id: "trace-unclassified", latency_ms: 100, metadata_json: {} }),
+      row("recall_completed", {
+        trace_id: "trace-skipped",
+        latency_ms: 100,
+        metadata_json: { skipped: true },
+      }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.reconstruction.explicitly_skipped_completed_count, 1);
+  assert.equal(report.reconstruction.unclassified_completed_count, 1);
+});
+
+test("aggregate vector_ms provides an independent vector timing summary", () => {
+  const events = [10, 30, 20, -1, "NaN"].map((vectorMs, index) => aggregateDebug(`trace-vector-${index}`, {
+    vector_ms: vectorMs,
+  }));
+  const report = buildAutoRecallProductHealthReport({ events, checkedAt: CHECKED_AT });
+  assert.deepEqual(report.reconstruction.vector_latency_ms, {
+    sample_count: 3,
+    p50: 20,
+    p95: 30,
+    max: 30,
+  });
+});
+
+test("Q6 shadow decisions are separate from actual injection counts", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [row("auto_recall_debug", {
+      trace_id: "trace-shadow",
+      metadata_json: {
+        debug_type: "q6_shadow_decision",
+        mode: "shadow",
+        would_inject_count: 2,
+      },
+    })],
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.telemetry.injected_count, 0);
+  assert.deepEqual(report.reconstruction.shadow, {
+    decision_trace_count: 1,
+    would_inject_trace_count: 1,
+  });
+});
+
+test("explicit builder and CLI evidence windows exclude older events", async () => {
+  const oldEvent = row("recall_completed", {
+    trace_id: "trace-old",
+    created_at: "2026-07-20 00:30:00",
+    latency_ms: 10,
+    metadata_json: {},
+  });
+  const currentEvent = row("recall_completed", {
+    trace_id: "trace-current",
+    created_at: "2026-07-20 01:30:00",
+    latency_ms: 20,
+    metadata_json: {},
+  });
+  const windowStart = "2026-07-20T01:00:00.000Z";
+  const direct = buildAutoRecallProductHealthReport({
+    events: [oldEvent, currentEvent],
+    checkedAt: CHECKED_AT,
+    windowStart,
+  });
+  assert.equal(direct.telemetry.event_count, 1);
+  assert.deepEqual(direct.analysis_window, {
+    start: windowStart,
+    end: CHECKED_AT,
+    source: "explicit",
+  });
+
+  const tempRoot = mkdtempSync(join(tmpdir(), "auto-recall-product-health-"));
+  const eventsPath = join(tempRoot, "events.json");
+  try {
+    writeFileSync(eventsPath, JSON.stringify([oldEvent, currentEvent]));
+    const parsed = parseArgs(["--events", eventsPath, "--window-start", windowStart]);
+    assert.equal(parsed.windowStart, windowStart);
+    const cliResult = await buildAutoRecallProductHealthCli([
+      "--events", eventsPath,
+      "--checked-at", CHECKED_AT,
+      "--window-start", windowStart,
+    ]);
+    assert.equal(cliResult.report.telemetry.event_count, 1);
+    assert.equal(cliResult.report.analysis_window.source, "explicit");
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("invalid explicit windowStart fails closed", () => {
+  assert.throws(
+    () => buildAutoRecallProductHealthReport({
+      events: [],
+      checkedAt: CHECKED_AT,
+      windowStart: "2026-07-20T01:00:00Z",
+    }),
+    /windowStart must be a canonical UTC ISO timestamp/,
+  );
+  assert.throws(
+    () => buildAutoRecallProductHealthReport({
+      events: [],
+      checkedAt: CHECKED_AT,
+      windowStart: "2026-07-20T03:00:00.000Z",
+    }),
+    /windowStart must not be after checkedAt/,
+  );
 });
