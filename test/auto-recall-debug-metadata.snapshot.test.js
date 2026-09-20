@@ -127,6 +127,34 @@ test("autoRecall debug metadata includes vector_init_error only when present", (
   assert.equal(Object.prototype.hasOwnProperty.call(readyResult, "vector_init_error"), false);
 });
 
+test("autoRecall debug metadata projects bounded hybrid stage timings", () => {
+  const metadata = buildAutoRecallDebugMetadata("query", {
+    results: [],
+    debug: {
+      hybrid_stage_timings: {
+        setup_ms: 1.25,
+        kg_ms: 2,
+        fts_ms: 3,
+        vector_ms: 4,
+        recent_ms: 5,
+        finalize_ms: 6,
+        total_ms: 7,
+        ignored_ms: 999,
+      },
+    },
+  });
+
+  assert.deepEqual(metadata.hybrid_stage_timings, {
+    setup_ms: 1.25,
+    kg_ms: 2,
+    fts_ms: 3,
+    vector_ms: 4,
+    recent_ms: 5,
+    finalize_ms: 6,
+    total_ms: 7,
+  });
+});
+
 test("autoRecall debug metadata preserves bounded fallback rerank source and count", () => {
   const metadata = buildAutoRecallDebugMetadata("query", {
     results: [],

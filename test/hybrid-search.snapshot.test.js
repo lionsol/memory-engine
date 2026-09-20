@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { hybridSearch } from "../lib/recall/hybrid-search.js";
+import { normalizeExplicitSearchRerankPolicy } from "../lib/recall/hybrid/explicit-search-rerank-profile.js";
 
 function withFakeDb(fn) {
   const db = {
@@ -83,6 +84,23 @@ function withFakeDbScope(fn) {
       isolatedRecent: true,
     },
   }));
+}
+
+const HYBRID_STAGE_TIMING_KEYS = [
+  "setup_ms",
+  "kg_ms",
+  "fts_ms",
+  "vector_ms",
+  "recent_ms",
+  "finalize_ms",
+  "total_ms",
+];
+
+function assertBoundedStageTimings(timings) {
+  for (const key of HYBRID_STAGE_TIMING_KEYS) {
+    assert.equal(Number.isFinite(timings?.[key]), true, key);
+    assert.equal(timings[key] >= 0, true, key);
+  }
 }
 
 const EXPECTED_SNAPSHOT = `{
@@ -270,6 +288,8 @@ test("hybridSearch snapshot stays JSON-stringify compatible", async () => {
     }),
   });
 
+  assertBoundedStageTimings(result.debug.hybrid_stage_timings);
+  assert.equal(result.debug.hybrid_stage_timings.vector_ms, result.debug.vector_ms);
   if (result?.debug && Number.isFinite(result.debug.vector_ms)) {
     result.debug.vector_ms = 0;
   }
@@ -313,6 +333,57 @@ test("hybridSearch snapshot stays JSON-stringify compatible", async () => {
   assert.equal(actualSnapshot.debug.canonical_result_projection.resolved_count, 1);
   assert.equal(actualSnapshot.results[0]?.memory_id, "chunk-1234567890abcdef");
   assert.equal(actualSnapshot.results[0]?.canonical_id, "cmem:core:chunk-1234567890abcdef");
+});
+
+test("hybridSearch no-channel return includes a complete bounded timing contract", async () => {
+  const result = await hybridSearch("x", { topK: 3 }, {
+    withHybridDbAccessScope: withFakeDbScope,
+    calcRealtimeConf: row => row.confidence,
+    categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async () => ({ entries: [] }),
+      },
+    }),
+  });
+
+  assert.deepEqual(result.results, []);
+  assert.equal(result.note, "no channels returned results");
+  assertBoundedStageTimings(result.debug.hybrid_stage_timings);
+  assert.equal(result.debug.hybrid_stage_timings.vector_ms, result.debug.vector_ms);
+});
+
+test("hybridSearch explicit rerank return includes the timing contract", async () => {
+  let adapterCalled = false;
+  const explicitSearchRerankProfile = normalizeExplicitSearchRerankPolicy({
+    enabled: true,
+    mode: "control",
+    candidateDepth: 3,
+    maxCodePointsPerCandidate: 8000,
+    maxTotalCodePoints: 400000,
+    deadlineMs: 100,
+    adapterIdentity: { provider: "test", model: "control", revision: null },
+    adapter: async () => {
+      adapterCalled = true;
+      throw new Error("control profile must not call adapter");
+    },
+  }, 3);
+  const result = await hybridSearch("x", { topK: 3 }, {
+    withHybridDbAccessScope: withFakeDbScope,
+    calcRealtimeConf: row => row.confidence,
+    categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
+    explicitSearchRerankProfile,
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async () => ({
+          entries: [{ id: "chunk-1234567890abcdef", text: "compat memory text", similarity: 0.91 }],
+        }),
+      },
+    }),
+  });
+
+  assert.equal(adapterCalled, false);
+  assertBoundedStageTimings(result.debug.hybrid_stage_timings);
 });
 
 test("hybridSearch reuses one scoped DB session across isolated reader calls", async () => {

@@ -411,6 +411,15 @@ test("Q6 shadow decisions are separate from actual injection counts", () => {
       p95: null,
       max: null,
     },
+    hybrid_stage_latency_ms: {
+      setup: { sample_count: 0, p50: null, p95: null, max: null },
+      kg: { sample_count: 0, p50: null, p95: null, max: null },
+      fts: { sample_count: 0, p50: null, p95: null, max: null },
+      vector: { sample_count: 0, p50: null, p95: null, max: null },
+      recent: { sample_count: 0, p50: null, p95: null, max: null },
+      finalize: { sample_count: 0, p50: null, p95: null, max: null },
+      total: { sample_count: 0, p50: null, p95: null, max: null },
+    },
     gate: {
       decision_trace_count: 0,
       pass_trace_count: 0,
@@ -593,4 +602,91 @@ test("overall rejection reasons include rejected candidates on partial-pass trac
     reason_y: 1,
   });
   assert.deepEqual(report.reconstruction.gate.full_reject_reason_counts, {});
+});
+
+test("product health summarizes stage timings for all, non-shadow, and shadow traces", () => {
+  const nonShadowTimings = {
+    setup_ms: 10,
+    kg_ms: 11,
+    fts_ms: 12,
+    vector_ms: 13,
+    recent_ms: 14,
+    finalize_ms: 15,
+    total_ms: 16,
+  };
+  const shadowTimings = Object.fromEntries(
+    Object.entries(nonShadowTimings).map(([key, value]) => [key, value * 2]),
+  );
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_started", { trace_id: "trace-stage-non-shadow" }),
+      aggregateDebug("trace-stage-non-shadow", {
+        gate_decisions: [{ id: "memory-pass", injected: true, allowed: true }],
+        hybrid_stage_timings: nonShadowTimings,
+      }),
+      row("recall_completed", { trace_id: "trace-stage-non-shadow", latency_ms: 100, metadata_json: {} }),
+      row("recall_started", { trace_id: "trace-stage-shadow" }),
+      aggregateDebug("trace-stage-shadow", {
+        gate_decisions: [{ id: "memory-reject", injected: false, allowed: true, reason: "shadow_reject" }],
+        hybrid_stage_timings: shadowTimings,
+      }),
+      row("auto_recall_debug", {
+        trace_id: "trace-stage-shadow",
+        metadata_json: { debug_type: "q6_shadow_decision", mode: "shadow" },
+      }),
+      row("recall_completed", { trace_id: "trace-stage-shadow", latency_ms: 200, metadata_json: {} }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+
+  assert.deepEqual(report.reconstruction.hybrid_stage_latency_ms.setup, {
+    sample_count: 2,
+    p50: 10,
+    p95: 20,
+    max: 20,
+  });
+  assert.deepEqual(report.reconstruction.non_shadow.hybrid_stage_latency_ms.total, {
+    sample_count: 1,
+    p50: 16,
+    p95: 16,
+    max: 16,
+  });
+  assert.deepEqual(report.reconstruction.shadow.hybrid_stage_latency_ms.total, {
+    sample_count: 1,
+    p50: 32,
+    p95: 32,
+    max: 32,
+  });
+});
+
+test("pre-retrieval explicit skip does not enter the gate unknown universe", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      aggregateDebug("trace-pre-retrieval-skip"),
+      row("recall_completed", {
+        trace_id: "trace-pre-retrieval-skip",
+        latency_ms: 5,
+        metadata_json: { skipped: true, skip_reason: "short_input" },
+      }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.reconstruction.gate.unknown_trace_count, 0);
+  assert.equal(report.reconstruction.non_shadow.gate.unknown_trace_count, 0);
+});
+
+test("executed trace without gate evidence is gate-unknown", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_started", { trace_id: "trace-executed-without-gate" }),
+      row("recall_completed", {
+        trace_id: "trace-executed-without-gate",
+        latency_ms: 5,
+        metadata_json: {},
+      }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+  assert.equal(report.reconstruction.gate.unknown_trace_count, 1);
+  assert.equal(report.reconstruction.non_shadow.gate.unknown_trace_count, 1);
 });

@@ -118,6 +118,13 @@ function profile(adapter, overrides = {}) {
   };
 }
 
+function assertHybridStageTimings(timings) {
+  for (const key of ["setup_ms", "kg_ms", "fts_ms", "vector_ms", "recent_ms", "finalize_ms", "total_ms"]) {
+    assert.equal(Number.isFinite(timings?.[key]), true, key);
+    assert.equal(timings[key] >= 0, true, key);
+  }
+}
+
 test("without the internal profile, Hybrid keeps the existing result and debug shape", async () => {
   const fixture = createFixture();
   try {
@@ -126,6 +133,8 @@ test("without the internal profile, Hybrid keeps the existing result and debug s
     const second = await hybridSearch("offline-profile-query", { topK: 3 }, runtime);
 
     assert.deepEqual(first.results, second.results);
+    assertHybridStageTimings(first.debug.hybrid_stage_timings);
+    assertHybridStageTimings(second.debug.hybrid_stage_timings);
     assert.equal(first.debug.offline_rerank, undefined);
     assert.deepEqual(first.results.map(result => result.memory_id), [IDS.a, IDS.b]);
   } finally {
@@ -152,6 +161,7 @@ test("offline profile uses candidateDepth, excludes archived/missing candidates,
     });
     const result = await hybridSearch("offline-profile-query", { topK: 3 }, runtime);
 
+    assertHybridStageTimings(result.debug.hybrid_stage_timings);
     assert.deepEqual(adapterTexts, [
       "CANONICAL FULL TEXT A - must stay internal",
       "CANONICAL FULL TEXT B - must stay internal",
