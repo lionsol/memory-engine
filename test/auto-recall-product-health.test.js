@@ -232,6 +232,7 @@ test("aggregate gate decisions alone authorize a matching injection", () => {
     full_reject_trace_count: 0,
     unknown_trace_count: 0,
     rejection_reason_counts: {},
+    full_reject_reason_counts: {},
   });
 });
 
@@ -253,6 +254,11 @@ test("aggregate full-reject gate evidence reconstructs bounded rejection reasons
   });
   assert.equal(report.reconstruction.gate.full_reject_trace_count, 1);
   assert.deepEqual(report.reconstruction.gate.rejection_reason_counts, {
+    episodic_final_score_below_minimum: 1,
+    policy_scope_denied: 1,
+    raw_log_low_coverage_no_exact: 1,
+  });
+  assert.deepEqual(report.reconstruction.gate.full_reject_reason_counts, {
     episodic_final_score_below_minimum: 1,
     policy_scope_denied: 1,
     raw_log_low_coverage_no_exact: 1,
@@ -390,6 +396,29 @@ test("Q6 shadow decisions are separate from actual injection counts", () => {
   assert.deepEqual(report.reconstruction.shadow, {
     decision_trace_count: 1,
     would_inject_trace_count: 1,
+    executed_started_count: 0,
+    executed_completed_count: 0,
+    executed_incomplete_count: 0,
+    executed_completed_hook_latency_ms: {
+      sample_count: 0,
+      p50: null,
+      p95: null,
+      max: null,
+    },
+    vector_latency_ms: {
+      sample_count: 0,
+      p50: null,
+      p95: null,
+      max: null,
+    },
+    gate: {
+      decision_trace_count: 0,
+      pass_trace_count: 0,
+      full_reject_trace_count: 0,
+      unknown_trace_count: 0,
+      rejection_reason_counts: {},
+      full_reject_reason_counts: {},
+    },
   });
 });
 
@@ -454,4 +483,114 @@ test("invalid explicit windowStart fails closed", () => {
     }),
     /windowStart must not be after checkedAt/,
   );
+});
+
+test("gate diagnostics partition all, non-shadow, and shadow traces", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_started", { trace_id: "trace-non-shadow" }),
+      aggregateDebug("trace-non-shadow", {
+        gate_decisions: [{ id: "memory-pass", injected: true, allowed: true }],
+      }),
+      row("recall_completed", { trace_id: "trace-non-shadow", latency_ms: 100, metadata_json: {} }),
+      row("recall_started", { trace_id: "trace-shadow-reject" }),
+      aggregateDebug("trace-shadow-reject", {
+        gate_decisions: [{
+          id: "memory-shadow-reject",
+          injected: false,
+          allowed: true,
+          rejected_reason: "shadow_gate_rejected",
+        }],
+      }),
+      row("auto_recall_debug", {
+        trace_id: "trace-shadow-reject",
+        metadata_json: {
+          debug_type: "q6_shadow_decision",
+          mode: "shadow",
+          would_inject_count: 0,
+        },
+      }),
+      row("recall_completed", { trace_id: "trace-shadow-reject", latency_ms: 200, metadata_json: {} }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+
+  assert.equal(report.reconstruction.gate.decision_trace_count, 2);
+  assert.equal(report.reconstruction.non_shadow.gate.decision_trace_count, 1);
+  assert.equal(report.reconstruction.non_shadow.gate.pass_trace_count, 1);
+  assert.equal(report.reconstruction.shadow.gate.decision_trace_count, 1);
+  assert.equal(report.reconstruction.shadow.gate.full_reject_trace_count, 1);
+  assert.equal(report.reconstruction.shadow.gate.full_reject_reason_counts.shadow_gate_rejected, 1);
+});
+
+test("shadow execution and vector timing stay out of non-shadow diagnostics", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_started", { trace_id: "trace-non-shadow-timing" }),
+      aggregateDebug("trace-non-shadow-timing", { vector_ms: 11 }),
+      row("recall_completed", { trace_id: "trace-non-shadow-timing", latency_ms: 100, metadata_json: {} }),
+      row("recall_started", { trace_id: "trace-shadow-timing" }),
+      aggregateDebug("trace-shadow-timing", { vector_ms: 22 }),
+      row("auto_recall_debug", {
+        trace_id: "trace-shadow-timing",
+        metadata_json: {
+          debug_type: "q6_shadow_decision",
+          mode: "shadow",
+          would_inject_count: 1,
+        },
+      }),
+      row("recall_completed", { trace_id: "trace-shadow-timing", latency_ms: 200, metadata_json: {} }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+
+  assert.deepEqual(report.reconstruction.non_shadow.executed_completed_hook_latency_ms, {
+    sample_count: 1,
+    p50: 100,
+    p95: 100,
+    max: 100,
+  });
+  assert.deepEqual(report.reconstruction.shadow.executed_completed_hook_latency_ms, {
+    sample_count: 1,
+    p50: 200,
+    p95: 200,
+    max: 200,
+  });
+  assert.deepEqual(report.reconstruction.non_shadow.vector_latency_ms, {
+    sample_count: 1,
+    p50: 11,
+    p95: 11,
+    max: 11,
+  });
+  assert.deepEqual(report.reconstruction.shadow.vector_latency_ms, {
+    sample_count: 1,
+    p50: 22,
+    p95: 22,
+    max: 22,
+  });
+});
+
+test("overall rejection reasons include rejected candidates on partial-pass traces", () => {
+  const traceId = "trace-partial-pass";
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_started", { trace_id: traceId }),
+      aggregateDebug(traceId, {
+        gate_decisions: [
+          { id: "memory-pass", injected: true, allowed: true },
+          { id: "memory-x", injected: false, allowed: true, rejected_reason: "reason_x" },
+          { id: "memory-y", injected: false, allowed: true, rejection_reason: "reason_y" },
+        ],
+      }),
+      row("recall_completed", { trace_id: traceId, latency_ms: 100, metadata_json: {} }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+
+  assert.equal(report.reconstruction.gate.pass_trace_count, 1);
+  assert.deepEqual(report.reconstruction.gate.rejection_reason_counts, {
+    reason_x: 1,
+    reason_y: 1,
+  });
+  assert.deepEqual(report.reconstruction.gate.full_reject_reason_counts, {});
 });
