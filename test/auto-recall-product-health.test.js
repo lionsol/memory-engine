@@ -420,6 +420,14 @@ test("Q6 shadow decisions are separate from actual injection counts", () => {
       finalize: { sample_count: 0, p50: null, p95: null, max: null },
       total: { sample_count: 0, p50: null, p95: null, max: null },
     },
+    hybrid_setup_stage_latency_ms: {
+      bootstrap: { sample_count: 0, p50: null, p95: null, max: null },
+      confidence_snapshot: { sample_count: 0, p50: null, p95: null, max: null },
+      chunk_snapshot: { sample_count: 0, p50: null, p95: null, max: null },
+      invariant: { sample_count: 0, p50: null, p95: null, max: null },
+      topology: { sample_count: 0, p50: null, p95: null, max: null },
+      runtime_build: { sample_count: 0, p50: null, p95: null, max: null },
+    },
     gate: {
       decision_trace_count: 0,
       pass_trace_count: 0,
@@ -614,8 +622,19 @@ test("product health summarizes stage timings for all, non-shadow, and shadow tr
     finalize_ms: 15,
     total_ms: 16,
   };
+  const nonShadowSetupTimings = {
+    bootstrap_ms: 1,
+    confidence_snapshot_ms: 2,
+    chunk_snapshot_ms: 3,
+    invariant_ms: 4,
+    topology_ms: 5,
+    runtime_build_ms: 6,
+  };
   const shadowTimings = Object.fromEntries(
     Object.entries(nonShadowTimings).map(([key, value]) => [key, value * 2]),
+  );
+  const shadowSetupTimings = Object.fromEntries(
+    Object.entries(nonShadowSetupTimings).map(([key, value]) => [key, value * 2]),
   );
   const report = buildAutoRecallProductHealthReport({
     events: [
@@ -623,12 +642,14 @@ test("product health summarizes stage timings for all, non-shadow, and shadow tr
       aggregateDebug("trace-stage-non-shadow", {
         gate_decisions: [{ id: "memory-pass", injected: true, allowed: true }],
         hybrid_stage_timings: nonShadowTimings,
+        hybrid_setup_timings: nonShadowSetupTimings,
       }),
       row("recall_completed", { trace_id: "trace-stage-non-shadow", latency_ms: 100, metadata_json: {} }),
       row("recall_started", { trace_id: "trace-stage-shadow" }),
       aggregateDebug("trace-stage-shadow", {
         gate_decisions: [{ id: "memory-reject", injected: false, allowed: true, reason: "shadow_reject" }],
         hybrid_stage_timings: shadowTimings,
+        hybrid_setup_timings: shadowSetupTimings,
       }),
       row("auto_recall_debug", {
         trace_id: "trace-stage-shadow",
@@ -657,6 +678,54 @@ test("product health summarizes stage timings for all, non-shadow, and shadow tr
     p95: 32,
     max: 32,
   });
+  assert.deepEqual(report.reconstruction.hybrid_setup_stage_latency_ms.bootstrap, {
+    sample_count: 2,
+    p50: 1,
+    p95: 2,
+    max: 2,
+  });
+  assert.deepEqual(report.reconstruction.non_shadow.hybrid_setup_stage_latency_ms.runtime_build, {
+    sample_count: 1,
+    p50: 6,
+    p95: 6,
+    max: 6,
+  });
+  assert.deepEqual(report.reconstruction.shadow.hybrid_setup_stage_latency_ms.runtime_build, {
+    sample_count: 1,
+    p50: 12,
+    p95: 12,
+    max: 12,
+  });
+});
+
+test("historical events without hybrid setup timings report no setup-stage samples", () => {
+  const report = buildAutoRecallProductHealthReport({
+    events: [
+      row("recall_started", { trace_id: "trace-historical-setup" }),
+      aggregateDebug("trace-historical-setup", {
+        hybrid_stage_timings: {
+          setup_ms: 10,
+          kg_ms: 11,
+          fts_ms: 12,
+          vector_ms: 13,
+          recent_ms: 14,
+          finalize_ms: 15,
+          total_ms: 16,
+        },
+      }),
+      row("recall_completed", { trace_id: "trace-historical-setup", latency_ms: 100, metadata_json: {} }),
+    ],
+    checkedAt: CHECKED_AT,
+  });
+
+  for (const summary of Object.values(report.reconstruction.hybrid_setup_stage_latency_ms)) {
+    assert.deepEqual(summary, {
+      sample_count: 0,
+      p50: null,
+      p95: null,
+      max: null,
+    });
+  }
 });
 
 test("pre-retrieval explicit skip does not enter the gate unknown universe", () => {

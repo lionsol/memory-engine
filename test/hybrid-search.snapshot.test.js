@@ -86,6 +86,18 @@ function withFakeDbScope(fn) {
   }));
 }
 
+function withRecentDisabledDbScope(fn) {
+  return withFakeDb(db => fn({
+    withCoreDb: run => run(db),
+    withEngineDb: run => run(db),
+    capabilities: {
+      isolatedFts: true,
+      isolatedKg: true,
+      isolatedRecent: false,
+    },
+  }));
+}
+
 const HYBRID_STAGE_TIMING_KEYS = [
   "setup_ms",
   "kg_ms",
@@ -95,11 +107,28 @@ const HYBRID_STAGE_TIMING_KEYS = [
   "finalize_ms",
   "total_ms",
 ];
+const HYBRID_SETUP_TIMING_KEYS = [
+  "bootstrap_ms",
+  "confidence_snapshot_ms",
+  "chunk_snapshot_ms",
+  "invariant_ms",
+  "topology_ms",
+  "runtime_build_ms",
+];
 
 function assertBoundedStageTimings(timings) {
   for (const key of HYBRID_STAGE_TIMING_KEYS) {
     assert.equal(Number.isFinite(timings?.[key]), true, key);
     assert.equal(timings[key] >= 0, true, key);
+  }
+}
+
+function assertBoundedSetupTimings(timings) {
+  assert.deepEqual(Object.keys(timings || {}), HYBRID_SETUP_TIMING_KEYS);
+  for (const key of HYBRID_SETUP_TIMING_KEYS) {
+    assert.equal(Number.isFinite(timings?.[key]), true, key);
+    assert.equal(timings[key] >= 0, true, key);
+    assert.equal(timings[key] <= 3_600_000, true, key);
   }
 }
 
@@ -289,6 +318,7 @@ test("hybridSearch snapshot stays JSON-stringify compatible", async () => {
   });
 
   assertBoundedStageTimings(result.debug.hybrid_stage_timings);
+  assertBoundedSetupTimings(result.debug.hybrid_setup_timings);
   assert.equal(result.debug.hybrid_stage_timings.vector_ms, result.debug.vector_ms);
   if (result?.debug && Number.isFinite(result.debug.vector_ms)) {
     result.debug.vector_ms = 0;
@@ -350,7 +380,24 @@ test("hybridSearch no-channel return includes a complete bounded timing contract
   assert.deepEqual(result.results, []);
   assert.equal(result.note, "no channels returned results");
   assertBoundedStageTimings(result.debug.hybrid_stage_timings);
+  assertBoundedSetupTimings(result.debug.hybrid_setup_timings);
   assert.equal(result.debug.hybrid_stage_timings.vector_ms, result.debug.vector_ms);
+});
+
+test("hybridSearch records zero topology timing when isolated Recent is disabled", async () => {
+  const result = await hybridSearch("x", { topK: 3 }, {
+    withHybridDbAccessScope: withRecentDisabledDbScope,
+    calcRealtimeConf: row => row.confidence,
+    categoryMap: { raw_log: { conf: 0.5, tau: 7 } },
+    getMemorySearchManager: async () => ({
+      manager: {
+        search: async () => ({ entries: [] }),
+      },
+    }),
+  });
+
+  assertBoundedSetupTimings(result.debug.hybrid_setup_timings);
+  assert.equal(result.debug.hybrid_setup_timings.topology_ms, 0);
 });
 
 test("hybridSearch explicit rerank return includes the timing contract", async () => {
@@ -384,6 +431,7 @@ test("hybridSearch explicit rerank return includes the timing contract", async (
 
   assert.equal(adapterCalled, false);
   assertBoundedStageTimings(result.debug.hybrid_stage_timings);
+  assertBoundedSetupTimings(result.debug.hybrid_setup_timings);
 });
 
 test("hybridSearch reuses one scoped DB session across isolated reader calls", async () => {

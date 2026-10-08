@@ -141,6 +141,15 @@ test("autoRecall debug metadata projects bounded hybrid stage timings", () => {
         total_ms: 7,
         ignored_ms: 999,
       },
+      hybrid_setup_timings: {
+        bootstrap_ms: 2,
+        confidence_snapshot_ms: 3,
+        chunk_snapshot_ms: 4,
+        invariant_ms: 5,
+        topology_ms: 6,
+        runtime_build_ms: 7,
+        ignored_ms: 999,
+      },
     },
   });
 
@@ -152,6 +161,39 @@ test("autoRecall debug metadata projects bounded hybrid stage timings", () => {
     recent_ms: 5,
     finalize_ms: 6,
     total_ms: 7,
+  });
+  assert.deepEqual(metadata.hybrid_setup_timings, {
+    bootstrap_ms: 2,
+    confidence_snapshot_ms: 3,
+    chunk_snapshot_ms: 4,
+    invariant_ms: 5,
+    topology_ms: 6,
+    runtime_build_ms: 7,
+  });
+});
+
+test("autoRecall debug metadata bounds malformed hybrid setup timings", () => {
+  const metadata = buildAutoRecallDebugMetadata("query", {
+    results: [],
+    debug: {
+      hybrid_setup_timings: {
+        bootstrap_ms: -1,
+        confidence_snapshot_ms: Infinity,
+        chunk_snapshot_ms: NaN,
+        invariant_ms: "not-a-number",
+        topology_ms: 4,
+        runtime_build_ms: 3_600_001,
+      },
+    },
+  });
+
+  assert.deepEqual(metadata.hybrid_setup_timings, {
+    bootstrap_ms: 0,
+    confidence_snapshot_ms: 0,
+    chunk_snapshot_ms: 0,
+    invariant_ms: 0,
+    topology_ms: 4,
+    runtime_build_ms: 3_600_000,
   });
 });
 
