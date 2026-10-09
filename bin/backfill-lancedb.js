@@ -5,22 +5,20 @@
  * 运行方式：node scripts/backfill-lancedb.js
  *
  * 从 memory-engine.sqlite 读取所有 memory_confidence 条目，
- * 关联 main.sqlite 的 chunks 获取文本，检查是否已在 LanceDB，
+ * 关联 OpenClaw Core 的 canonical chunks 获取文本，检查是否已在 LanceDB，
  * 缺失的逐批生成 embedding 并写入。
  */
 
 const https = require("node:https");
-const path = require("node:path");
-const { homedir } = require("node:os");
-const { resolve } = require("node:path");
 const { readFileSync, existsSync } = require("node:fs");
 const Database = require("better-sqlite3");
+const { resolveMemoryEnginePaths } = require("../lib/runtime/paths.cjs");
 
-const HOME = homedir();
-const DB_PATH = resolve(HOME, ".openclaw/memory/main.sqlite");
-const ME_DB_PATH = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
-const LANCEDB_PATH = resolve(HOME, ".openclaw/memory/lancedb");
-const CONFIG_JSON = resolve(HOME, ".openclaw/openclaw.json");
+const PATHS = resolveMemoryEnginePaths();
+const DB_PATH = PATHS.coreDbPath;
+const ME_DB_PATH = PATHS.engineDbPath;
+const LANCEDB_PATH = PATHS.lancedbDir;
+const CONFIG_JSON = PATHS.configJsonPath;
 
 function getConfig() {
   return JSON.parse(readFileSync(CONFIG_JSON, "utf-8"));
@@ -92,17 +90,21 @@ async function main() {
   console.log("=== LanceDB Backfill ===");
   const start = Date.now();
 
-  // Step 1: Get all valid confidence entries (chunks that exist in main.sqlite)
+  // Step 1: Get all valid confidence entries (chunks that exist in Core)
   console.log("\n[1/4] Reading confidence entries...");
   const meDb = new Database(ME_DB_PATH, { readonly: true });
-  const mainDb = new Database(DB_PATH, { readonly: true });
+  const { openCoreDbReadonly } = await import("../lib/db/isolated-dbs.js");
+  const mainDb = openCoreDbReadonly({
+    coreDbPath: DB_PATH,
+    engineDbPath: ME_DB_PATH,
+  });
 
   // Join across two DBs
   const confIds = meDb.prepare(`
     SELECT mc.chunk_id, mc.category FROM memory_confidence mc WHERE mc.is_archived = 0
   `).all().map(r => r.chunk_id);
 
-  // Build a set of chunk_ids that exist in main.sqlite
+  // Build a set of chunk_ids that exist in the canonical Core chunks view
   const validChunks = new Set();
   const chunkLookup = mainDb.prepare("SELECT id, text, path FROM chunks WHERE id = ?");
   const chunkData = [];

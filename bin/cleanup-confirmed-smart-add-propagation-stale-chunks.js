@@ -11,7 +11,7 @@ Options:
   --json                      Print deterministic JSON output
   --root <path>               Workspace root; defaults to ~/.openclaw/workspace
   --memory-dir <path>         Memory directory; defaults to <root>/memory
-  --core-db <path>            Core DB path; defaults to ~/.openclaw/memory/main.sqlite
+  --core-db <path>            Core DB path; defaults to the shared current Core resolver
   --engine-db <path>          Engine DB path; defaults to ~/.openclaw/memory/memory-engine/memory-engine.sqlite
   --confirmed-path <path>     Explicit confirmed path; current allowlist only permits memory/smart-add/2026-06-24.md
   --apply                     Retired; always refused by Core ownership boundary

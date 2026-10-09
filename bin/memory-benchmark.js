@@ -9,14 +9,19 @@
  *   4. 三系统同时运行的内存占用 (RSS)
  */
 
-const { homedir } = require("node:os");
 const { resolve } = require("node:path");
 const { readFileSync, existsSync } = require("node:fs");
+const Database = require("better-sqlite3");
+const { resolveMemoryEnginePaths } = require("../lib/runtime/paths.cjs");
+const {
+  ensureCoreStoreCompatibility,
+  getCoreFtsReference,
+} = require("../lib/db/core-store.cjs");
 
-const HOME = homedir();
-const DB_PATH = resolve(HOME, ".openclaw/memory/main.sqlite");
-const LANCEDB_PATH = resolve(HOME, ".openclaw/memory/lancedb");
-const KG_JSON = resolve(HOME, ".openclaw/workspace/knowledge-graph.json");
+const PATHS = resolveMemoryEnginePaths();
+const DB_PATH = PATHS.coreDbPath;
+const LANCEDB_PATH = PATHS.lancedbDir;
+const KG_JSON = resolve(PATHS.workspaceDir, "knowledge-graph.json");
 
 const WARMUP = 50;
 const ITERATIONS = 200;
@@ -65,13 +70,19 @@ function runGC() {
 
 // ── Benchmark: SQLite ──
 
+function openCoreDb() {
+  const db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
+  ensureCoreStoreCompatibility(db, { schema: "main" });
+  return db;
+}
+
 function benchSQLite(batchSize) {
-  const Database = require("better-sqlite3");
-  const db = new Database(DB_PATH, { readonly: true });
+  const db = openCoreDb();
+  const ftsReference = getCoreFtsReference(db);
 
   // Prepare queries
   const randomSelect = db.prepare("SELECT id, text, path FROM chunks ORDER BY RANDOM() LIMIT ?");
-  const ftsSearch = db.prepare("SELECT c.id, c.path FROM chunks_fts f JOIN chunks c ON c.id = f.id WHERE chunks_fts MATCH ? LIMIT ?");
+  const ftsSearch = db.prepare(`SELECT c.id, c.path FROM ${ftsReference.from} f JOIN chunks c ON c.id = f.id WHERE ${ftsReference.matchName} MATCH ? LIMIT ?`);
   const countQuery = db.prepare("SELECT COUNT(*) as cnt FROM chunks WHERE source = 'memory'");
 
   // Warmup
@@ -222,16 +233,16 @@ function benchKG() {
 async function benchConcurrent() {
   const batchSize = 10;
   const lancedb = require("@lancedb/lancedb");
-  const Database = require("better-sqlite3");
   const kg = JSON.parse(readFileSync(KG_JSON, "utf-8"));
   const kgNodes = Object.entries(kg);
   const kgNames = kgNodes.map(([n]) => n);
   const vectorDim = 2560;
   const terms = ["记忆", "system", "配置", "memory", "数据", "test", "EDi", "Sol", "config", "recall"];
 
-  const db = new Database(DB_PATH, { readonly: true });
+  const db = openCoreDb();
+  const ftsReference = getCoreFtsReference(db);
   const randomSelect = db.prepare("SELECT id, text, path FROM chunks ORDER BY RANDOM() LIMIT ?");
-  const ftsSearch = db.prepare("SELECT id FROM chunks_fts WHERE chunks_fts MATCH ? LIMIT ?");
+  const ftsSearch = db.prepare(`SELECT id FROM ${ftsReference.from} WHERE ${ftsReference.matchName} MATCH ? LIMIT ?`);
 
   const ldb = await lancedb.connect(LANCEDB_PATH);
   const table = await ldb.openTable("chunks");

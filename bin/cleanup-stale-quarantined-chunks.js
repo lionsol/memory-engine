@@ -11,7 +11,7 @@ Options:
   --json                      Print deterministic JSON output
   --root <path>               Workspace root; defaults to ~/.openclaw/workspace
   --memory-dir <path>         Memory directory; defaults to <root>/memory
-  --core-db <path>            Core DB path; defaults to ~/.openclaw/memory/main.sqlite
+  --core-db <path>            Core DB path; defaults to the shared current Core resolver
   --apply                     Retired; always refused by Core ownership boundary
   --confirm <token>           Legacy compatibility option; cannot authorize Core writes
 

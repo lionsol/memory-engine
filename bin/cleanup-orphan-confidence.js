@@ -2,10 +2,8 @@
 
 const { existsSync, mkdirSync, writeFileSync, writeSync } = require("node:fs");
 const { dirname, resolve } = require("node:path");
-const { homedir } = require("node:os");
+const { resolveMemoryEnginePaths } = require("../lib/runtime/paths.cjs");
 
-const DEFAULT_ENGINE_DB_PATH = resolve(homedir(), ".openclaw/memory/memory-engine/memory-engine.sqlite");
-const DEFAULT_CORE_DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
 const OUTPUT_DIR = resolve(process.cwd(), "tmp/memory-quality");
 const FORBIDDEN_FLAGS = new Set(["--delete", "--write-db", "--force"]);
 
@@ -123,13 +121,13 @@ function parseArgs(argv = []) {
 }
 
 function resolveDbPaths(options = {}) {
+  const paths = resolveMemoryEnginePaths({
+    coreDbPath: options.coreDbPath,
+    engineDbPath: options.engineDbPath,
+  });
   return {
-    engineDbPath: options.engineDbPath
-      || process.env.ENGINE_DB_PATH
-      || DEFAULT_ENGINE_DB_PATH,
-    coreDbPath: options.coreDbPath
-      || process.env.CORE_DB_PATH
-      || DEFAULT_CORE_DB_PATH,
+    engineDbPath: paths.engineDbPath,
+    coreDbPath: paths.coreDbPath,
   };
 }
 

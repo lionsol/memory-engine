@@ -9,17 +9,14 @@
  */
 
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
-const { homedir } = require('node:os');
 const { dirname, resolve } = require('node:path');
+const { resolveMemoryEnginePaths } = require('../lib/runtime/paths.cjs');
 const {
   DEFAULT_RESCUE_KEYWORDS,
   describeSignalPolarity,
   inferArchivedRawLogRescueSignals,
 } = require('../lib/annotation/archived-raw-log-rescue-signals.cjs');
 
-const HOME = homedir();
-const DEFAULT_ENGINE_DB = resolve(HOME, '.openclaw/memory/memory-engine/memory-engine.sqlite');
-const DEFAULT_CORE_DB = resolve(HOME, '.openclaw/memory/main.sqlite');
 const DEFAULT_KEYWORDS = DEFAULT_RESCUE_KEYWORDS;
 const ALLOWED_FORMATS = new Set(['jsonl', 'md']);
 
@@ -288,8 +285,9 @@ async function main() {
   const format = String(readFlag(argv, '--format', 'jsonl')).toLowerCase();
   if (!ALLOWED_FORMATS.has(format)) throw new Error('--format must be jsonl or md');
   const out = resolve(process.cwd(), readFlag(argv, '--out', defaultOutPath(format)));
-  const engineDbPath = resolve(readFlag(argv, '--engine-db', process.env.MEMORY_ENGINE_DB_PATH || DEFAULT_ENGINE_DB));
-  const coreDbPath = resolve(readFlag(argv, '--core-db', process.env.MEMORY_ENGINE_CORE_DB || DEFAULT_CORE_DB));
+  const paths = resolveMemoryEnginePaths();
+  const engineDbPath = resolve(readFlag(argv, '--engine-db', paths.engineDbPath));
+  const coreDbPath = resolve(readFlag(argv, '--core-db', paths.coreDbPath));
 
   const candidatePoolLimit = Math.max(limit * 10, limit);
   const rows = await queryCandidates({ engineDbPath, coreDbPath, keywords, limit: candidatePoolLimit, offset });

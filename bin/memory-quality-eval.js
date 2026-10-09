@@ -2,8 +2,7 @@
 
 const { execFileSync } = require("node:child_process");
 const { existsSync } = require("node:fs");
-const { homedir } = require("node:os");
-const { resolve } = require("node:path");
+const { resolveMemoryEnginePaths } = require("../lib/runtime/paths.cjs");
 
 const SUPPORTED_PATH_FAMILIES = new Set([
   "smart-add",
@@ -23,12 +22,10 @@ const FORBIDDEN_FLAGS = new Set([
 ]);
 
 function resolveDbPaths() {
-  const home = homedir();
+  const paths = resolveMemoryEnginePaths();
   return {
-    coreDbPath: process.env.MEMORY_ENGINE_CORE_DB || resolve(home, ".openclaw/memory/main.sqlite"),
-    engineDbPath: process.env.MEMORY_ENGINE_DB_PATH
-      || process.env.MEMORY_ENGINE_DB
-      || resolve(home, ".openclaw/memory/memory-engine/memory-engine.sqlite"),
+    coreDbPath: paths.coreDbPath,
+    engineDbPath: paths.engineDbPath,
   };
 }
 
