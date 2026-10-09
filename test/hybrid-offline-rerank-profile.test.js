@@ -133,6 +133,9 @@ function assertHybridSetupTimings(timings) {
     "invariant_ms",
     "topology_ms",
     "runtime_build_ms",
+    "chunk_db_wait_ms",
+    "chunk_query_ms",
+    "chunk_map_build_ms",
   ]);
   for (const key of Object.keys(timings)) {
     assert.equal(Number.isFinite(timings[key]), true, key);

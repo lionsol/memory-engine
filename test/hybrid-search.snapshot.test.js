@@ -114,6 +114,9 @@ const HYBRID_SETUP_TIMING_KEYS = [
   "invariant_ms",
   "topology_ms",
   "runtime_build_ms",
+  "chunk_db_wait_ms",
+  "chunk_query_ms",
+  "chunk_map_build_ms",
 ];
 
 function assertBoundedStageTimings(timings) {

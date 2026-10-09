@@ -148,6 +148,9 @@ test("autoRecall debug metadata projects bounded hybrid stage timings", () => {
         invariant_ms: 5,
         topology_ms: 6,
         runtime_build_ms: 7,
+        chunk_db_wait_ms: 8,
+        chunk_query_ms: 9,
+        chunk_map_build_ms: 10,
         ignored_ms: 999,
       },
     },
@@ -169,6 +172,9 @@ test("autoRecall debug metadata projects bounded hybrid stage timings", () => {
     invariant_ms: 5,
     topology_ms: 6,
     runtime_build_ms: 7,
+    chunk_db_wait_ms: 8,
+    chunk_query_ms: 9,
+    chunk_map_build_ms: 10,
   });
 });
 
@@ -183,6 +189,9 @@ test("autoRecall debug metadata bounds malformed hybrid setup timings", () => {
         invariant_ms: "not-a-number",
         topology_ms: 4,
         runtime_build_ms: 3_600_001,
+        chunk_db_wait_ms: -2,
+        chunk_query_ms: Infinity,
+        chunk_map_build_ms: NaN,
       },
     },
   });
@@ -194,6 +203,9 @@ test("autoRecall debug metadata bounds malformed hybrid setup timings", () => {
     invariant_ms: 0,
     topology_ms: 4,
     runtime_build_ms: 3_600_000,
+    chunk_db_wait_ms: 0,
+    chunk_query_ms: 0,
+    chunk_map_build_ms: 0,
   });
 });
 

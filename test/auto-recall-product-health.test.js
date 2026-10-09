@@ -427,6 +427,9 @@ test("Q6 shadow decisions are separate from actual injection counts", () => {
       invariant: { sample_count: 0, p50: null, p95: null, max: null },
       topology: { sample_count: 0, p50: null, p95: null, max: null },
       runtime_build: { sample_count: 0, p50: null, p95: null, max: null },
+      chunk_db_wait: { sample_count: 0, p50: null, p95: null, max: null },
+      chunk_query: { sample_count: 0, p50: null, p95: null, max: null },
+      chunk_map_build: { sample_count: 0, p50: null, p95: null, max: null },
     },
     gate: {
       decision_trace_count: 0,
@@ -629,6 +632,9 @@ test("product health summarizes stage timings for all, non-shadow, and shadow tr
     invariant_ms: 4,
     topology_ms: 5,
     runtime_build_ms: 6,
+    chunk_db_wait_ms: 7,
+    chunk_query_ms: 8,
+    chunk_map_build_ms: 9,
   };
   const shadowTimings = Object.fromEntries(
     Object.entries(nonShadowTimings).map(([key, value]) => [key, value * 2]),
@@ -696,9 +702,27 @@ test("product health summarizes stage timings for all, non-shadow, and shadow tr
     p95: 12,
     max: 12,
   });
+  assert.deepEqual(report.reconstruction.hybrid_setup_stage_latency_ms.chunk_db_wait, {
+    sample_count: 2,
+    p50: 7,
+    p95: 14,
+    max: 14,
+  });
+  assert.deepEqual(report.reconstruction.non_shadow.hybrid_setup_stage_latency_ms.chunk_query, {
+    sample_count: 1,
+    p50: 8,
+    p95: 8,
+    max: 8,
+  });
+  assert.deepEqual(report.reconstruction.shadow.hybrid_setup_stage_latency_ms.chunk_map_build, {
+    sample_count: 1,
+    p50: 18,
+    p95: 18,
+    max: 18,
+  });
 });
 
-test("historical events without hybrid setup timings report no setup-stage samples", () => {
+test("historical events without new hybrid setup timings report no new setup-stage samples", () => {
   const report = buildAutoRecallProductHealthReport({
     events: [
       row("recall_started", { trace_id: "trace-historical-setup" }),
@@ -712,20 +736,29 @@ test("historical events without hybrid setup timings report no setup-stage sampl
           finalize_ms: 15,
           total_ms: 16,
         },
+        hybrid_setup_timings: {
+          bootstrap_ms: 1,
+          confidence_snapshot_ms: 2,
+          chunk_snapshot_ms: 3,
+          invariant_ms: 4,
+          topology_ms: 5,
+          runtime_build_ms: 6,
+        },
       }),
       row("recall_completed", { trace_id: "trace-historical-setup", latency_ms: 100, metadata_json: {} }),
     ],
     checkedAt: CHECKED_AT,
   });
 
-  for (const summary of Object.values(report.reconstruction.hybrid_setup_stage_latency_ms)) {
-    assert.deepEqual(summary, {
+  for (const name of ["chunk_db_wait", "chunk_query", "chunk_map_build"]) {
+    assert.deepEqual(report.reconstruction.hybrid_setup_stage_latency_ms[name], {
       sample_count: 0,
       p50: null,
       p95: null,
       max: null,
     });
   }
+  assert.equal(report.reconstruction.hybrid_setup_stage_latency_ms.bootstrap.sample_count, 1);
 });
 
 test("pre-retrieval explicit skip does not enter the gate unknown universe", () => {
