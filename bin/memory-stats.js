@@ -11,6 +11,8 @@ const { dirname, resolve } = require("node:path");
 const { appendFileSync, mkdirSync, readFileSync } = require("node:fs");
 const Database = require("better-sqlite3");
 const businessTime = require("../lib/business-time.cjs");
+const { ensureCoreStoreCompatibility } = require("../lib/db/core-store.cjs");
+const { resolveMemoryEnginePaths } = require("../lib/runtime/paths.cjs");
 
 function readRuntimeConfig(configJsonPath) {
   try {
@@ -23,25 +25,23 @@ function readRuntimeConfig(configJsonPath) {
 function resolveRuntime(options = {}) {
   const env = options.env || process.env;
   const home = options.homeDir || homedir();
-  const workspaceDir = options.workspaceDir
-    || env.MEMORY_ENGINE_WORKSPACE
-    || env.MEMORY_ENGINE_WORKSPACE_DIR
-    || resolve(home, ".openclaw/workspace");
+  const paths = resolveMemoryEnginePaths({
+    homeDir: home,
+    openclawDir: options.openclawDir,
+    agentId: options.agentId,
+    workspaceDir: options.workspaceDir || env.MEMORY_ENGINE_WORKSPACE,
+    coreDbPath: options.coreDbPath,
+    engineDbPath: options.engineDbPath,
+    configJsonPath: options.configJsonPath,
+    timeZone: options.timeZone,
+  }, env);
   const runtime = {
-    coreDbPath: options.coreDbPath
-      || env.MEMORY_ENGINE_CORE_DB
-      || env.CORE_DB_PATH
-      || resolve(home, ".openclaw/memory/main.sqlite"),
-    engineDbPath: options.engineDbPath
-      || env.MEMORY_ENGINE_DB
-      || env.ENGINE_DB_PATH
-      || resolve(home, ".openclaw/memory/memory-engine/memory-engine.sqlite"),
-    workspaceDir,
-    dailyDir: resolve(workspaceDir, "memory"),
-    statsLog: resolve(workspaceDir, "memory/stats-history.md"),
-    configJsonPath: options.configJsonPath
-      || env.OPENCLAW_CONFIG_PATH
-      || resolve(home, ".openclaw/openclaw.json"),
+    coreDbPath: paths.coreDbPath,
+    engineDbPath: paths.engineDbPath,
+    workspaceDir: paths.workspaceDir,
+    dailyDir: resolve(paths.workspaceDir, "memory"),
+    statsLog: resolve(paths.workspaceDir, "memory/stats-history.md"),
+    configJsonPath: paths.configJsonPath,
   };
   runtime.timeZone = businessTime.resolveBusinessTimeZone({
     explicitTimeZone: options.timeZone,
@@ -54,7 +54,8 @@ function resolveRuntime(options = {}) {
 function withCoreDb(runtime, fn) {
   const db = new Database(runtime.coreDbPath, { readonly: true, fileMustExist: true });
   try {
-    return fn(db);
+    const descriptor = ensureCoreStoreCompatibility(db, { schema: "main" });
+    return fn(db, descriptor);
   } finally {
     db.close();
   }
@@ -189,8 +190,9 @@ function collectWriteTriggers(dateStr, runtime) {
 }
 
 function collectActivity(dateStr, runtime) {
-  const stats = withCoreDb(runtime, db => {
-    const withEmbedding = db.prepare("SELECT COUNT(*) FROM chunks WHERE source = 'memory' AND embedding IS NOT NULL AND embedding != ''").get()["COUNT(*)"];
+  const stats = withCoreDb(runtime, (db, descriptor) => {
+    const physicalChunksFrom = descriptor?.physicalChunksFrom || "chunks";
+    const withEmbedding = db.prepare(`SELECT COUNT(*) FROM ${physicalChunksFrom} WHERE source = 'memory' AND embedding IS NOT NULL AND embedding != ''`).get()["COUNT(*)"];
     const total = db.prepare("SELECT COUNT(*) FROM chunks WHERE source = 'memory'").get()["COUNT(*)"];
     const dailyFilesCount = db.prepare("SELECT COUNT(*) FROM chunks WHERE path LIKE 'memory/%-%-%.md' AND source = 'memory'").get()["COUNT(*)"];
     const models = db.prepare("SELECT DISTINCT model FROM chunks WHERE source = 'memory' AND model != ''").all().map(r => r.model);

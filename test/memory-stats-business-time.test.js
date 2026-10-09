@@ -69,7 +69,7 @@ test("memory-stats resolves config, env, explicit, default, and invalid timezone
     }).timeZone, "America/Los_Angeles");
     assert.equal(stats.resolveRuntime({
       ...base,
-      env: { MEMORY_ENGINE_TIME_ZONE: "America/Los_Angeles" },
+      env: { MEMORY_ENGINE_TIME_ZONE: "Not/AZone" },
       timeZone: "UTC",
     }).timeZone, "UTC");
     assert.equal(stats.resolveRuntime({

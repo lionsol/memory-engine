@@ -13,22 +13,33 @@
  * 数据来源：memory-engine.sqlite.memory_events
  */
 
-const { homedir } = require("node:os");
 const { resolve } = require("node:path");
 const { existsSync, readFileSync, appendFileSync, mkdirSync } = require("node:fs");
 const Database = require("better-sqlite3");
+const { ensureCoreStoreCompatibility } = require("../lib/db/core-store.cjs");
+const { resolveMemoryEnginePaths } = require("../lib/runtime/paths.cjs");
 
 // ── Paths ──
-const HOME = homedir();
-const ME_DB = resolve(HOME, ".openclaw/memory/memory-engine/memory-engine.sqlite");
-const MAIN_DB = resolve(HOME, ".openclaw/memory/main.sqlite");
-const WORKSPACE = resolve(HOME, ".openclaw/workspace");
+const PATHS = resolveMemoryEnginePaths();
+const ME_DB = PATHS.engineDbPath;
+const CORE_DB = PATHS.coreDbPath;
+const WORKSPACE = PATHS.workspaceDir;
 const STATS_LOG = resolve(WORKSPACE, "memory/stats-history.md");
 
 // ── Helpers ──
-function withDb(path, fn) {
-  const db = new Database(path, { readonly: true });
+function withEngineDb(fn) {
+  const db = new Database(ME_DB, { readonly: true, fileMustExist: true });
   try { return fn(db); } finally { db.close(); }
+}
+
+function withCoreDb(fn) {
+  const db = new Database(CORE_DB, { readonly: true, fileMustExist: true });
+  try {
+    const descriptor = ensureCoreStoreCompatibility(db, { schema: "main" });
+    return fn(db, descriptor);
+  } finally {
+    db.close();
+  }
 }
 
 function isoWeekStart() {
@@ -237,7 +248,7 @@ function resolveChunkPaths(memories) {
   const ids = memories.map(m => m.id);
   if (ids.length === 0) return memories;
 
-  return withDb(MAIN_DB, (db) => {
+  return withCoreDb((db) => {
     const rows = {};
     const stmt = db.prepare("SELECT id, path, start_line, end_line, model FROM chunks WHERE id = ?");
     for (const id of ids) {
@@ -257,7 +268,7 @@ function resolveChunkPaths(memories) {
 
 // ── 5. Category Stats from memory_confidence ──
 function collectCategoryStats() {
-  return withDb(MAIN_DB, (db) => {
+  return withEngineDb((db) => {
     const rows = db.prepare(`
       SELECT mc.category, 
              COUNT(*) as count, 
@@ -289,7 +300,7 @@ function generateSnapshot() {
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
 
-  const events = withDb(ME_DB, (db) => {
+  const events = withEngineDb((db) => {
     return db.prepare(`
       SELECT * FROM memory_events 
       WHERE event_type = 'auto_recall_debug'

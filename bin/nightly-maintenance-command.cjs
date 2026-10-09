@@ -8,18 +8,13 @@
  */
 
 const { existsSync, readFileSync } = require('node:fs');
-const { homedir } = require('node:os');
-const { resolve } = require('node:path');
+const { resolveMemoryEnginePaths } = require('../lib/runtime/paths.cjs');
 
-const HOME = homedir();
-const WORKSPACE = process.env.OPENCLAW_WORKSPACE || resolve(HOME, '.openclaw/workspace');
-const ENGINE_DB_PATH = process.env.MEMORY_ENGINE_DB_PATH
-  || process.env.MEMORY_ENGINE_DB
-  || resolve(HOME, '.openclaw/memory/memory-engine/memory-engine.sqlite');
-const CORE_DB_PATH = process.env.MEMORY_ENGINE_CORE_DB
-  || resolve(HOME, '.openclaw/memory/main.sqlite');
-const KG_PATH = process.env.MEMORY_ENGINE_KG_PATH
-  || resolve(WORKSPACE, 'knowledge-graph.json');
+const PATHS = resolveMemoryEnginePaths();
+const WORKSPACE = PATHS.workspaceDir;
+const ENGINE_DB_PATH = PATHS.engineDbPath;
+const CORE_DB_PATH = PATHS.coreDbPath;
+const KG_PATH = PATHS.kgPath;
 const ARCHIVE_THRESHOLD = Number(process.env.MEMORY_ENGINE_ARCHIVE_THRESHOLD || '0.15');
 const DRY_RUN = process.argv.includes('--dry-run');
 
