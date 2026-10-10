@@ -40,4 +40,5 @@ test("reconciliation keeps UTC migration and local provenance predicates distinc
   assert.equal(JSON.stringify(report).includes("deleted session message"), false);
   assert.equal(report.writes_db, false);
   assert.equal(report.migration_applied, false);
+  assert.equal(report.core_db_path, f.coreDbPath);
 });

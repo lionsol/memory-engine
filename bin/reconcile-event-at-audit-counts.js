@@ -6,7 +6,6 @@ const os = require("node:os");
 const path = require("node:path");
 const Database = require("better-sqlite3");
 
-const DEFAULT_CORE_DB = path.resolve(os.homedir(), ".openclaw/memory/main.sqlite");
 const DEFAULT_ENGINE_DB = path.resolve(os.homedir(), ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_SESSIONS_DIR = path.resolve(os.homedir(), ".openclaw/agents/main/sessions");
 const FORBIDDEN_FLAGS = new Set(["--apply", "--force", "--write-db", "--no-backup"]);
@@ -67,7 +66,7 @@ function sessionFormulaSets(sessionsDir) {
   return { oldSet, currentSet, files, oldFiles, resetFiles, deletedFiles };
 }
 function parseArgs(argv = []) {
-  const options = { legacyDate: null, coreDbPath: DEFAULT_CORE_DB, engineDbPath: DEFAULT_ENGINE_DB, sessionsDir: DEFAULT_SESSIONS_DIR, json: false, help: false };
+  const options = { legacyDate: null, coreDbPath: null, engineDbPath: DEFAULT_ENGINE_DB, sessionsDir: DEFAULT_SESSIONS_DIR, json: false, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]; if (FORBIDDEN_FLAGS.has(arg)) throw new Error(`unsupported flag: ${arg}`);
     if (arg === "--help" || arg === "help") { options.help = true; continue; }
@@ -77,17 +76,21 @@ function parseArgs(argv = []) {
     throw new Error(`unknown argument: ${arg}`);
   }
   if (!options.help && !/^\d{4}-\d{2}-\d{2}$/.test(options.legacyDate || "")) throw new Error("--legacy-date must be YYYY-MM-DD");
+  if (!options.help && !options.coreDbPath) throw new Error("--core-db is required for historical Core forensic operations");
   return options;
 }
 
 function reconcile(options) {
+  const configuredCoreDbPath = typeof options.coreDbPath === "string" ? options.coreDbPath.trim() : "";
+  if (!configuredCoreDbPath) throw new Error("--core-db is required for historical Core forensic operations");
+  const coreDbPath = path.resolve(configuredCoreDbPath);
   const local = range(options.legacyDate, "+08:00"); const utc = range(options.legacyDate, "Z");
   const engine = new Database(options.engineDbPath, { readonly: true });
   const confidenceRows = engine.prepare("SELECT chunk_id, is_archived FROM memory_confidence WHERE category = 'raw_log'").all();
   const rawIds = new Set(confidenceRows.map((row) => row.chunk_id));
   const archivedIds = new Set(confidenceRows.filter((row) => Number(row.is_archived) === 1).map((row) => row.chunk_id));
   engine.close();
-  const core = new Database(options.coreDbPath, { readonly: true });
+  const core = new Database(coreDbPath, { readonly: true, fileMustExist: true });
   const rows = core.prepare("SELECT id,text,updated_at FROM chunks WHERE (updated_at >= ? AND updated_at < ?) OR (updated_at >= ? AND updated_at < ?)").all(local.start, utc.end, local.start * 1000, utc.end * 1000).filter((row) => rawIds.has(row.id));
   core.close();
   const oldRows = rows.filter((row) => utcDate(row.updated_at) === options.legacyDate);
@@ -104,6 +107,7 @@ function reconcile(options) {
   return {
     mode: "read_only",
     legacy_date: options.legacyDate,
+    core_db_path: coreDbPath,
     count_sources: [
       { name: "migration_impact_preview", row_count: oldRows.length, recoverable: 530, recoverable_reported_historically: 530, recoverable_replayed_current_files: oldReplayRecoverable.length, predicate_summary: "chunks c JOIN engine.memory_confidence mc ON mc.chunk_id=c.id WHERE mc.category='raw_log'; legacy date = UTC calendar date derived from c.updated_at; no is_archived predicate", joins_memory_confidence: true, category: "raw_log exactly", archived_filter: "none", missing_chunks: "excluded by INNER JOIN", session_scope: "historical migration wildcard: *.jsonl and any *.jsonl.* variant; excludes *.jsonl.deleted.* and *.trajectory.*" },
       { name: "provenance_audit", row_count: auditRows.length, predicate_summary: "chunks rows joined by raw_log chunk ids; updated_at numeric range for local +08:00 calendar day; seconds and milliseconds accepted", joins_memory_confidence: true, category: "raw_log exactly", archived_filter: "none", missing_chunks: "excluded because no chunks row", session_scope: "*.jsonl, *.jsonl.reset.*, *.jsonl.deleted.*; excludes *.trajectory.*" },
@@ -119,6 +123,6 @@ function reconcile(options) {
     raw_text_exported: false, writes_db: false, migration_applied: false,
   };
 }
-function help() { process.stdout.write("Reconcile event-at audit counts (read-only)\n\nUsage: node bin/reconcile-event-at-audit-counts.js --legacy-date YYYY-MM-DD --json\n\nRefused: --apply --force --write-db --no-backup\n"); }
+function help() { process.stdout.write("Reconcile event-at audit counts (read-only)\n\nUsage: node bin/reconcile-event-at-audit-counts.js --legacy-date YYYY-MM-DD --core-db <path> [options]\n\nOptions:\n  --core-db <path>   Required historical/forensic Core DB source\n  --engine-db <path> Engine DB path (optional)\n  --sessions-dir <path> Session directory\n  --json             Print JSON report\n\nRefused: --apply --force --write-db --no-backup\n"); }
 if (require.main === module) { try { const options = parseArgs(process.argv.slice(2)); if (options.help) help(); else process.stdout.write(`${JSON.stringify(reconcile(options), null, 2)}\n`); } catch (error) { process.stderr.write(`error: ${String(error?.message || error)}\n`); process.exitCode = 1; } }
 module.exports = { parseArgs, reconcile };

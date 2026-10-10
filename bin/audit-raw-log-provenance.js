@@ -7,7 +7,6 @@ const path = require("node:path");
 const Database = require("better-sqlite3");
 
 const FORBIDDEN_FLAGS = new Set(["--apply", "--force", "--write-db", "--no-backup"]);
-const DEFAULT_CORE_DB = path.resolve(os.homedir(), ".openclaw/memory/main.sqlite");
 const DEFAULT_ENGINE_DB = path.resolve(os.homedir(), ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_SESSIONS_DIR = path.resolve(os.homedir(), ".openclaw/agents/main/sessions");
 const DEFAULT_MEMORY_DIR = path.resolve(os.homedir(), ".openclaw/workspace/memory");
@@ -128,8 +127,13 @@ function batchStats(seconds) {
 }
 
 function auditRawLogProvenance(options = {}) {
+  const configuredCoreDbPath = typeof options.coreDbPath === "string" ? options.coreDbPath.trim() : "";
+  if (!configuredCoreDbPath) {
+    throw new Error("--core-db is required for historical Core forensic operations");
+  }
+  const coreDbPath = path.resolve(configuredCoreDbPath);
   const range = rangeForDate(options.legacyDate);
-  const coreDb = new Database(options.coreDbPath || DEFAULT_CORE_DB, { readonly: true });
+  const coreDb = new Database(coreDbPath, { readonly: true, fileMustExist: true });
   const engineDbPath = options.engineDbPath || DEFAULT_ENGINE_DB;
   const engineDb = new Database(engineDbPath, { readonly: true });
   const rawIds = new Set(engineDb.prepare("SELECT chunk_id FROM memory_confidence WHERE category = 'raw_log'").all().map((row) => row.chunk_id));
@@ -165,6 +169,7 @@ function auditRawLogProvenance(options = {}) {
   return {
     mode: "read_only",
     legacy_date: options.legacyDate,
+    core_db_path: coreDbPath,
     row_count: rows.length,
     path_breakdown: sortedCounts(pathCounts), source_breakdown: sortedCounts(sourceCounts), model_breakdown: sortedCounts(modelCounts), start_line_end_line_breakdown: sortedCounts(startEndCounts), path_family_breakdown: sortedCounts(familyCounts),
     hash_id_analysis: { hash_matches_sha256_text: hashMatches, hash_missing: hashMissing, id_equals_hash: idEqualsHash, hash_match_rate: rows.length ? Number((hashMatches / rows.length).toFixed(4)) : 0, duplicate_hash_group_count: duplicateHashGroups, exact_duplicate_text_hash_group_count: duplicateTextGroups },
@@ -188,7 +193,7 @@ function auditRawLogProvenance(options = {}) {
 }
 
 function parseArgs(argv = []) {
-  const options = { legacyDate: null, json: false, coreDbPath: DEFAULT_CORE_DB, engineDbPath: DEFAULT_ENGINE_DB, sessionsDir: DEFAULT_SESSIONS_DIR, memoryDir: DEFAULT_MEMORY_DIR, help: false };
+  const options = { legacyDate: null, json: false, coreDbPath: null, engineDbPath: DEFAULT_ENGINE_DB, sessionsDir: DEFAULT_SESSIONS_DIR, memoryDir: DEFAULT_MEMORY_DIR, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (FORBIDDEN_FLAGS.has(arg)) throw new Error(`unsupported flag: ${arg}`);
@@ -199,9 +204,10 @@ function parseArgs(argv = []) {
     throw new Error(`unknown argument: ${arg}`);
   }
   if (!options.help && !options.legacyDate) throw new Error("--legacy-date is required");
+  if (!options.help && !options.coreDbPath) throw new Error("--core-db is required for historical Core forensic operations");
   return options;
 }
-function printHelp() { process.stdout.write("Audit raw_log provenance (read-only)\n\nUsage: node bin/audit-raw-log-provenance.js --legacy-date YYYY-MM-DD --json\n\nRefused: --apply --force --write-db --no-backup\n"); }
+function printHelp() { process.stdout.write("Audit raw_log provenance (read-only)\n\nUsage: node bin/audit-raw-log-provenance.js --legacy-date YYYY-MM-DD --core-db <path> [options]\n\nOptions:\n  --core-db <path>   Required historical/forensic Core DB source\n  --engine-db <path> Engine DB path (optional)\n  --sessions-dir <path> Session directory\n  --memory-dir <path> Memory directory\n  --json             Print JSON report\n\nRefused: --apply --force --write-db --no-backup\n"); }
 
 if (require.main === module) {
   try { const options = parseArgs(process.argv.slice(2)); if (options.help) printHelp(); else process.stdout.write(`${JSON.stringify(auditRawLogProvenance(options), null, 2)}\n`); }

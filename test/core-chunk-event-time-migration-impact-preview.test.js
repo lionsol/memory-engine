@@ -179,7 +179,7 @@ test("CLI --json runs and forbidden flags are rejected", () => {
     MEMORY_ENGINE_SESSIONS_DIR: fixture.sessionsDir,
   };
 
-  const run = spawnSync(process.execPath, [scriptPath, "--json"], {
+  const run = spawnSync(process.execPath, [scriptPath, "--json", "--core-db", fixture.coreDbPath], {
     cwd: repoRoot,
     encoding: "utf8",
     env: baseEnv,
@@ -187,6 +187,7 @@ test("CLI --json runs and forbidden flags are rejected", () => {
   assert.equal(run.status, 0);
   const parsed = JSON.parse(run.stdout);
   assert.equal(parsed.writes_db, false);
+  assert.equal(parsed.core_db_path, fixture.coreDbPath);
   assert.equal(parsed.raw_log_total_count, 3);
 
   for (const flag of ["--apply", "--force", "--write-db", "--no-backup"]) {

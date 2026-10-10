@@ -41,9 +41,15 @@ test("migration dry-run remains available and writes no DB", () => {
 });
 
 test("migration CLI apply is denied by the same Core ownership boundary", () => {
+  const root = mkdtempSync(resolve(tmpdir(), "event-at-migration-cli-source-"));
+  const core = new Database(resolve(root, "core.sqlite"));
+  core.exec("CREATE TABLE chunks (id TEXT PRIMARY KEY, text TEXT, updated_at INTEGER)");
+  core.close();
   const result = spawnSync(process.execPath, [
     "bin/migrate-core-chunk-times.js",
     "--apply",
+    "--core-db",
+    resolve(root, "core.sqlite"),
     "--confirm-core-time-migration",
     CORE_CHUNK_TIME_MIGRATION_CONFIRM_TOKEN,
   ], { encoding: "utf8" });

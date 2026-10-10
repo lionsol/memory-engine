@@ -4,7 +4,6 @@ const { writeSync } = require("node:fs");
 const { resolve } = require("node:path");
 const { homedir } = require("node:os");
 
-const DEFAULT_CORE_DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
 const DEFAULT_ENGINE_DB_PATH = resolve(homedir(), ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_SESSIONS_DIR = resolve(homedir(), ".openclaw/agents/main/sessions");
 const FORBIDDEN_FLAGS = new Set(["--apply", "--force", "--write-db", "--no-backup"]);
@@ -26,7 +25,7 @@ Usage:
 Options:
   --help                         Show this help
   --json                         Print JSON report only
-  --core-db <path>               Core DB path; default: ${DEFAULT_CORE_DB_PATH}
+  --core-db <path>               Required historical/forensic Core DB source
   --engine-db <path>             Engine DB path; default: ${DEFAULT_ENGINE_DB_PATH}
   --sessions-dir <path>          Session transcript dir; default: ${DEFAULT_SESSIONS_DIR}
   --no-session-transcript-recovery
@@ -103,7 +102,7 @@ function parseArgs(argv = []) {
 
 function toPreviewOptions(options) {
   return {
-    coreDbPath: options.coreDbPath || process.env.MEMORY_ENGINE_CORE_DB || process.env.CORE_DB_PATH || DEFAULT_CORE_DB_PATH,
+    coreDbPath: options.coreDbPath ? resolve(options.coreDbPath) : null,
     engineDbPath: options.engineDbPath || process.env.MEMORY_ENGINE_DB || process.env.ENGINE_DB_PATH || DEFAULT_ENGINE_DB_PATH,
     sessionsDir: options.sessionsDir || process.env.MEMORY_ENGINE_SESSIONS_DIR || DEFAULT_SESSIONS_DIR,
     sessionTranscriptRecovery: options.sessionTranscriptRecovery,
@@ -130,6 +129,9 @@ async function main(argv = process.argv.slice(2)) {
   if (options.help) {
     printHelp();
     return;
+  }
+  if (!options.coreDbPath) {
+    throw new Error("--core-db is required for historical Core forensic operations");
   }
 
   const migration = await import("../lib/db/core-chunk-time-migration.js");

@@ -4,7 +4,6 @@ const { writeSync } = require("node:fs");
 const { resolve } = require("node:path");
 const { homedir } = require("node:os");
 
-const DEFAULT_CORE_DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
 const DEFAULT_ENGINE_DB_PATH = resolve(homedir(), ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_SESSIONS_DIR = resolve(homedir(), ".openclaw/agents/main/sessions");
 const DEFAULT_MEMORY_DIR = resolve(process.cwd(), "memory");
@@ -28,7 +27,7 @@ Options:
   --help                         Show this help
   --json                         Print JSON report only
   --date <YYYY-MM-DD>            Required legacy updated_at date to inspect
-  --core-db <path>               Core DB path; default: ${DEFAULT_CORE_DB_PATH}
+  --core-db <path>               Required historical/forensic Core DB source
   --engine-db <path>             Engine DB path; default: ${DEFAULT_ENGINE_DB_PATH}
   --sessions-dir <path>          Session transcript dir; default: ${DEFAULT_SESSIONS_DIR}
   --memory-dir <path>            Workspace memory dir for file existence checks; default: ${DEFAULT_MEMORY_DIR}
@@ -115,6 +114,9 @@ function parseArgs(argv = []) {
   if (!options.help && !options.date) {
     throw new Error("--date is required");
   }
+  if (!options.help && !options.coreDbPath) {
+    throw new Error("--core-db is required for historical Core forensic operations");
+  }
 
   return options;
 }
@@ -122,7 +124,7 @@ function parseArgs(argv = []) {
 function toInspectOptions(options) {
   return {
     date: options.date,
-    coreDbPath: options.coreDbPath || process.env.MEMORY_ENGINE_CORE_DB || process.env.CORE_DB_PATH || DEFAULT_CORE_DB_PATH,
+    coreDbPath: options.coreDbPath ? resolve(options.coreDbPath) : null,
     engineDbPath: options.engineDbPath || process.env.MEMORY_ENGINE_DB || process.env.ENGINE_DB_PATH || DEFAULT_ENGINE_DB_PATH,
     sessionsDir: options.sessionsDir || process.env.MEMORY_ENGINE_SESSIONS_DIR || DEFAULT_SESSIONS_DIR,
     memoryDir: options.memoryDir || process.env.MEMORY_ENGINE_MEMORY_DIR || DEFAULT_MEMORY_DIR,
@@ -133,6 +135,7 @@ function toInspectOptions(options) {
 function printHuman(report) {
   writeStdout(`mode: ${report.mode}`);
   writeStdout(`writes_db: ${report.writes_db}`);
+  writeStdout(`core_db_path: ${report.core_db_path}`);
   writeStdout(`date: ${report.date}`);
   writeStdout(`legacy_rows: ${report.legacy_rows}`);
   writeStdout(`recoverable_rows: ${report.recoverable_rows}`);

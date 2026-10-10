@@ -112,6 +112,7 @@ test("export defaults to dry-run and only exports manual recovery candidates", (
 
   assert.equal(summary.mode, "dry_run");
   assert.equal(summary.writes_db, false);
+  assert.equal(summary.core_db_path, fixture.coreDbPath);
   assert.equal(summary.candidate_count, 2);
   const lines = readFileSync(outPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
   assert.equal(lines.length, 2);
@@ -177,14 +178,13 @@ test("CLI supports jsonl and md output and rejects forbidden flags", () => {
   const mdPath = resolve(fixture.reportDir, "cli.md");
   const baseEnv = {
     ...process.env,
-    MEMORY_ENGINE_CORE_DB: fixture.coreDbPath,
     MEMORY_ENGINE_DB: fixture.engineDbPath,
     MEMORY_ENGINE_DB_PATH: fixture.engineDbPath,
     MEMORY_ENGINE_SESSIONS_DIR: fixture.sessionsDir,
     MEMORY_ENGINE_MEMORY_DIR: fixture.memoryDir,
   };
 
-  const jsonRun = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-15", "--format", "jsonl", "--out", jsonlPath, "--json"], {
+  const jsonRun = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-15", "--core-db", fixture.coreDbPath, "--format", "jsonl", "--out", jsonlPath, "--json"], {
     cwd: repoRoot,
     encoding: "utf8",
     env: baseEnv,
@@ -192,8 +192,9 @@ test("CLI supports jsonl and md output and rejects forbidden flags", () => {
   assert.equal(jsonRun.status, 0);
   const jsonSummary = JSON.parse(jsonRun.stdout);
   assert.equal(jsonSummary.candidate_count, 2);
+  assert.equal(jsonSummary.core_db_path, fixture.coreDbPath);
 
-  const mdRun = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-15", "--format", "md", "--out", mdPath], {
+  const mdRun = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-15", "--core-db", fixture.coreDbPath, "--format", "md", "--out", mdPath], {
     cwd: repoRoot,
     encoding: "utf8",
     env: baseEnv,
@@ -202,7 +203,7 @@ test("CLI supports jsonl and md output and rejects forbidden flags", () => {
   assert.equal(readFileSync(mdPath, "utf8").includes("raw_text_exported: `false`"), true);
 
   for (const flag of ["--apply", "--force", "--write-db", "--no-backup"]) {
-    const rejected = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-15", flag], {
+    const rejected = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-15", "--core-db", fixture.coreDbPath, flag], {
       cwd: repoRoot,
       encoding: "utf8",
       env: baseEnv,

@@ -202,14 +202,13 @@ test("CLI --json runs and forbidden flags are rejected", () => {
   const fixture = createFixture();
   const baseEnv = {
     ...process.env,
-    MEMORY_ENGINE_CORE_DB: fixture.coreDbPath,
     MEMORY_ENGINE_DB: fixture.engineDbPath,
     MEMORY_ENGINE_DB_PATH: fixture.engineDbPath,
     MEMORY_ENGINE_SESSIONS_DIR: fixture.sessionsDir,
     MEMORY_ENGINE_MEMORY_DIR: fixture.memoryDir,
   };
 
-  const run = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-21", "--json"], {
+  const run = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-21", "--json", "--core-db", fixture.coreDbPath], {
     cwd: repoRoot,
     encoding: "utf8",
     env: baseEnv,
@@ -217,11 +216,12 @@ test("CLI --json runs and forbidden flags are rejected", () => {
   assert.equal(run.status, 0);
   const parsed = JSON.parse(run.stdout);
   assert.equal(parsed.writes_db, false);
+  assert.equal(parsed.core_db_path, fixture.coreDbPath);
   assert.equal(parsed.unrecoverable_rows, 4);
   assert.equal(JSON.stringify(parsed).includes("follow up on migration"), false);
 
   for (const flag of ["--apply", "--force", "--write-db", "--no-backup"]) {
-    const rejected = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-21", flag], {
+    const rejected = spawnSync(process.execPath, [scriptPath, "--date", "2026-06-21", "--core-db", fixture.coreDbPath, flag], {
       cwd: repoRoot,
       encoding: "utf8",
       env: baseEnv,

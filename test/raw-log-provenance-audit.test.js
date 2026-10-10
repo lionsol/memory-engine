@@ -43,6 +43,7 @@ test("audit filters legacy updated_at date, aggregates provenance, and stays rea
   ]);
   writeFileSync(resolve(f.sessionsDir, "one.jsonl"), `${JSON.stringify({ type: "message", timestamp, message: { role: "user", content: [{ type: "text", text }] } })}\n`);
   const report = auditRawLogProvenance({ legacyDate: "2026-06-15", coreDbPath: f.corePath, engineDbPath: f.enginePath, sessionsDir: f.sessionsDir, memoryDir: f.memoryDir });
+  assert.equal(report.core_db_path, f.corePath);
   assert.equal(report.row_count, 1);
   assert.equal(report.path_breakdown["memory/smart-add/2026-06-15.md"], 1);
   assert.equal(report.model_breakdown["flush-script"], 1);

@@ -46,14 +46,6 @@ const HELP_ONLY_FILES = CURRENT_CORE_DEFAULT_FILES.slice(9);
 
 const INTENTIONAL_LEGACY_ALLOWLIST = [
   "lib/runtime/paths.cjs",
-  "bin/preview-core-chunk-event-time-migration-impact.js",
-  "bin/audit-raw-log-provenance.js",
-  "bin/migrate-core-chunk-times.js",
-  "bin/audit-core-chunk-event-time-recovery.js",
-  "bin/reconcile-event-at-audit-counts.js",
-  "bin/export-event-at-manual-recovery-candidates.js",
-  "bin/inspect-unrecoverable-event-at-raw-log.js",
-  "lib/db/core-chunk-time-migration.js",
 ];
 
 function makeLayout() {
@@ -283,7 +275,8 @@ function assertCurrentCoreContract(layout) {
   }
 }
 
-test("current Core tooling has no retired legacy default outside the B2 allowlist", () => {
+test("current Core tooling has no retired legacy default", () => {
+  assert.deepEqual(INTENTIONAL_LEGACY_ALLOWLIST, ["lib/runtime/paths.cjs"]);
   for (const relativePath of CURRENT_CORE_DEFAULT_FILES) {
     const source = readFileSync(resolve(repoRoot, relativePath), "utf8");
     assert.doesNotMatch(source, /(?:\.openclaw\/)?memory\/main\.sqlite/);

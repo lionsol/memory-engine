@@ -122,6 +122,7 @@ test("audit defaults to dry-run and does not write DB", () => {
 
   const beforeColumns = readColumns(fixture.coreDbPath);
   const report = auditCoreChunkEventTimeRecovery(fixture);
+  assert.equal(report.core_db_path, fixture.coreDbPath);
   const afterColumns = readColumns(fixture.coreDbPath);
 
   assert.equal(report.mode, "dry_run");

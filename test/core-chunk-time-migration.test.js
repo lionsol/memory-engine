@@ -154,6 +154,7 @@ test("core chunk time migration dry-run reports schema/backfill without writing 
 
   const afterColumns = readCoreColumns(fixture.coreDbPath);
   assert.equal(report.mode, "dry_run");
+  assert.equal(report.core_db_path, fixture.coreDbPath);
   assert.equal(report.writes_db, false);
   assert.deepEqual(report.would_add_columns, ["event_at", "created_at"]);
   assert.equal(report.raw_log_total_count, 3);
@@ -167,6 +168,24 @@ test("core chunk time migration dry-run reports schema/backfill without writing 
   assert.deepEqual(afterColumns, beforeColumns);
   assert.equal(afterColumns.has("event_at"), false);
   assert.equal(afterColumns.has("created_at"), false);
+});
+
+test("DB-backed forensic diagnostics require an explicit Core source regardless of generic Core env", () => {
+  const previousMemoryEngineCoreDb = process.env.MEMORY_ENGINE_CORE_DB;
+  const previousCoreDbPath = process.env.CORE_DB_PATH;
+  process.env.MEMORY_ENGINE_CORE_DB = "/tmp/implicit-current-core.sqlite";
+  process.env.CORE_DB_PATH = "/tmp/implicit-runtime-core.sqlite";
+  try {
+    assert.throws(
+      () => inspectCoreChunkTimeMigration({}),
+      { message: "--core-db is required for historical Core forensic operations" },
+    );
+  } finally {
+    if (previousMemoryEngineCoreDb === undefined) delete process.env.MEMORY_ENGINE_CORE_DB;
+    else process.env.MEMORY_ENGINE_CORE_DB = previousMemoryEngineCoreDb;
+    if (previousCoreDbPath === undefined) delete process.env.CORE_DB_PATH;
+    else process.env.CORE_DB_PATH = previousCoreDbPath;
+  }
 });
 
 test("core chunk time migration apply is prohibited by Core ownership", () => {

@@ -4,7 +4,6 @@ const { writeSync } = require("node:fs");
 const { resolve } = require("node:path");
 const { homedir, tmpdir } = require("node:os");
 
-const DEFAULT_CORE_DB_PATH = resolve(homedir(), ".openclaw/memory/main.sqlite");
 const DEFAULT_ENGINE_DB_PATH = resolve(homedir(), ".openclaw/memory/memory-engine/memory-engine.sqlite");
 const DEFAULT_SESSIONS_DIR = resolve(homedir(), ".openclaw/agents/main/sessions");
 const DEFAULT_MEMORY_DIR = resolve(process.cwd(), "memory");
@@ -33,7 +32,7 @@ Options:
   --out <path>                   Output file path; default: ${DEFAULT_REPORT_DIR}/event-at-manual-recovery-<date>.<format>
   --preview-chars <n>            Preview cap; default: 240
   --no-preview                   Do not include preview field/column
-  --core-db <path>               Core DB path; default: ${DEFAULT_CORE_DB_PATH}
+  --core-db <path>               Required historical/forensic Core DB source
   --engine-db <path>             Engine DB path; default: ${DEFAULT_ENGINE_DB_PATH}
   --sessions-dir <path>          Session transcript dir; default: ${DEFAULT_SESSIONS_DIR}
   --memory-dir <path>            Workspace memory dir for existence checks; default: ${DEFAULT_MEMORY_DIR}
@@ -143,6 +142,9 @@ function parseArgs(argv = []) {
   if (!options.help && !options.date) {
     throw new Error("--date is required");
   }
+  if (!options.help && !options.coreDbPath) {
+    throw new Error("--core-db is required for historical Core forensic operations");
+  }
   return options;
 }
 
@@ -157,7 +159,7 @@ function toExportOptions(options) {
     outPath: options.outPath || resolveDefaultOutPath(options.date, options.format),
     previewChars: options.previewChars,
     includePreview: options.includePreview,
-    coreDbPath: options.coreDbPath || process.env.MEMORY_ENGINE_CORE_DB || process.env.CORE_DB_PATH || DEFAULT_CORE_DB_PATH,
+    coreDbPath: options.coreDbPath ? resolve(options.coreDbPath) : null,
     engineDbPath: options.engineDbPath || process.env.MEMORY_ENGINE_DB || process.env.ENGINE_DB_PATH || DEFAULT_ENGINE_DB_PATH,
     sessionsDir: options.sessionsDir || process.env.MEMORY_ENGINE_SESSIONS_DIR || DEFAULT_SESSIONS_DIR,
     memoryDir: options.memoryDir || process.env.MEMORY_ENGINE_MEMORY_DIR || DEFAULT_MEMORY_DIR,
@@ -168,6 +170,7 @@ function toExportOptions(options) {
 function printHuman(summary) {
   writeStdout(`mode: ${summary.mode}`);
   writeStdout(`writes_db: ${summary.writes_db}`);
+  writeStdout(`core_db_path: ${summary.core_db_path}`);
   writeStdout(`date: ${summary.date}`);
   writeStdout(`candidate_count: ${summary.candidate_count}`);
   writeStdout(`output_path: ${summary.output_path}`);
