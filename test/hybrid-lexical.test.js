@@ -162,7 +162,10 @@ test("hybridSearch keeps lexical confidence driven vector skip debug fields", as
               kg_data: "session checkpoint project",
             }];
           }
-          if (q.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (q.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1234567890abcdef" }];
+          }
+          if (q.includes("WITH selected AS") && q.includes("FROM chunks c")) {
             return [{
               id: "chunk-1234567890abcdef",
               source: "openclaw_core",

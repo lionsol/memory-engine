@@ -143,6 +143,8 @@ test("collector views expose only their channel dependency subset", () => {
   assert.equal(Object.hasOwn(kg, "recentCanaryDecision"), false);
 
   assert.equal(vector.getLancedbRuntimeRuntime, values.getLancedbRuntime);
+  assert.equal(vector.withCoreDb, values.withCoreDb);
+  assert.equal(Object.hasOwn(vector, "chunkMetaMap"), false);
   assert.equal(vector.shouldSkipVector, true);
   assert.equal(Object.hasOwn(vector, "withDb"), false);
   assert.equal(Object.hasOwn(vector, "kgAccessMode"), false);

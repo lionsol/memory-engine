@@ -53,14 +53,18 @@ function makeDbForVector({ includeRecentRows = false } = {}) {
             }
             return confidenceRows;
           }
+          if (q.includes("WITH selected AS") && q.includes("FROM chunks c")) {
+            const selectedIds = JSON.parse(String(args[0] || "[]"));
+            return chunkRows.filter(row => selectedIds.includes(row.id));
+          }
           if (q.includes("FROM chunks c")) {
             if (includeRecentRows && q.includes("ORDER BY c.updated_at DESC")) {
               return chunkRows.filter(row => row.id === "chunk-recent-1");
             }
             return [];
           }
-          if (q.includes("SELECT id, path, updated_at FROM chunks")) {
-            return chunkRows;
+          if (q.includes("SELECT id FROM chunks")) {
+            return chunkRows.map(({ id }) => ({ id }));
           }
           if (q.includes("FROM chunks") && !q.includes("chunks_fts")) {
             return chunkRows;
@@ -128,7 +132,11 @@ function makeDbForTiered({
               ...row,
             }));
           }
-          if (q.includes("SELECT id, path, updated_at FROM chunks")) return chunkRows;
+          if (q.includes("SELECT id FROM chunks")) return chunkRows.map(({ id }) => ({ id }));
+          if (q.includes("WITH selected AS") && q.includes("FROM chunks c")) {
+            const selectedIds = JSON.parse(String(args[0] || "[]"));
+            return chunkRows.filter(row => selectedIds.includes(row.id));
+          }
           if (q.includes("FROM chunks_fts f")) {
             const query = String(args[0] || "");
             return query.includes(" OR ") ? fallbackFtsRows : ftsRows;

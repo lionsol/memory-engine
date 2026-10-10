@@ -29,6 +29,20 @@ test("evaluateKgTextIdInvariant passes for all-text snapshots and empty snapshot
   assert.equal(empty.reason, "text_id_invariant_passed");
 });
 
+test("KG text-ID invariant is unchanged when Core snapshot rows contain only ids", () => {
+  const engineRows = [{ chunk_id: "chunk-1" }, { chunk_id: "chunk-2" }];
+  const fullCoreRows = engineRows.map(row => ({
+    id: row.chunk_id,
+    path: "memory/example.md",
+    updated_at: 1710000000,
+  }));
+  const idOnlyCoreRows = engineRows.map(row => ({ id: row.chunk_id }));
+  assert.deepEqual(
+    evaluateKgTextIdInvariant({ engineRows, coreRows: idOnlyCoreRows }),
+    evaluateKgTextIdInvariant({ engineRows, coreRows: fullCoreRows }),
+  );
+});
+
 test("evaluateKgTextIdInvariant fails closed for invalid snapshots", () => {
   const invalid = evaluateKgTextIdInvariant({ engineRows: null, coreRows: [] });
   assert.equal(invalid.passed, false);

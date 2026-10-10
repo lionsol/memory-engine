@@ -41,7 +41,10 @@ function rowsFor(sql) {
       is_archived: 0,
     }];
   }
-  if (sql.includes("SELECT id, path, updated_at FROM chunks")) {
+  if (sql.includes("SELECT id FROM chunks")) {
+    return [{ id: "chunk-1234567890abcdef" }];
+  }
+  if (sql.includes("WITH selected AS") && sql.includes("FROM chunks c")) {
     return [{ id: "chunk-1234567890abcdef", path: "memory/smart-add/test.md", updated_at: 1710000000 }];
   }
   return [];
@@ -268,7 +271,7 @@ test("explicit scope resolves and rejects with one lifecycle", async () => {
 
   const rejectedCalls = { scopeOpened: 0, scopeClosed: 0 };
   await assert.rejects(hybridSearch("query", {}, runtimeWithExplicitAccess({
-    withCoreDb: accessorFor("core", {}, { fail: sql => sql.includes("SELECT id, path, updated_at") }),
+    withCoreDb: accessorFor("core", {}, { fail: sql => sql.includes("SELECT id FROM chunks") }),
     withEngineDb: accessorFor("engine", {}),
   }, rejectedCalls)), /core reader failure/);
   assert.equal(rejectedCalls.scopeOpened, 1);
@@ -393,7 +396,10 @@ test("hybridSearch routes KG to isolated readers only when capability is true an
           if (name === "engine" && query.includes("SELECT chunk_id, confidence")) {
             return [{ chunk_id: "chunk-1", confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
           }
-          if (name === "core" && query.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (name === "core" && query.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1" }];
+          }
+          if (name === "core" && query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
             return [{ id: "chunk-1", path: "memory/a.md", updated_at: 1 }];
           }
           if (name === "engine" && query.includes("typeof(chunk_id) AS chunk_id_storage_class")) {
@@ -437,7 +443,10 @@ test("hybridSearch blocks KG when isolated identity is invalid", async () => {
           if (name === "engine" && query.includes("SELECT chunk_id, confidence")) {
             return [{ chunk_id: Buffer.from("blob-id"), confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
           }
-          if (name === "core" && query.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (name === "core" && query.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1" }];
+          }
+          if (name === "core" && query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
             return [{ id: "chunk-1", path: "memory/a.md", updated_at: 1 }];
           }
           if (name === "legacy" && query.includes("FROM memory_confidence mc") && query.includes("mc.kg_data LIKE")) {
@@ -484,7 +493,10 @@ test("hybridSearch routes Recent to isolated readers only when capability is tru
           if (name === "engine" && query.includes("SELECT chunk_id, confidence")) {
             return [{ chunk_id: "chunk-1", confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
           }
-          if (name === "core" && query.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (name === "core" && query.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1" }];
+          }
+          if (name === "core" && query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
             return [{ id: "chunk-1", path: "memory/smart-add/a.md", updated_at: 1 }];
           }
           if (name === "engine" && query.includes("COALESCE(is_archived, 0) != 0")) {
@@ -539,7 +551,10 @@ test("hybridSearch blocks Recent when isolated identity is invalid", async () =>
           if (name === "engine" && query.includes("SELECT chunk_id, confidence")) {
             return [{ chunk_id: Buffer.from("blob-id"), confidence: 0.8, last_confidence_update: 0, base_tau: 7, hit_count: 2, is_protected: 0, conflict_flag: 0, category: "raw_log", is_archived: 0 }];
           }
-          if (name === "core" && query.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (name === "core" && query.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1" }];
+          }
+          if (name === "core" && query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
             return [{ id: "chunk-1", path: "memory/smart-add/a.md", updated_at: 1 }];
           }
           if (name === "legacy" && query.includes("LEFT JOIN memory_confidence") && query.includes("memory/smart-add/%")) {

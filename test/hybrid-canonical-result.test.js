@@ -140,7 +140,10 @@ function createIsolatedHybridFixture({ dropCanonicalCore = false, external = fal
       return {
         all(...params) {
           if (query === "PRAGMA database_list") return [{ name: "main" }];
-          if (query.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (query.includes("SELECT id FROM chunks")) {
+            return [{ id: TOP_ID }, { id: LOWER_ID }];
+          }
+          if (query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
             return [
               { id: TOP_ID, path: "memory/smart-add/runtime.md", updated_at: 1710000000 },
               { id: LOWER_ID, path: "memory/smart-add/lower.md", updated_at: 1700000000 },

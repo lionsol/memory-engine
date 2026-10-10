@@ -28,7 +28,7 @@ function makeInternalResult() {
     sqlite_version: "3.49.2",
     better_sqlite3_version: "11.10.0",
     existingSnapshotInventory: {
-      core_fields: ["id", "path", "updated_at"],
+      core_fields: ["id"],
       engine_fields: ["chunk_id", "confidence", "last_confidence_update", "base_tau", "hit_count", "is_protected", "conflict_flag", "category", "is_archived"],
       engine_snapshot_contains_is_archived: true,
       engine_snapshot_contains_full_recent_metadata: true,

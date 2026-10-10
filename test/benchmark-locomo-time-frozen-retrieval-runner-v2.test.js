@@ -139,7 +139,10 @@ function mockHybridRuntime(options = {}) {
               is_archived: 0,
             }];
           }
-          if (query.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (query.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1234567890abcdef" }];
+          }
+          if (query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
             return [{
               id: "chunk-1234567890abcdef",
               path: "memory/episodes/session-checkpoint.md",

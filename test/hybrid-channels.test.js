@@ -121,8 +121,16 @@ function makeBaseCtx(overrides = {}) {
       },
     }),
     withCoreDb: fn => fn({
-      prepare() {
-        return { all: () => [] };
+      prepare(sql) {
+        return {
+          all(...args) {
+            if (!String(sql).includes("WITH selected AS")) return [];
+            const ids = JSON.parse(args[0] || "[]");
+            return ids
+              .map(id => overrides.chunkMetaMap?.get(id))
+              .filter(Boolean);
+          },
+        };
       },
     }),
     ftsAccessMode: "legacy",
@@ -932,6 +940,34 @@ test("vector fallback accepts the official manager array result contract", async
   assert.equal(ctx.warnings.some(warning => warning.message === "search_error"), false);
 });
 
+test("vector metadata misses preserve the existing Lance and manager fallbacks", async () => {
+  const lanceCtx = makeBaseCtx({
+    chunkMetaMap: new Map(),
+    withCoreDb: fn => fn({ prepare: () => ({ all: () => [] }) }),
+    getLancedbTableRuntime: () => ({
+      search: () => ({
+        limit() { return this; },
+        execute: async () => [{ id: "missing-lance", text: "lance", timestamp: 1710000000, _distance: 0.1 }],
+      }),
+    }),
+  });
+  await collectVectorCandidates(lanceCtx);
+  assert.equal(lanceCtx.channels.vector[0].path, "");
+  assert.equal(lanceCtx.channels.vector[0].created_at, 1710000000);
+
+  const managerCtx = makeBaseCtx({
+    chunkMetaMap: new Map(),
+    withCoreDb: fn => fn({ prepare: () => ({ all: () => [] }) }),
+    getLancedbRuntimeRuntime: async () => ({ table: null, readyState: "disabled" }),
+    getMemorySearchManagerFn: async () => ({
+      manager: { search: async () => [{ id: "missing-manager", text: "manager", score: 0.9 }] },
+    }),
+  });
+  await collectVectorCandidates(managerCtx);
+  assert.equal(managerCtx.channels.vector[0].path, "");
+  assert.equal(managerCtx.channels.vector[0].created_at, 0);
+});
+
 test("vector Lance single-query excludes archived managed candidates before channel output", async () => {
   const ctx = makeBaseCtx({
     confidenceMap: new Map([
@@ -1071,7 +1107,10 @@ test("hybridSearch integration smoke keeps topK order and debug compatibility", 
               is_archived: 0,
             }];
           }
-          if (q.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (q.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1234567890abcdef" }];
+          }
+          if (q.includes("WITH selected AS") && q.includes("FROM chunks c")) {
             return [{
               id: "chunk-1234567890abcdef",
               path: "memory/smart-add/memory-engine-compatibility.md",

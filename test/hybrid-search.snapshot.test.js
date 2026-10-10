@@ -26,7 +26,10 @@ function withFakeDb(fn) {
               is_archived: 0,
             }];
           }
-          if (q.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (q.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1234567890abcdef" }];
+          }
+          if (q.includes("WITH selected AS") && q.includes("FROM chunks c")) {
             return [{
               id: "chunk-1234567890abcdef",
               path: "memory/smart-add/2026-05-26.md",
@@ -322,6 +325,7 @@ test("hybridSearch snapshot stays JSON-stringify compatible", async () => {
 
   assertBoundedStageTimings(result.debug.hybrid_stage_timings);
   assertBoundedSetupTimings(result.debug.hybrid_setup_timings);
+  assert.equal(result.debug.hybrid_setup_timings.chunk_map_build_ms, 0);
   assert.equal(result.debug.hybrid_stage_timings.vector_ms, result.debug.vector_ms);
   if (result?.debug && Number.isFinite(result.debug.vector_ms)) {
     result.debug.vector_ms = 0;
@@ -445,7 +449,7 @@ test("hybridSearch reuses one scoped DB session across isolated reader calls", a
     prepare(sql) {
       const q = String(sql);
       return {
-        all() {
+        all(...args) {
           if (q.includes("SELECT chunk_id") && q.includes("FROM memory_confidence")) {
             return [{
               chunk_id: "chunk-1234567890abcdef",
@@ -459,7 +463,10 @@ test("hybridSearch reuses one scoped DB session across isolated reader calls", a
               is_archived: 0,
             }];
           }
-          if (q.includes("SELECT id, path, updated_at FROM chunks")) {
+          if (q.includes("SELECT id FROM chunks")) {
+            return [{ id: "chunk-1234567890abcdef" }];
+          }
+          if (q.includes("WITH selected AS") && q.includes("FROM chunks c")) {
             return [{
               id: "chunk-1234567890abcdef",
               path: "memory/smart-add/2026-05-26.md",
@@ -663,12 +670,16 @@ test("hybridSearch captures bounded channel provenance without changing result o
     prepare(sql) {
       const query = String(sql);
       return {
-        all() {
+        all(...args) {
           if (query.includes("PRAGMA database_list")) return [{ name: "main" }];
           if (query.includes("chunk_id") && query.includes("FROM memory_confidence")) {
             return confidenceRows;
           }
-          if (query.includes("SELECT id, path, updated_at FROM chunks")) return chunkRows;
+          if (query.includes("SELECT id FROM chunks")) return chunkRows.map(({ id }) => ({ id }));
+          if (query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
+            const ids = JSON.parse(args[0] || "[]");
+            return chunkRows.filter(row => ids.includes(row.id)).map(({ id, path, updated_at }) => ({ id, path, updated_at }));
+          }
           if (query.includes("FROM chunks c")) return [];
           if (query.includes("FROM chunks") && !query.includes("chunks_fts")) return chunkRows;
           return [];

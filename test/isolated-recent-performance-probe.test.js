@@ -17,7 +17,7 @@ test("recent performance probe returns a privacy-safe aggregated public report",
   });
 
   assert.equal(report.probe, "isolated_recent_archived_exclusion_performance");
-  assert.deepEqual(report.existing_snapshot_inventory.core_fields, ["id", "path", "updated_at"]);
+  assert.deepEqual(report.existing_snapshot_inventory.core_fields, ["id"]);
   assert.deepEqual(
     report.existing_snapshot_inventory.engine_fields,
     ["chunk_id", "confidence", "last_confidence_update", "base_tau", "hit_count", "is_protected", "conflict_flag", "category", "is_archived"],

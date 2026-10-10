@@ -65,8 +65,12 @@ function createHybridRuntime({
                 is_archived: row.is_archived,
               }));
             }
-            if (query.includes("SELECT id, path, updated_at FROM chunks")) {
-              return chunkRows;
+            if (query.includes("SELECT id FROM chunks")) {
+              return chunkRows.map(({ id }) => ({ id }));
+            }
+            if (query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
+              const selectedIds = JSON.parse(String(args[0] || "[]"));
+              return chunkRows.filter(row => selectedIds.includes(row.id));
             }
             if (query.includes("chunks_fts")) {
               return ftsIds.map(id => rowById.get(id));
@@ -132,6 +136,8 @@ function stripCanaryDebug(debug = {}) {
     if (key.startsWith("recent_canary_")) delete next[key];
   }
   if (Number.isFinite(next.vector_ms)) next.vector_ms = 0;
+  delete next.hybrid_stage_timings;
+  delete next.hybrid_setup_timings;
   return next;
 }
 

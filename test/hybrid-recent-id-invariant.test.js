@@ -61,6 +61,20 @@ test("evaluateRecentTextIdInvariant passes only when both snapshots are all TEXT
   assert.equal(bothFailed.core.storage_classes.other, 1);
 });
 
+test("Recent text-ID invariant is unchanged when Core snapshot rows contain only ids", () => {
+  const engineRows = [{ chunk_id: "chunk-1" }, { chunk_id: "chunk-2" }];
+  const fullCoreRows = engineRows.map(row => ({
+    id: row.chunk_id,
+    path: "memory/example.md",
+    updated_at: 1710000000,
+  }));
+  const idOnlyCoreRows = engineRows.map(row => ({ id: row.chunk_id }));
+  assert.deepEqual(
+    evaluateRecentTextIdInvariant({ engineRows, coreRows: idOnlyCoreRows }),
+    evaluateRecentTextIdInvariant({ engineRows, coreRows: fullCoreRows }),
+  );
+});
+
 test("evaluateRecentTextIdInvariant fails closed for invalid snapshots", () => {
   const invalid = evaluateRecentTextIdInvariant({
     engineRows: null,
