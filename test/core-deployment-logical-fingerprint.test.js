@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -9,7 +17,13 @@ import Database from "better-sqlite3";
 
 import fingerprint from "../bin/core-deployment-logical-fingerprint.js";
 
-const { captureFingerprint, compareFingerprints, FINGERPRINT_CONTRACT, runCli } = fingerprint;
+const {
+  captureFingerprint,
+  compareFingerprints,
+  FINGERPRINT_CONTRACT,
+  runCli,
+  withReadSnapshot,
+} = fingerprint;
 
 function createCurrentCoreDb(path) {
   const db = new Database(path);
@@ -104,6 +118,24 @@ function setBaseline(path, report) {
   writeFileSync(path, `${JSON.stringify(report)}\n`, "utf8");
 }
 
+function assertQuickCheck(path) {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    assert.equal(db.prepare("PRAGMA quick_check").get().quick_check, "ok");
+  } finally {
+    db.close();
+  }
+}
+
+async function assertOutputRejected(coreDbPath, outputPath, expectedMessage) {
+  const before = fileSha256(coreDbPath);
+  const result = await invokeCli(["--core-db", coreDbPath, "--out", outputPath]);
+  assert.equal(result.status, 64, result.stderr);
+  assert.match(result.stderr, expectedMessage);
+  assert.equal(fileSha256(coreDbPath), before);
+  assertQuickCheck(coreDbPath);
+}
+
 test("captures deterministic current-dialect fingerprints read-only and supports --out", async t => {
   const { root, coreDbPath } = createFixture(t);
   const beforeDigest = fileSha256(coreDbPath);
@@ -130,7 +162,7 @@ test("captures deterministic current-dialect fingerprints read-only and supports
 
   const refused = await invokeCli(["--core-db", coreDbPath, "--out", coreDbPath]);
   assert.equal(refused.status, 64);
-  assert.match(refused.stderr, /must not target the Core DB/u);
+  assert.match(refused.stderr, /--out resolves to protected Core storage/u);
   assert.equal(fileSha256(coreDbPath), beforeDigest);
 });
 
@@ -163,6 +195,86 @@ test("uses shared resolver current-agent Core default", async t => {
   }
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).core_db_path, resolve(coreDbPath));
+});
+
+test("rejects symlink and hardlink aliases to Core", async t => {
+  const { root, coreDbPath } = createFixture(t);
+  const symlinkAlias = join(root, "core-alias");
+  const hardlinkAlias = join(root, "core-hardlink");
+  symlinkSync(coreDbPath, symlinkAlias);
+  linkSync(coreDbPath, hardlinkAlias);
+
+  await assertOutputRejected(coreDbPath, symlinkAlias, /--out resolves to protected Core storage/u);
+  await assertOutputRejected(coreDbPath, hardlinkAlias, /--out resolves to protected Core storage/u);
+});
+
+test("rejects future Core WAL, SHM, and journal paths", async t => {
+  const { coreDbPath } = createFixture(t);
+  for (const suffix of ["-wal", "-shm", "-journal"]) {
+    await assertOutputRejected(coreDbPath, `${coreDbPath}${suffix}`, /--out resolves to protected Core storage/u);
+  }
+});
+
+test("rejects symlinked-parent aliases to Core", async t => {
+  const { root, coreDbPath } = createFixture(t);
+  const aliasDir = join(root, "alias-dir");
+  symlinkSync(root, aliasDir, "dir");
+
+  await assertOutputRejected(coreDbPath, join(aliasDir, "openclaw-agent.sqlite"), /--out resolves to protected Core storage/u);
+});
+
+test("rejects baseline symlink and hardlink aliases", async t => {
+  const { root, coreDbPath } = createFixture(t);
+  const baselinePath = join(root, "before.json");
+  setBaseline(baselinePath, await captureFingerprint({ coreDbPath }));
+  const baselineSymlink = join(root, "before-symlink.json");
+  const baselineHardlink = join(root, "before-hardlink.json");
+  symlinkSync(baselinePath, baselineSymlink);
+  linkSync(baselinePath, baselineHardlink);
+
+  for (const alias of [baselineSymlink, baselineHardlink]) {
+    const result = await invokeCli(["--compare", alias, "--core-db", coreDbPath, "--out", alias]);
+    assert.equal(result.status, 64, result.stderr);
+    assert.match(result.stderr, /--out resolves to the comparison baseline/u);
+    assert.equal(readFileSync(baselinePath, "utf8"), readFileSync(alias, "utf8"));
+  }
+});
+
+test("atomically replaces a normal existing JSON output", async t => {
+  const { root, coreDbPath } = createFixture(t);
+  const outputPath = join(root, "report.json");
+  writeFileSync(outputPath, "old report\n");
+  const result = await invokeCli(["--core-db", coreDbPath, "--out", outputPath]);
+  assert.equal(result.status, 0, result.stderr);
+  const saved = JSON.parse(readFileSync(outputPath, "utf8"));
+  assert.equal(saved.core_db_path, resolve(coreDbPath));
+  assert.notEqual(readFileSync(outputPath, "utf8"), "old report\n");
+});
+
+test("read snapshot keeps a stable view across a concurrent writer commit", t => {
+  const root = mkdtempSync(join(tmpdir(), "core-logical-snapshot-"));
+  const snapshotPath = join(root, "snapshot.sqlite");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const setup = new Database(snapshotPath);
+  setup.exec("PRAGMA journal_mode = WAL; CREATE TABLE values_table (value TEXT); INSERT INTO values_table VALUES ('before')");
+  setup.close();
+
+  const reader = new Database(snapshotPath, { readonly: true, fileMustExist: true });
+  const writer = new Database(snapshotPath, { fileMustExist: true });
+  t.after(() => {
+    reader.close();
+    writer.close();
+  });
+
+  const observed = withReadSnapshot(reader, () => {
+    assert.equal(reader.inTransaction, true);
+    const before = reader.prepare("SELECT value FROM values_table").get().value;
+    writer.prepare("UPDATE values_table SET value = 'after'").run();
+    const after = reader.prepare("SELECT value FROM values_table").get().value;
+    return { before, after };
+  });
+  assert.deepEqual(observed, { before: "before", after: "before" });
+  assert.equal(writer.prepare("SELECT value FROM values_table").get().value, "after");
 });
 
 test("schema_meta.updated_at changes are allowed by compare", async t => {

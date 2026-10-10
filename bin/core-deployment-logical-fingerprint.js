@@ -1,8 +1,21 @@
 #!/usr/bin/env node
 
-const { createHash } = require("node:crypto");
-const { createReadStream, mkdirSync, statSync, writeFileSync, readFileSync } = require("node:fs");
-const { dirname, resolve } = require("node:path");
+const { createHash, randomUUID } = require("node:crypto");
+const {
+  closeSync,
+  createReadStream,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} = require("node:fs");
+const { constants: fsConstants } = require("node:fs");
+const { basename, dirname, resolve } = require("node:path");
 const Database = require("better-sqlite3");
 const { resolveMemoryEnginePaths } = require("../lib/runtime/paths.cjs");
 
@@ -206,6 +219,111 @@ function captureLogicalSections(db) {
   };
 }
 
+function withReadSnapshot(db, read) {
+  db.exec("BEGIN");
+  try {
+    return read();
+  } finally {
+    if (db.inTransaction) db.exec("ROLLBACK");
+  }
+}
+
+function canonicalFuturePath(inputPath) {
+  let candidate = resolve(inputPath);
+  const remainder = [];
+  while (true) {
+    try {
+      const canonical = realpathSync(candidate);
+      return resolve(canonical, ...remainder);
+    } catch (error) {
+      if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+      const parent = dirname(candidate);
+      if (parent === candidate) throw error;
+      remainder.unshift(basename(candidate));
+      candidate = parent;
+    }
+  }
+}
+
+function filesystemIdentity(path) {
+  try {
+    const stat = statSync(path);
+    return { dev: String(stat.dev), ino: String(stat.ino) };
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+    throw error;
+  }
+}
+
+function describeFilesystemTarget(path, label) {
+  return {
+    label,
+    canonicalPath: canonicalFuturePath(path),
+    identity: filesystemIdentity(path),
+  };
+}
+
+function protectedOutputTargets(coreDbPath, comparePath) {
+  const canonicalCorePath = canonicalFuturePath(coreDbPath);
+  const targets = [
+    describeFilesystemTarget(canonicalCorePath, "Core storage"),
+    describeFilesystemTarget(`${canonicalCorePath}-wal`, "Core storage"),
+    describeFilesystemTarget(`${canonicalCorePath}-shm`, "Core storage"),
+    describeFilesystemTarget(`${canonicalCorePath}-journal`, "Core storage"),
+  ];
+  if (comparePath) {
+    targets.push(describeFilesystemTarget(comparePath, "the comparison baseline"));
+  }
+  return targets;
+}
+
+function assertOutputIsSafe(outputPath, coreDbPath, comparePath) {
+  const output = describeFilesystemTarget(outputPath, "output");
+  for (const target of protectedOutputTargets(coreDbPath, comparePath)) {
+    if (output.canonicalPath === target.canonicalPath) {
+      throw new Error(target.label === "the comparison baseline"
+        ? "--out resolves to the comparison baseline"
+        : "--out resolves to protected Core storage");
+    }
+    if (output.identity && target.identity
+      && output.identity.dev === target.identity.dev
+      && output.identity.ino === target.identity.ino) {
+      throw new Error(target.label === "the comparison baseline"
+        ? "--out resolves to the comparison baseline"
+        : "--out resolves to protected Core storage");
+    }
+  }
+}
+
+function writeAtomic(outputPath, content, coreDbPath, comparePath) {
+  const absoluteOutputPath = resolve(outputPath);
+  assertOutputIsSafe(absoluteOutputPath, coreDbPath, comparePath);
+  mkdirSync(dirname(absoluteOutputPath), { recursive: true });
+  assertOutputIsSafe(absoluteOutputPath, coreDbPath, comparePath);
+
+  const parent = dirname(absoluteOutputPath);
+  const tempPath = `${parent}/.${absoluteOutputPath.slice(parent.length + 1)}.tmp-${process.pid}-${randomUUID()}`;
+  let fd;
+  try {
+    fd = openSync(tempPath, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600);
+    const bytes = Buffer.from(content, "utf8");
+    let offset = 0;
+    while (offset < bytes.length) offset += writeSync(fd, bytes, offset, bytes.length - offset);
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
+    renameSync(tempPath, absoluteOutputPath);
+  } catch (error) {
+    if (fd !== undefined) closeSync(fd);
+    try {
+      unlinkSync(tempPath);
+    } catch (cleanupError) {
+      if (cleanupError?.code !== "ENOENT") error.cleanupError = cleanupError;
+    }
+    throw error;
+  }
+}
+
 function sha256File(path) {
   return new Promise((resolvePromise, reject) => {
     const hash = createHash("sha256");
@@ -223,7 +341,7 @@ async function captureFingerprint({ coreDbPath, physicalSha256 = false } = {}) {
   try {
     db.pragma("query_only = ON");
     db.defaultSafeIntegers(true);
-    sections = captureLogicalSections(db);
+    sections = withReadSnapshot(db, () => captureLogicalSections(db));
   } finally {
     db.close();
   }
@@ -359,15 +477,7 @@ async function runCli(argv, { stdout = process.stdout, stderr = process.stderr }
     }
     const output = `${JSON.stringify(report, null, args.pretty ? 2 : 0)}\n`;
     if (args.outPath) {
-      const outputPath = resolve(args.outPath);
-      if (outputPath === report.core_db_path) {
-        throw new Error("--out must not target the Core DB");
-      }
-      if (args.comparePath && outputPath === resolve(args.comparePath)) {
-        throw new Error("--out must not overwrite the comparison baseline");
-      }
-      mkdirSync(dirname(outputPath), { recursive: true });
-      writeFileSync(outputPath, output, "utf8");
+      writeAtomic(args.outPath, output, report.core_db_path, args.comparePath);
     }
     stdout.write(output);
     return exitCode;
@@ -389,4 +499,5 @@ module.exports = {
   compareFingerprints,
   parseArgs,
   runCli,
+  withReadSnapshot,
 };
