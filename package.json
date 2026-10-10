@@ -19,6 +19,7 @@
     "test:integrity": "node bin/test-integrity-check.js",
     "review": "node bin/review-gate.js",
     "memory:quality": "node bin/memory-quality-eval.js",
+    "ops:core-deployment-fingerprint": "node bin/core-deployment-logical-fingerprint.js",
     "benchmark:longmemeval:validate": "node bin/benchmark-longmemeval-v1.js",
     "benchmark:locomo:validate": "node bin/benchmark-locomo-v1.js",
     "benchmark:locomo:retrieval": "node bin/run-locomo-retrieval-v1.js",

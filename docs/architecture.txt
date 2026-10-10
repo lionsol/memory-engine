@@ -54,12 +54,13 @@ memory-engine
 └──────────────────────────────────────────────┘
 
    CORE_DB
-   ~/.openclaw/memory/main.sqlite
+   ~/.openclaw/agents/main/agent/openclaw-agent.sqlite
 
    ├─ OpenClaw Core Memory
-   ├─ chunks (842)
-   ├─ memory_confidence (97)
-   └─ 已恢复后的健康库
+   └─ current OpenClaw memory index
+
+   ~/.openclaw/memory/main.sqlite
+   └─ resolver legacy fallback only; not the current main-agent Core
 
                 ▲
                 │ ATTACH (readonly)
