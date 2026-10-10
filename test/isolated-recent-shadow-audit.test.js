@@ -189,7 +189,7 @@ test("shadow audit reports isolated equivalence across fts and fallback scenario
         core_query_count: 1,
       });
       assert.equal(ftsTrue.isolated_requested.query_counts.engine_query_count_total, 2);
-      assert.equal(ftsTrue.isolated_requested.query_counts.core_query_count, 3);
+      assert.equal(ftsTrue.isolated_requested.query_counts.core_query_count, 2);
       assert.equal(ftsTrue.isolated_requested.archived_payload.payload_large, false);
       assert.equal(
         assertRecentShadowPrivacy(JSON.stringify(report), [

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { openCoreDbReadonly, openEngineDbIsolated } from "../lib/db/isolated-dbs.js";
+import { ensureCoreStoreCompatibility } from "../lib/db/core-store.js";
 import { collectRecentCandidates } from "../lib/recall/hybrid/channels/recent.js";
 import {
   createCandidateCounts,
@@ -23,6 +24,7 @@ import {
 } from "../lib/recall/hybrid/normalize-candidate.js";
 import { enrichLexicalCandidate } from "../lib/recall/hybrid/lexical.js";
 import { computeRecencyBoost } from "../lib/recall/hybrid/fusion.js";
+import { ISOLATED_RECENT_SHARED_SQL } from "../lib/recall/hybrid/recent-access.js";
 
 function createFixtureRoot() {
   return mkdtempSync(join(tmpdir(), "memory-engine-recent-isolated-"));
@@ -55,6 +57,38 @@ function createCoreDb(root) {
       updated_at INTEGER
     );
   `);
+  return db;
+}
+
+function createCurrentCoreDb(root, { withRecentIndex = false } = {}) {
+  const db = new Database(join(root, "current-core.sqlite"));
+  db.exec(`
+    CREATE TABLE memory_index_chunks (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'memory',
+      start_line INTEGER NOT NULL,
+      end_line INTEGER NOT NULL,
+      hash TEXT NOT NULL,
+      model TEXT NOT NULL,
+      text TEXT NOT NULL,
+      embedding TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+  const insert = db.prepare(`
+    INSERT INTO memory_index_chunks
+      (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at)
+    VALUES (?, ?, 'memory', 1, 1, 'hash', 'model', ?, ?, ?)
+  `);
+  insert.run("archived", "memory/smart-add/archived.md", "alpha archived", "[]", 500);
+  insert.run("A", "memory/smart-add/A.md", "alpha A", "x".repeat(1024), 300);
+  insert.run("B", "memory/episodes/B.md", "alpha B", "x".repeat(1024), 200);
+  insert.run("C", "memory/smart-add/C.md", "alpha C", "x".repeat(1024), 100);
+  if (withRecentIndex) {
+    db.exec("CREATE INDEX idx_memory_index_chunks_recent_cover ON memory_index_chunks(updated_at DESC, id ASC, path)");
+  }
+  ensureCoreStoreCompatibility(db);
   return db;
 }
 
@@ -343,9 +377,13 @@ test("isolated Recent matches legacy across like, recent, episode, and recent_fa
     assert.equal(isolated.ctx.debug.recent_archived_duplicate_id_count, 0);
     assert.equal(isolated.ctx.debug.recent_archived_payload_large, false);
     assert.equal(isolated.ctx.debug.recent_isolated_engine_query_count, 1);
-    assert.equal(isolated.ctx.debug.recent_isolated_core_query_count, 3);
+    assert.equal(isolated.ctx.debug.recent_isolated_core_query_count, 2);
     assert.equal(isolated.ctx.debug.recent_isolated_metadata_query_count, 1);
     assert.deepEqual(isolated.ctx.debug.recent_isolated_branches, ["like_fallback", "recent_scored", "recent_fallback"]);
+    for (const key of ["archive_load_ms", "core_access_ms", "core_query_ms", "engine_metadata_ms", "postprocess_ms"]) {
+      assert.equal(Number.isFinite(isolated.ctx.debug.recent_io_timings[key]), true, key);
+      assert.equal(isolated.ctx.debug.recent_io_timings[key] >= 0, true, key);
+    }
     assert.deepEqual(ids(isolated.ctx.channels.recent), ["A", "B", "C"]);
     assert.deepEqual(ids(isolated.ctx.channels.episode), ["B"]);
     assert.deepEqual(ids(isolated.ctx.channels.recent_fallback), ["A", "B", "C"]);
@@ -392,6 +430,35 @@ test("isolated Recent preserves missing-confidence semantics and ordering", asyn
     assert.equal(isolated.ctx.channels.recent[1].hits, legacy.ctx.channels.recent[1].hits);
     assert.equal(isolated.ctx.channels.recent[1].category, legacy.ctx.channels.recent[1].category);
     assert.equal(isolated.ctx.candidateCounts.recent_raw, legacy.ctx.candidateCounts.recent_raw);
+  });
+});
+
+test("isolated Recent shares the larger branch pool without changing differing branch limits", async () => {
+  await withFixture(({ core, engine }) => {
+    for (const [id, updatedAt] of [["A", 3000], ["B", 2000], ["C", 1000]]) {
+      insertChunk(core, { id, updatedAt, path: `memory/smart-add/${id}.md`, text: `alpha ${id}` });
+      insertConfidence(engine, { id, kgData: `alpha ${id}` });
+    }
+  }, async (paths) => {
+    const options = {
+      ftsIsEmpty: true,
+      recentTopK: 1,
+      recentRerankTopK: 3,
+      recentFallbackTopK: 3,
+      likeTopK: 1,
+    };
+    const legacy = await runRecent(paths, { ...options, recentAccessMode: "legacy" });
+    const isolated = await runRecent(paths, {
+      ...options,
+      recentAccessMode: "isolated",
+      recentIsolationRequested: true,
+    });
+
+    assert.deepEqual(channelSnapshot(isolated.ctx.channels, "recent"), channelSnapshot(legacy.ctx.channels, "recent"));
+    assert.deepEqual(channelSnapshot(isolated.ctx.channels, "recent_fallback"), channelSnapshot(legacy.ctx.channels, "recent_fallback"));
+    assert.equal(isolated.ctx.candidateCounts.recent_raw, legacy.ctx.candidateCounts.recent_raw);
+    assert.equal(isolated.ctx.candidateCounts.recent_fallback_raw, legacy.ctx.candidateCounts.recent_fallback_raw);
+    assert.equal(isolated.ctx.debug.recent_isolated_core_query_count, 2);
   });
 });
 
@@ -642,7 +709,7 @@ test("isolated Recent keeps empty archived payload equivalent and production SQL
     const coreDb = new Database(paths.corePath, { readonly: true, fileMustExist: true });
     try {
       const coreSqlRecords = isolated.records.filter(record => record.db === "core" && record.sql.includes("json_each(?) AS archived"));
-      assert.equal(coreSqlRecords.length, 3);
+      assert.equal(coreSqlRecords.length, 2);
       for (const record of coreSqlRecords) {
         assert.equal(record.sql.includes("NOT IN"), true);
         assert.equal(record.sql.includes("NOT EXISTS"), false);
@@ -655,4 +722,36 @@ test("isolated Recent keeps empty archived payload equivalent and production SQL
       coreDb.close();
     }
   });
+});
+
+test("isolated Recent shared selection preserves current Core rows and exposes bounded query plans", () => {
+  const root = createFixtureRoot();
+  try {
+    for (const withRecentIndex of [false, true]) {
+      const core = createCurrentCoreDb(root, { withRecentIndex });
+      try {
+        const params = [JSON.stringify(["archived"]), 2];
+        const rows = core.prepare(ISOLATED_RECENT_SHARED_SQL).all(...params);
+        assert.deepEqual(rows.map(row => row.id), ["A", "B"]);
+
+        const details = core.prepare(`EXPLAIN QUERY PLAN ${ISOLATED_RECENT_SHARED_SQL}`).all(...params)
+          .map(row => String(row.detail || row[3] || ""));
+        const invariantDetails = core.prepare("EXPLAIN QUERY PLAN SELECT id FROM chunks").all()
+          .map(row => String(row.detail || row[3] || ""));
+        assert.match(invariantDetails.join("\n"), /COVERING INDEX/i);
+        if (withRecentIndex) {
+          assert.match(details.join("\n"), /COVERING INDEX idx_memory_index_chunks_recent_cover/i);
+          assert.match(details.join("\n"), /SEARCH memory_index_chunks USING (?:INDEX|INTEGER PRIMARY KEY).*\(id=\?/i);
+          assert.doesNotMatch(details.join("\n"), /SCAN memory_index_chunks\s*$/i);
+        } else {
+          assert.match(details.join("\n"), /SCAN memory_index_chunks/i);
+        }
+      } finally {
+        core.close();
+        rmSync(join(root, "current-core.sqlite"), { force: true });
+      }
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

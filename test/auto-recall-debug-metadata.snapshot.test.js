@@ -153,6 +153,14 @@ test("autoRecall debug metadata projects bounded hybrid stage timings", () => {
         chunk_map_build_ms: 10,
         ignored_ms: 999,
       },
+      recent_io_timings: {
+        archive_load_ms: 11,
+        core_access_ms: 12,
+        core_query_ms: 13,
+        engine_metadata_ms: 14,
+        postprocess_ms: 15,
+        ignored_ms: 999,
+      },
     },
   });
 
@@ -175,6 +183,13 @@ test("autoRecall debug metadata projects bounded hybrid stage timings", () => {
     chunk_db_wait_ms: 8,
     chunk_query_ms: 9,
     chunk_map_build_ms: 10,
+  });
+  assert.deepEqual(metadata.recent_io_timings, {
+    archive_load_ms: 11,
+    core_access_ms: 12,
+    core_query_ms: 13,
+    engine_metadata_ms: 14,
+    postprocess_ms: 15,
   });
 });
 
@@ -206,6 +221,29 @@ test("autoRecall debug metadata bounds malformed hybrid setup timings", () => {
     chunk_db_wait_ms: 0,
     chunk_query_ms: 0,
     chunk_map_build_ms: 0,
+  });
+});
+
+test("autoRecall debug metadata bounds malformed Recent I/O timings", () => {
+  const metadata = buildAutoRecallDebugMetadata("query", {
+    results: [],
+    debug: {
+      recent_io_timings: {
+        archive_load_ms: -1,
+        core_access_ms: Infinity,
+        core_query_ms: NaN,
+        engine_metadata_ms: "not-a-number",
+        postprocess_ms: 3_600_001,
+      },
+    },
+  });
+
+  assert.deepEqual(metadata.recent_io_timings, {
+    archive_load_ms: 0,
+    core_access_ms: 0,
+    core_query_ms: 0,
+    engine_metadata_ms: 0,
+    postprocess_ms: 3_600_000,
   });
 });
 

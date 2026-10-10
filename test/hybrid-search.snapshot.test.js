@@ -29,7 +29,7 @@ function withFakeDb(fn) {
           if (q.includes("SELECT id FROM chunks")) {
             return [{ id: "chunk-1234567890abcdef" }];
           }
-          if (q.includes("WITH selected AS") && q.includes("FROM chunks c")) {
+          if (q.includes("WITH selected AS") && !q.includes("MATERIALIZED") && q.includes("FROM chunks c")) {
             return [{
               id: "chunk-1234567890abcdef",
               path: "memory/smart-add/2026-05-26.md",
@@ -676,7 +676,7 @@ test("hybridSearch captures bounded channel provenance without changing result o
             return confidenceRows;
           }
           if (query.includes("SELECT id FROM chunks")) return chunkRows.map(({ id }) => ({ id }));
-          if (query.includes("WITH selected AS") && query.includes("FROM chunks c")) {
+          if (query.includes("WITH selected AS") && !query.includes("MATERIALIZED") && query.includes("FROM chunks c")) {
             const ids = JSON.parse(args[0] || "[]");
             return chunkRows.filter(row => ids.includes(row.id)).map(({ id, path, updated_at }) => ({ id, path, updated_at }));
           }

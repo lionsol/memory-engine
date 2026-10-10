@@ -216,7 +216,7 @@ test("rollout readiness audit passes canary readiness with branch coverage, no-h
       const ftsFalse = report.scenarios.find(item => item.scenario.ftsIsEmpty === false && item.comparison.classification === "isolated_equivalent");
       const ftsTrue = report.scenarios.find(item => item.scenario.ftsIsEmpty === true && item.comparison.classification === "isolated_equivalent");
       assert.equal(ftsFalse.isolated_requested.query_counts.core_query_count, 1);
-      assert.equal(ftsTrue.isolated_requested.query_counts.core_query_count, 3);
+      assert.equal(ftsTrue.isolated_requested.query_counts.core_query_count, 2);
       assert.equal(report.concurrency.length, 2);
       assert.equal(report.concurrency.every(item =>
         item.error_count === 0

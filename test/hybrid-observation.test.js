@@ -134,6 +134,33 @@ test("hybrid observation preserves canonical fields and derives fallback from ac
   assert.equal(JSON.stringify(observation).includes("must not persist"), false);
 });
 
+test("hybrid observation projects bounded Recent I/O timings", () => {
+  const observation = buildHybridSearchObservation({
+    surface: "memory_engine_search",
+    result: {
+      results: [],
+      debug: {
+        recent_io_timings: {
+          archive_load_ms: 1.5,
+          core_access_ms: 2,
+          core_query_ms: 3,
+          engine_metadata_ms: 4,
+          postprocess_ms: 5,
+          ignored_ms: 999,
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(observation.recent_io_timings, {
+    archive_load_ms: 1.5,
+    core_access_ms: 2,
+    core_query_ms: 3,
+    engine_metadata_ms: 4,
+    postprocess_ms: 5,
+  });
+});
+
 test("hybrid observation persists only bounded explicit-search rerank metadata", () => {
   const observation = buildHybridSearchObservation({
     surface: "memory_engine_search",

@@ -138,6 +138,7 @@ function stripCanaryDebug(debug = {}) {
   if (Number.isFinite(next.vector_ms)) next.vector_ms = 0;
   delete next.hybrid_stage_timings;
   delete next.hybrid_setup_timings;
+  delete next.recent_io_timings;
   return next;
 }
 
