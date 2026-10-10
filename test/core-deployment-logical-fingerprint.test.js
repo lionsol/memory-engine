@@ -328,6 +328,36 @@ async function assertMutationDetected(t, mutate, expectedSection) {
   assert.equal(parseCliReport(result).comparison.deployment_invariant_equal, false);
 }
 
+async function assertProtectedTableIndexMutationDetected(t, { prepare, mutate }) {
+  const { root, coreDbPath } = createFixture(t);
+  const setup = new Database(coreDbPath);
+  prepare(setup);
+  setup.close();
+
+  const before = await captureFingerprint({ coreDbPath });
+  const baselinePath = join(root, "before.json");
+  setBaseline(baselinePath, before);
+
+  const db = new Database(coreDbPath);
+  mutate(db);
+  db.close();
+
+  const after = await captureFingerprint({ coreDbPath });
+  assert.equal(after.canonical_content.sha256, before.canonical_content.sha256);
+  assert.equal(after.schema_identity.sha256, before.schema_identity.sha256);
+  assert.equal(after.pragma_user_version, before.pragma_user_version);
+  assert.notEqual(after.schema_surface.sha256, before.schema_surface.sha256);
+
+  const result = await compareCli(baselinePath, coreDbPath);
+  assert.equal(result.status, 2, result.stderr);
+  const comparison = parseCliReport(result).comparison;
+  assert.equal(comparison.canonical_content_equal, true);
+  assert.equal(comparison.schema_identity_equal, true);
+  assert.equal(comparison.user_version_equal, true);
+  assert.equal(comparison.schema_surface_equal, false);
+  assert.equal(comparison.deployment_invariant_equal, false);
+}
+
 test("chunk text mutation changes canonical content and fails comparison", async t => {
   await assertMutationDetected(t, db => db.prepare("UPDATE memory_index_chunks SET text = 'changed' WHERE id = 'chunk-1'").run(), "canonical_content");
 });
@@ -358,6 +388,48 @@ test("PRAGMA user_version mutation fails comparison", async t => {
 
 test("memory-index schema surface mutation fails comparison", async t => {
   await assertMutationDetected(t, db => db.exec("CREATE TABLE memory_index_future_table (id INTEGER PRIMARY KEY, value TEXT)"), "schema_surface");
+});
+
+test("target protected-table index CREATE changes only schema surface", async t => {
+  await assertProtectedTableIndexMutationDetected(t, {
+    prepare: () => {},
+    mutate: db => db.exec("CREATE INDEX idx_memory_index_chunks_recent_cover ON memory_index_chunks(updated_at DESC, id ASC, path)"),
+  });
+});
+
+test("arbitrary-name protected-table index CREATE changes only schema surface", async t => {
+  await assertProtectedTableIndexMutationDetected(t, {
+    prepare: () => {},
+    mutate: db => db.exec("CREATE INDEX arbitrary_chunk_index ON memory_index_chunks(path)"),
+  });
+});
+
+test("target protected-table index definition changes are detected", async t => {
+  await assertProtectedTableIndexMutationDetected(t, {
+    prepare: db => db.exec("CREATE INDEX idx_memory_index_chunks_recent_cover ON memory_index_chunks(updated_at DESC, id ASC, path)"),
+    mutate: db => db.exec("DROP INDEX idx_memory_index_chunks_recent_cover; CREATE INDEX idx_memory_index_chunks_recent_cover ON memory_index_chunks(path, id)"),
+  });
+});
+
+test("arbitrary-name protected-table index definition changes are detected", async t => {
+  await assertProtectedTableIndexMutationDetected(t, {
+    prepare: db => db.exec("CREATE INDEX arbitrary_chunk_index ON memory_index_chunks(path)"),
+    mutate: db => db.exec("DROP INDEX arbitrary_chunk_index; CREATE INDEX arbitrary_chunk_index ON memory_index_chunks(updated_at, id)"),
+  });
+});
+
+test("target protected-table index DROP changes only schema surface", async t => {
+  await assertProtectedTableIndexMutationDetected(t, {
+    prepare: db => db.exec("CREATE INDEX idx_memory_index_chunks_recent_cover ON memory_index_chunks(updated_at DESC, id ASC, path)"),
+    mutate: db => db.exec("DROP INDEX idx_memory_index_chunks_recent_cover"),
+  });
+});
+
+test("arbitrary-name protected-table index DROP changes only schema surface", async t => {
+  await assertProtectedTableIndexMutationDetected(t, {
+    prepare: db => db.exec("CREATE INDEX arbitrary_chunk_index ON memory_index_chunks(path)"),
+    mutate: db => db.exec("DROP INDEX arbitrary_chunk_index"),
+  });
 });
 
 test("physical SHA mismatch is diagnostic and does not fail an equal logical invariant", async t => {

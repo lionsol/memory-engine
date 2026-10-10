@@ -191,6 +191,7 @@ function captureLogicalSections(db) {
     WHERE name = 'schema_meta'
        OR tbl_name = 'schema_meta'
        OR name LIKE 'memory_index_%'
+       OR tbl_name LIKE 'memory_index_%'
     ORDER BY type, name
   `).safeIntegers(true);
   const surface = hashRows(surfaceStatement, "schema_surface", SCHEMA_SURFACE_FIELDS);
