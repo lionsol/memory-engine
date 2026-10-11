@@ -298,6 +298,201 @@ _autorecall_recent_deployment_capture_core_baseline() {
   _autorecall_recent_deployment_validate_baseline_shape "$baseline_path" "$core_db" "$node"
 }
 
+_autorecall_recent_deployment_validate_engine_fingerprint() {
+  local report_path="$1"
+  local engine_db="$2"
+  local node="$3"
+
+  if [[ ! -s "$report_path" ]]; then
+    printf '%s\n' 'Engine fingerprint was not produced' >&2
+    return 64
+  fi
+  if "$node" -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    if (report.contract !== "engine_deployment_fingerprint_v1") throw new Error("Engine fingerprint contract mismatch");
+    if (report.engine_db_path !== path.resolve(process.argv[2])) throw new Error("Engine fingerprint path mismatch");
+    for (const key of ["engine_invariant_sha256", "content_sha256", "schema_sha256"]) {
+      if (!/^[a-f0-9]{64}$/.test(report[key] || "")) throw new Error(`Engine fingerprint field missing: ${key}`);
+    }
+    if (!Number.isSafeInteger(report.pragma_user_version) || report.pragma_user_version < 0) throw new Error("Engine user_version is invalid");
+    if (!Number.isSafeInteger(report.pragma_schema_version) || report.pragma_schema_version < 0) throw new Error("Engine schema_version is invalid");
+    if (!report.physical || !Number.isSafeInteger(report.physical.size_bytes) || !/^[a-f0-9]{64}$/.test(report.physical.sha256 || "")) throw new Error("Engine physical fingerprint is missing");
+  ' "$report_path" "$engine_db"; then
+    return 0
+  else
+    printf '%s\n' 'invalid Engine fingerprint' >&2
+    return 64
+  fi
+}
+
+_autorecall_recent_deployment_capture_engine_fingerprint() {
+  local report_path="$1"
+  local engine_db="$2"
+  local node="$3"
+  local require_path="$4"
+  local stdout_path="${report_path}.stdout"
+  local stderr_path="${report_path}.stderr"
+  local capture_exit
+
+  if "$node" -e '
+    const { createHash } = require("node:crypto");
+    const { readFileSync, statSync, writeFileSync } = require("node:fs");
+    const { resolve } = require("node:path");
+    const { createRequire } = require("node:module");
+    const dbPath = resolve(process.argv[1]);
+    const outputPath = resolve(process.argv[2]);
+    const requirePath = resolve(process.argv[3]);
+    const Database = createRequire(requirePath)("better-sqlite3");
+    const bytes = readFileSync(dbPath);
+    const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    try {
+      db.pragma("query_only = ON");
+      const schema = db.prepare("SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name").all();
+      const userVersion = db.prepare("PRAGMA user_version").get().user_version;
+      const schemaVersion = db.prepare("PRAGMA schema_version").get().schema_version;
+      const schemaSha = createHash("sha256").update(JSON.stringify(schema)).digest("hex");
+      const contentHasher = createHash("sha256");
+      const typeAndLengthUpdate = (value) => {
+        let type;
+        let raw;
+        if (value === null || value === undefined) {
+          type = "null";
+          raw = Buffer.alloc(0);
+        } else if (Buffer.isBuffer(value)) {
+          type = "blob";
+          raw = value;
+        } else if (typeof value === "bigint") {
+          type = "bigint";
+          raw = Buffer.from(value.toString(), "utf8");
+        } else {
+          type = typeof value;
+          raw = Buffer.from(String(value), "utf8");
+        }
+        const typeBytes = Buffer.from(type, "utf8");
+        const length = Buffer.alloc(8);
+        length.writeBigUInt64BE(BigInt(raw.byteLength));
+        contentHasher.update(typeBytes);
+        contentHasher.update(Buffer.from([0]));
+        contentHasher.update(length);
+        contentHasher.update(raw);
+      };
+      const quote = value => "\"" + String(value).replaceAll("\"", "\"\"") + "\"";
+      for (const table of schema.filter(row => row.type === "table" && !String(row.name).startsWith("sqlite_"))) {
+        const columns = db.prepare("PRAGMA table_info(" + quote(table.name) + ")").all().sort((a, b) => a.cid - b.cid);
+        const order = columns.map(column => quote(column.name)).join(", ");
+        const query = "SELECT * FROM " + quote(table.name) + (order ? " ORDER BY " + order : "");
+        contentHasher.update(Buffer.from("table:" + table.name + "\u0000", "utf8"));
+        for (const row of db.prepare(query).iterate()) {
+          contentHasher.update(Buffer.from("row\u0000", "utf8"));
+          for (const column of columns) typeAndLengthUpdate(row[column.name]);
+        }
+      }
+      const contentSha = contentHasher.digest("hex");
+      const physicalSha = createHash("sha256").update(bytes).digest("hex");
+      const invariantSha = createHash("sha256").update(JSON.stringify({ contentSha, schemaSha, userVersion, schemaVersion })).digest("hex");
+      const stats = statSync(dbPath);
+      writeFileSync(outputPath, `${JSON.stringify({
+        contract: "engine_deployment_fingerprint_v1",
+        engine_db_path: dbPath,
+        engine_invariant_sha256: invariantSha,
+        content_sha256: contentSha,
+        schema_sha256: schemaSha,
+        pragma_user_version: userVersion,
+        pragma_schema_version: schemaVersion,
+        physical: { size_bytes: stats.size, mtime_ms: stats.mtimeMs, sha256: physicalSha },
+      })}\n`, { mode: 0o600 });
+    } finally {
+      db.close();
+    }
+  ' "$engine_db" "$report_path" "$require_path" >"$stdout_path" 2>"$stderr_path"; then
+    capture_exit=0
+  else
+    capture_exit=$?
+  fi
+  if [[ "$capture_exit" != 0 ]]; then
+    printf 'Engine fingerprint capture failed with exit %s\n' "$capture_exit" >&2
+    return 64
+  fi
+  _autorecall_recent_deployment_validate_engine_fingerprint "$report_path" "$engine_db" "$node"
+}
+
+_autorecall_recent_deployment_compare_engine_fingerprint() {
+  local baseline_path="$1"
+  local after_path="$2"
+  local report_path="$3"
+  local engine_db="$4"
+  local node="$5"
+  local compare_exit
+
+  if "$node" -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const baseline = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const after = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+    const expected = path.resolve(process.argv[3]);
+    if (baseline.contract !== "engine_deployment_fingerprint_v1" || after.contract !== baseline.contract) throw new Error("Engine fingerprint contract mismatch");
+    if (baseline.engine_db_path !== expected || after.engine_db_path !== expected) throw new Error("Engine fingerprint path mismatch");
+    const comparison = {
+      contract: "engine_deployment_fingerprint_v1",
+      engine_db_path: expected,
+      valid: true,
+      engine_invariant_equal: baseline.engine_invariant_sha256 === after.engine_invariant_sha256,
+      content_equal: baseline.content_sha256 === after.content_sha256,
+      schema_equal: baseline.schema_sha256 === after.schema_sha256,
+      user_version_equal: baseline.pragma_user_version === after.pragma_user_version,
+      physical_sha_equal: baseline.physical?.sha256 === after.physical?.sha256,
+    };
+    fs.writeFileSync(path.resolve(process.argv[4]), `${JSON.stringify(comparison)}\n`, { mode: 0o600 });
+    process.exitCode = comparison.engine_invariant_equal ? 0 : 2;
+  ' "$baseline_path" "$after_path" "$engine_db" "$report_path"; then
+    compare_exit=0
+  else
+    compare_exit=$?
+  fi
+  if [[ "$compare_exit" != 0 && "$compare_exit" != 2 ]]; then
+    printf 'Engine fingerprint comparison failed with exit %s\n' "$compare_exit" >&2
+    return 64
+  fi
+  if ! "$node" -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    if (report.contract !== "engine_deployment_fingerprint_v1" || report.engine_db_path !== path.resolve(process.argv[2]) || report.valid !== true) throw new Error("invalid Engine comparison report");
+    for (const key of ["engine_invariant_equal", "content_equal", "schema_equal", "user_version_equal", "physical_sha_equal"]) if (typeof report[key] !== "boolean") throw new Error(`Engine comparison field missing: ${key}`);
+    if (Number(process.argv[3]) === 0 && report.engine_invariant_equal !== true) throw new Error("Engine exit 0 without equal invariant");
+    if (Number(process.argv[3]) === 2 && report.engine_invariant_equal === true) throw new Error("Engine exit 2 with equal invariant");
+  ' "$report_path" "$engine_db" "$compare_exit"; then
+    printf '%s\n' 'invalid Engine comparison report' >&2
+    return 64
+  fi
+  AUTORECALL_RECENT_DEPLOYMENT_ENGINE_EQUAL=0
+  if [[ "$compare_exit" == 0 ]]; then AUTORECALL_RECENT_DEPLOYMENT_ENGINE_EQUAL=1; fi
+  return 0
+}
+
+_autorecall_recent_deployment_capture_cron_after() {
+  local store_path="$1"
+  local output_path="$2"
+  local projection_path="$3"
+  local node="$4"
+  local raw_tmp="${output_path}.tmp.$$"
+  if [[ ! -f "$store_path" || ! -s "$store_path" ]]; then
+    printf '%s\n' 'confirmed host cron store is unavailable after child' >&2
+    return 64
+  fi
+  if cp -- "$store_path" "$raw_tmp" &&
+     _autorecall_recent_deployment_cron_projection "$raw_tmp" "${projection_path}.tmp" "$node" &&
+     mv -- "$raw_tmp" "$output_path" &&
+     mv -- "${projection_path}.tmp" "$projection_path"; then
+    return 0
+  fi
+  rm -f -- "$raw_tmp" "${projection_path}.tmp"
+  printf '%s\n' 'invalid confirmed host cron store after child' >&2
+  return 64
+}
+
 _autorecall_recent_deployment_cron_projection() {
   local input_path="$1"
   local output_path="$2"
@@ -397,6 +592,8 @@ _autorecall_recent_deployment_compare_cron() {
   local baseline_projection="$3"
   local after_projection="$4"
   local node="$5"
+  local report_path="${6:-}"
+  local equal=0
 
   if ! _autorecall_recent_deployment_cron_projection "$baseline_path" "$baseline_projection" "$node"; then
     return 64
@@ -405,9 +602,109 @@ _autorecall_recent_deployment_compare_cron() {
     return 64
   fi
   if cmp -s -- "$baseline_projection" "$after_projection"; then
+    equal=1
+  fi
+  if [[ -n "$report_path" ]]; then
+    if ! "$node" -e '
+      const fs = require("node:fs");
+      const path = require("node:path");
+      const report = {
+        contract: "autorecall_cron_equivalence_v1",
+        valid: true,
+        baseline_path: path.resolve(process.argv[1]),
+        after_path: path.resolve(process.argv[2]),
+        definition_equal: Number(process.argv[3]) === 1,
+        baseline_projection_sha256: require("node:crypto").createHash("sha256").update(fs.readFileSync(process.argv[4])).digest("hex"),
+        after_projection_sha256: require("node:crypto").createHash("sha256").update(fs.readFileSync(process.argv[5])).digest("hex"),
+      };
+      fs.writeFileSync(path.resolve(process.argv[6]), `${JSON.stringify(report)}\n`, { mode: 0o600 });
+    ' "$baseline_path" "$after_path" "$equal" "$baseline_projection" "$after_projection" "$report_path"; then
+      return 64
+    fi
+  fi
+  if [[ "$equal" == 1 ]]; then
     return 0
   fi
   return 2
+}
+
+_autorecall_recent_deployment_validate_config_snapshot() {
+  local source_path="$1"
+  local node="$2"
+  if [[ ! -f "$source_path" || ! -s "$source_path" ]]; then
+    printf '%s\n' 'config snapshot source is unavailable' >&2
+    return 64
+  fi
+  if "$node" -e '
+    const fs = require("node:fs");
+    const value = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("config snapshot must be an object");
+    if (!value.meta || typeof value.meta !== "object" || Array.isArray(value.meta)) throw new Error("config snapshot meta is missing");
+  ' "$source_path"; then
+    return 0
+  else
+    printf '%s\n' 'invalid config snapshot' >&2
+    return 64
+  fi
+}
+
+_autorecall_recent_deployment_capture_config_baseline() {
+  local source_path="$1"
+  local output_path="$2"
+  local node="$3"
+  if _autorecall_recent_deployment_validate_config_snapshot "$source_path" "$node" &&
+     cp -- "$source_path" "$output_path" &&
+     _autorecall_recent_deployment_validate_config_snapshot "$output_path" "$node"; then
+    return 0
+  fi
+  printf '%s\n' 'config baseline capture failed' >&2
+  return 64
+}
+
+_autorecall_recent_deployment_config_compare() {
+  local baseline_path="$1"
+  local after_path="$2"
+  local report_path="$3"
+  local node="$4"
+  local equivalence_tool="$5"
+  local stdout_path="${report_path}.stdout"
+  local stderr_path="${report_path}.stderr"
+  local compare_exit
+
+  if "$node" "$equivalence_tool" --before "$baseline_path" --after "$after_path" --out "$report_path" >"$stdout_path" 2>"$stderr_path"; then
+    compare_exit=0
+  else
+    compare_exit=$?
+  fi
+  if [[ "$compare_exit" != 0 && "$compare_exit" != 2 ]]; then
+    printf 'config comparison failed with exit %s\n' "$compare_exit" >&2
+    return 64
+  fi
+  if ! "$node" -e '
+    const fs = require("node:fs");
+    const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    if (report.schema_version !== 1 || report.policy !== "memory-engine-config-semantic-equivalence-v1" || typeof report.valid !== "boolean") throw new Error("invalid config comparison report");
+    if (!Array.isArray(report.changed_paths) || !Array.isArray(report.unexpected_changed_paths)) throw new Error("config comparison paths are missing");
+    if (Number(process.argv[2]) === 0 && report.valid !== true) throw new Error("config exit 0 without valid report");
+    if (Number(process.argv[2]) === 2 && report.valid === true) throw new Error("config exit 2 with valid report");
+  ' "$report_path" "$compare_exit"; then
+    printf '%s\n' 'invalid config comparison report' >&2
+    return 64
+  fi
+  AUTORECALL_RECENT_DEPLOYMENT_CONFIG_EQUAL=0
+  if [[ "$compare_exit" == 0 ]]; then AUTORECALL_RECENT_DEPLOYMENT_CONFIG_EQUAL=1; fi
+  return 0
+}
+
+_autorecall_recent_deployment_capture_config_after() {
+  local source_path="$1"
+  local output_path="$2"
+  local node="$3"
+  if _autorecall_recent_deployment_validate_config_snapshot "$source_path" "$node" && cp -- "$source_path" "$output_path"; then
+    return 0
+  fi
+  printf '%s\n' 'config after snapshot capture failed' >&2
+  return 64
 }
 
 _autorecall_recent_deployment_facts_callback() {
@@ -434,7 +731,23 @@ _autorecall_recent_deployment_facts_callback() {
   local expected_artifact_manifest
   local installed_artifact_manifest="$evidence_dir/runtime-facts-${facts_number}-installed.json"
   local artifact_report="$evidence_dir/runtime-facts-${facts_number}-compare.json"
-  local after_cron="${AUTORECALL_RECENT_DEPLOYMENT_CRON_AFTER_JSON:-}"
+  local engine_db="$AUTORECALL_RECENT_DEPLOYMENT_ENGINE_DB"
+  local engine_baseline="$AUTORECALL_RECENT_DEPLOYMENT_ENGINE_BASELINE_PATH"
+  local engine_after="$evidence_dir/engine-facts-${facts_number}.json"
+  local engine_report="$evidence_dir/engine-facts-${facts_number}-compare.json"
+  local engine_require_path="$AUTORECALL_RECENT_DEPLOYMENT_ENGINE_REQUIRE_PATH"
+  local lance_root="$AUTORECALL_RECENT_DEPLOYMENT_LANCEDB_ROOT"
+  local lance_baseline="$AUTORECALL_RECENT_DEPLOYMENT_LANCEDB_BASELINE_PATH"
+  local lance_after="$evidence_dir/lancedb-facts-${facts_number}.json"
+  local lance_report="$evidence_dir/lancedb-facts-${facts_number}-compare.json"
+  local config_path="$AUTORECALL_RECENT_DEPLOYMENT_CONFIG_PATH"
+  local config_baseline="$AUTORECALL_RECENT_DEPLOYMENT_CONFIG_BASELINE_PATH"
+  local config_after="$evidence_dir/config-facts-${facts_number}.json"
+  local config_report="$evidence_dir/config-facts-${facts_number}-compare.json"
+  local config_tool="$AUTORECALL_RECENT_DEPLOYMENT_CONFIG_EQUIVALENCE_TOOL"
+  local cron_store="$AUTORECALL_RECENT_DEPLOYMENT_CRON_STORE_PATH"
+  local after_cron="$evidence_dir/cron-after-${facts_number}.json"
+  local cron_report="$evidence_dir/cron-facts-${facts_number}-compare.json"
   local baseline_projection="$evidence_dir/cron-before-projection.json"
   local after_projection="$evidence_dir/cron-after-${facts_number}-projection.json"
   local baseline_hash
@@ -451,8 +764,8 @@ _autorecall_recent_deployment_facts_callback() {
     printf '%s\n' 'facts callback invoked outside the bounded candidate/recovery pair' >&2
     return 64
   fi
-  if [[ ! -f "$baseline_path" || ! -f "$after_cron" || ! -f "$expected_artifact_manifest" ]]; then
-    printf '%s\n' 'facts callback is missing a non-Gateway evidence file' >&2
+  if [[ ! -f "$baseline_path" || ! -f "$engine_baseline" || ! -d "$lance_root" || ! -f "$config_path" || ! -f "$cron_store" || ! -f "$expected_artifact_manifest" ]]; then
+    printf '%s\n' 'facts callback is missing a fresh non-Gateway evidence source' >&2
     return 64
   fi
   baseline_hash="$(_autorecall_recent_deployment_sha256 "$baseline_path")" || return 64
@@ -467,6 +780,47 @@ _autorecall_recent_deployment_facts_callback() {
     fi
   else
     return 64
+  fi
+
+  if ! _autorecall_recent_deployment_capture_engine_fingerprint \
+    "$engine_after" "$engine_db" "$node" "$engine_require_path"; then
+    printf '%s\n' 'facts callback could not capture Engine evidence' >&2
+    return 64
+  fi
+  if ! _autorecall_recent_deployment_compare_engine_fingerprint \
+    "$engine_baseline" "$engine_after" "$engine_report" "$engine_db" "$node"; then
+    printf '%s\n' 'facts callback could not compare Engine evidence' >&2
+    return 64
+  fi
+  if [[ "$AUTORECALL_RECENT_DEPLOYMENT_ENGINE_EQUAL" != 1 ]]; then
+    data_drift='unexplained'
+  fi
+
+  if ! _autorecall_recent_deployment_build_artifact_manifest \
+    "$lance_after" "$lance_root" "$node" "$artifact_build_tool"; then
+    printf '%s\n' 'facts callback could not capture LanceDB evidence' >&2
+    return 64
+  fi
+  if ! _autorecall_recent_deployment_artifact_compare \
+    "$lance_report" "$lance_baseline" "$lance_after" "$node" "$artifact_compare_tool"; then
+    printf '%s\n' 'facts callback could not compare LanceDB evidence' >&2
+    return 64
+  fi
+  if [[ "$AUTORECALL_RECENT_DEPLOYMENT_ARTIFACT_EQUAL" != 1 ]]; then
+    data_drift='unexplained'
+  fi
+
+  if ! _autorecall_recent_deployment_capture_config_after "$config_path" "$config_after" "$node"; then
+    printf '%s\n' 'facts callback could not capture config evidence' >&2
+    return 64
+  fi
+  if ! _autorecall_recent_deployment_config_compare \
+    "$config_baseline" "$config_after" "$config_report" "$node" "$config_tool"; then
+    printf '%s\n' 'facts callback could not compare config evidence' >&2
+    return 64
+  fi
+  if [[ "$AUTORECALL_RECENT_DEPLOYMENT_CONFIG_EQUAL" != 1 ]]; then
+    data_drift='unexplained'
   fi
 
   if _autorecall_recent_deployment_build_artifact_manifest \
@@ -502,12 +856,15 @@ _autorecall_recent_deployment_facts_callback() {
     return 64
   fi
 
-  if _autorecall_recent_deployment_compare_cron \
+  if _autorecall_recent_deployment_capture_cron_after \
+    "$cron_store" "$after_cron" "$after_projection" "$node" &&
+     _autorecall_recent_deployment_compare_cron \
     "$AUTORECALL_RECENT_DEPLOYMENT_CRON_BASELINE_PATH" \
     "$after_cron" \
     "$baseline_projection" \
     "$after_projection" \
-    "$node"; then
+    "$node" \
+    "$cron_report"; then
     cron_rc=0
   else
     cron_rc=$?
@@ -526,6 +883,11 @@ _autorecall_recent_deployment_facts_callback() {
     data_drift='unexplained'
   fi
 
+  if [[ "$AUTORECALL_INSTALL_STEP_INVOKED" != 1 || ! "$AUTORECALL_INSTALL_STEP_LAST_EXIT" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' 'facts callback did not receive a valid child exit result' >&2
+    return 64
+  fi
+
   # The existing helper accepts only these three bounded fields from facts.
   printf 'launch_observed=%s\n' "$launch_observed"
   printf 'runtime_state=%s\n' "$runtime_state"
@@ -535,6 +897,11 @@ _autorecall_recent_deployment_facts_callback() {
 _autorecall_recent_deployment_recovery_acceptance_callback() {
   local baseline_hash
   local artifact_report="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/runtime-facts-2-compare.json"
+  local core_report="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/core-facts-2.json"
+  local engine_report="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/engine-facts-2-compare.json"
+  local lance_report="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/lancedb-facts-2-compare.json"
+  local config_report="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/config-facts-2-compare.json"
+  local cron_report="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/cron-facts-2-compare.json"
   local node="$AUTORECALL_RECENT_DEPLOYMENT_NODE"
   if [[ "${AUTORECALL_INSTALL_STEP_RECOVERY_EXIT_CODE:-not_run}" != 0 ]]; then
     printf '%s\n' 'recovery acceptance: recovery command did not exit zero' >&2
@@ -551,6 +918,23 @@ _autorecall_recent_deployment_recovery_acceptance_callback() {
       return 64
       ;;
   esac
+  if [[ ! -s "$core_report" || ! -s "$engine_report" || ! -s "$lance_report" || ! -s "$config_report" || ! -s "$cron_report" ]] ||
+     ! "$node" -e '
+       const fs = require("node:fs");
+       const core = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+       const engine = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+       const lance = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+       const config = JSON.parse(fs.readFileSync(process.argv[4], "utf8"));
+       const cron = JSON.parse(fs.readFileSync(process.argv[5], "utf8"));
+       if (core.comparison?.deployment_invariant_equal !== true) throw new Error("recovery Core evidence is not equal");
+       if (engine.valid !== true || engine.engine_invariant_equal !== true || engine.content_equal !== true || engine.schema_equal !== true || engine.user_version_equal !== true) throw new Error("recovery Engine evidence is not equal");
+       if (lance.schema_version !== 2 || lance.accepted !== true || lance.decision !== "PASS" || lance.classification !== "EXACT") throw new Error("recovery LanceDB evidence is not exact");
+       if (config.valid !== true || !["exact_equal", "approved_host_metadata_change"].includes(config.status) || config.unexpected_changed_paths.length !== 0) throw new Error("recovery config evidence is not accepted");
+       if (cron.contract !== "autorecall_cron_equivalence_v1" || cron.valid !== true || cron.definition_equal !== true) throw new Error("recovery cron evidence is not equal");
+     ' "$core_report" "$engine_report" "$lance_report" "$config_report" "$cron_report"; then
+    printf '%s\n' 'recovery acceptance: one or more data evidence reports are missing or invalid' >&2
+    return 64
+  fi
   if [[ ! -s "$artifact_report" ]] || ! "$node" -e '
     const fs = require("node:fs");
     const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -616,6 +1000,12 @@ autorecall_recent_deployment_run() (
   local fingerprint_tool="${AUTORECALL_DEPLOYMENT_CORE_FINGERPRINT_TOOL:-$_autorecall_recent_deployment_callbacks_dir/../../bin/core-deployment-logical-fingerprint.js}"
   local artifact_build_tool="${AUTORECALL_DEPLOYMENT_ARTIFACT_BUILD_TOOL:-$_autorecall_recent_deployment_callbacks_dir/../../bin/build-runtime-artifact-manifest-v2.cjs}"
   local artifact_compare_tool="${AUTORECALL_DEPLOYMENT_ARTIFACT_COMPARE_TOOL:-$_autorecall_recent_deployment_callbacks_dir/../../bin/compare-runtime-artifact-manifests-v2.cjs}"
+  local config_equivalence_tool="${AUTORECALL_DEPLOYMENT_CONFIG_EQUIVALENCE_TOOL:-$_autorecall_recent_deployment_callbacks_dir/../../bin/build-config-semantic-equivalence-report.js}"
+  local engine_db="${AUTORECALL_DEPLOYMENT_ENGINE_DB:-}"
+  local engine_require_path="${AUTORECALL_DEPLOYMENT_ENGINE_REQUIRE_PATH:-$_autorecall_recent_deployment_callbacks_dir/../../package.json}"
+  local lancedb_root="${AUTORECALL_DEPLOYMENT_LANCEDB_ROOT:-}"
+  local config_path="${AUTORECALL_DEPLOYMENT_CONFIG_PATH:-}"
+  local cron_store_path="${AUTORECALL_DEPLOYMENT_CRON_STORE_PATH:-}"
   local active_artifact_root="${AUTORECALL_DEPLOYMENT_ACTIVE_ARTIFACT_ROOT:-}"
   local openclaw="${AUTORECALL_DEPLOYMENT_OPENCLAW:-}"
   local install_entrypoint="${AUTORECALL_DEPLOYMENT_INSTALL_ENTRYPOINT:-${INSTALL_STEP_OPENCLAW_ENTRYPOINT:-}}"
@@ -623,6 +1013,12 @@ autorecall_recent_deployment_run() (
   local install_path="${AUTORECALL_DEPLOYMENT_INSTALL_PATH:-${INSTALL_STEP_PATH:-${PATH:-}}}"
   local baseline_path="$evidence_dir/core-post-index.json"
   local baseline_self_compare="$evidence_dir/core-post-index-self-compare.json"
+  local engine_baseline="$evidence_dir/engine-before.json"
+  local engine_baseline_self_compare="$evidence_dir/engine-before-self-compare.json"
+  local lancedb_baseline="$evidence_dir/lancedb-before.json"
+  local lancedb_baseline_self_compare="$evidence_dir/lancedb-before-self-compare.json"
+  local config_baseline="$evidence_dir/config-before.json"
+  local config_baseline_self_compare="$evidence_dir/config-before-self-compare.json"
   local candidate_artifact_manifest="$evidence_dir/candidate-runtime-manifest.json"
   local rollback_artifact_manifest="$evidence_dir/rollback-runtime-manifest.json"
   local baseline_sha
@@ -648,6 +1044,18 @@ autorecall_recent_deployment_run() (
     validation_error='artifact manifest builder'
   elif [[ ! -f "$artifact_compare_tool" ]]; then
     validation_error='artifact manifest comparator'
+  elif [[ ! -f "$config_equivalence_tool" ]]; then
+    validation_error='config equivalence tool'
+  elif [[ -z "$engine_db" || ! -f "$engine_db" ]]; then
+    validation_error='Engine DB path'
+  elif [[ ! -f "$engine_require_path" ]]; then
+    validation_error='Engine fingerprint dependency path'
+  elif [[ -z "$lancedb_root" || ! -d "$lancedb_root" ]]; then
+    validation_error='LanceDB root'
+  elif [[ -z "$config_path" || ! -f "$config_path" ]]; then
+    validation_error='config path'
+  elif [[ -z "$cron_store_path" || ! -f "$cron_store_path" ]]; then
+    validation_error='confirmed host cron store'
   elif [[ -z "$active_artifact_root" || ! -d "$active_artifact_root" ]]; then
     validation_error='active artifact root'
   elif [[ -z "$openclaw" || ! -x "$openclaw" ]]; then
@@ -680,10 +1088,18 @@ autorecall_recent_deployment_run() (
   export AUTORECALL_RECENT_DEPLOYMENT_ACTIVE_ARTIFACT_ROOT="$active_artifact_root"
   export AUTORECALL_RECENT_DEPLOYMENT_ARTIFACT_BUILD_TOOL="$artifact_build_tool"
   export AUTORECALL_RECENT_DEPLOYMENT_ARTIFACT_COMPARE_TOOL="$artifact_compare_tool"
+  export AUTORECALL_RECENT_DEPLOYMENT_CONFIG_EQUIVALENCE_TOOL="$config_equivalence_tool"
+  export AUTORECALL_RECENT_DEPLOYMENT_ENGINE_DB="$engine_db"
+  export AUTORECALL_RECENT_DEPLOYMENT_ENGINE_REQUIRE_PATH="$engine_require_path"
+  export AUTORECALL_RECENT_DEPLOYMENT_ENGINE_BASELINE_PATH="$engine_baseline"
+  export AUTORECALL_RECENT_DEPLOYMENT_LANCEDB_ROOT="$lancedb_root"
+  export AUTORECALL_RECENT_DEPLOYMENT_LANCEDB_BASELINE_PATH="$lancedb_baseline"
+  export AUTORECALL_RECENT_DEPLOYMENT_CONFIG_PATH="$config_path"
+  export AUTORECALL_RECENT_DEPLOYMENT_CONFIG_BASELINE_PATH="$config_baseline"
   export AUTORECALL_RECENT_DEPLOYMENT_CANDIDATE_ARTIFACT_MANIFEST="$candidate_artifact_manifest"
   export AUTORECALL_RECENT_DEPLOYMENT_ROLLBACK_ARTIFACT_MANIFEST="$rollback_artifact_manifest"
   export AUTORECALL_RECENT_DEPLOYMENT_CRON_BASELINE_PATH="$evidence_dir/cron-before.json"
-  export AUTORECALL_RECENT_DEPLOYMENT_CRON_AFTER_JSON="${AUTORECALL_DEPLOYMENT_CRON_AFTER_JSON:-}"
+  export AUTORECALL_RECENT_DEPLOYMENT_CRON_STORE_PATH="$cron_store_path"
 
   # Fresh complete cron baseline must be captured and validated before any
   # stop or DDL callback.  The facts callback later reads a direct file only.
@@ -697,8 +1113,38 @@ autorecall_recent_deployment_run() (
     return 64
   fi
 
-  if _autorecall_recent_deployment_run_callback 'stop' "$stop_callback" "$evidence_dir" &&
-     _autorecall_recent_deployment_run_callback 'ddl' "$ddl_callback" "$evidence_dir"; then
+  if _autorecall_recent_deployment_run_callback 'stop' "$stop_callback" "$evidence_dir"; then
+    :
+  else
+    _autorecall_recent_deployment_emit_blocked 'pre_install_callback_failed'
+    return 64
+  fi
+
+  # These fresh non-Gateway baselines are deliberately taken while the
+  # Gateway is stopped and before Core DDL.  Each is self-compared and then
+  # frozen; facts callbacks only recapture the live sources after each child.
+  if _autorecall_recent_deployment_capture_engine_fingerprint \
+    "$engine_baseline" "$engine_db" "$node" "$engine_require_path" &&
+     _autorecall_recent_deployment_compare_engine_fingerprint \
+    "$engine_baseline" "$engine_baseline" "$engine_baseline_self_compare" "$engine_db" "$node" &&
+     [[ "$AUTORECALL_RECENT_DEPLOYMENT_ENGINE_EQUAL" == 1 ]] &&
+     _autorecall_recent_deployment_build_artifact_manifest \
+    "$lancedb_baseline" "$lancedb_root" "$node" "$artifact_build_tool" &&
+     _autorecall_recent_deployment_artifact_compare \
+    "$lancedb_baseline_self_compare" "$lancedb_baseline" "$lancedb_baseline" "$node" "$artifact_compare_tool" &&
+     [[ "$AUTORECALL_RECENT_DEPLOYMENT_ARTIFACT_EQUAL" == 1 ]] &&
+     _autorecall_recent_deployment_capture_config_baseline \
+    "$config_path" "$config_baseline" "$node" &&
+     _autorecall_recent_deployment_config_compare \
+    "$config_baseline" "$config_baseline" "$config_baseline_self_compare" "$node" "$config_equivalence_tool" &&
+     [[ "$AUTORECALL_RECENT_DEPLOYMENT_CONFIG_EQUAL" == 1 ]]; then
+    :
+  else
+    _autorecall_recent_deployment_emit_blocked 'pre_install_data_baseline_invalid'
+    return 64
+  fi
+
+  if _autorecall_recent_deployment_run_callback 'ddl' "$ddl_callback" "$evidence_dir"; then
     :
   else
     _autorecall_recent_deployment_emit_blocked 'pre_install_callback_failed'

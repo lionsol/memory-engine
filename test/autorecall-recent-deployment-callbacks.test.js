@@ -80,6 +80,17 @@ function createCoreDb(databasePath) {
   db.close();
 }
 
+function createEngineDb(databasePath) {
+  const db = new Database(databasePath);
+  db.exec(`
+    CREATE TABLE memory_events (id INTEGER PRIMARY KEY, event_type TEXT NOT NULL, payload TEXT NOT NULL);
+    CREATE TABLE memory_confidence (chunk_id TEXT PRIMARY KEY, confidence REAL NOT NULL);
+    INSERT INTO memory_events VALUES (1, 'fixture', 'stable');
+    INSERT INTO memory_confidence VALUES ('chunk-1', 0.9);
+  `);
+  db.close();
+}
+
 function cronJob({ id = "job-1", enabled = true, message = "run nightly maintenance" } = {}) {
   return {
     id,
@@ -126,17 +137,27 @@ function makeFixture(t, options = {}) {
   const openclaw = join(root, "offline gateway cron fixture.sh");
   const driver = join(root, "offline deployment driver.sh");
   const coreDb = join(root, "openclaw-agent.sqlite");
+  const engineDb = join(root, "memory-engine.sqlite");
+  const lancedbRoot = join(root, "lancedb");
+  const configPath = join(root, "openclaw.json");
   const evidence = join(root, "evidence");
   const cronBeforeSource = join(root, "cron-before-source.json");
   const cronAfter = join(root, "cron-after.json");
+  const cronStore = join(root, "confirmed-host-cron-store.json");
   const installLog = join(root, "install.log");
   const phaseLog = join(root, "phase.log");
   const cronArgsLog = join(root, "cron-args.log");
   const preDdlBaseline = join(evidence, "core-pre-ddl.json");
   const jobs = [cronJob(), cronJob({ id: "job-2", enabled: false, message: "disabled maintenance" })];
 
-  for (const path of [candidate, rollback, active, cwd, evidence]) mkdirSync(path);
+  for (const path of [candidate, rollback, active, cwd, evidence, lancedbRoot]) mkdirSync(path);
   createCoreDb(coreDb);
+  createEngineDb(engineDb);
+  writeFileSync(join(lancedbRoot, "segments.bin"), "stable lance fixture\n");
+  writeFileSync(configPath, JSON.stringify({
+    meta: { lastTouchedAt: "2026-10-11T00:00:00.000Z" },
+    memoryEngine: { mode: "fixture", enabled: true },
+  }) + "\n");
   writeFileSync(join(candidate, "runtime.js"), "candidate-runtime\n");
   writeFileSync(join(candidate, "package.json"), JSON.stringify({ name: "candidate", version: "1.0.0" }) + "\n");
   writeFileSync(join(candidate, "native.node"), "candidate-native\n");
@@ -149,6 +170,7 @@ function makeFixture(t, options = {}) {
   chmodSync(active, options.activeRootMode ?? 0o755);
   writeCron(cronBeforeSource, jobs);
   writeCron(cronAfter, jobs);
+  writeCron(cronStore, jobs);
 
   writeFileSync(entrypoint, `
 import { appendFileSync, existsSync, readdirSync, rmSync, cpSync, readFileSync, writeFileSync } from "node:fs";
@@ -180,6 +202,34 @@ if ((process.env.INSTALL_MODE || "normal") === "core-drift" && role === "candida
   db.prepare("UPDATE memory_index_meta SET value = ? WHERE key = ?").run("mutated", "format");
   db.close();
 }
+if ((process.env.INSTALL_MODE || "normal") === "engine-drift" && role === "candidate") {
+  const Database = createRequire(process.env.REPO_PACKAGE)("better-sqlite3");
+  const db = new Database(process.env.ENGINE_DB);
+  db.prepare("UPDATE memory_events SET payload = ? WHERE id = 1").run("unexpected engine content");
+  db.close();
+}
+if ((process.env.INSTALL_MODE || "normal") === "engine-invalid" && role === "candidate") {
+  rmSync(process.env.ENGINE_DB, { force: true });
+}
+if ((process.env.INSTALL_MODE || "normal") === "lance-drift" && role === "candidate") {
+  writeFileSync(join(process.env.LANCEDB_ROOT, "unexpected.segment"), "unexpected lance content\\n");
+}
+if ((process.env.INSTALL_MODE || "normal") === "config-drift" && role === "candidate") {
+  const value = JSON.parse(readFileSync(process.env.CONFIG_PATH, "utf8"));
+  value.memoryEngine.mode = "unexpected";
+  writeFileSync(process.env.CONFIG_PATH, JSON.stringify(value) + "\\n");
+}
+if ((process.env.INSTALL_MODE || "normal") === "config-touch" && role === "candidate") {
+  const value = JSON.parse(readFileSync(process.env.CONFIG_PATH, "utf8"));
+  value.meta.lastTouchedAt = "2026-10-11T00:01:00.000Z";
+  writeFileSync(process.env.CONFIG_PATH, JSON.stringify(value) + "\\n");
+}
+if ((process.env.INSTALL_MODE || "normal") === "cron-drift" && role === "candidate") {
+  cpSync(process.env.CRON_AFTER_MUTATION, process.env.CRON_STORE);
+}
+if ((process.env.INSTALL_MODE || "normal") === "cron-invalid" && role === "candidate") {
+  writeFileSync(process.env.CRON_STORE, "not-json\\n");
+}
 process.exit(Number.isInteger(codes[Math.min(index, codes.length - 1)]) ? codes[Math.min(index, codes.length - 1)] : 70);
 `);
 
@@ -201,20 +251,33 @@ export AUTORECALL_DEPLOYMENT_OPENCLAW="$4"
 export AUTORECALL_DEPLOYMENT_INSTALL_ENTRYPOINT="$5"
 export AUTORECALL_DEPLOYMENT_INSTALL_CWD="$6"
 export AUTORECALL_DEPLOYMENT_INSTALL_PATH="$7"
-export AUTORECALL_DEPLOYMENT_CRON_AFTER_JSON="$8"
+export CRON_AFTER_MUTATION="$8"
 export INSTALL_LOG="$9"
 export PHASE_LOG="\${10}"
-export CRON_SOURCE="\${11}"
+export CRON_SOURCE="\${23}"
 export CRON_ARGS_LOG="\${17}"
 export ACTIVE_ARTIFACT_ROOT="\${16}"
 export AUTORECALL_DEPLOYMENT_ACTIVE_ARTIFACT_ROOT="\${16}"
 export INSTALL_MODE="\${18}"
 export CORE_DB="\${12}"
+export EVIDENCE_DIR="\${15}"
 export REPO_PACKAGE="\${19}/package.json"
+export ENGINE_DB="\${20}"
+export LANCEDB_ROOT="\${21}"
+export CONFIG_PATH="\${22}"
+export CRON_STORE="\${23}"
+export AUTORECALL_DEPLOYMENT_ENGINE_DB="\${20}"
+export AUTORECALL_DEPLOYMENT_LANCEDB_ROOT="\${21}"
+export AUTORECALL_DEPLOYMENT_CONFIG_PATH="\${22}"
+export AUTORECALL_DEPLOYMENT_CRON_STORE_PATH="\${23}"
 export DDL_NODE="$2"
 export DDL_CORE_DB="\${12}"
 stop_callback() { printf '%s\\n' stop >> "$PHASE_LOG"; }
 ddl_callback() {
+  if [[ ! -s "$EVIDENCE_DIR/engine-before.json" || ! -s "$EVIDENCE_DIR/lancedb-before.json" || ! -s "$EVIDENCE_DIR/config-before.json" ]]; then
+    printf '%s\\n' missing-pre-ddl-data-baseline >&2
+    return 75
+  fi
   if "$DDL_NODE" -e '
     const Database = require("better-sqlite3");
     const db = new Database(process.argv[1]);
@@ -249,11 +312,15 @@ exit 0
     openclaw,
     driver,
     coreDb,
+    engineDb,
+    lancedbRoot,
+    configPath,
     evidence,
     baseline: join(evidence, "core-post-index.json"),
     preDdlBaseline,
     cronBeforeSource,
     cronAfter,
+    cronStore,
     installLog,
     phaseLog,
     cronArgsLog,
@@ -261,7 +328,10 @@ exit 0
 }
 
 function runFixture(fixture, options = {}) {
-  if (options.cronSourceContent !== undefined) writeFileSync(fixture.cronBeforeSource, options.cronSourceContent);
+  if (options.cronSourceContent !== undefined) {
+    writeFileSync(fixture.cronBeforeSource, options.cronSourceContent);
+    writeFileSync(fixture.cronStore, options.cronSourceContent);
+  }
   const env = {
     ...process.env,
     INSTALL_EXIT_CODES: options.installExitCodes ?? "0",
@@ -270,6 +340,11 @@ function runFixture(fixture, options = {}) {
     CRON_MODE: options.cronMode ?? "normal",
     ACTIVE_ARTIFACT_ROOT: fixture.active,
     CRON_ARGS_LOG: fixture.cronArgsLog,
+    CRON_STORE: fixture.cronStore,
+    CRON_AFTER_MUTATION: fixture.cronAfter,
+    ENGINE_DB: fixture.engineDb,
+    LANCEDB_ROOT: fixture.lancedbRoot,
+    CONFIG_PATH: fixture.configPath,
   };
   for (const key of ["AUTORECALL_RECENT_DEPLOYMENT_LAUNCH_OBSERVED", "AUTORECALL_RECENT_DEPLOYMENT_RUNTIME_STATE"]) delete env[key];
   const result = spawnSync("/bin/bash", [
@@ -293,6 +368,10 @@ function runFixture(fixture, options = {}) {
     fixture.cronArgsLog,
     options.installMode ?? "normal",
     repoRoot,
+    fixture.engineDb,
+    fixture.lancedbRoot,
+    fixture.configPath,
+    fixture.cronStore,
   ], { encoding: "utf8", env });
   assert.equal(result.status, 0, result.error?.message || result.stderr);
   const fields = Object.fromEntries(result.stdout.trim().split("\n").filter(Boolean).map(line => {
@@ -397,7 +476,7 @@ test("offline deployment caller enforces fresh cron, post-DDL Core, and observed
       cronJob(),
       cronJob({ id: "job-2", enabled: false, message: "changed disabled payload" }),
     ]);
-    const run = runFixture(fixture);
+    const run = runFixture(fixture, { installMode: "cron-drift" });
     assert.equal(run.fields.status, "STOPPED");
     assert.equal(run.fields.candidate_data_drift, "unexplained");
     assert.equal(run.fields.restart_decision, "blocked");
@@ -446,6 +525,50 @@ test("offline deployment caller enforces fresh cron, post-DDL Core, and observed
     assert.equal(recoveryArtifact.accepted, false);
   });
 
+  for (const [label, installMode, evidenceName] of [
+    ["Engine content drift", "engine-drift", "engine-facts-1-compare.json"],
+    ["LanceDB content drift", "lance-drift", "lancedb-facts-1-compare.json"],
+    ["config semantic drift", "config-drift", "config-facts-1-compare.json"],
+    ["cron producer invalid evidence", "cron-invalid", null],
+  ]) {
+    await t.test(label + " is blocked from actual child facts", () => {
+      const fixture = makeFixture(t);
+      const run = runFixture(fixture, { installMode });
+      assert.equal(run.fields.status, "STOPPED");
+      assert.equal(run.fields.candidate_data_drift, evidenceName ? "unexplained" : "unknown");
+      assert.equal(run.fields.restart_decision, "blocked");
+      assert.equal(run.install.length, 1);
+      assert.equal(run.fields.recovery_invocations, "0");
+      if (evidenceName) {
+        const report = JSON.parse(readFileSync(join(fixture.evidence, evidenceName), "utf8"));
+        assert.equal(report.engine_invariant_equal ?? report.accepted ?? report.valid, false);
+      }
+    });
+  }
+
+  await t.test("allows only the existing config lastTouchedAt metadata change", () => {
+    const fixture = makeFixture(t);
+    const run = runFixture(fixture, { installMode: "config-touch" });
+    const report = JSON.parse(readFileSync(join(fixture.evidence, "config-facts-1-compare.json"), "utf8"));
+    assert.equal(run.fields.status, "CONTINUE");
+    assert.equal(run.fields.candidate_data_drift, "none");
+    assert.equal(report.valid, true);
+    assert.equal(report.status, "approved_host_metadata_change");
+    assert.deepEqual(report.changed_paths, ["meta.lastTouchedAt"]);
+  });
+
+  await t.test("keeps the candidate unexplained latch after an exact recovery", () => {
+    const fixture = makeFixture(t);
+    const run = runFixture(fixture, { installMode: "content-drift", installExitCodes: "1,0" });
+    assert.equal(run.fields.candidate_data_drift, "unexplained");
+    assert.equal(run.fields.recovery_facts_status, "ok");
+    assert.equal(run.fields.recovery_data_drift, "none");
+    assert.equal(run.fields.recovery_acceptance, "accepted");
+    assert.equal(run.fields.status, "STOPPED");
+    assert.equal(run.fields.restart_decision, "blocked");
+    assert.equal(run.install.length, 2);
+  });
+
   await t.test("missing Core blocks before stop, DDL, and install", () => {
     const fixture = makeFixture(t);
     const run = runFixture(fixture, { coreDb: join(fixture.root, "missing-core.sqlite") });
@@ -487,7 +610,7 @@ test("offline deployment caller enforces fresh cron, post-DDL Core, and observed
       cronJob(),
       cronJob({ id: "job-2", enabled: false, message: "changed disabled payload" }),
     ]);
-    const run = runFixture(fixture);
+    const run = runFixture(fixture, { installMode: "cron-drift" });
     assert.equal(run.fields.status, "STOPPED");
     assert.equal(run.fields.outcome, "candidate_facts_blocked");
     assert.equal(run.fields.candidate_facts_status, "ok");
