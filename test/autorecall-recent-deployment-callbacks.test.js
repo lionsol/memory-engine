@@ -4,6 +4,7 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -161,6 +162,10 @@ function makeFixture(t, options = {}) {
   writeFileSync(join(candidate, "runtime.js"), "candidate-runtime\n");
   writeFileSync(join(candidate, "package.json"), JSON.stringify({ name: "candidate", version: "1.0.0" }) + "\n");
   writeFileSync(join(candidate, "native.node"), "candidate-native\n");
+  if (options.topologyFixture) {
+    writeFileSync(join(candidate, "topology-a.txt"), "same topology payload\n");
+    writeFileSync(join(candidate, "topology-b.txt"), "same topology payload\n");
+  }
   writeFileSync(join(rollback, "runtime.js"), "rollback-runtime\n");
   writeFileSync(join(rollback, "package.json"), JSON.stringify({ name: "rollback", version: "0.9.0" }) + "\n");
   writeFileSync(join(rollback, "native.node"), "rollback-native\n");
@@ -173,7 +178,7 @@ function makeFixture(t, options = {}) {
   writeCron(cronStore, jobs);
 
   writeFileSync(entrypoint, `
-import { appendFileSync, existsSync, readdirSync, rmSync, cpSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, rmSync, cpSync, linkSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 const activeRoot = process.env.ACTIVE_ARTIFACT_ROOT;
@@ -187,6 +192,10 @@ const role = packagePath.includes("candidate") ? "candidate" : "recovery";
 appendFileSync(logPath, JSON.stringify({ packagePath, role }) + "\\n");
 for (const name of readdirSync(activeRoot)) rmSync(join(activeRoot, name), { recursive: true, force: true });
 for (const name of readdirSync(packagePath)) cpSync(join(packagePath, name), join(activeRoot, name), { recursive: true });
+if (mode === "topology-only" && role === "candidate") {
+  rmSync(join(activeRoot, "topology-b.txt"), { force: true });
+  linkSync(join(activeRoot, "topology-a.txt"), join(activeRoot, "topology-b.txt"));
+}
 if ((process.env.INSTALL_MODE || "normal") === "unexpected" && role === "candidate") {
   writeFileSync(join(activeRoot, "unexpected.js"), "unexpected runtime\\n");
 }
@@ -479,6 +488,30 @@ test("offline deployment caller enforces fresh cron, post-DDL Core, and observed
     assert.equal(run.fields.restart_decision, "blocked");
     assert.equal(artifact.accepted, false);
     assert.equal(artifact.semantic_difference.difference_count > 1, true);
+  });
+
+  await t.test("latches a topology-only runtime artifact drift through recovery", () => {
+    const fixture = makeFixture(t, { topologyFixture: true });
+    const run = runFixture(fixture, {
+      installMode: "topology-only",
+      installExitCodes: "1,0",
+    });
+    const artifact = JSON.parse(readFileSync(join(fixture.evidence, "runtime-facts-1-compare.json"), "utf8"));
+    const latch = JSON.parse(readFileSync(join(fixture.evidence, "candidate-unexplained-drift-runtime.json"), "utf8"));
+    const recoveryArtifact = JSON.parse(readFileSync(join(fixture.evidence, "runtime-facts-2-compare.json"), "utf8"));
+    assert.equal(artifact.semantic_equal, true);
+    assert.equal(artifact.topology_equal, false);
+    assert.equal(artifact.classification, "MERGE_DETECTED");
+    assert.equal(artifact.accepted, false);
+    assert.equal(latch.kind, "runtime");
+    assert.equal(run.fields.candidate_data_drift, "unexplained");
+    assert.equal(run.fields.recovery_facts_status, "ok");
+    assert.equal(run.fields.recovery_data_drift, "none");
+    assert.equal(run.fields.recovery_acceptance, "rejected");
+    assert.equal(recoveryArtifact.classification, "EXACT");
+    assert.equal(recoveryArtifact.accepted, true);
+    assert.equal(run.fields.status, "STOPPED");
+    assert.equal(run.fields.restart_decision, "blocked");
   });
 
   await t.test("does not overwrite an existing Core unexplained drift", () => {

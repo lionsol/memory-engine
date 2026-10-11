@@ -730,7 +730,7 @@ _autorecall_recent_deployment_record_candidate_unexplained_drift() {
       if (report.contract !== "engine_deployment_fingerprint_v1" || report.valid !== true || report.engine_invariant_equal !== false) fail("candidate Engine comparison is not confirmed unexplained");
       if (baseline.contract !== "engine_deployment_fingerprint_v1" || !validSha(baseline.engine_invariant_sha256)) fail("candidate Engine baseline is invalid");
     } else if (kind === "lance" || kind === "runtime") {
-      if (!validManifest(baseline) || report.schema_version !== 2 || report.accepted !== false || report.decision !== "REJECT" || report.semantic_equal !== false) fail(`candidate ${kind} artifact comparison is not confirmed unexplained`);
+      if (!validManifest(baseline) || report.schema_version !== 2 || report.accepted !== false || report.decision !== "REJECT" || (report.semantic_equal !== false && report.topology_equal !== false)) fail(`candidate ${kind} artifact comparison is not confirmed unexplained`);
       if (report.candidate_semantic_identity !== baseline.semantic_identity || report.candidate_topology_identity !== baseline.topology_identity || report.candidate_exact_identity !== baseline.exact_identity) fail(`candidate ${kind} artifact comparison is not bound to its manifest`);
       const difference = report.semantic_difference;
       const rootModeOnly = kind === "runtime"
@@ -813,7 +813,7 @@ _autorecall_recent_deployment_validate_candidate_unexplained_drift_marker() {
         break;
       case "lance":
       case "runtime": {
-        if (!validManifest(baseline) || report.schema_version !== 2 || report.accepted !== false || report.decision !== "REJECT" || report.semantic_equal !== false) fail(`candidate ${marker.kind} drift latch is not confirmed`);
+        if (!validManifest(baseline) || report.schema_version !== 2 || report.accepted !== false || report.decision !== "REJECT" || (report.semantic_equal !== false && report.topology_equal !== false)) fail(`candidate ${marker.kind} drift latch is not confirmed`);
         if (report.candidate_semantic_identity !== baseline.semantic_identity || report.candidate_topology_identity !== baseline.topology_identity || report.candidate_exact_identity !== baseline.exact_identity) fail(`candidate ${marker.kind} drift latch is not bound to its manifest`);
         const difference = report.semantic_difference;
         const rootModeOnly = marker.kind === "runtime"
