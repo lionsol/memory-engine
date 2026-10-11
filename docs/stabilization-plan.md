@@ -8,6 +8,8 @@
 
 ### NOW
 
+**Recent I/O observation — `PENDING / NO EXECUTED NATURAL SAMPLE`:** the one permitted read-only window after `2026-10-11 23:25:11 +08:00` used a SQL-level `LIMIT 200` and observed 30 metadata rows. Fifteen completions were explicitly skipped; no `recall_started` rows were present, and active/shadow, natural/qualification, and Recent/LIKE branch provenance remained unknown. The only available timing was hook latency (`n=15`, p50 `17 ms`, p95 `23 ms`, max `23 ms`); missing timings were not counted as zero. There is no comparable pre-activation baseline, so no latency improvement is claimed. Keep deployment acceptance separate from latency benefit; do not trigger another activation, provider experiment, synthetic request, or verification stage from this result. Preserve current policy and runtime.
+
 #### memory-engine 1.1 — Recall Quality
 
 The accepted post-1.0 product line is **memory-engine 1.1 — Recall Quality**. The primary bottleneck has moved from storage and authority boundaries to recall triggering, query scope understanding, cross-session evidence composition, and ranking complete/current evidence into the production `topK=3` budget. Keep these boundaries distinct: memory existence, recall attempt, candidate generation, production top-K entry, and answering-model use are separate failure points.
