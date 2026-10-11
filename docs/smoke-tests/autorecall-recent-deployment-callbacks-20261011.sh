@@ -242,6 +242,41 @@ _autorecall_recent_deployment_artifact_compare() {
   fi
 }
 
+_autorecall_recent_deployment_candidate_root_mode_exception() {
+  local report_path="$1"
+  local expected_manifest="$2"
+  local installed_manifest="$3"
+  local node="$4"
+
+  # The exact v2 report remains unchanged.  This caller classifies only the
+  # one candidate install-root permission normalization allowed here.
+  if "$node" -e '
+    const fs = require("node:fs");
+    const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const expected = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+    const installed = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+    const validIdentity = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+    if (expected.schema_version !== 2 || installed.schema_version !== 2 || expected.valid !== true || installed.valid !== true) throw new Error("artifact manifest is not valid");
+    if (!validIdentity(expected.semantic_identity) || !validIdentity(expected.topology_identity) || !validIdentity(expected.exact_identity)) throw new Error("candidate artifact identity is missing");
+    if (!validIdentity(installed.semantic_identity) || !validIdentity(installed.topology_identity) || !validIdentity(installed.exact_identity)) throw new Error("installed artifact identity is missing");
+    if (report.schema_version !== 2 || report.policy !== "exact" || report.accepted !== false || report.decision !== "REJECT" || report.classification !== "SEMANTIC_MISMATCH") throw new Error("unexpected exact comparison decision");
+    if (report.semantic_equal !== false || report.topology_equal !== true) throw new Error("root mode exception changed more than semantic root mode");
+    if (report.candidate_semantic_identity !== expected.semantic_identity || report.installed_semantic_identity !== installed.semantic_identity) throw new Error("comparison manifest identity mismatch");
+    if (report.candidate_topology_identity !== expected.topology_identity || report.installed_topology_identity !== installed.topology_identity) throw new Error("comparison topology identity mismatch");
+    const difference = report.semantic_difference;
+    if (!difference || difference.difference_count !== 1 || difference.changed_field_count !== 1 || difference.changed_path_count !== 1 || difference.changed_paths_truncated !== false || !Array.isArray(difference.changed_paths) || difference.changed_paths.length !== 1) throw new Error("root mode difference is not complete and singular");
+    const change = difference.changed_paths[0];
+    if (change.path !== "." || change.change_type !== "changed" || change.changed_fields.length !== 1 || change.changed_fields[0] !== "mode") throw new Error("unexpected candidate artifact difference");
+    if (change.candidate?.type !== "directory" || change.installed?.type !== "directory" || change.candidate?.mode !== "0755" || change.installed?.mode !== "0700") throw new Error("unexpected root directory modes");
+    if (expected.root_entry_type !== "directory" || installed.root_entry_type !== "directory" || expected.root_mode !== "0755" || installed.root_mode !== "0700") throw new Error("root manifest modes are not bound");
+    if (report.topology_difference?.new_sharing_pair_count !== 0 || report.topology_difference?.removed_sharing_pair_count !== 0) throw new Error("topology changed");
+  ' "$report_path" "$expected_manifest" "$installed_manifest"; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 _autorecall_recent_deployment_capture_core_baseline() {
   local baseline_path="$1"
   local core_db="$2"
@@ -449,7 +484,19 @@ _autorecall_recent_deployment_facts_callback() {
     "$artifact_compare_tool"; then
     runtime_state='changed'
     if [[ "$AUTORECALL_RECENT_DEPLOYMENT_ARTIFACT_EQUAL" != 1 ]]; then
-      data_drift='unexplained'
+      if [[ "$facts_number" == 1 ]] &&
+         _autorecall_recent_deployment_candidate_root_mode_exception \
+           "$artifact_report" \
+           "$expected_artifact_manifest" \
+           "$installed_artifact_manifest" \
+           "$node"; then
+        # Do not replace a pre-existing Core/cron unexplained finding.
+        if [[ "$data_drift" == none ]]; then
+          data_drift='explained'
+        fi
+      else
+        data_drift='unexplained'
+      fi
     fi
   else
     return 64

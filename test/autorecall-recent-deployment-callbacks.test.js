@@ -116,7 +116,7 @@ function readLines(path) {
   return existsSync(path) ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean) : [];
 }
 
-function makeFixture(t) {
+function makeFixture(t, options = {}) {
   const root = mkdtempSync(join(tmpdir(), "autorecall-deployment-callbacks-"));
   const candidate = join(root, "candidate package");
   const rollback = join(root, "fresh rollback package");
@@ -139,14 +139,20 @@ function makeFixture(t) {
   createCoreDb(coreDb);
   writeFileSync(join(candidate, "runtime.js"), "candidate-runtime\n");
   writeFileSync(join(candidate, "package.json"), JSON.stringify({ name: "candidate", version: "1.0.0" }) + "\n");
+  writeFileSync(join(candidate, "native.node"), "candidate-native\n");
   writeFileSync(join(rollback, "runtime.js"), "rollback-runtime\n");
   writeFileSync(join(rollback, "package.json"), JSON.stringify({ name: "rollback", version: "0.9.0" }) + "\n");
+  writeFileSync(join(rollback, "native.node"), "rollback-native\n");
   for (const name of readdirSync(rollback)) cpSync(join(rollback, name), join(active, name), { recursive: true });
+  chmodSync(candidate, options.candidateRootMode ?? 0o755);
+  chmodSync(rollback, options.rollbackRootMode ?? 0o755);
+  chmodSync(active, options.activeRootMode ?? 0o755);
   writeCron(cronBeforeSource, jobs);
   writeCron(cronAfter, jobs);
 
   writeFileSync(entrypoint, `
 import { appendFileSync, existsSync, readdirSync, rmSync, cpSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 const activeRoot = process.env.ACTIVE_ARTIFACT_ROOT;
 const logPath = process.env.INSTALL_LOG;
@@ -160,6 +166,19 @@ for (const name of readdirSync(activeRoot)) rmSync(join(activeRoot, name), { rec
 for (const name of readdirSync(packagePath)) cpSync(join(packagePath, name), join(activeRoot, name), { recursive: true });
 if ((process.env.INSTALL_MODE || "normal") === "unexpected" && role === "candidate") {
   writeFileSync(join(activeRoot, "unexpected.js"), "unexpected runtime\\n");
+}
+if ((process.env.INSTALL_MODE || "normal") === "content-drift" && role === "candidate") {
+  writeFileSync(join(activeRoot, "runtime.js"), "unexpected candidate content\\n");
+  writeFileSync(join(activeRoot, "native.node"), "unexpected native content\\n");
+}
+if ((process.env.INSTALL_MODE || "normal") === "recovery-unexpected" && role === "recovery") {
+  writeFileSync(join(activeRoot, "unexpected-recovery.js"), "unexpected recovery runtime\\n");
+}
+if ((process.env.INSTALL_MODE || "normal") === "core-drift" && role === "candidate") {
+  const Database = createRequire(process.env.REPO_PACKAGE)("better-sqlite3");
+  const db = new Database(process.env.CORE_DB);
+  db.prepare("UPDATE memory_index_meta SET value = ? WHERE key = ?").run("mutated", "format");
+  db.close();
 }
 process.exit(Number.isInteger(codes[Math.min(index, codes.length - 1)]) ? codes[Math.min(index, codes.length - 1)] : 70);
 `);
@@ -190,6 +209,8 @@ export CRON_ARGS_LOG="\${17}"
 export ACTIVE_ARTIFACT_ROOT="\${16}"
 export AUTORECALL_DEPLOYMENT_ACTIVE_ARTIFACT_ROOT="\${16}"
 export INSTALL_MODE="\${18}"
+export CORE_DB="\${12}"
+export REPO_PACKAGE="\${19}/package.json"
 export DDL_NODE="$2"
 export DDL_CORE_DB="\${12}"
 stop_callback() { printf '%s\\n' stop >> "$PHASE_LOG"; }
@@ -271,6 +292,7 @@ function runFixture(fixture, options = {}) {
     fixture.active,
     fixture.cronArgsLog,
     options.installMode ?? "normal",
+    repoRoot,
   ], { encoding: "utf8", env });
   assert.equal(result.status, 0, result.error?.message || result.stderr);
   const fields = Object.fromEntries(result.stdout.trim().split("\n").filter(Boolean).map(line => {
@@ -329,6 +351,58 @@ test("offline deployment caller enforces fresh cron, post-DDL Core, and observed
     assert.equal(artifact.topology_equal, true);
   });
 
+  await t.test("explains only the candidate root 0755 to 0700 normalization", () => {
+    const fixture = makeFixture(t, { rollbackRootMode: 0o700, activeRootMode: 0o700 });
+    const run = runFixture(fixture);
+    const artifact = JSON.parse(readFileSync(join(fixture.evidence, "runtime-facts-1-compare.json"), "utf8"));
+    assert.equal(run.fields.status, "CONTINUE");
+    assert.equal(run.fields.candidate_facts_status, "ok");
+    assert.equal(run.fields.candidate_data_drift, "explained");
+    assert.equal(run.fields.restart_decision, "permitted");
+    assert.equal(artifact.accepted, false);
+    assert.equal(artifact.decision, "REJECT");
+    assert.equal(artifact.classification, "SEMANTIC_MISMATCH");
+    assert.equal(artifact.semantic_equal, false);
+    assert.equal(artifact.topology_equal, true);
+    assert.equal(artifact.semantic_difference.difference_count, 1);
+    assert.equal(artifact.semantic_difference.changed_field_count, 1);
+    assert.deepEqual(artifact.semantic_difference.changed_paths[0].changed_fields, ["mode"]);
+    assert.equal(artifact.semantic_difference.changed_paths[0].path, ".");
+  });
+
+  await t.test("does not explain file content or native changes with root normalization", () => {
+    const fixture = makeFixture(t, { rollbackRootMode: 0o700, activeRootMode: 0o700 });
+    const run = runFixture(fixture, { installMode: "content-drift" });
+    const artifact = JSON.parse(readFileSync(join(fixture.evidence, "runtime-facts-1-compare.json"), "utf8"));
+    assert.equal(run.fields.status, "STOPPED");
+    assert.equal(run.fields.candidate_data_drift, "unexplained");
+    assert.equal(run.fields.restart_decision, "blocked");
+    assert.equal(artifact.accepted, false);
+    assert.equal(artifact.semantic_difference.difference_count > 1, true);
+  });
+
+  await t.test("does not overwrite an existing Core unexplained drift", () => {
+    const fixture = makeFixture(t, { rollbackRootMode: 0o700, activeRootMode: 0o700 });
+    const run = runFixture(fixture, { installMode: "core-drift" });
+    const artifact = JSON.parse(readFileSync(join(fixture.evidence, "runtime-facts-1-compare.json"), "utf8"));
+    assert.equal(run.fields.status, "STOPPED");
+    assert.equal(run.fields.candidate_data_drift, "unexplained");
+    assert.equal(run.fields.restart_decision, "blocked");
+    assert.equal(artifact.accepted, false);
+  });
+
+  await t.test("does not overwrite an existing cron unexplained drift", () => {
+    const fixture = makeFixture(t, { rollbackRootMode: 0o700, activeRootMode: 0o700 });
+    writeCron(fixture.cronAfter, [
+      cronJob(),
+      cronJob({ id: "job-2", enabled: false, message: "changed disabled payload" }),
+    ]);
+    const run = runFixture(fixture);
+    assert.equal(run.fields.status, "STOPPED");
+    assert.equal(run.fields.candidate_data_drift, "unexplained");
+    assert.equal(run.fields.restart_decision, "blocked");
+  });
+
   await t.test("blocks an unexpected active artifact", () => {
     const fixture = makeFixture(t);
     const run = runFixture(fixture, { installMode: "unexpected" });
@@ -357,6 +431,19 @@ test("offline deployment caller enforces fresh cron, post-DDL Core, and observed
     assert.equal(readFileSync(join(fixture.active, "runtime.js"), "utf8"), "rollback-runtime\n");
     assert.equal(run.install.length, 2);
     assert.equal(readLines(join(fixture.evidence, "facts-count"))[0], "2");
+  });
+
+  await t.test("does not apply the candidate exception to a mismatching recovery artifact", () => {
+    const fixture = makeFixture(t, { rollbackRootMode: 0o700, activeRootMode: 0o700 });
+    const run = runFixture(fixture, { installExitCodes: "1,0", installMode: "recovery-unexpected" });
+    const recoveryArtifact = JSON.parse(readFileSync(join(fixture.evidence, "runtime-facts-2-compare.json"), "utf8"));
+    assert.equal(run.fields.candidate_data_drift, "explained");
+    assert.equal(run.fields.recovery_facts_status, "ok");
+    assert.equal(run.fields.recovery_data_drift, "unexplained");
+    assert.equal(run.fields.recovery_acceptance, "rejected");
+    assert.equal(run.fields.status, "STOPPED");
+    assert.equal(run.fields.restart_decision, "blocked");
+    assert.equal(recoveryArtifact.accepted, false);
   });
 
   await t.test("missing Core blocks before stop, DDL, and install", () => {
