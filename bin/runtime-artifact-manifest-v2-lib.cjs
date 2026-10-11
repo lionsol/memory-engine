@@ -401,11 +401,11 @@ function buildRuntimeArtifactManifestV2({ rootDir, checkedAt = new Date().toISOS
   const unknownEntries = entries.filter(entry => entry.type === "unknown");
   const externalSymlinkCount = symlinkEntries.filter(entry => entry.symlink_resolution_state === "external").length;
   const danglingSymlinkCount = symlinkEntries.filter(entry => entry.symlink_resolution_state === "dangling").length;
+  const rootEntry = entries.find(entry => entry.path === ".");
   const valid = collected.errors.length === 0
     && collected.topologyComplete
     && entries.every(entry => isValidRelativePath(entry.path))
-    && entries[0]?.path === "."
-    && entries[0]?.type === "directory"
+    && rootEntry?.type === "directory"
     && specialEntries.length === 0
     && unknownEntries.length === 0
     && externalSymlinkCount === 0

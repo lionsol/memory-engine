@@ -179,6 +179,24 @@ test("v2 exact identity separates semantic and topology identities", () => {
   }
 });
 
+test("v2 builder locates the root entry by path when __manifest sorts before it", () => {
+  const root = makeTree({
+    fileContents: {
+      "__manifest/metadata.json": "offline-fixture\n",
+      ...baseFiles(),
+    },
+  });
+  try {
+    const report = buildRuntimeArtifactManifestV2({ rootDir: root, checkedAt: "2026-10-11T00:00:00.000Z" });
+    assert.equal(report.valid, true);
+    assert.equal(report.entries[0].path, "__manifest");
+    assert.equal(report.entries.find(entry => entry.path === ".").type, "directory");
+    assert.equal(validateRuntimeArtifactManifestV2(report).artifact_valid, true);
+  } finally {
+    cleanupTree(root);
+  }
+});
+
 test("install normalization classification is policy-independent and root-mode exact", () => {
   const candidateRoot = makeTree({ fileContents: baseFiles(), rootMode: 0o500 });
   const installedRoot = makeTree({ fileContents: baseFiles(), rootMode: 0o700 });
