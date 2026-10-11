@@ -181,6 +181,7 @@ const logPath = process.env.INSTALL_LOG;
 const previous = existsSync(logPath) ? readFileSync(logPath, "utf8").trim() : "";
 const index = previous ? previous.split("\\n").filter(Boolean).length : 0;
 const codes = (process.env.INSTALL_EXIT_CODES || "0").split(",").map(Number);
+const mode = process.env.INSTALL_MODE || "normal";
 const packagePath = process.argv[4] || "";
 const role = packagePath.includes("candidate") ? "candidate" : "recovery";
 appendFileSync(logPath, JSON.stringify({ packagePath, role }) + "\\n");
@@ -229,6 +230,26 @@ if ((process.env.INSTALL_MODE || "normal") === "cron-drift" && role === "candida
 }
 if ((process.env.INSTALL_MODE || "normal") === "cron-invalid" && role === "candidate") {
   writeFileSync(process.env.CRON_STORE, "not-json\\n");
+}
+if (mode === "cron-invalid-once" && role === "candidate") {
+  writeFileSync(process.env.CRON_STORE, "not-json\\n");
+}
+if (mode === "cron-invalid-once" && role === "recovery") {
+  cpSync(process.env.CRON_AFTER_MUTATION, process.env.CRON_STORE);
+}
+if (mode === "core-drift-cron-invalid-once" && role === "candidate") {
+  const Database = createRequire(process.env.REPO_PACKAGE)("better-sqlite3");
+  const db = new Database(process.env.CORE_DB);
+  db.prepare("UPDATE memory_index_meta SET value = ? WHERE key = ?").run("mutated", "format");
+  db.close();
+  writeFileSync(process.env.CRON_STORE, "not-json\\n");
+}
+if (mode === "core-drift-cron-invalid-once" && role === "recovery") {
+  const Database = createRequire(process.env.REPO_PACKAGE)("better-sqlite3");
+  const db = new Database(process.env.CORE_DB);
+  db.prepare("UPDATE memory_index_meta SET value = ? WHERE key = ?").run("v1", "format");
+  db.close();
+  cpSync(process.env.CRON_AFTER_MUTATION, process.env.CRON_STORE);
 }
 process.exit(Number.isInteger(codes[Math.min(index, codes.length - 1)]) ? codes[Math.min(index, codes.length - 1)] : 70);
 `);
@@ -563,9 +584,49 @@ test("offline deployment caller enforces fresh cron, post-DDL Core, and observed
     assert.equal(run.fields.candidate_data_drift, "unexplained");
     assert.equal(run.fields.recovery_facts_status, "ok");
     assert.equal(run.fields.recovery_data_drift, "none");
-    assert.equal(run.fields.recovery_acceptance, "accepted");
+    assert.equal(run.fields.recovery_acceptance, "rejected");
     assert.equal(run.fields.status, "STOPPED");
     assert.equal(run.fields.restart_decision, "blocked");
+    assert.equal(run.install.length, 2);
+  });
+
+  await t.test("keeps confirmed Core drift blocked when the later cron callback fails", () => {
+    const fixture = makeFixture(t);
+    const run = runFixture(fixture, {
+      installMode: "core-drift-cron-invalid-once",
+      installExitCodes: "1,0",
+    });
+    const latch = JSON.parse(readFileSync(join(fixture.evidence, "candidate-unexplained-drift-core.json"), "utf8"));
+    const candidateCore = JSON.parse(readFileSync(join(fixture.evidence, "core-facts-1.json"), "utf8"));
+    const recoveryCore = JSON.parse(readFileSync(join(fixture.evidence, "core-facts-2.json"), "utf8"));
+    assert.equal(run.fields.candidate_facts_status, "failed:64");
+    assert.equal(run.fields.recovery_facts_status, "ok");
+    assert.equal(run.fields.recovery_acceptance, "rejected");
+    assert.equal(run.fields.status, "STOPPED");
+    assert.equal(run.fields.restart_decision, "blocked");
+    assert.equal(candidateCore.comparison.deployment_invariant_equal, false);
+    assert.equal(recoveryCore.comparison.deployment_invariant_equal, true);
+    assert.equal(latch.kind, "core");
+    assert.equal(latch.report_path, resolve(join(fixture.evidence, "core-facts-1.json")));
+    assert.equal(run.install.length, 2);
+  });
+
+  await t.test("retains recovery after a pure one-time cron facts failure", () => {
+    const fixture = makeFixture(t);
+    const run = runFixture(fixture, {
+      installMode: "cron-invalid-once",
+      installExitCodes: "1,0",
+    });
+    assert.equal(run.fields.candidate_facts_status, "failed:64");
+    assert.equal(run.fields.candidate_data_drift, "unknown");
+    assert.equal(run.fields.recovery_facts_status, "ok");
+    assert.equal(run.fields.recovery_data_drift, "none");
+    assert.equal(run.fields.recovery_acceptance, "accepted");
+    assert.equal(run.fields.status, "CONTINUE");
+    assert.equal(run.fields.outcome, "candidate_failed_recovery_succeeded");
+    assert.equal(run.fields.restart_decision, "permitted");
+    assert.equal(existsSync(join(fixture.evidence, "candidate-unexplained-drift-core.json")), false);
+    assert.equal(existsSync(join(fixture.evidence, "candidate-unexplained-drift-cron.json")), false);
     assert.equal(run.install.length, 2);
   });
 

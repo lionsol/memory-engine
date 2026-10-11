@@ -696,6 +696,180 @@ _autorecall_recent_deployment_config_compare() {
   return 0
 }
 
+_autorecall_recent_deployment_record_candidate_unexplained_drift() {
+  local kind="$1"
+  local report_path="$2"
+  local baseline_path="$3"
+  local binding_path="$4"
+  local node="$5"
+  local marker_path="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/candidate-unexplained-drift-${kind}.json"
+
+  if "$node" -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const crypto = require("node:crypto");
+    const [markerPath, kind, reportPath, baselinePath, bindingPath] = process.argv.slice(1);
+    const fail = message => { throw new Error(message); };
+    const readJson = file => JSON.parse(fs.readFileSync(file, "utf8"));
+    const sha256 = file => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    const resolved = file => path.resolve(file);
+    const reportFile = resolved(reportPath);
+    const baselineFile = resolved(baselinePath);
+    const bindingFile = resolved(bindingPath);
+    if (!fs.statSync(reportFile).isFile() || !fs.statSync(baselineFile).isFile() || !fs.statSync(bindingFile).isFile()) fail("candidate drift evidence source is not a file");
+    const report = readJson(reportFile);
+    const baseline = readJson(baselineFile);
+    const validSha = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+    const validManifest = value => value && value.schema_version === 2 && value.valid === true
+      && validSha(value.semantic_identity) && validSha(value.topology_identity) && validSha(value.exact_identity);
+    if (kind === "core") {
+      if (report.contract !== "core_deployment_logical_fingerprint_v1" || report.comparison?.deployment_invariant_equal !== false) fail("candidate Core comparison is not confirmed unexplained");
+      if (report.comparison.baseline_path !== baselineFile || report.comparison.core_path_equal !== true) fail("candidate Core comparison is not bound to the INSTALL baseline");
+      if (baseline.contract !== "core_deployment_logical_fingerprint_v1" || !validSha(baseline.deployment_invariant_sha256)) fail("candidate Core baseline is invalid");
+    } else if (kind === "engine") {
+      if (report.contract !== "engine_deployment_fingerprint_v1" || report.valid !== true || report.engine_invariant_equal !== false) fail("candidate Engine comparison is not confirmed unexplained");
+      if (baseline.contract !== "engine_deployment_fingerprint_v1" || !validSha(baseline.engine_invariant_sha256)) fail("candidate Engine baseline is invalid");
+    } else if (kind === "lance" || kind === "runtime") {
+      if (!validManifest(baseline) || report.schema_version !== 2 || report.accepted !== false || report.decision !== "REJECT" || report.semantic_equal !== false) fail(`candidate ${kind} artifact comparison is not confirmed unexplained`);
+      if (report.candidate_semantic_identity !== baseline.semantic_identity || report.candidate_topology_identity !== baseline.topology_identity || report.candidate_exact_identity !== baseline.exact_identity) fail(`candidate ${kind} artifact comparison is not bound to its manifest`);
+      const difference = report.semantic_difference;
+      const rootModeOnly = kind === "runtime"
+        && report.topology_equal === true
+        && difference?.difference_count === 1
+        && difference?.changed_field_count === 1
+        && difference?.changed_path_count === 1
+        && difference?.changed_paths_truncated === false
+        && difference?.changed_paths?.length === 1
+        && difference.changed_paths[0]?.path === "."
+        && difference.changed_paths[0]?.change_type === "changed"
+        && difference.changed_paths[0]?.changed_fields?.length === 1
+        && difference.changed_paths[0]?.changed_fields[0] === "mode"
+        && difference.changed_paths[0]?.candidate?.type === "directory"
+        && difference.changed_paths[0]?.installed?.type === "directory"
+        && difference.changed_paths[0]?.candidate?.mode === "0755"
+        && difference.changed_paths[0]?.installed?.mode === "0700";
+      if (rootModeOnly) fail("candidate runtime root mode exception is not unexplained drift");
+    } else if (kind === "config") {
+      if (report.schema_version !== 1 || report.valid !== false || !Array.isArray(report.changed_paths) || !Array.isArray(report.unexpected_changed_paths)) fail("candidate config comparison is not confirmed unexplained");
+    } else if (kind === "cron") {
+      if (report.contract !== "autorecall_cron_equivalence_v1" || report.valid !== true || report.definition_equal !== false) fail("candidate cron comparison is not confirmed unexplained");
+      if (report.baseline_path !== baselineFile) fail("candidate cron comparison is not bound to its baseline");
+    } else fail(`unsupported candidate drift kind: ${kind}`);
+
+    const record = {
+      contract: "autorecall_candidate_unexplained_drift_v1",
+      kind,
+      report_path: reportFile,
+      report_sha256: sha256(reportFile),
+      baseline_path: baselineFile,
+      baseline_sha256: sha256(baselineFile),
+      binding_path: bindingFile,
+      binding_sha256: sha256(bindingFile),
+    };
+    if (fs.existsSync(markerPath)) {
+      const existing = readJson(markerPath);
+      for (const key of Object.keys(record)) if (existing[key] !== record[key]) fail("candidate drift latch does not match current evidence");
+    } else {
+      fs.writeFileSync(markerPath, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+    }
+  ' "$marker_path" "$kind" "$report_path" "$baseline_path" "$binding_path"; then
+    return 0
+  else
+    printf 'could not persist confirmed candidate %s drift evidence\n' "$kind" >&2
+    return 64
+  fi
+}
+
+_autorecall_recent_deployment_validate_candidate_unexplained_drift_marker() {
+  local marker_path="$1"
+  local node="$2"
+
+  if "$node" -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const crypto = require("node:crypto");
+    const [markerPath] = process.argv.slice(1);
+    const fail = message => { throw new Error(message); };
+    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    if (marker.contract !== "autorecall_candidate_unexplained_drift_v1") fail("candidate drift latch contract mismatch");
+    for (const key of ["kind", "report_path", "baseline_path", "binding_path", "report_sha256", "baseline_sha256", "binding_sha256"]) if (typeof marker[key] !== "string" || !marker[key]) fail(`candidate drift latch field missing: ${key}`);
+    const sha256 = file => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    for (const [key, digestKey] of [["report_path", "report_sha256"], ["baseline_path", "baseline_sha256"], ["binding_path", "binding_sha256"]]) {
+      if (!fs.statSync(marker[key]).isFile() || sha256(marker[key]) !== marker[digestKey]) fail(`candidate drift latch ${key} changed`);
+    }
+    const report = JSON.parse(fs.readFileSync(marker.report_path, "utf8"));
+    const baseline = JSON.parse(fs.readFileSync(marker.baseline_path, "utf8"));
+    const validSha = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+    const validManifest = value => value && value.schema_version === 2 && value.valid === true
+      && validSha(value.semantic_identity) && validSha(value.topology_identity) && validSha(value.exact_identity);
+    switch (marker.kind) {
+      case "core":
+        if (report.contract !== "core_deployment_logical_fingerprint_v1" || report.comparison?.deployment_invariant_equal !== false || report.comparison?.baseline_path !== path.resolve(marker.baseline_path)) fail("candidate Core drift latch is not confirmed");
+        if (baseline.contract !== "core_deployment_logical_fingerprint_v1" || !validSha(baseline.deployment_invariant_sha256)) fail("candidate Core drift baseline is invalid");
+        break;
+      case "engine":
+        if (report.contract !== "engine_deployment_fingerprint_v1" || report.valid !== true || report.engine_invariant_equal !== false) fail("candidate Engine drift latch is not confirmed");
+        if (baseline.contract !== "engine_deployment_fingerprint_v1" || !validSha(baseline.engine_invariant_sha256)) fail("candidate Engine drift baseline is invalid");
+        break;
+      case "lance":
+      case "runtime": {
+        if (!validManifest(baseline) || report.schema_version !== 2 || report.accepted !== false || report.decision !== "REJECT" || report.semantic_equal !== false) fail(`candidate ${marker.kind} drift latch is not confirmed`);
+        if (report.candidate_semantic_identity !== baseline.semantic_identity || report.candidate_topology_identity !== baseline.topology_identity || report.candidate_exact_identity !== baseline.exact_identity) fail(`candidate ${marker.kind} drift latch is not bound to its manifest`);
+        const difference = report.semantic_difference;
+        const rootModeOnly = marker.kind === "runtime"
+          && report.topology_equal === true
+          && difference?.difference_count === 1
+          && difference?.changed_field_count === 1
+          && difference?.changed_path_count === 1
+          && difference?.changed_paths_truncated === false
+          && difference?.changed_paths?.length === 1
+          && difference.changed_paths[0]?.path === "."
+          && difference.changed_paths[0]?.changed_fields?.length === 1
+          && difference.changed_paths[0]?.changed_fields[0] === "mode"
+          && difference.changed_paths[0]?.candidate?.mode === "0755"
+          && difference.changed_paths[0]?.installed?.mode === "0700";
+        if (rootModeOnly) fail("candidate runtime root mode exception was latched as unexplained");
+        break;
+      }
+      case "config":
+        if (report.schema_version !== 1 || report.valid !== false || !Array.isArray(report.changed_paths) || !Array.isArray(report.unexpected_changed_paths)) fail("candidate config drift latch is not confirmed");
+        break;
+      case "cron":
+        if (report.contract !== "autorecall_cron_equivalence_v1" || report.valid !== true || report.definition_equal !== false || report.baseline_path !== path.resolve(marker.baseline_path)) fail("candidate cron drift latch is not confirmed");
+        break;
+      default:
+        fail(`unsupported candidate drift kind: ${marker.kind}`);
+    }
+  ' "$marker_path"; then
+    return 0
+  else
+    printf 'invalid or changed candidate drift latch: %s\n' "$marker_path" >&2
+    return 64
+  fi
+}
+
+_autorecall_recent_deployment_validate_candidate_unexplained_drift_latch() {
+  local evidence_dir="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR"
+  local node="$AUTORECALL_RECENT_DEPLOYMENT_NODE"
+  local kind
+  local found=0
+  local marker_path
+  for kind in core engine lance config cron runtime; do
+    marker_path="$evidence_dir/candidate-unexplained-drift-${kind}.json"
+    if [[ -e "$marker_path" ]]; then
+      found=1
+      if ! _autorecall_recent_deployment_validate_candidate_unexplained_drift_marker "$marker_path" "$node"; then
+        return 64
+      fi
+    fi
+  done
+  if ((found)); then
+    printf '%s\n' 'candidate comparison confirmed unexplained drift; recovery acceptance is blocked' >&2
+    return 0
+  fi
+  return 1
+}
+
 _autorecall_recent_deployment_capture_config_after() {
   local source_path="$1"
   local output_path="$2"
@@ -777,6 +951,10 @@ _autorecall_recent_deployment_facts_callback() {
   if _autorecall_recent_deployment_core_compare "$core_report" "$core_db" "$baseline_path" "$node" "$fingerprint_tool"; then
     if [[ "$AUTORECALL_RECENT_DEPLOYMENT_CORE_EQUAL" != 1 ]]; then
       data_drift='unexplained'
+      if [[ "$facts_number" == 1 ]] && ! _autorecall_recent_deployment_record_candidate_unexplained_drift \
+        core "$core_report" "$baseline_path" "$baseline_path" "$node"; then
+        return 64
+      fi
     fi
   else
     return 64
@@ -794,6 +972,10 @@ _autorecall_recent_deployment_facts_callback() {
   fi
   if [[ "$AUTORECALL_RECENT_DEPLOYMENT_ENGINE_EQUAL" != 1 ]]; then
     data_drift='unexplained'
+    if [[ "$facts_number" == 1 ]] && ! _autorecall_recent_deployment_record_candidate_unexplained_drift \
+      engine "$engine_report" "$engine_baseline" "$engine_baseline" "$node"; then
+      return 64
+    fi
   fi
 
   if ! _autorecall_recent_deployment_build_artifact_manifest \
@@ -808,6 +990,10 @@ _autorecall_recent_deployment_facts_callback() {
   fi
   if [[ "$AUTORECALL_RECENT_DEPLOYMENT_ARTIFACT_EQUAL" != 1 ]]; then
     data_drift='unexplained'
+    if [[ "$facts_number" == 1 ]] && ! _autorecall_recent_deployment_record_candidate_unexplained_drift \
+      lance "$lance_report" "$lance_baseline" "$lance_baseline" "$node"; then
+      return 64
+    fi
   fi
 
   if ! _autorecall_recent_deployment_capture_config_after "$config_path" "$config_after" "$node"; then
@@ -821,6 +1007,10 @@ _autorecall_recent_deployment_facts_callback() {
   fi
   if [[ "$AUTORECALL_RECENT_DEPLOYMENT_CONFIG_EQUAL" != 1 ]]; then
     data_drift='unexplained'
+    if [[ "$facts_number" == 1 ]] && ! _autorecall_recent_deployment_record_candidate_unexplained_drift \
+      config "$config_report" "$config_baseline" "$config_baseline" "$node"; then
+      return 64
+    fi
   fi
 
   if _autorecall_recent_deployment_build_artifact_manifest \
@@ -850,6 +1040,10 @@ _autorecall_recent_deployment_facts_callback() {
         fi
       else
         data_drift='unexplained'
+        if [[ "$facts_number" == 1 ]] && ! _autorecall_recent_deployment_record_candidate_unexplained_drift \
+          runtime "$artifact_report" "$expected_artifact_manifest" "$expected_artifact_manifest" "$node"; then
+          return 64
+        fi
       fi
     fi
   else
@@ -870,6 +1064,10 @@ _autorecall_recent_deployment_facts_callback() {
     cron_rc=$?
     if [[ "$cron_rc" == 2 ]]; then
       data_drift='unexplained'
+      if [[ "$facts_number" == 1 ]] && ! _autorecall_recent_deployment_record_candidate_unexplained_drift \
+        cron "$cron_report" "$AUTORECALL_RECENT_DEPLOYMENT_CRON_BASELINE_PATH" "$AUTORECALL_RECENT_DEPLOYMENT_CRON_BASELINE_PATH" "$node"; then
+        return 64
+      fi
     else
       printf '%s\n' 'facts callback received invalid cron evidence' >&2
       return 64
@@ -903,6 +1101,16 @@ _autorecall_recent_deployment_recovery_acceptance_callback() {
   local config_report="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/config-facts-2-compare.json"
   local cron_report="$AUTORECALL_RECENT_DEPLOYMENT_EVIDENCE_DIR/cron-facts-2-compare.json"
   local node="$AUTORECALL_RECENT_DEPLOYMENT_NODE"
+  if _autorecall_recent_deployment_validate_candidate_unexplained_drift_latch; then
+    printf '%s\n' 'recovery acceptance: candidate unexplained drift latch blocks restart' >&2
+    return 64
+  else
+    local latch_rc=$?
+    if [[ "$latch_rc" != 1 ]]; then
+      printf '%s\n' 'recovery acceptance: candidate drift latch is invalid' >&2
+      return 64
+    fi
+  fi
   if [[ "${AUTORECALL_INSTALL_STEP_RECOVERY_EXIT_CODE:-not_run}" != 0 ]]; then
     printf '%s\n' 'recovery acceptance: recovery command did not exit zero' >&2
     return 64
