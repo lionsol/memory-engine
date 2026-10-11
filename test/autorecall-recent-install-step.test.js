@@ -71,9 +71,16 @@ facts_callback() {
   if [[ "$FACTS_EXIT_CODES" == *,* ]]; then
     last_code="\${FACTS_EXIT_CODES##*,}"
   fi
+  local first_drift="\${FACTS_DATA_DRIFT%%,*}"
+  local last_drift="$first_drift"
+  if [[ "$FACTS_DATA_DRIFT" == *,* ]]; then
+    last_drift="\${FACTS_DATA_DRIFT##*,}"
+  fi
   local code="$first_code"
+  local drift="$first_drift"
   if [[ "$count" != 0 ]]; then
     code="$last_code"
+    drift="$last_drift"
   fi
   printf '%s' "$((count + 1))" > "$FACTS_COUNTER"
   if [[ "$code" != 0 ]]; then
@@ -81,7 +88,7 @@ facts_callback() {
   fi
   printf 'launch_observed=%s\\n' "$FACTS_LAUNCH_OBSERVED"
   printf 'runtime_state=%s\\n' "$FACTS_RUNTIME_STATE"
-  printf 'data_drift=%s\\n' "$FACTS_DATA_DRIFT"
+  printf 'data_drift=%s\\n' "$drift"
 }
 
 recovery_acceptance_callback() {
@@ -286,6 +293,25 @@ test('offline install-step subprocess contract', async (t) => {
     assert.equal(run.facts.recovery_data_drift, 'unexplained');
     assert.equal(run.facts.restart_decision, 'blocked');
     assert.equal(run.facts.status, 'STOPPED');
+    assert.deepEqual(run.order, ['child:candidate', 'facts', 'child:recovery', 'facts', 'acceptance']);
+  });
+
+  await t.test('candidate unexplained drift remains blocked after clean accepted recovery', () => {
+    const fixture = makeFixture();
+    const run = runFixture(fixture, {
+      exitCodes: '1,0',
+      launchObserved: 'yes',
+      runtimeState: 'changed',
+      dataDrift: 'unexplained,none',
+    });
+
+    assert.equal(run.facts.candidate_data_drift, 'unexplained');
+    assert.equal(run.facts.recovery_data_drift, 'none');
+    assert.equal(run.facts.recovery_acceptance, 'accepted');
+    assert.equal(run.facts.outcome, 'candidate_unexplained_drift');
+    assert.equal(run.facts.status, 'STOPPED');
+    assert.equal(run.facts.restart_decision, 'blocked');
+    assert.equal(run.facts.driver_rc, '1');
     assert.deepEqual(run.order, ['child:candidate', 'facts', 'child:recovery', 'facts', 'acceptance']);
   });
 

@@ -384,7 +384,11 @@ _autorecall_install_step_run() {
     recovery_acceptance='rejected'
   fi
 
-  if [[ "$recovery_rc" == 0 && "$recovery_facts_status" == 'ok' && "$recovery_drift" != 'unexplained' && "$recovery_drift" != 'unknown' && "$acceptance_rc" == 0 ]]; then
+  if [[ "$candidate_drift" == 'unexplained' ]]; then
+    status='STOPPED'
+    outcome='candidate_unexplained_drift'
+    restart_decision='blocked'
+  elif [[ "$recovery_rc" == 0 && "$recovery_facts_status" == 'ok' && "$recovery_drift" != 'unexplained' && "$recovery_drift" != 'unknown' && "$acceptance_rc" == 0 ]]; then
     status='CONTINUE'
     outcome='candidate_failed_recovery_succeeded'
     restart_decision='permitted'
