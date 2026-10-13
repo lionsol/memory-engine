@@ -60,6 +60,7 @@ function createLifecycle(options = {}) {
     batchReinforce: options.batchReinforce || (() => 0),
     now: options.now || (() => 1_700_000_000_000),
     randomUUID: options.randomUUID || (() => "trace-1"),
+    evaluateDirectCardBoundary: options.evaluateDirectCardBoundary,
   });
   return { ...fixture, lifecycle, events };
 }
@@ -366,4 +367,67 @@ test("finalize ignores prose hex strings without explicit citation metadata", as
   assert.equal(fixture.events.some(event => event.event_type === "memory_reinforced"), false);
   assert.equal(fixture.lifecycle.turnState.getTurnState("run-no-citation"), null);
   assert.equal(fixture.lifecycle.turnState.getToolInvocationScope("tool-no-citation"), null);
+});
+
+test("DIRECT_CARD await shares the request budget and discards a late decision", async () => {
+  let directCardCalls = 0;
+  let releaseLateDecision;
+  const lateDecision = new Promise(resolve => { releaseLateDecision = resolve; });
+  const fixture = createLifecycle({
+    autoRecallConfig: {
+      enabled: true,
+      timeoutMs: 250,
+      cardFirstRuntime: { enabled: true },
+    },
+    randomUUID: () => "trace-direct-card-cancel",
+    evaluateDirectCardBoundary: async () => {
+      directCardCalls += 1;
+      return lateDecision;
+    },
+  });
+  const candidate = {
+    id: "abcdef1234567890",
+    memory_id: "abcdef1234567890-full",
+    path: "memory/direct-card.md",
+    text: "direct card candidate",
+    category: "episodic",
+    confidence: 0.9,
+    final_score: 0.9,
+    sources: ["fts"],
+  };
+  const hybridContext = createHybridContext(fixture.events, async () => ({
+    results: [candidate],
+    debug: {
+      query_stripped: "direct card candidate",
+      post_rerank_topK: [{ id: candidate.id, score: candidate.final_score }],
+    },
+  }));
+  fixture.lifecycle.register(hybridContext);
+
+  const beforePrompt = fixture.hooks.find(item => item.name === "before_prompt_build").handler;
+  await beforePrompt({
+    prompt: "please find the direct card candidate",
+    runId: "run-direct-card-cancel",
+    sessionId: "session-direct-card-cancel",
+  }, {
+    agentId: "edi",
+    trigger: "user",
+    runId: "run-direct-card-cancel",
+    sessionId: "session-direct-card-cancel",
+  });
+
+  assert.equal(directCardCalls, 1);
+  assert.equal(fixture.events.some(event => event.event_type === "memory_injected"), false);
+  assert.equal(fixture.lifecycle.turnState.getTurnState("run-direct-card-cancel"), null);
+  const cancellation = fixture.events.find(event => event.metadata_json?.debug_type === "auto_recall_cancellation");
+  assert.equal(cancellation.trace_id, "trace-direct-card-cancel");
+  assert.equal(cancellation.metadata_json.cancellation_stage, "direct_card");
+  assert.equal(cancellation.metadata_json.request_cancelled, true);
+
+  releaseLateDecision({
+    selected: [{ candidate_index: 0, memory_id: candidate.memory_id, decision: "DISCLOSE_CARD" }],
+  });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(fixture.events.some(event => event.event_type === "memory_injected"), false);
+  assert.equal(fixture.events.some(event => event.event_type === "recall_completed"), false);
 });

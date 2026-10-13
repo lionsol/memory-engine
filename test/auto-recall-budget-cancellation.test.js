@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 
 import { generateEmbedding } from "../lib/siliconflow-runtime.js";
-import { createAutoRecallRequestBudget } from "../lib/recall/request-budget.js";
+import {
+  awaitWithAutoRecallBudget,
+  createAutoRecallRequestBudget,
+} from "../lib/recall/request-budget.js";
 import { createAutoRecallHookLifecycle } from "../lib/recall/auto-recall-hook-lifecycle.js";
 import { createHybridRuntimeContext } from "../lib/recall/hybrid/runtime-context.js";
 import { hybridSearch } from "../lib/recall/hybrid-search.js";
@@ -205,6 +208,7 @@ test("shared budget cancels the real AutoRecall to Hybrid/vector/embedding chain
     batchReinforce: () => {
       throw new Error("reinforcement must not run");
     },
+    randomUUID: () => "trace-budget-cancel",
   });
   lifecycle.register(runtime);
   const hook = apiFixture.hooks.find(item => item.name === "before_prompt_build").handler;
@@ -225,7 +229,65 @@ test("shared budget cancels the real AutoRecall to Hybrid/vector/embedding chain
   assert.equal(events.some(event => event.event_type === "memory_reinforced"), false);
   assert.equal(events.some(event => event.event_type === "recall_completed"), false);
   assert.equal(events.filter(event => event.metadata_json?.debug_type === "auto_recall_cancellation").length, 1);
+  const cancellation = events.find(event => event.metadata_json?.debug_type === "auto_recall_cancellation");
+  assert.equal(cancellation.trace_id, "trace-budget-cancel");
+  assert.equal(cancellation.metadata_json.cancellation_stage, "embedding");
+  assert.equal(Number.isFinite(cancellation.metadata_json.hybrid_vector_timings.vector_embedding_wait_ms), true);
+  assert.equal(cancellation.metadata_json.hybrid_vector_timings.vector_embedding_wait_ms >= 0, true);
   assert.equal(lifecycle.turnState.getTurnState("run-cancel"), null);
+});
+
+test("cancelled budget does not start a queued operation", async () => {
+  let starts = 0;
+  const budget = createAutoRecallRequestBudget(100);
+  budget.cancel("lancedb_search");
+  assert.throws(
+    () => awaitWithAutoRecallBudget(() => {
+      starts += 1;
+      return Promise.resolve([]);
+    }, budget, "lancedb_search"),
+    error => error.code === "AUTO_RECALL_REQUEST_CANCELLED",
+  );
+  assert.equal(starts, 0);
+  budget.dispose();
+});
+
+test("cancelled budget does not start the real LanceDB search callback", async () => {
+  const db = makeBudgetDb();
+  const budget = createAutoRecallRequestBudget(1_000);
+  let searchCalls = 0;
+  const table = {
+    search() {
+      searchCalls += 1;
+      return { limit: () => ({ execute: async () => [] }) };
+    },
+  };
+  const runtimeInfo = { readyState: "ready" };
+  Object.defineProperty(runtimeInfo, "table", {
+    get() {
+      budget.cancel("lancedb_search");
+      return table;
+    },
+  });
+
+  const result = await hybridSearch("query", { topK: 2 }, {
+    requestBudget: budget,
+    withHybridDbAccessScope: async run => run({
+      withCoreDb: callback => callback(db),
+      withEngineDb: callback => callback(db),
+      capabilities: { isolatedFts: true, isolatedKg: true, isolatedRecent: true },
+    }),
+    calcRealtimeConf: row => row.confidence,
+    generateEmbedding: async () => [0.1, 0.2],
+    getLancedbRuntime: async () => runtimeInfo,
+    getMemorySearchManager: async () => ({ manager: null }),
+    syncIndexIfNeeded: async () => ({ synced: false }),
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(result.debug.request_cancelled, true);
+  assert.equal(result.debug.cancellation_stage, "lancedb_search");
+  assert.equal(searchCalls, 0);
+  budget.dispose();
 });
 
 test("budget helper supports independent concurrent invocations and cleans its timer", async () => {
