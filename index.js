@@ -120,9 +120,10 @@ export default definePluginEntry({
 
     const effectiveRuntimeConfig = config.effectiveRuntimeConfig;
     const smartAddTimeZone = config.smartAddTimeZone;
-    const generateEmbeddingRuntime = text => generateEmbedding(text, {
+    const generateEmbeddingRuntime = (text, options = {}) => generateEmbedding(text, {
       cfg: config.embeddingRuntimeConfig,
       apiConfig: consumerRuntimeConfig,
+      ...options,
     });
     const autoRecallConfig = effectiveRuntimeConfig.autoRecall;
     const kgFailClosedMode = effectiveRuntimeConfig.kgFailClosedMode;
