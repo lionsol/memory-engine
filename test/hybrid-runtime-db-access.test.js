@@ -377,7 +377,7 @@ test("production wiring supplies the scope to AutoRecall and both search surface
 test("AutoRecall persistence is explicitly gated on an executed Hybrid result", () => {
   const lifecycleSource = readFileSync(new URL("../lib/recall/auto-recall-hook-lifecycle.js", import.meta.url), "utf8");
   const debugSource = readFileSync(new URL("../lib/recall/auto-recall-debug-metadata.js", import.meta.url), "utf8");
-  assert.match(lifecycleSource, /buildAutoRecallDebugMetadata\(prompt, result, null, \{ searchExecuted: true \}\)/);
+  assert.match(lifecycleSource, /buildAutoRecallDebugMetadata\(prompt, debugResult, null, \{ searchExecuted: true \}\)/);
   assert.match(debugSource, /function summarizeLegacyDbFallback\(debugInfo = \{\}\)/);
   assert.match(debugSource, /legacy_db_fallback_channels/);
   assert.match(debugSource, /legacy_db_fallback_used/);

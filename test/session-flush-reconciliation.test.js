@@ -389,6 +389,7 @@ test("session_flush eligibility is deterministic, provenance-scoped, and fail-cl
     assert.equal(result.unmappable_chunk_count, 2);
     assert.deepEqual(result.eligibleCoreRows.map(row => row.id), ["eligible"]);
     assert.equal(result.engine_inserted, 1);
+    assert.equal(result.stable_identity_state, "unmigrated");
     assert.equal(result.engine_converged, false);
   } finally {
     fixture.cleanup();

@@ -162,6 +162,16 @@ function createActionRuntime(fixture, overrides = {}) {
       return withEngineDbIsolated(fn, { ...accessorOptions, readonly: true });
     },
     getLancedbTable: () => ({
+      async schema() {
+        return {
+          fields: [
+            { name: "id" },
+            { name: "text" },
+            { name: "vector", type: { listSize: 3 } },
+            { name: "embedding_fingerprint" },
+          ],
+        };
+      },
       query() {
         const query = {
           where() { return query; },

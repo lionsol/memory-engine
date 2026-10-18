@@ -129,7 +129,7 @@ test("current OpenClaw Core chunks backfill into an empty Engine through canonic
       }),
     });
     const result = backfill(1234);
-    assert.deepEqual(result, { scanned: 2, inserted: 2 });
+    assert.deepEqual(result, { scanned: 2, inserted: 2, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
     withEngineDbIsolated((db) => {
       assert.deepEqual(
         db.prepare("SELECT chunk_id, category FROM memory_confidence ORDER BY chunk_id").all(),

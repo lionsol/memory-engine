@@ -470,6 +470,7 @@ async function main(argv = process.argv.slice(2)) {
         engine_inserted: engineReconciliation?.engine_inserted || 0,
         engine_backlog_remaining: engineReconciliation?.engine_backlog_remaining || 0,
         engine_converged: engineReconciliation?.engine_converged === true,
+        stable_identity_state: engineReconciliation?.stable_identity_state || "unknown",
         error: engineReconciliation?.error || null,
       })}`);
       if (engineReconciliation?.ok === false && engineReconciliation.error) {

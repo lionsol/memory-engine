@@ -1,0 +1,18 @@
+# Tasks
+- [x] migration module + isolated tests (additive, idempotent, conflict detection)
+- [x] deterministic migration mapping for the actual 129-row legacy shape
+- [x] stable id assignment on create/update/rechunk paths (no new drift)
+- [x] database-enforced active identity uniqueness and explicit old-schema gate
+- [x] LanceDB row contract: id=entity_id (+ doc_uuid/fingerprint)
+- [x] schema-aware LanceDB enumeration and real temporary legacy-schema test
+- [x] path recovery via doc registry (129 manifest as input)
+- [x] explicit authorization-gated global maintenance entry point
+- [x] global convergence: paged bounded enumeration + dataset-bound checkpoint + idempotent + 4-class
+- [x] embedding validation: dimension, finite/non-degenerate values, model compatibility
+- [x] legacy preservation: never relink/delete 613/36
+- [x] interruption, dataset-change, scale, invalid-vector, duplicate, and partial-failure regressions
+- [x] serving-ID normalization through current Core metadata and confidence
+- [x] actual 129-row JSONL first/repeat/conflict-retry coverage with persistent Lance aliases
+- [x] old-schema add/index-sync/confidence-writer compatibility and explicit state reporting
+- [x] Core-reindex stale snapshot quarantine without guessed remapping
+- [x] same-count dataset membership invalidation, hard caps, legacy fingerprint recovery, and move contract

@@ -116,6 +116,16 @@ function createDeltaHarness({
     getLancedbTable: () => {
       lanceTableCalls += 1;
       const table = {
+        async schema() {
+          return {
+            fields: [
+              { name: "id" },
+              { name: "text" },
+              { name: "vector", type: { listSize: 2 } },
+              { name: "embedding_fingerprint" },
+            ],
+          };
+        },
         query() {
           let predicate = "";
           const query = {

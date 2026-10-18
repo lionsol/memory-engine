@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createRequire } from "node:module";
 import {
   withCoreDbReadonly,
   withEngineDbIsolated,
@@ -12,6 +13,9 @@ import {
   createBackfillConfidenceForIndexedChunks,
   createIndexSyncRuntime,
 } from "../lib/index-sync-runtime.js";
+
+const require = createRequire(import.meta.url);
+const stableIdentity = require("../lib/db/stable-memory-identity.cjs");
 
 const BATCH_SIZE = 500;
 
@@ -114,7 +118,7 @@ test("backfill inserts one missing managed chunk with the legacy field contract"
   });
   try {
     const result = createBackfill(fixture)(123);
-    assert.deepEqual(result, { scanned: 1, inserted: 1 });
+    assert.deepEqual(result, { scanned: 1, inserted: 1, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
     fixture.withCoreDb(db => {
       assert.deepEqual(db.prepare("PRAGMA database_list").all().map(row => row.name), ["main"]);
       assert.throws(
@@ -155,6 +159,85 @@ test("backfill inserts one missing managed chunk with the legacy field contract"
   }
 });
 
+test("Core reindex caller keeps uncertain old chunks out of active convergence", () => {
+  const fixture = createDbFixture({
+    coreRows: [{
+      id: "core-new-after-reindex",
+      path: "memory/smart-add/reindexed.md",
+      text: "new chunk after reindex",
+      updated_at: 20,
+    }],
+  });
+  try {
+    fixture.withEngineDb(db => {
+      stableIdentity.ensureStableMemoryIdentityTables(db, { addConfidenceColumns: true });
+      stableIdentity.migrateStableMemoryIdentity(db, {
+        manifest: [{
+          lance_id: "legacy-lance-old-before-reindex",
+          engine_memory_id: "engine-old-before-reindex",
+          core_chunk_id: "core-old-before-reindex",
+          path: "memory/smart-add/reindexed.md",
+        }],
+        nowSec: 10,
+      });
+      assert.equal(db.prepare("SELECT state FROM memory_identity WHERE core_chunk_id_snapshot = 'core-old-before-reindex'").get().state, "recovered");
+    });
+    const result = createBackfill(fixture)(123);
+    assert.equal(result.stable_identity_state, "migrated");
+    assert.equal(result.unknown_reindexed, 1);
+    fixture.withEngineDb(db => {
+      const recovered = db.prepare("SELECT entity_id, state FROM memory_identity WHERE core_chunk_id_snapshot = 'core-old-before-reindex'").get();
+      assert.equal(recovered.state, "unknown_legacy");
+      assert.equal(db.prepare("SELECT is_archived FROM memory_confidence WHERE entity_id = ?").get(recovered.entity_id).is_archived, 1);
+      assert.equal(db.prepare("SELECT state FROM memory_identity WHERE core_chunk_id_snapshot = 'core-new-after-reindex'").get().state, "active");
+      assert.equal(db.prepare("SELECT COUNT(*) AS c FROM memory_identity WHERE state IN ('active', 'recovered') AND core_chunk_id_snapshot = 'core-old-before-reindex'").get().c, 0);
+    });
+  } finally {
+    closeFixture(fixture);
+  }
+});
+
+test("index-sync reuses a migrated engine/core alias and remains idempotent", () => {
+  const fixture = createDbFixture({
+    coreRows: [{
+      id: "core-current-alias",
+      path: "memory/smart-add/alias.md",
+      text: "current core snapshot",
+      updated_at: 20,
+    }],
+  });
+  try {
+    fixture.withEngineDb(db => {
+      stableIdentity.ensureStableMemoryIdentityTables(db, { addConfidenceColumns: true });
+      stableIdentity.migrateStableMemoryIdentity(db, {
+        manifest: [{
+          lance_id: "legacy-lance-alias",
+          engine_memory_id: "engine-memory-alias",
+          core_chunk_id: "core-current-alias",
+          path: "memory/smart-add/alias.md",
+        }],
+        nowSec: 10,
+      });
+    });
+    const backfill = createBackfill(fixture);
+    const first = backfill(123);
+    const second = backfill(456);
+    assert.equal(first.inserted, 0);
+    assert.equal(second.inserted, 0);
+    fixture.withEngineDb(db => {
+      const confidence = db.prepare("SELECT chunk_id, entity_id FROM memory_confidence").all();
+      assert.equal(confidence.length, 1);
+      assert.deepEqual(confidence[0], {
+        chunk_id: "engine-memory-alias",
+        entity_id: db.prepare("SELECT entity_id FROM memory_identity WHERE core_chunk_id_snapshot = 'core-current-alias'").get().entity_id,
+      });
+      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM memory_identity WHERE state IN ('active', 'recovered') AND core_chunk_id_snapshot = 'core-current-alias'").get().count, 1);
+    });
+  } finally {
+    closeFixture(fixture);
+  }
+});
+
 test("existing confidence rows are excluded regardless of archive, conflict, or category state", () => {
   const fixture = createDbFixture({
     coreRows: [{ id: "chunk-1", path: "memory/smart-add/a.md", text: "body", updated_at: 10 }],
@@ -167,7 +250,7 @@ test("existing confidence rows are excluded regardless of archive, conflict, or 
     }],
   });
   try {
-    assert.deepEqual(createBackfill(fixture)(123), { scanned: 0, inserted: 0 });
+    assert.deepEqual(createBackfill(fixture)(123), { scanned: 0, inserted: 0, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
     fixture.withEngineDb(db => {
       assert.deepEqual(db.prepare("SELECT confidence, is_archived, conflict_flag, category FROM memory_confidence").get(), {
         confidence: 0.91,
@@ -192,7 +275,7 @@ test("only smart-add and episode paths participate, with unknown category fallba
     ],
   });
   try {
-    assert.deepEqual(createBackfill(fixture)(123), { scanned: 2, inserted: 2 });
+    assert.deepEqual(createBackfill(fixture)(123), { scanned: 2, inserted: 2, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
     fixture.withEngineDb(db => {
       assert.deepEqual(db.prepare("SELECT chunk_id, category FROM memory_confidence ORDER BY chunk_id").all(), [
         { chunk_id: "episode", category: "episodic" },
@@ -216,7 +299,7 @@ test("applies LIMIT 500 after global Engine existence filtering", () => {
   }
   const fixture = createDbFixture({ coreRows, confidenceRows });
   try {
-    assert.deepEqual(createBackfill(fixture)(123), { scanned: 500, inserted: 500 });
+    assert.deepEqual(createBackfill(fixture)(123), { scanned: 500, inserted: 500, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
     fixture.withEngineDb(db => {
       assert.equal(db.prepare("SELECT COUNT(*) AS count FROM memory_confidence WHERE chunk_id LIKE 'missing-%'").get().count, 500);
       assert.equal(db.prepare("SELECT 1 FROM memory_confidence WHERE chunk_id = 'missing-500'").get(), undefined);
@@ -239,7 +322,7 @@ test("batches Engine existence reads globally and preserves Core order", () => {
   });
   try {
     const result = createBackfill(fixture)(123);
-    assert.deepEqual(result, { scanned: 500, inserted: 500 });
+    assert.deepEqual(result, { scanned: 500, inserted: 500, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
     fixture.withEngineDb(db => {
       const inserted = db.prepare("SELECT chunk_id FROM memory_confidence WHERE last_confidence_update = 123").all();
       assert.deepEqual(inserted.map(row => row.chunk_id), coreRows
@@ -262,7 +345,7 @@ test("text IDs with numeric-looking values are matched without string normalizat
     confidenceRows: [{ chunk_id: "1" }],
   });
   try {
-    assert.deepEqual(createBackfill(fixture)(123), { scanned: 2, inserted: 2 });
+    assert.deepEqual(createBackfill(fixture)(123), { scanned: 2, inserted: 2, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
     fixture.withEngineDb(db => {
       assert.deepEqual(db.prepare("SELECT chunk_id FROM memory_confidence ORDER BY chunk_id").all(), [
         { chunk_id: "0001" },
@@ -301,8 +384,8 @@ test("backfill is idempotent after the first insert", () => {
   });
   try {
     const backfill = createBackfill(fixture);
-    assert.deepEqual(backfill(123), { scanned: 1, inserted: 1 });
-    assert.deepEqual(backfill(456), { scanned: 0, inserted: 0 });
+    assert.deepEqual(backfill(123), { scanned: 1, inserted: 1, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
+    assert.deepEqual(backfill(456), { scanned: 0, inserted: 0, stable_identity_state: "unmigrated", unknown_reindexed: 0 });
   } finally {
     closeFixture(fixture);
   }

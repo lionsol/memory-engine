@@ -217,7 +217,9 @@ async function runRepairWithLanceDb(fixture, lancedbExports, run = null) {
     configJsonPath: fixture.configJsonPath,
   }, async () => withPatchedRequireCache("@lancedb/lancedb", lancedbExports, async () => {
     if (run) return run();
-    return orphanRepair.repairOrphanVectors();
+    return orphanRepair.repairOrphanVectors({
+      authorization: "stable-memory-identity-global-maintenance",
+    });
   }));
 }
 
@@ -242,7 +244,7 @@ test("LanceDB require/connect failure returns 0 and warns", async () => {
         throw new Error("lancedb init failed");
       },
     });
-    assert.equal(repaired, 0);
+    assert.equal(repaired.repaired, 0);
   } finally {
     console.warn = prevWarn;
   }
@@ -265,7 +267,7 @@ test("orphan repair uses the shared runtime LanceDB directory", async () => {
     },
   });
 
-  assert.equal(repaired, 0);
+  assert.equal(repaired.repaired, 0);
   assert.deepEqual(connectedPaths, [fixture.lancedbDir]);
   assert.notEqual(fixture.lancedbDir, resolve(fixture.memoryDir, "lancedb"));
 });
@@ -281,7 +283,7 @@ test("count > 1000 returns 0", async () => {
     }),
   });
 
-  assert.equal(repaired, 0);
+  assert.equal(repaired.repaired, 0);
 });
 
 test("no orphan vectors returns 0 and does not call add", async () => {
@@ -306,7 +308,7 @@ test("no orphan vectors returns 0 and does not call add", async () => {
     }),
   });
 
-  assert.equal(repaired, 0);
+  assert.equal(repaired.repaired, 0);
   assert.equal(addCalls, 0);
 });
 
@@ -332,7 +334,7 @@ test("single orphan is repaired once with the matching core chunk text", async (
     }),
   }));
 
-  assert.equal(repaired, 1);
+  assert.equal(repaired.repaired, 1);
   assert.equal(addedRows.length, 1);
   assert.equal(addedRows[0].id, "chunk-2");
   assert.equal(addedRows[0].text, "body 2");
@@ -372,7 +374,7 @@ test("multiple orphan vectors are repaired in engine query order without duplica
     }),
   }));
 
-  assert.equal(repaired, 2);
+  assert.equal(repaired.repaired, 2);
   assert.deepEqual(addedIds, ["chunk-2", "chunk-3"]);
 });
 
@@ -405,6 +407,7 @@ test("global orphan repair uses one canonical batch per ten ids and preserves ex
         }),
       }),
     }, () => orphanRepair.repairOrphanVectors({
+      authorization: "stable-memory-identity-global-maintenance",
       getCanonicalMemoriesByIds: ids => {
         batchCalls.push(ids);
         return {
@@ -428,10 +431,10 @@ test("global orphan repair uses one canonical batch per ten ids and preserves ex
       now: () => 1780000000000,
     }));
 
-    assert.equal(repaired, 11);
-    assert.deepEqual(batchCalls.map(ids => ids.length), [10, 1]);
+    assert.equal(repaired.repaired, 10);
+    assert.deepEqual(batchCalls.map(ids => ids.length), [10]);
     assert.deepEqual(addedRows.map(row => row.id), [
-      ...Array.from({ length: 11 }, (_, index) => `global-${String(index).padStart(2, "0")}`),
+      ...Array.from({ length: 10 }, (_, index) => `global-${String(index).padStart(2, "0")}`),
     ]);
     assert.deepEqual(addedRows.map(row => row.text), embeddingInputs);
     assert.deepEqual(embeddingInputs, addedRows.map(row => `CANONICAL GLOBAL SOURCE ${row.id}`));
@@ -473,6 +476,7 @@ test("global canonical failure skips only the affected orphan", async () => {
         }),
       }),
     }, () => orphanRepair.repairOrphanVectors({
+      authorization: "stable-memory-identity-global-maintenance",
       getCanonicalMemoriesByIds: ids => ({
         ok: true,
         results: ids.map(id => id === "global-fail"
@@ -491,7 +495,7 @@ test("global canonical failure skips only the affected orphan", async () => {
       embedText: async () => [0.11, 0.22, 0.33],
     }));
 
-    assert.equal(repaired, 1);
+    assert.equal(repaired.repaired, 1);
     assert.deepEqual(addedIds, ["global-ok"]);
     assert.equal(warnings.some(line => line.includes("canonical_lookup_core_not_found")), true);
   } finally {
@@ -527,7 +531,7 @@ test("archived engine rows are excluded from orphan detection", async () => {
     }),
   }));
 
-  assert.equal(repaired, 1);
+  assert.equal(repaired.repaired, 1);
   assert.deepEqual(addedIds, ["chunk-1"]);
 });
 
@@ -558,7 +562,7 @@ test("empty core returns 0 even when engine rows are missing from LanceDB", asyn
     }),
   }));
 
-  assert.equal(repaired, 0);
+  assert.equal(repaired.repaired, 0);
   assert.equal(addCalls, 0);
 });
 
@@ -586,7 +590,7 @@ test("empty engine dataset returns 0 and does not repair anything", async () => 
     }),
   });
 
-  assert.equal(repaired, 0);
+  assert.equal(repaired.repaired, 0);
   assert.equal(addCalls, 0);
 });
 
@@ -614,7 +618,7 @@ test("missing Engine DB keeps readonly behavior and returns 0 without creating t
         }),
       }),
     });
-    assert.equal(repaired, 0);
+  assert.equal(repaired.repaired, 0);
   } finally {
     console.warn = prevWarn;
   }
@@ -650,7 +654,7 @@ test("missing Engine schema returns 0 and does not initialize memory_confidence"
         }),
       }),
     });
-    assert.equal(repaired, 0);
+  assert.equal(repaired.repaired, 0);
   } finally {
     console.warn = prevWarn;
   }
@@ -709,8 +713,10 @@ test("orphan repair uses native readonly isolated Engine without attached schema
       }),
     }),
   }, async () => {
-    const repaired = await freshOrphanRepair.repairOrphanVectors();
-    assert.equal(repaired, 2);
+    const repaired = await freshOrphanRepair.repairOrphanVectors({
+      authorization: "stable-memory-identity-global-maintenance",
+    });
+  assert.equal(repaired.repaired, 2);
   }))));
 
   assert.equal(observations.length, 2);
@@ -760,7 +766,7 @@ test("repair failure warns and continues with later orphan rows", async () => {
         }),
       }),
     }));
-    assert.equal(repaired, 1);
+    assert.equal(repaired.repaired, 1);
   } finally {
     console.warn = prevWarn;
   }

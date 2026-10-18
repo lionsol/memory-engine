@@ -4,8 +4,12 @@ import Database from "better-sqlite3";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 
 import { getCanonicalMemoryById } from "../lib/canonical/read-adapter.js";
+
+const require = createRequire(import.meta.url);
+const identity = require("../lib/db/stable-memory-identity.cjs");
 
 function createFixture({ coreRows = [], engineRows = [] } = {}) {
   const root = mkdtempSync(join(tmpdir(), "memory-engine-canonical-adapter-"));
@@ -187,6 +191,41 @@ test("adapter returns a valid external object when Core has no Engine row", asyn
     assert.equal(result.memory.lifecycle.confidence, null);
     assert.equal(result.memory.classification.category, "project");
     assert.equal(result.memory.classification.category_authority, "path_inference");
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("adapter resolves stable entity confidence through a changed Engine chunk id", async () => {
+  const fixture = createFixture({ coreRows: [coreRow()], engineRows: [] });
+  try {
+    const engine = new Database(fixture.engineDbPath);
+    identity.ensureStableMemoryIdentityTables(engine, { addConfidenceColumns: true });
+    engine.prepare(`
+      INSERT INTO memory_source_docs
+        (doc_uuid, source, canonical_path, created_at, updated_at)
+      VALUES ('stable-serving-doc', 'core', 'memory/projects/adapter.md', 900, 900)
+    `).run();
+    engine.prepare(`
+      INSERT INTO memory_identity
+        (entity_id, doc_uuid, core_chunk_id_snapshot, content_hash, state, created_at, updated_at)
+      VALUES ('stable-serving-entity', 'stable-serving-doc', 'core-1', 'sha256:adapter', 'active', 900, 900)
+    `).run();
+    engine.prepare(`
+      INSERT INTO memory_confidence
+        (chunk_id, initial_confidence, confidence, last_confidence_update,
+         base_tau, hit_count, is_archived, is_protected, conflict_flag, category,
+         entity_id, source_doc_id, content_hash)
+      VALUES ('legacy-engine-memory-id', 0.5, 0.88, 900, 7, 0, 0, 0, 0, 'project',
+        'stable-serving-entity', 'stable-serving-doc', 'sha256:adapter')
+    `).run();
+    engine.close();
+
+    const result = await readFixture(fixture, "core-1");
+    assert.equal(result.ok, true);
+    assert.equal(result.memory.memory_id, "core-1");
+    assert.equal(result.memory.lifecycle.management, "managed");
+    assert.equal(result.memory.lifecycle.confidence, 0.88);
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

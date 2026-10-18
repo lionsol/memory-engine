@@ -152,6 +152,16 @@ test("memory_engine.add keeps Engine metadata and reports partial success when L
     }),
     withEngineDb: fn => fn(db),
     getLancedbTable: () => ({
+      async schema() {
+        return {
+          fields: [
+            { name: "id" },
+            { name: "text" },
+            { name: "vector", type: { listSize: 2 } },
+            { name: "embedding_fingerprint" },
+          ],
+        };
+      },
       query() {
         const query = {
           where() { return query; },
