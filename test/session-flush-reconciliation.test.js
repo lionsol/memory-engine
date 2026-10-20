@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
 const orphanRepair = require("../lib/checkpoint/orphan-repair.js");
+const stableIdentity = require("../lib/db/stable-memory-identity.cjs");
 const isolatedDbs = require("../lib/db/isolated-dbs.js");
 const {
   MAX_ENGINE_INSERTS_PER_CYCLE,
@@ -396,6 +397,144 @@ test("session_flush eligibility is deterministic, provenance-scoped, and fail-cl
   }
 });
 
+test("target-date input can converge while historical ambiguity remains a reported backlog", async () => {
+  const source = makeBlocksSource();
+  const historicalPath = "memory/smart-add/2026-08-09.md";
+  const targetPath = "memory/smart-add/2026-08-10.md";
+  const fixture = createFixture({
+    sourceFiles: {
+      [historicalPath]: source.content,
+      [targetPath]: source.content,
+    },
+    coreRows: [
+      {
+        id: "historical-ambiguous",
+        path: historicalPath,
+        start_line: source.ranges.session_entry.startLine + 5,
+        end_line: source.ranges.manual_entry.startLine,
+        updated_at: 1,
+      },
+      {
+        id: "target-complete",
+        path: targetPath,
+        start_line: source.ranges.session_entry.startLine + 5,
+        end_line: source.ranges.session_entry.endLine - 1,
+        updated_at: 2,
+      },
+    ],
+  });
+  try {
+    const result = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({
+      targetDate: "2026-08-10",
+      nowSec: 123,
+    }));
+    assert.equal(result.engine_converged, false);
+    assert.equal(result.target_date_input_complete, true);
+    assert.equal(result.target_date_backlog_remaining, 0);
+    assert.equal(result.historical_ambiguous_chunk_count, 1);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("target-date reconciliation shares the raw-log timestamp candidate set, not the filename date", async () => {
+  const source = makeBlocksSource();
+  const oldFilenamePath = "memory/smart-add/2026-08-01.md";
+  const targetFilenamePath = "memory/smart-add/2026-08-10.md";
+  const fixture = createFixture({
+    sourceFiles: {
+      [oldFilenamePath]: source.content,
+      [targetFilenamePath]: source.content,
+    },
+    coreRows: [
+      {
+        id: "timestamp-target-old-file",
+        path: oldFilenamePath,
+        start_line: source.ranges.session_entry.startLine + 5,
+        end_line: source.ranges.session_entry.endLine - 1,
+        updated_at: 1,
+      },
+      {
+        id: "filename-target-outside-window",
+        path: targetFilenamePath,
+        start_line: source.ranges.session_entry.startLine + 5,
+        end_line: source.ranges.manual_entry.startLine,
+        updated_at: 2,
+      },
+    ],
+  });
+  try {
+    const core = new Database(fixture.coreDbPath);
+    core.exec("ALTER TABLE chunks ADD COLUMN event_at INTEGER");
+    core.prepare("UPDATE chunks SET event_at = ? WHERE id = ?").run(
+      Date.parse("2026-08-10T09:00:00+08:00") / 1000,
+      "timestamp-target-old-file",
+    );
+    core.prepare("UPDATE chunks SET event_at = ? WHERE id = ?").run(
+      Date.parse("2026-08-09T09:00:00+08:00") / 1000,
+      "filename-target-outside-window",
+    );
+    core.close();
+
+    const result = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({
+      targetDate: "2026-08-10",
+      nowSec: 123,
+    }));
+    assert.deepEqual(result.eligibleCoreRows.map(row => row.id), ["timestamp-target-old-file"]);
+    assert.deepEqual(result.target_date_candidate_ids, ["timestamp-target-old-file"]);
+    assert.equal(result.target_date_core_examined, 1);
+    assert.equal(result.target_date_eligible_session_flush, 1);
+    assert.equal(result.target_date_input_complete, true);
+    assert.equal(result.target_date_backlog_remaining, 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("checkpoint sends target-date-complete input to LLM despite historical ambiguity", async () => {
+  const source = makeBlocksSource();
+  const historicalPath = "memory/smart-add/2026-08-09.md";
+  const targetPath = "memory/smart-add/2026-08-10.md";
+  const fixture = createFixture({
+    sourceFiles: {
+      [historicalPath]: source.content,
+      [targetPath]: source.content,
+    },
+    coreRows: [
+      {
+        id: "historical-ambiguous-main",
+        path: historicalPath,
+        start_line: source.ranges.session_entry.startLine + 5,
+        end_line: source.ranges.manual_entry.startLine,
+        updated_at: 1,
+      },
+      {
+        id: "target-complete-main",
+        path: targetPath,
+        start_line: source.ranges.session_entry.startLine + 5,
+        end_line: source.ranges.session_entry.endLine - 1,
+        updated_at: 2,
+      },
+    ],
+  });
+  let llmCalls = 0;
+  try {
+    await withFixtureRuntime(fixture, () => checkpoint.main(["--target-date", "2026-08-10"]), {
+      flushCheckpointRawLog: () => ({ ok: true }),
+      readCheckpointRawLogs: () => [{ source: "conversation", category: "raw_log", text: "**User:** hello" }],
+      llmNightlyExtract: async () => {
+        llmCalls += 1;
+        return { smart_memories: [], configs: [], episode_summary: "target date summary" };
+      },
+      repairOrphanVectors: async () => ({ lance_added: 0, lance_converged: true }),
+      resolveConfigConflicts: () => 0,
+    });
+    assert.equal(llmCalls, 1);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("R3-shaped answer-bearing lines 80-108 are eligible", async () => {
   const source = makeR3ShapedSource();
   const path = "memory/smart-add/2026-07-31.md";
@@ -700,6 +839,170 @@ test("scoped Lance reconciliation is exact, active-only, oldest-first, and bound
   }
 });
 
+test("scoped Lance uses stable entity_id and excludes unknown_legacy", async () => {
+  const source = makeBlocksSource();
+  const path = "memory/smart-add/stable-scope.md";
+  const range = source.ranges.session_entry;
+  const fixture = createFixture({
+    sourceFiles: { [path]: source.content },
+    coreRows: [{
+      id: "stable-core-chunk",
+      path,
+      start_line: range.startLine + 5,
+      end_line: range.endLine - 1,
+      updated_at: 1,
+    }],
+  });
+  try {
+    const engineDb = new Database(fixture.engineDbPath);
+    stableIdentity.ensureStableMemoryIdentityTables(engineDb, { addConfidenceColumns: true });
+    engineDb.close();
+
+    const engine = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({ nowSec: 10 }));
+    assert.equal(engine.engine_inserted, 1);
+    const active = readEngineRows(fixture)[0];
+    assert.equal(typeof active.entity_id, "string");
+    assert.ok(active.entity_id.length > 0);
+
+    const lance = makeLanceStub();
+    const first = await scopedLance(fixture, engine, lance, {
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => ({
+          memory_id: id,
+          ok: true,
+          memory: {
+            memory_id: id,
+            canonical_id: `canonical:${id}`,
+            source: { text: `canonical-${id}` },
+            content_ref: { content_hash: `sha256:${id}` },
+          },
+        })),
+      }),
+    });
+    assert.equal(first.lance_added, 1);
+    assert.deepEqual(lance.state.addedIds, [active.entity_id]);
+    assert.equal(lance.state.ids.has("stable-core-chunk"), false);
+
+    const engineDbAfter = new Database(fixture.engineDbPath);
+    stableIdentity.transitionMemoryIdentity(engineDbAfter, active.entity_id, "unknown_legacy", { nowSec: 11 });
+    engineDbAfter.close();
+    const isolatedLance = makeLanceStub();
+    let embeddingCalls = 0;
+    const skipped = await scopedLance(fixture, engine, isolatedLance, {
+      embedText: async () => {
+        embeddingCalls += 1;
+        return [0.1, 0.2, 0.3];
+      },
+    });
+    assert.equal(skipped.lance_eligible, 0);
+    assert.equal(skipped.lance_added, 0);
+    assert.equal(embeddingCalls, 0);
+    assert.deepEqual(isolatedLance.state.addedIds, []);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("post-migration confidence rows with NULL entity_id are repaired before scoped Lance", async () => {
+  const source = makeBlocksSource();
+  const path = "memory/smart-add/2026-08-10.md";
+  const range = source.ranges.session_entry;
+  const coreRows = [];
+  const confidenceRows = [];
+  for (let index = 0; index < 49; index += 1) {
+    const id = `null-identity-${String(index).padStart(2, "0")}`;
+    coreRows.push({
+      id,
+      path,
+      start_line: range.startLine + 5,
+      end_line: range.endLine - 1,
+      updated_at: index + 1,
+    });
+    confidenceRows.push({ chunk_id: id });
+  }
+  const fixture = createFixture({ sourceFiles: { [path]: source.content }, coreRows, confidenceRows });
+  try {
+    const engineDb = new Database(fixture.engineDbPath);
+    stableIdentity.ensureStableMemoryIdentityTables(engineDb, { addConfidenceColumns: true });
+    engineDb.close();
+
+    const engine = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({
+      targetDate: "2026-08-10",
+      nowSec: 10,
+    }));
+    assert.equal(engine.stable_identity_state, "migrated");
+    assert.equal(engine.engine_missing_before, 0);
+    assert.equal(engine.engine_identity_repaired, 49);
+    assert.equal(engine.target_date_input_complete, true);
+    const repaired = readEngineRows(fixture);
+    assert.equal(repaired.length, 49);
+    assert.equal(repaired.every(row => typeof row.entity_id === "string" && row.entity_id.length > 0), true);
+
+    const lance = makeLanceStub();
+    const scoped = await scopedLance(fixture, engine, lance, {
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => ({
+          memory_id: id,
+          ok: true,
+          memory: {
+            memory_id: id,
+            canonical_id: `canonical:${id}`,
+            source: { text: `canonical-${id}` },
+            content_ref: { content_hash: `sha256:${id}` },
+          },
+        })),
+      }),
+    });
+    assert.equal(scoped.lance_added, 10);
+    assert.equal(lance.state.addedIds.every(id => id.startsWith("null-identity-") === false), true);
+    assert.equal(lance.state.addedIds.every(id => id.includes("-")), true);
+    assert.equal(lance.state.ids.has("null-identity-00"), false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("partial stable identity schema fails closed before embedding or Lance writes", async () => {
+  const source = makeBlocksSource();
+  const path = "memory/smart-add/partial-schema.md";
+  const fixture = createFixture({
+    sourceFiles: { [path]: source.content },
+    coreRows: [{
+      id: "partial-core",
+      path,
+      start_line: source.ranges.session_entry.startLine + 5,
+      end_line: source.ranges.session_entry.endLine - 1,
+      updated_at: 1,
+    }],
+  });
+  try {
+    const engineDb = new Database(fixture.engineDbPath);
+    engineDb.exec("ALTER TABLE memory_confidence ADD COLUMN entity_id TEXT");
+    engineDb.exec("CREATE TABLE memory_identity (entity_id TEXT PRIMARY KEY)");
+    engineDb.close();
+    const engine = {
+      eligibleCoreRows: [{ id: "partial-core", path, text: "partial" }],
+      ok: true,
+    };
+    const lance = makeLanceStub();
+    let embeddingCalls = 0;
+    const result = await scopedLance(fixture, engine, lance, {
+      embedText: async () => {
+        embeddingCalls += 1;
+        return [0.1, 0.2, 0.3];
+      },
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /schema incomplete/);
+    assert.equal(embeddingCalls, 0);
+    assert.deepEqual(lance.state.addedIds, []);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("scoped Lance reconciliation resolves the selected ids through one canonical batch", async () => {
   const source = makeBulkSource();
   const path = "memory/smart-add/canonical-batch.md";
@@ -894,9 +1197,16 @@ test("checkpoint reaches reconciliation after no-data, skipped, and timeout nigh
           ? [{ source: "note", text: "note only", category: "raw_log" }]
           : [{ source: "conversation", text: "**User:** hello", category: "raw_log" }];
       await withFixtureRuntime(fixture, () => checkpoint.main(), {
-        readCheckpointRawLogs: () => rawLogs,
-        flushCheckpointRawLog: () => ({ ok: true }),
+        flushCheckpointRawLog: () => {
+          order.push("flush");
+          return { ok: true };
+        },
+        readCheckpointRawLogs: () => {
+          order.push("collect");
+          return rawLogs;
+        },
         llmNightlyExtract: async () => {
+          order.push("llm");
           if (scenario === "timeout") throw new Error("bounded timeout fixture");
           return { smart_memories: [], configs: [], episode_summary: "unused" };
         },
@@ -914,7 +1224,10 @@ test("checkpoint reaches reconciliation after no-data, skipped, and timeout nigh
           return 0;
         },
       });
-      assert.deepEqual(order, ["engine", "lance", "conflicts"], scenario);
+      const expected = scenario === "timeout"
+        ? ["flush", "engine", "collect", "llm", "lance", "conflicts"]
+        : ["flush", "engine", "collect", "lance", "conflicts"];
+      assert.deepEqual(order, expected, scenario);
     } finally {
       fixture.cleanup();
     }
@@ -925,9 +1238,12 @@ test("reconciliation failure is observable without claiming convergence or skipp
   const fixture = createFixture();
   const order = [];
   try {
-    await withFixtureRuntime(fixture, () => checkpoint.main(), {
+    await assert.rejects(() => withFixtureRuntime(fixture, () => checkpoint.main(), {
       readCheckpointRawLogs: () => [],
-      flushCheckpointRawLog: () => ({ ok: true }),
+      flushCheckpointRawLog: () => {
+        order.push("flush");
+        return { ok: true };
+      },
       reconcileSessionFlushManagedState: async () => {
         order.push("engine");
         throw new Error("engine maintenance unavailable");
@@ -941,8 +1257,11 @@ test("reconciliation failure is observable without claiming convergence or skipp
         order.push("conflicts");
         return 0;
       },
-    });
-    assert.deepEqual(order, ["engine", "lance", "conflicts"]);
+    }), error => error?.code === "CHECKPOINT_INPUT_INCOMPLETE");
+    assert.deepEqual(order, ["flush", "engine", "conflicts"]);
+    const marker = readFileSync(resolve(fixture.memoryDir, "episodes", "2023-11-14.md"), "utf8");
+    assert.match(marker, /session_flush reconciliation/);
+    assert.match(marker, /engine maintenance unavailable/);
   } finally {
     fixture.cleanup();
   }

@@ -8,6 +8,9 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
+const confidenceWriter = require("../lib/checkpoint/confidence-writer.js");
+const smartAddWriter = require("../lib/checkpoint/smart-add-writer.js");
+const stableIdentity = require("../lib/db/stable-memory-identity.cjs");
 
 async function withStubbedCheckpointConfidence(writeConfidenceImpl, run) {
   const checkpointPath = require.resolve("../bin/session-checkpoint.js");
@@ -213,7 +216,12 @@ test("session checkpoint with no raw logs never calls LLM", async () => {
     }, () => checkpoint.nightlyCheckpoint([]));
 
     assert.equal(llmCalls, 0);
-    assert.deepEqual(result, { memories: 0, episode: false, configs: 0 });
+    assert.deepEqual(result, {
+      memories: 0,
+      episode: false,
+      configs: 0,
+      writes: { file_written: 0, confidence_bound: 0, pending: 0, failed: 0 },
+    });
   } finally {
     fixture.cleanup();
   }
@@ -242,7 +250,12 @@ test("session checkpoint with all-empty logs never calls LLM", async () => {
     ]));
 
     assert.equal(llmCalls, 0);
-    assert.deepEqual(result, { memories: 0, episode: false, configs: 0 });
+    assert.deepEqual(result, {
+      memories: 0,
+      episode: false,
+      configs: 0,
+      writes: { file_written: 0, confidence_bound: 0, pending: 0, failed: 0 },
+    });
   } finally {
     fixture.cleanup();
   }
@@ -344,7 +357,7 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
     assert.match(episode, /rawLogTimeBasis: event_at\/legacy_event_time/);
     assert.match(episode, /rawLogIncluded: 0|rawLogIncluded: 1/);
     assert.match(episode, /resetDirectParseEnabled: false/);
-    assert.match(smartAdd, /## 2026-06-16_episodic_nightly_generated_013000/);
+    assert.match(smartAdd, /## [a-f0-9]{16}/);
     assert.match(smartAdd, /Category: episodic/);
     assert.match(smartAdd, /Provenance: checkpoint_generated/);
     assert.match(smartAdd, /"generatedAt":"2026-06-16T17:30:00.000Z"/);
@@ -364,6 +377,7 @@ test("session checkpoint exports legacy and official busy-timeout inspectors", (
 test("session checkpoint calls flush before reading targetDate-bounded raw logs and keeps reset direct parse off by default", async () => {
   const fixture = createFixture();
   let flushed = 0;
+  let reconciled = 0;
   let readerOptions = null;
 
   try {
@@ -379,6 +393,10 @@ test("session checkpoint calls flush before reading targetDate-bounded raw logs 
         flushed += 1;
         return { ok: true };
       },
+      reconcileSessionFlushManagedState: async () => {
+        reconciled += 1;
+        return { engine_converged: true };
+      },
       readCheckpointRawLogs: (options) => {
         readerOptions = options;
         return [];
@@ -388,6 +406,7 @@ test("session checkpoint calls flush before reading targetDate-bounded raw logs 
     }, () => checkpoint.main(["--dry-run"]));
 
     assert.equal(flushed, 1);
+    assert.equal(reconciled, 0);
     assert.equal(readerOptions.targetDate, "2026-06-16");
     assert.equal(readerOptions.resetDirectParseEnabled, false);
   } finally {
@@ -461,6 +480,12 @@ test("session checkpoint warns and continues when confidence writes fail", async
     assert.equal(result.memories, 1);
     assert.equal(result.episode, true);
     assert.equal(result.configs, 1);
+    assert.deepEqual(result.writes, {
+      file_written: 3,
+      confidence_bound: 0,
+      pending: 0,
+      failed: 3,
+    });
     assert.equal(warnings.length, 3);
 
     const smartMemoryWarning = warnings.find((line) => line.includes("section=smart_memory"));
@@ -485,6 +510,355 @@ test("session checkpoint warns and continues when confidence writes fail", async
     assert.match(configWarning, /error=confidence write exploded/);
   } finally {
     console.warn = originalWarn;
+    fixture.cleanup();
+  }
+});
+
+test("generated entries use content fingerprints and report pending confidence separately", async () => {
+  const fixture = createFixture({ includeFts: true, includeEngineSchema: true });
+  try {
+    const result = await withStubbedCheckpointConfidence(
+      () => ({ ok: true, status: "pending", reason: "exact_core_chunk_not_indexed" }),
+      async (stubbedCheckpoint) => stubbedCheckpoint.withRuntime({
+        coreDbPath: fixture.coreDbPath,
+        engineDbPath: fixture.engineDbPath,
+        workspaceDir: fixture.workspaceDir,
+        memoryDir: fixture.memoryDir,
+        sessionsDir: fixture.sessionsDir,
+        timeZone: "Asia/Shanghai",
+        now: () => Date.parse(fixture.now),
+        llmNightlyExtract: async () => ({
+          episode_summary: "",
+          smart_memories: [
+            { type: "user_preference", text: "first generated preference" },
+            { type: "user_preference", text: "second generated preference" },
+          ],
+          configs: [],
+        }),
+      }, () => stubbedCheckpoint.nightlyCheckpoint([
+        { chunk_id: "conv-1", category: "raw_log", text: "**User:** hello", source: "conversation" },
+      ])),
+    );
+    assert.deepEqual(result.writes, {
+      file_written: 2,
+      confidence_bound: 0,
+      pending: 2,
+      failed: 0,
+    });
+    const smartAddPath = resolve(fixture.memoryDir, "generated-smart-add", "2026-06-17.md");
+    const smartAdd = readFileSync(smartAddPath, "utf8");
+    const headings = smartAdd.match(/^## ([a-f0-9]{16})$/gm) || [];
+    assert.equal(headings.length, 2);
+    assert.notEqual(headings[0], headings[1]);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("pending generated entry is rebound after Core indexing without duplicating its file", async () => {
+  const fixture = createFixture({ includeFts: true, includeEngineSchema: true });
+  let coreIndexed = false;
+  const confidenceCalls = [];
+  try {
+    const first = await withStubbedCheckpointConfidence((entryId) => {
+      confidenceCalls.push({ entryId, coreIndexed });
+      return coreIndexed
+        ? { ok: true, status: "initialized", initialized: 1 }
+        : { ok: true, status: "pending", reason: "exact_core_chunk_not_indexed" };
+    }, async stubbedCheckpoint => stubbedCheckpoint.withRuntime({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      workspaceDir: fixture.workspaceDir,
+      memoryDir: fixture.memoryDir,
+      sessionsDir: fixture.sessionsDir,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse(fixture.now),
+      llmNightlyExtract: async () => ({
+        episode_summary: "",
+        smart_memories: [{ type: "user_preference", text: "pending then indexed preference" }],
+        configs: [],
+      }),
+    }, () => stubbedCheckpoint.nightlyCheckpoint([
+      { chunk_id: "conv-1", category: "raw_log", text: "**User:** hello", source: "conversation" },
+    ])));
+    assert.equal(first.writes.pending, 1);
+    const generatedPath = resolve(fixture.memoryDir, "generated-smart-add", "2026-06-17.md");
+    const firstContent = readFileSync(generatedPath, "utf8");
+    assert.equal((firstContent.match(/^## [a-f0-9]{16}$/gm) || []).length, 1);
+    const firstEntryId = firstContent.match(/^## ([a-f0-9]{16})$/m)?.[1];
+    const firstLines = firstContent.split("\n");
+    const firstEntryStart = firstLines.findIndex(line => /^## [a-f0-9]{16}$/.test(line)) + 1;
+    const core = new Database(fixture.coreDbPath);
+    core.prepare("DELETE FROM chunks").run();
+    core.prepare(
+      "INSERT INTO chunks (id, path, text, updated_at, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("indexed-pending", "memory/generated-smart-add/2026-06-17.md", "pending then indexed preference", 2, firstEntryStart, firstLines.length - 1);
+    core.close();
+    coreIndexed = true;
+
+    const second = await withStubbedCheckpointConfidence((entryId) => {
+      confidenceCalls.push({ entryId, coreIndexed });
+      return { ok: true, status: "initialized", initialized: 1 };
+    }, async stubbedCheckpoint => stubbedCheckpoint.withRuntime({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      workspaceDir: fixture.workspaceDir,
+      memoryDir: fixture.memoryDir,
+      sessionsDir: fixture.sessionsDir,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse(fixture.now),
+      llmNightlyExtract: async () => ({
+        episode_summary: "",
+        smart_memories: [{ type: "user_preference", text: "pending then indexed preference" }],
+        configs: [],
+      }),
+    }, () => stubbedCheckpoint.nightlyCheckpoint([
+      { chunk_id: "conv-1", category: "raw_log", text: "**User:** hello", source: "conversation" },
+    ])));
+    assert.equal(second.writes.file_written, 0);
+    assert.equal(second.writes.confidence_bound, 1);
+    assert.equal(confidenceCalls.length, 2);
+    assert.equal(confidenceCalls[0].entryId, firstEntryId);
+    assert.equal(confidenceCalls[1].entryId, firstEntryId);
+    const secondContent = readFileSync(generatedPath, "utf8");
+    assert.equal((secondContent.match(/^## [a-f0-9]{16}$/gm) || []).length, 1);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("already-written pending entry is rebound by the bounded retry path without LLM", async () => {
+  const fixture = createFixture({ includeEngineSchema: true });
+  const targetDate = "2026-06-17";
+  const fileRel = `memory/generated-smart-add/${targetDate}.md`;
+  const generatedPath = resolve(fixture.memoryDir, "generated-smart-add", `${targetDate}.md`);
+  try {
+    const engine = new Database(fixture.engineDbPath);
+    engine.exec(`
+      DROP TABLE memory_confidence;
+      CREATE TABLE memory_confidence (
+        chunk_id TEXT PRIMARY KEY,
+        initial_confidence REAL NOT NULL DEFAULT 0.5,
+        confidence REAL NOT NULL DEFAULT 0.5,
+        last_confidence_update INTEGER,
+        base_tau REAL NOT NULL DEFAULT 7,
+        hit_count INTEGER NOT NULL DEFAULT 0,
+        is_archived INTEGER NOT NULL DEFAULT 0,
+        is_protected INTEGER NOT NULL DEFAULT 0,
+        conflict_flag INTEGER NOT NULL DEFAULT 0,
+        category TEXT NOT NULL DEFAULT 'raw_log',
+        kg_data TEXT
+      )
+    `);
+    stableIdentity.ensureStableMemoryIdentityTables(engine, { addConfidenceColumns: true });
+    engine.close();
+    const core = new Database(fixture.coreDbPath);
+    core.prepare("DELETE FROM chunks").run();
+    core.close();
+
+    const first = await checkpoint.withRuntime({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      workspaceDir: fixture.workspaceDir,
+      memoryDir: fixture.memoryDir,
+      sessionsDir: fixture.sessionsDir,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse("2026-06-17T09:00:00+08:00"),
+    }, () => {
+      const entryId = smartAddWriter.appendSmartAdd("real pending item", "preference", {
+        generatedAt: "2026-06-17T09:00:00.000+08:00",
+        provenance: smartAddWriter.SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+      });
+      const confidence = confidenceWriter.writeConfidence(entryId, "real pending item", "preference", { fileRel });
+      return { entryId, confidence };
+    });
+    assert.equal(first.confidence.status, "pending");
+    const firstContent = readFileSync(generatedPath, "utf8");
+    const lines = firstContent.split("\n");
+    const startLine = lines.findIndex(line => line.startsWith("## ")) + 1;
+    const coreAfterPending = new Database(fixture.coreDbPath);
+    coreAfterPending.prepare(
+      "INSERT INTO chunks (id, path, text, updated_at, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      "indexed-pending-item",
+      fileRel,
+      "real pending item",
+      Date.parse("2026-06-17T10:00:00+08:00") / 1000,
+      startLine,
+      lines.length - 1,
+    );
+    coreAfterPending.close();
+
+    let llmCalls = 0;
+    await checkpoint.withRuntime({
+      coreDbPath: fixture.coreDbPath,
+      engineDbPath: fixture.engineDbPath,
+      workspaceDir: fixture.workspaceDir,
+      memoryDir: fixture.memoryDir,
+      sessionsDir: fixture.sessionsDir,
+      timeZone: "Asia/Shanghai",
+      now: () => Date.parse("2026-06-17T11:00:00+08:00"),
+      flushCheckpointRawLog: () => ({ ok: true }),
+      readCheckpointRawLogs: () => [],
+      llmNightlyExtract: async () => {
+        llmCalls += 1;
+        throw new Error("LLM must not be called for pending-only recovery");
+      },
+      repairOrphanVectors: async () => 0,
+      resolveConfigConflicts: () => 0,
+    }, () => checkpoint.main(["--target-date", targetDate]));
+
+    assert.equal(llmCalls, 0);
+    const engineAfter = new Database(fixture.engineDbPath, { readonly: true });
+    const row = engineAfter.prepare(
+      "SELECT chunk_id, entity_id FROM memory_confidence WHERE chunk_id = ?",
+    ).get("indexed-pending-item");
+    engineAfter.close();
+    assert.equal(row.chunk_id, "indexed-pending-item");
+    assert.equal(typeof row.entity_id, "string");
+    assert.ok(row.entity_id.length > 0);
+    const secondContent = readFileSync(generatedPath, "utf8");
+    assert.equal((secondContent.match(/^## [a-f0-9]{16}$/gm) || []).length, 1);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("bounded pending recovery skips completed and deferred entries so the 51st indexed entry binds", async () => {
+  const fixture = createFixture({ includeEngineSchema: true });
+  const targetDate = "2026-06-17";
+  const fileRel = `memory/generated-smart-add/${targetDate}.md`;
+  const generatedPath = resolve(fixture.memoryDir, "generated-smart-add", `${targetDate}.md`);
+  const runtimeOptions = {
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    workspaceDir: fixture.workspaceDir,
+    memoryDir: fixture.memoryDir,
+    sessionsDir: fixture.sessionsDir,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-17T11:00:00+08:00"),
+  };
+
+  try {
+    const engine = new Database(fixture.engineDbPath);
+    engine.exec(`
+      DROP TABLE memory_confidence;
+      CREATE TABLE memory_confidence (
+        chunk_id TEXT PRIMARY KEY,
+        initial_confidence REAL NOT NULL DEFAULT 0.5,
+        confidence REAL NOT NULL DEFAULT 0.5,
+        last_confidence_update INTEGER,
+        base_tau REAL NOT NULL DEFAULT 7,
+        hit_count INTEGER NOT NULL DEFAULT 0,
+        is_archived INTEGER NOT NULL DEFAULT 0,
+        is_protected INTEGER NOT NULL DEFAULT 0,
+        conflict_flag INTEGER NOT NULL DEFAULT 0,
+        category TEXT NOT NULL DEFAULT 'raw_log',
+        kg_data TEXT
+      )
+    `);
+    stableIdentity.ensureStableMemoryIdentityTables(engine, { addConfidenceColumns: true });
+    engine.close();
+
+    await checkpoint.withRuntime(runtimeOptions, () => {
+      for (let index = 1; index <= 51; index += 1) {
+        smartAddWriter.appendSmartAdd(`bulk pending item ${index}`, "preference", {
+          generatedAt: "2026-06-17T11:00:00.000+08:00",
+          provenance: smartAddWriter.SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+        });
+      }
+    });
+
+    const lines = readFileSync(generatedPath, "utf8").split("\n");
+    const headings = lines
+      .map((line, index) => line.startsWith("## ") ? index : -1)
+      .filter(index => index >= 0);
+    assert.equal(headings.length, 51);
+    const core = new Database(fixture.coreDbPath);
+    core.prepare("DELETE FROM chunks").run();
+    const insertCore = core.prepare(
+      "INSERT INTO chunks (id, path, text, updated_at, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    for (let index = 0; index < 50; index += 1) {
+      insertCore.run(
+        `bulk-indexed-${index + 1}`,
+        fileRel,
+        `bulk pending item ${index + 1}`,
+        1,
+        headings[index] + 1,
+        headings[index + 1] ?? lines.length - 1,
+      );
+    }
+    core.close();
+
+    await checkpoint.withRuntime(runtimeOptions, () => {
+      for (let index = 1; index <= 50; index += 1) {
+        const result = confidenceWriter.writeConfidence(
+          smartAddWriter.resolveSmartAddEntryId(`bulk pending item ${index}`, "preference", {
+            targetDate,
+            provenance: smartAddWriter.SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+          }),
+          `bulk pending item ${index}`,
+          "preference",
+          { fileRel },
+        );
+        assert.equal(result.status, "initialized");
+      }
+    });
+
+    const engineBefore = new Database(fixture.engineDbPath, { readonly: true });
+    const before = engineBefore.prepare(`
+      SELECT chunk_id, initial_confidence, confidence, last_confidence_update, entity_id
+      FROM memory_confidence
+      WHERE chunk_id LIKE 'bulk-indexed-%'
+      ORDER BY CAST(REPLACE(chunk_id, 'bulk-indexed-', '') AS INTEGER)
+    `).all();
+    engineBefore.close();
+    assert.equal(before.length, 50);
+
+    const coreAfterFirstFifty = new Database(fixture.coreDbPath);
+    coreAfterFirstFifty.prepare(
+      "INSERT INTO chunks (id, path, text, updated_at, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      "bulk-indexed-51",
+      fileRel,
+      "bulk pending item 51",
+      1,
+      headings[50] + 1,
+      lines.length - 1,
+    );
+    coreAfterFirstFifty.close();
+
+    let llmCalls = 0;
+    await checkpoint.withRuntime({
+      ...runtimeOptions,
+      flushCheckpointRawLog: () => ({ ok: true }),
+      readCheckpointRawLogs: () => [],
+      llmNightlyExtract: async () => {
+        llmCalls += 1;
+        throw new Error("LLM must not be called for bounded pending recovery");
+      },
+      repairOrphanVectors: async () => 0,
+      resolveConfigConflicts: () => 0,
+    }, () => checkpoint.main(["--target-date", targetDate]));
+
+    assert.equal(llmCalls, 0);
+    const engineAfter = new Database(fixture.engineDbPath, { readonly: true });
+    const after = engineAfter.prepare(`
+      SELECT chunk_id, initial_confidence, confidence, last_confidence_update, entity_id
+      FROM memory_confidence
+      WHERE chunk_id LIKE 'bulk-indexed-%'
+      ORDER BY CAST(REPLACE(chunk_id, 'bulk-indexed-', '') AS INTEGER)
+    `).all();
+    engineAfter.close();
+    assert.deepEqual(after.slice(0, 50), before);
+    const fiftyFirst = after.find(row => row.chunk_id === "bulk-indexed-51");
+    assert.ok(fiftyFirst);
+    assert.equal(typeof fiftyFirst.entity_id, "string");
+    assert.ok(fiftyFirst.entity_id.length > 0);
+    const secondContent = readFileSync(generatedPath, "utf8");
+    assert.equal((secondContent.match(/^## [a-f0-9]{16}$/gm) || []).length, 51);
+  } finally {
     fixture.cleanup();
   }
 });

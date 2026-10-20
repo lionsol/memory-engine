@@ -314,6 +314,43 @@ test("migration consumes the real 129-row JSONL manifest and preserves legacy La
   }
 });
 
+test("49 identity-less confidence rows stay unknown_legacy in the offline vector regression", async () => {
+  const fixture = oldEngineDb();
+  try {
+    const insert = fixture.db.prepare("INSERT INTO memory_confidence (chunk_id, category) VALUES (?, 'raw_log')");
+    const legacyIds = Array.from({ length: 49 }, (_, index) => `legacy-confidence-${String(index + 1).padStart(2, "0")}`);
+    for (const id of legacyIds) insert.run(id);
+
+    const migration = identity.migrateStableMemoryIdentity(fixture.db, { manifest: [], nowSec: 850 });
+    assert.equal(migration.unknown_legacy, 49);
+    assert.equal(fixture.db.prepare(
+      "SELECT COUNT(*) AS c FROM memory_identity WHERE state = 'unknown_legacy'",
+    ).get().c, 49);
+    assert.equal(fixture.db.prepare(
+      "SELECT COUNT(*) AS c FROM memory_confidence WHERE entity_id IS NULL",
+    ).get().c, 0);
+
+    const lance = pagedLanceTable(legacyIds.map(id => ({ id })));
+    let embeddingCalls = 0;
+    const result = await runStableRepairWithTable(fixture, lance.table, {
+      embedText: async () => {
+        embeddingCalls += 1;
+        throw new Error("unknown_legacy rows must not be embedded");
+      },
+      getCanonicalMemoriesByIds: () => {
+        throw new Error("unknown_legacy rows must not resolve canonical content");
+      },
+    });
+    assert.equal(result.complete, true);
+    assert.equal(result.repaired, 0);
+    assert.equal(result.counts.unknown_identity, 49);
+    assert.equal(embeddingCalls, 0);
+    assert.deepEqual([...lance.rows.keys()], legacyIds);
+  } finally {
+    closeFixture(fixture);
+  }
+});
+
 test("a recovered entity whose Core snapshot disappeared leaves global convergence without backlog", async () => {
   const fixture = oldEngineDb();
   try {

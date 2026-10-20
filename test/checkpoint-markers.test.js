@@ -69,6 +69,24 @@ test("writeIncompleteEpisode writes original format and noteCount", async () => 
   assert.match(content, /_Generated at 2026-06-18T01:23:45\.000Z_/);
 });
 
+test("writeIncompleteEpisode preserves an existing non-empty episode", async () => {
+  const fixture = createFixture();
+  const episodePath = resolve(fixture.episodesDir, "2026-06-17.md");
+  writeFileSync(episodePath, "# valid completed episode\n");
+
+  await checkpoint.withRuntime({
+    episodesDir: fixture.episodesDir,
+    now: () => Date.parse("2026-06-18T01:23:45.000Z"),
+  }, async () => {
+    const result = checkpointMarkers.writeIncompleteEpisode("2026-06-17", 3, {
+      incompleteReason: "engine backlog",
+    });
+    assert.equal(result.preserved, true);
+  });
+
+  assert.equal(readFileSync(episodePath, "utf8"), "# valid completed episode\n");
+});
+
 test("writeLLMTimeoutEpisode writes original timeout marker format", async () => {
   const fixture = createFixture();
 

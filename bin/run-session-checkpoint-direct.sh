@@ -34,6 +34,11 @@ write_fallback_episode() {
 
   mkdir -p "$EPISODES_DIR"
 
+  if [ -s "$episode_file" ]; then
+    warn "preserving existing non-empty episode: $episode_file"
+    return 0
+  fi
+
   now_iso="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
   now_local="$(TZ="$TIME_ZONE" date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S UTC')"
   smart_add_file="memory/smart-add/$target_date.md"
@@ -135,11 +140,12 @@ main() {
     reason="session-checkpoint exited with status $checkpoint_status"
   else
     reason="session-checkpoint completed but expected episode file is missing or empty: $episode_file"
+    checkpoint_status=1
   fi
 
   warn "$reason"
   write_fallback_episode "$target_date" "$reason"
-  exit 0
+  exit "$checkpoint_status"
 }
 
 main "$@"

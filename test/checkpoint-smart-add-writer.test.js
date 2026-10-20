@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
 const smartAddWriter = require("../lib/checkpoint/smart-add-writer.js");
+const { buildSmartAddFingerprint } = require("../lib/smart-add-entry-contract.cjs");
 
 function likeOnlyInput() {
   return "alphaBeta gammaDelta epsilonZeta";
@@ -256,6 +257,25 @@ test("appendSmartAdd writes header for new file and keeps entry format", async (
   assert.match(content, /Provenance: checkpoint_generated\n<!-- smart-add-fingerprint: [a-f0-9]{16} -->/);
   assert.match(content, /kg_data: \{"a":1\}/);
   assert.match(content, /hello world/);
+});
+
+test("appendSmartAdd defaults generated entry identity to its canonical fingerprint", async () => {
+  const fixture = createFixture();
+
+  await checkpoint.withRuntime({
+    smartAddDir: fixture.smartAddDir,
+    generatedSmartAddDir: fixture.generatedSmartAddDir,
+    coreDbPath: fixture.coreDbPath,
+    engineDbPath: fixture.engineDbPath,
+    timeZone: "Asia/Shanghai",
+    now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
+  }, async () => {
+    const first = smartAddWriter.appendSmartAdd("first generated body", "preference");
+    const second = smartAddWriter.appendSmartAdd("second generated body", "preference");
+    assert.equal(first, buildSmartAddFingerprint("first generated body", "preference", false));
+    assert.equal(second, buildSmartAddFingerprint("second generated body", "preference", false));
+    assert.notEqual(first, second);
+  });
 });
 
 test("appendSmartAdd does not repeat header for existing file", async () => {

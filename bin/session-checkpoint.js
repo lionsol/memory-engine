@@ -10,11 +10,15 @@
  */
 
 const { spawnSync } = require("node:child_process");
+const { existsSync, readdirSync, readFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 const checkpointDate = require("../lib/checkpoint/date");
 const checkpointCompleteness = require("../lib/checkpoint/completeness");
 const { resolveConfigConflicts } = require("../lib/checkpoint/conflict-resolver");
-const { writeConfidence } = require("../lib/checkpoint/confidence-writer");
+const {
+  inspectConfidenceBinding,
+  writeConfidence,
+} = require("../lib/checkpoint/confidence-writer");
 const {
   inspectBusyTimeouts,
   inspectCheckpointBusyTimeouts,
@@ -30,11 +34,16 @@ const {
   mapToCategory,
   appendSmartAdd,
   readSmartAddFingerprints,
+  resolveSmartAddEntryId,
   isDuplicate,
   resolveOutputTarget,
 } = require("../lib/checkpoint/smart-add-writer");
 const { getRuntime, withRuntime } = require("../lib/checkpoint/runtime");
 const runtimeRegistry = require("../lib/checkpoint/runtime");
+const { parseSmartAddEntries } = require("../lib/smart-add-entry-contract.cjs");
+
+const MAX_PENDING_RETRY_FILES = 7;
+const MAX_PENDING_RETRY_ENTRIES = 50;
 
 function currentIsoString() {
   return new Date(getRuntime().now()).toISOString();
@@ -182,6 +191,148 @@ function warnConfidenceWriteFailure({ entryId, category, section, type, key, err
   console.warn(`[checkpoint] Confidence write failed: ${fields.join(" ")}`);
 }
 
+function recordConfidenceResult(writeStats, result) {
+  if (result?.status === "pending") {
+    writeStats.pending += 1;
+    return;
+  }
+  if (result?.ok === false) {
+    writeStats.failed += 1;
+    return;
+  }
+  writeStats.confidence_bound += 1;
+}
+
+function emptyCheckpointWriteStats() {
+  return {
+    file_written: 0,
+    confidence_bound: 0,
+    pending: 0,
+    failed: 0,
+  };
+}
+
+function retryPendingCheckpointEntries({
+  dates = null,
+  maxFiles = MAX_PENDING_RETRY_FILES,
+  maxEntries = MAX_PENDING_RETRY_ENTRIES,
+} = {}) {
+  const runtime = getRuntime();
+  const fileLimit = Math.min(
+    MAX_PENDING_RETRY_FILES,
+    Math.max(0, Number.isFinite(Number(maxFiles)) ? Math.floor(Number(maxFiles)) : 0),
+  );
+  const entryLimit = Math.min(
+    MAX_PENDING_RETRY_ENTRIES,
+    Math.max(0, Number.isFinite(Number(maxEntries)) ? Math.floor(Number(maxEntries)) : 0),
+  );
+  const result = {
+    files_scanned: 0,
+    entries_examined: 0,
+    entries_retried: 0,
+    confidence_bound: 0,
+    already_initialized: 0,
+    pending: 0,
+    deferred_pending: 0,
+    deferred_ambiguous: 0,
+    deferred_other: 0,
+    failed: 0,
+  };
+  if (!existsSync(runtime.generatedSmartAddDir) || entryLimit <= 0 || fileLimit <= 0) return result;
+
+  let candidateDates = Array.isArray(dates)
+    ? dates.map(value => String(value || "").trim()).filter(Boolean)
+    : readdirSync(runtime.generatedSmartAddDir)
+      .map(name => String(name).match(/^(\d{4}-\d{2}-\d{2})\.md$/)?.[1] || null)
+      .filter(Boolean)
+      .sort((left, right) => right.localeCompare(left));
+  candidateDates = [...new Set(candidateDates)].slice(0, fileLimit);
+
+  for (const date of candidateDates) {
+    if (result.entries_retried >= entryLimit) break;
+    const filePath = resolve(runtime.generatedSmartAddDir, `${date}.md`);
+    if (!existsSync(filePath)) continue;
+    result.files_scanned += 1;
+    let entries;
+    try {
+      entries = parseSmartAddEntries(readFileSync(filePath, "utf8"));
+    } catch (_) {
+      result.failed += 1;
+      continue;
+    }
+    for (const entry of entries) {
+      if (result.entries_retried >= entryLimit) break;
+      if (entry.provenance !== SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED) continue;
+      result.entries_examined += 1;
+      try {
+        const inspection = inspectConfidenceBinding(
+          entry.entryId,
+          entry.category || "raw_log",
+          { fileRel: `memory/generated-smart-add/${date}.md` },
+        );
+        if (inspection.status === "already_initialized") {
+          result.already_initialized += 1;
+          continue;
+        }
+        if (inspection.status === "pending") {
+          result.pending += 1;
+          result.deferred_pending += 1;
+          continue;
+        }
+        if (inspection.status === "deferred") {
+          if (inspection.reason === "ambiguous_core_identity") result.deferred_ambiguous += 1;
+          else result.deferred_other += 1;
+          continue;
+        }
+        if (result.entries_retried >= entryLimit) break;
+        result.entries_retried += 1;
+        const confidence = writeConfidence(
+          entry.entryId,
+          entry.text,
+          entry.category || "raw_log",
+          { fileRel: `memory/generated-smart-add/${date}.md` },
+        );
+        if (confidence?.status === "pending") result.pending += 1;
+        else if (confidence?.status === "already_initialized") result.already_initialized += 1;
+        else result.confidence_bound += 1;
+      } catch (error) {
+        result.failed += 1;
+        result.deferred_other += 1;
+        console.warn(`[checkpoint] Pending generated entry retry failed: entryId=${entry.entryId} date=${date} error=${error.message}`);
+      }
+    }
+  }
+  return result;
+}
+
+function bindCheckpointConfidence({
+  entryId,
+  text,
+  category,
+  fileRel,
+  section,
+  type,
+  key,
+  writeStats,
+}) {
+  if (!entryId) return false;
+  try {
+    const confidenceResult = writeConfidence(entryId, text, category, { fileRel });
+    recordConfidenceResult(writeStats, confidenceResult);
+  } catch (error) {
+    writeStats.failed += 1;
+    warnConfidenceWriteFailure({ entryId, category, section, type, key, error });
+  }
+  return true;
+}
+
+function resolveExistingCheckpointEntry(text, category, episodeDate) {
+  return resolveSmartAddEntryId(text, category, {
+    targetDate: episodeDate,
+    provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+  });
+}
+
 // ── Read today's raw content ──
 
 // ── Unified Nightly Smart Extraction ──
@@ -193,6 +344,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   const episodeDate = resolveTargetDate(options);
   const generatedAt = currentIsoString();
   const diagnostics = buildCheckpointEvidenceDiagnostics(episodeDate, options.rawLogStats);
+  const writeStats = emptyCheckpointWriteStats();
   const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
   const conversationLogs = assessment.conversationLogs;
   const allLogs = assessment.allLogs;
@@ -201,19 +353,26 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   if (assessment.status === "no_raw_logs") {
     console.log("[checkpoint] No raw logs found — nothing to extract.");
     writeEmptyEpisode(episodeDate, diagnostics);
-    return { memories: 0, episode: false, configs: 0 };
+    return { memories: 0, episode: false, configs: 0, writes: writeStats };
   }
 
   if (assessment.status === "all_logs_empty") {
     console.log("[checkpoint] All logs empty — nothing to extract.");
     writeEmptyEpisode(episodeDate, diagnostics);
-    return { memories: 0, episode: false, configs: 0 };
+    return { memories: 0, episode: false, configs: 0, writes: writeStats };
   }
 
   if (assessment.status === "no_conversation") {
     console.log(`[checkpoint] No conversation logs found (${assessment.allCount} note entries only) — marking as incomplete, skipping LLM.`);
     writeIncompleteEpisode(episodeDate, assessment.allCount, diagnostics);
-    return { memories: 0, episode: false, configs: 0, skipped: true, reason: "no_conversation_data" };
+    return {
+      memories: 0,
+      episode: false,
+      configs: 0,
+      skipped: true,
+      reason: "no_conversation_data",
+      writes: writeStats,
+    };
   }
 
   console.log(`[checkpoint] Conversation entries: ${assessment.conversationCount}, Total entries: ${assessment.allCount}`);
@@ -225,14 +384,21 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   } catch (error) {
     console.error(`[checkpoint] LLM extraction failed: ${error.message}`);
     writeLLMTimeoutEpisode(episodeDate, diagnostics);
-    return { memories: 0, episode: false, configs: 0, timeout: true, error: error.message };
+    return {
+      memories: 0,
+      episode: false,
+      configs: 0,
+      timeout: true,
+      error: error.message,
+      writes: writeStats,
+    };
   }
 
   // ── Timeout guard: llm超时 → write marker episode and exit early ──
   if (extracted.error === "llm超时") {
     console.log("[checkpoint] llm超时 — both providers failed");
     writeLLMTimeoutEpisode(episodeDate, diagnostics);
-    return { memories: 0, episode: false, configs: 0, timeout: true };
+    return { memories: 0, episode: false, configs: 0, timeout: true, writes: writeStats };
   }
 
   // ── 1. Write structured memories (6 types) ──
@@ -245,36 +411,51 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
     if (!item.text || !item.type) continue;
 
     // Dedup check
-    if (isDuplicate(item.text, mapToCategory(item.type), {
-      provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
-    })) {
-      console.log(`  ↳ Skipped (duplicate): ${item.text.slice(0, 60)}`);
-      continue;
-    }
-
     const cat = mapToCategory(item.type);
     const stableText = String(item.text || "").trim();
     if (!stableText) continue;
+    if (isDuplicate(item.text, cat, {
+      provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
+    })) {
+      const existingEntryId = resolveExistingCheckpointEntry(stableText, cat, episodeDate);
+      if (existingEntryId) {
+        bindCheckpointConfidence({
+          entryId: existingEntryId,
+          text: stableText,
+          category: cat,
+          fileRel: generatedFileRel,
+          section: "smart_memory_pending_recovery",
+          type: item.type,
+          writeStats,
+        });
+      } else {
+        console.log(`  ↳ Skipped (duplicate): ${stableText.slice(0, 60)}`);
+      }
+      continue;
+    }
+
     const entryId = appendSmartAdd(item.text, cat, {
       targetDate: episodeDate,
       generatedAt,
       provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
     });
-    if (!entryId) {
+    const effectiveEntryId = entryId || resolveExistingCheckpointEntry(stableText, cat, episodeDate);
+    if (!effectiveEntryId) {
       console.log(`  ↳ Skipped (duplicate/fingerprint): ${stableText.slice(0, 60)}`);
       continue;
     }
-    try {
-      writeConfidence(entryId, item.text, cat, { fileRel: generatedFileRel });
-    } catch (e) {
-      warnConfidenceWriteFailure({
-        entryId,
-        category: cat,
-        section: "smart_memory",
-        type: item.type,
-        error: e,
-      });
+    if (entryId) {
+      writeStats.file_written += 1;
     }
+    bindCheckpointConfidence({
+      entryId: effectiveEntryId,
+      text: stableText,
+      category: cat,
+      fileRel: generatedFileRel,
+      section: entryId ? "smart_memory" : "smart_memory_pending_recovery",
+      type: item.type,
+      writeStats,
+    });
     memWritten++;
   }
   console.log(`[checkpoint] Wrote ${memWritten} structured memory(-ies)`);
@@ -298,17 +479,17 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
       generatedAt,
       provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
     });
-    if (entryId) {
-      try {
-        writeConfidence(entryId, episodeText, 'episodic', { fileRel: generatedFileRel });
-      } catch (e) {
-        warnConfidenceWriteFailure({
-          entryId,
-          category: "episodic",
-          section: "episode_summary",
-          error: e,
-        });
-      }
+    const effectiveEntryId = entryId || resolveExistingCheckpointEntry(episodeText, "episodic", episodeDate);
+    if (effectiveEntryId) {
+      if (entryId) writeStats.file_written += 1;
+      bindCheckpointConfidence({
+        entryId: effectiveEntryId,
+        text: episodeText,
+        category: "episodic",
+        fileRel: generatedFileRel,
+        section: entryId ? "episode_summary" : "episode_summary_pending_recovery",
+        writeStats,
+      });
     } else {
       console.log("[checkpoint] Episode smart-add append skipped by fingerprint dedup");
     }
@@ -360,21 +541,21 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
       generatedAt,
       provenance: SMART_ADD_PROVENANCE.CHECKPOINT_GENERATED,
     });
-    if (!entryId) {
+    const effectiveEntryId = entryId || resolveExistingCheckpointEntry(text, "preference", episodeDate);
+    if (!effectiveEntryId) {
       console.log(`  ↳ Skipped config (duplicate/fingerprint): ${cfg.key}`);
       continue;
     }
-    try {
-      writeConfidence(entryId, text, 'preference', { fileRel: generatedFileRel });
-    } catch (e) {
-      warnConfidenceWriteFailure({
-        entryId,
-        category: "preference",
-        section: "config",
-        key: cfg.key,
-        error: e,
-      });
-    }
+    if (entryId) writeStats.file_written += 1;
+    bindCheckpointConfidence({
+      entryId: effectiveEntryId,
+      text,
+      category: "preference",
+      fileRel: generatedFileRel,
+      section: entryId ? "config" : "config_pending_recovery",
+      key: cfg.key,
+      writeStats,
+    });
     cfgWritten++;
   }
   console.log(`[checkpoint] Wrote ${cfgWritten} config(s)`);
@@ -387,6 +568,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
     generatedAt,
     source_type: "checkpoint_llm",
     category: "episodic",
+    writes: writeStats,
   };
 }
 
@@ -403,7 +585,53 @@ async function main(argv = process.argv.slice(2)) {
   try {
     getRuntime().flushCheckpointRawLog({ targetDate });
 
-    // Step 1: Gather raw logs
+    // Reconciliation must settle the flushed session_flush input before it is
+    // collected for LLM extraction.  Dry-run deliberately keeps the old
+    // flush/read-only behavior and does not invoke reconciliation, because
+    // reconciliation can write Engine state.
+    let engineReconciliation = null;
+    let lanceReconciliation = null;
+    let lanceSummary = null;
+    if (!options.dryRun) {
+      try {
+        engineReconciliation = await getRuntime().reconcileSessionFlushManagedState({
+          trigger: "nightly_checkpoint",
+          targetDate,
+        });
+        console.log(`[checkpoint] session_flush Engine reconciliation ${JSON.stringify({
+          eligible_core_examined: engineReconciliation?.eligible_core_examined || 0,
+          eligible_session_flush: engineReconciliation?.eligible_session_flush || 0,
+          excluded_non_session_flush: engineReconciliation?.excluded_non_session_flush || 0,
+          ambiguous_chunk_count: engineReconciliation?.ambiguous_chunk_count || 0,
+          engine_existing: engineReconciliation?.engine_existing || 0,
+          engine_inserted: engineReconciliation?.engine_inserted || 0,
+          engine_backlog_remaining: engineReconciliation?.engine_backlog_remaining || 0,
+          engine_converged: engineReconciliation?.engine_converged === true,
+          target_date_input_complete: engineReconciliation?.target_date_input_complete === true,
+          target_date_backlog_remaining: engineReconciliation?.target_date_backlog_remaining || 0,
+          historical_backlog_remaining: engineReconciliation?.historical_backlog_remaining || 0,
+          historical_ambiguous_chunk_count: engineReconciliation?.historical_ambiguous_chunk_count || 0,
+          stable_identity_state: engineReconciliation?.stable_identity_state || "unknown",
+          error: engineReconciliation?.error || null,
+        })}`);
+        if (engineReconciliation?.ok === false && engineReconciliation.error) {
+          console.warn(`[checkpoint] session_flush Engine reconciliation incomplete: ${engineReconciliation.error}`);
+        }
+      } catch (error) {
+        engineReconciliation = {
+          ok: false,
+          trigger: "nightly_checkpoint",
+          eligibleCoreRows: [],
+          engine_converged: false,
+          target_date_input_complete: false,
+          error: error?.message ? String(error.message) : String(error),
+        };
+        console.warn(`[checkpoint] session_flush Engine reconciliation incomplete: ${engineReconciliation.error}`);
+      }
+    }
+
+    // Step 1: Gather raw logs after reconciliation so the first run can see
+    // the inputs whose Engine associations were just completed.
     const rawLogs = getRuntime().readCheckpointRawLogs({
       targetDate,
       timeZone: getRuntime().timeZone,
@@ -452,43 +680,44 @@ async function main(argv = process.argv.slice(2)) {
       };
     }
 
+    const engineComplete = options.dryRun || (
+      engineReconciliation?.ok !== false
+      && (engineReconciliation?.target_date_input_complete === undefined
+        ? engineReconciliation?.engine_converged === true
+        : engineReconciliation?.target_date_input_complete === true)
+    );
+    if (!engineComplete) {
+      const reasons = [];
+      if (engineReconciliation?.error) reasons.push(`Engine=${engineReconciliation.error}`);
+      if (engineReconciliation?.target_date_backlog_remaining) {
+        reasons.push(`target_date_backlog=${engineReconciliation.target_date_backlog_remaining}`);
+      }
+      if (engineReconciliation?.target_date_ambiguous_chunk_count) {
+        reasons.push(`target_date_ambiguous=${engineReconciliation.target_date_ambiguous_chunk_count}`);
+      }
+      if (reasons.length === 0) reasons.push("target_date_not_converged");
+      const reason = reasons.join("; ");
+      console.error(`[checkpoint] ❌ Input incomplete after session_flush reconciliation; LLM skipped: ${reason}`);
+      writeIncompleteEpisode(targetDate, rawLogs.length, {
+        ...diagnostics,
+        incompleteReason: reason,
+      });
+      getRuntime().resolveConfigConflicts();
+      const incomplete = new Error(`checkpoint input incomplete: ${reason}`);
+      incomplete.code = "CHECKPOINT_INPUT_INCOMPLETE";
+      incomplete.reconciliation = engineReconciliation;
+      throw incomplete;
+    }
+
+    const pendingRecovery = retryPendingCheckpointEntries();
+    console.log(`[checkpoint] Pending generated-entry recovery ${JSON.stringify(pendingRecovery)}`);
+
     // Step 2: Unified nightly checkpoint (1 LLM call → 3 outputs)
     const result = await nightlyCheckpoint(rawLogs, { targetDate, rawLogStats });
 
-    // Step 2.5: Reconcile canonical session_flush Core chunks into Engine.
-    let engineReconciliation;
-    try {
-      engineReconciliation = await getRuntime().reconcileSessionFlushManagedState({
-        trigger: "nightly_checkpoint",
-      });
-      console.log(`[checkpoint] session_flush Engine reconciliation ${JSON.stringify({
-        eligible_core_examined: engineReconciliation?.eligible_core_examined || 0,
-        eligible_session_flush: engineReconciliation?.eligible_session_flush || 0,
-        excluded_non_session_flush: engineReconciliation?.excluded_non_session_flush || 0,
-        ambiguous_chunk_count: engineReconciliation?.ambiguous_chunk_count || 0,
-        engine_existing: engineReconciliation?.engine_existing || 0,
-        engine_inserted: engineReconciliation?.engine_inserted || 0,
-        engine_backlog_remaining: engineReconciliation?.engine_backlog_remaining || 0,
-        engine_converged: engineReconciliation?.engine_converged === true,
-        stable_identity_state: engineReconciliation?.stable_identity_state || "unknown",
-        error: engineReconciliation?.error || null,
-      })}`);
-      if (engineReconciliation?.ok === false && engineReconciliation.error) {
-        console.warn(`[checkpoint] session_flush Engine reconciliation incomplete: ${engineReconciliation.error}`);
-      }
-    } catch (error) {
-      engineReconciliation = {
-        ok: false,
-        trigger: "nightly_checkpoint",
-        eligibleCoreRows: [],
-        engine_converged: false,
-        error: error?.message ? String(error.message) : String(error),
-      };
-      console.warn(`[checkpoint] session_flush Engine reconciliation incomplete: ${engineReconciliation.error}`);
-    }
-
-    // Step 2.6: Reconcile only active session_flush Engine IDs into LanceDB.
-    let lanceReconciliation;
+    // Step 2.5: Reconcile only active session_flush Engine IDs into LanceDB.
+    // This remains after LLM extraction: Engine convergence gates the input,
+    // while a retryable vector backlog must be reported independently.
     try {
       lanceReconciliation = await getRuntime().repairOrphanVectors({
         scope: "session_flush",
@@ -496,7 +725,7 @@ async function main(argv = process.argv.slice(2)) {
         eligibleCoreRows: engineReconciliation?.eligibleCoreRows || [],
         engineReconciliation,
       });
-      const lanceSummary = typeof lanceReconciliation === "number"
+      lanceSummary = typeof lanceReconciliation === "number"
         ? { lance_added: lanceReconciliation, lance_converged: true }
         : lanceReconciliation || {};
       console.log(`[checkpoint] session_flush Lance reconciliation ${JSON.stringify({
@@ -517,6 +746,7 @@ async function main(argv = process.argv.slice(2)) {
         lance_converged: false,
         error: error?.message ? String(error.message) : String(error),
       };
+      lanceSummary = lanceReconciliation;
       console.warn(`[checkpoint] session_flush Lance reconciliation incomplete: ${lanceReconciliation.error}`);
     }
 
@@ -533,10 +763,11 @@ async function main(argv = process.argv.slice(2)) {
     } else if (result.skipped) {
       console.log(`[checkpoint] ⏭ Skipped (no conversation data) — ${elapsed}s`);
     } else {
-      console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, ${repaired} vectors repaired, ${conflicts} conflicts`);
+      console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, writes=${JSON.stringify(result.writes || emptyCheckpointWriteStats())}, ${repaired} vectors repaired, ${conflicts} conflicts`);
     }
   } catch (e) {
     console.error("[checkpoint] ❌ Failed:", e.message);
+    if (require.main !== module) throw e;
     process.exit(1);
   }
 }
@@ -566,6 +797,7 @@ module.exports = {
   buildCheckpointEvidenceDiagnostics,
   mergeKgData,
   nightlyCheckpoint,
+  retryPendingCheckpointEntries,
   parseCliArgs,
   runFlushSessionRawlogCheckpoint,
   withRuntime,
