@@ -131,8 +131,24 @@ function withFixtureRuntime(fixture, fn, overrides = {}) {
     configJsonPath: fixture.configJsonPath,
     timeZone: "Asia/Shanghai",
     now: () => 1700000000000,
+    syncCoreMemoryIndex: async ({ targetDate }) => completeCoreIndexResult(targetDate),
     ...overrides,
   }, fn);
+}
+
+function completeCoreIndexResult(targetDate) {
+  return {
+    ok: true,
+    index_invocation: { status: "succeeded", via: "isolated_fixture" },
+    target_date_coverage: {
+      status: "complete",
+      target_date: targetDate,
+      path: `memory/smart-add/${targetDate}.md`,
+      required_fingerprints: 1,
+      matched_fingerprints: 1,
+      missing_fingerprints: 0,
+    },
+  };
 }
 
 function readEngineRows(fixture, where = "1 = 1", params = []) {
@@ -549,7 +565,7 @@ test("checkpoint sends target-date-complete input to LLM despite historical ambi
   try {
     await withFixtureRuntime(fixture, () => checkpoint.main(["--target-date", "2026-08-10"]), {
       flushCheckpointRawLog: () => { order.push("flush"); return { ok: true }; },
-      syncCoreMemoryIndex: async () => { order.push("core_index"); return { ok: true }; },
+      syncCoreMemoryIndex: async ({ targetDate }) => { order.push("core_index"); return completeCoreIndexResult(targetDate); },
       readCheckpointRawLogs: () => { order.push("collect"); return [{ source: "conversation", category: "raw_log", text: "**User:** hello" }]; },
       llmNightlyExtract: async () => {
         order.push("llm");
@@ -1583,9 +1599,9 @@ test("checkpoint reaches reconciliation after no-data, skipped, and timeout nigh
           order.push("flush");
           return { ok: true };
         },
-        syncCoreMemoryIndex: async () => {
+        syncCoreMemoryIndex: async ({ targetDate }) => {
           order.push("sync");
-          return { ok: true };
+          return completeCoreIndexResult(targetDate);
         },
         readCheckpointRawLogs: () => {
           order.push("collect");
@@ -1656,7 +1672,7 @@ test("budget-clipped checkpoint reports input_incomplete instead of valid comple
   try {
     const result = await withFixtureRuntime(fixture, () => checkpoint.main(["--target-date", "2026-08-10"]), {
       flushCheckpointRawLog: () => ({ ok: true }),
-      syncCoreMemoryIndex: async () => ({ ok: true }),
+      syncCoreMemoryIndex: async ({ targetDate }) => completeCoreIndexResult(targetDate),
       reconcileSessionFlushManagedState: async () => ({
         eligibleCoreRows: [],
         target_date_input_complete: true,
@@ -1706,12 +1722,64 @@ test("Core index ingress failure blocks Engine and LLM completion", async () => 
     }), error => {
       assert.equal(error.businessStatus.status, "input_incomplete");
       assert.equal(error.businessStatus.core_ingestion, "failed");
-      assert.match(error.message, /Core memory index ingress failed/);
+      assert.match(error.message, /Core memory index ingress incomplete/);
       return true;
     });
     assert.deepEqual(calls, ["flush", "core_index", "collect"]);
   } finally {
     fixture.cleanup();
+  }
+});
+
+test("successful Core index invocation with failed target post-read blocks Engine reconciliation and LLM", async () => {
+  for (const coverage of [
+    { status: "read_error", reason: "target file post-read failed" },
+    { status: "missing", reason: "target path has no indexed Core chunks" },
+    { status: "stale", reason: "Core target path does not contain all current session_flush fingerprints" },
+  ]) {
+    const fixture = createFixture();
+    const calls = [];
+    try {
+      await assert.rejects(() => withFixtureRuntime(fixture, () => checkpoint.main(["--target-date", "2026-08-10"]), {
+        flushCheckpointRawLog: () => { calls.push("flush"); return { ok: true }; },
+        syncCoreMemoryIndex: async ({ targetDate }) => {
+          calls.push("core_index");
+          return {
+            ok: false,
+            index_invocation: { status: "succeeded", via: "memory_manager" },
+            target_date_coverage: {
+              ...coverage,
+              target_date: targetDate,
+              path: `memory/smart-add/${targetDate}.md`,
+              required_fingerprints: 1,
+              matched_fingerprints: 0,
+              missing_fingerprints: 1,
+            },
+          };
+        },
+        reconcileSessionFlushManagedState: async () => {
+          calls.push("engine");
+          throw new Error("Engine must not run without target Core coverage");
+        },
+        readCheckpointRawLogs: () => {
+          calls.push("collect");
+          return [{ source: "conversation", category: "raw_log", text: "fixture-only" }];
+        },
+        llmNightlyExtract: async () => {
+          calls.push("llm");
+          throw new Error("LLM must not run without target Core coverage");
+        },
+      }), error => {
+        assert.equal(error.businessStatus.status, "input_incomplete");
+        assert.equal(error.businessStatus.core_index_invocation, "succeeded");
+        assert.equal(error.businessStatus.core_target_date_coverage, coverage.status);
+        assert.match(error.message, /Core memory index ingress incomplete/);
+        return true;
+      });
+      assert.deepEqual(calls, ["flush", "core_index", "collect"]);
+    } finally {
+      fixture.cleanup();
+    }
   }
 });
 

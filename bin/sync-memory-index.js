@@ -1,25 +1,22 @@
 const Database = require("better-sqlite3");
 const { execFileSync } = require("node:child_process");
+const { createHash } = require("node:crypto");
+const { readFileSync, statSync } = require("node:fs");
+const { resolve, relative, sep, isAbsolute } = require("node:path");
+const { parseSmartAddEntries } = require("../lib/smart-add-entry-contract.cjs");
+
+const SMART_ADD_FINGERPRINT_RE = /<!--\s*smart-add-fingerprint:\s*([a-f0-9]{8,64})\s*-->/gi;
 
 async function loadRuntimeDeps() {
   const [
-    { dateStrInTimeZone },
-    { tableExists },
-    { getSmartAddTimeZone },
     { collectIndexedFiles, readIndexedPathState },
     runtime,
   ] = await Promise.all([
-    import("../date-utils.js"),
-    import("../lib/db/schema.js"),
-    import("../lib/config/helpers.js"),
     import("../lib/sync/index-sync.js"),
     import("../memory-manager-runtime.js"),
   ]);
 
   return {
-    dateStrInTimeZone,
-    tableExists,
-    getSmartAddTimeZone,
     collectIndexedFiles,
     readIndexedPathState,
     CORE_DB_PATH: runtime.CORE_DB_PATH,
@@ -38,23 +35,166 @@ function withDb(fn, dbPath) {
   }
 }
 
-function safeWithDb(fn, dbPath, fallbackValue = null) {
+function safeWithDb(fn, dbPath, fallbackValue = null, withDbImpl = withDb) {
   try {
-    return { value: withDb(fn, dbPath), error: null };
+    return { value: withDbImpl(fn, dbPath), error: null };
   } catch (error) {
     return { value: fallbackValue, error: String(error?.message || error) };
   }
 }
 
+function summarizeManagerSyncResult(value) {
+  if (value === null || value === undefined) return null;
+  return {
+    returned: true,
+    ok: typeof value?.ok === "boolean" ? value.ok : null,
+  };
+}
+
+function extractCoreChunkFingerprints(text) {
+  const fingerprints = new Set();
+  SMART_ADD_FINGERPRINT_RE.lastIndex = 0;
+  let match;
+  while ((match = SMART_ADD_FINGERPRINT_RE.exec(String(text || ""))) !== null) {
+    fingerprints.add(String(match[1]).toLowerCase());
+  }
+  SMART_ADD_FINGERPRINT_RE.lastIndex = 0;
+  return fingerprints;
+}
+
+function readTargetIndexedContentEvidence(db, targetPath) {
+  const columns = new Set(db.prepare("PRAGMA table_info(chunks)").all().map(row => String(row.name)));
+  if (!columns.has("path") || !columns.has("text")) {
+    return { path_present: false, chunk_count: 0, fingerprints: [], error: "Core chunks path/text columns unavailable" };
+  }
+  const rows = db.prepare("SELECT text FROM chunks WHERE path = ?").all(targetPath);
+  const fingerprints = new Set();
+  for (const row of rows) {
+    for (const fingerprint of extractCoreChunkFingerprints(row.text)) fingerprints.add(fingerprint);
+  }
+  return {
+    path_present: rows.length > 0,
+    chunk_count: rows.length,
+    fingerprints: [...fingerprints],
+    error: null,
+  };
+}
+
+function validTargetDate(value) {
+  const date = String(value || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
+function snapshotTargetFile(filePath) {
+  const stat = statSync(filePath);
+  if (!stat.isFile()) throw new Error("target path is not a regular file");
+  const bytes = readFileSync(filePath);
+  const content = bytes.toString("utf8");
+  const fingerprints = new Set(parseSmartAddEntries(content)
+    .filter(entry => entry.provenance === "session_flush" && entry.category === "raw_log")
+    .map(entry => entry.fingerprint)
+    .filter(value => typeof value === "string" && /^[a-f0-9]{8,64}$/i.test(value))
+    .map(value => value.toLowerCase()));
+  return {
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    fingerprints,
+  };
+}
+
+function assessTargetDateCoverage({
+  targetDate,
+  targetPath,
+  scannedPaths,
+  sourceBefore,
+  sourceAfter,
+  sourceBeforeError,
+  sourceAfterError,
+  indexedResult,
+}) {
+  const coverage = {
+    status: "unverified",
+    target_date: targetDate,
+    path: targetPath,
+    required_fingerprints: sourceBefore?.fingerprints?.size || 0,
+    matched_fingerprints: 0,
+    missing_fingerprints: sourceBefore?.fingerprints?.size || 0,
+    source_stable: false,
+    indexed_path_present: indexedResult?.path_present === true,
+    indexed_chunk_count: Number(indexedResult?.chunk_count) || 0,
+    reason: null,
+  };
+
+  if (sourceBeforeError) {
+    coverage.status = "missing";
+    coverage.reason = `target file unavailable before indexing: ${sourceBeforeError}`;
+    return coverage;
+  }
+  if (sourceAfterError) {
+    coverage.status = "read_error";
+    coverage.reason = `target file post-read failed: ${sourceAfterError}`;
+    return coverage;
+  }
+  if (sourceBefore.sha256 !== sourceAfter.sha256) {
+    coverage.status = "stale";
+    coverage.reason = "target file changed during Core indexing";
+    return coverage;
+  }
+  coverage.source_stable = true;
+  if (!scannedPaths.includes(targetPath)) {
+    coverage.status = "stale";
+    coverage.reason = "target file was outside the enumerated index scan scope";
+    return coverage;
+  }
+  if (indexedResult?.error) {
+    coverage.status = "read_error";
+    coverage.reason = indexedResult.error;
+    return coverage;
+  }
+  if (!indexedResult?.path_present) {
+    coverage.status = "missing";
+    coverage.reason = "target path has no indexed Core chunks";
+    return coverage;
+  }
+  if (coverage.required_fingerprints === 0) {
+    coverage.status = "unverified";
+    coverage.reason = "target file has no verifiable session_flush fingerprints";
+    return coverage;
+  }
+
+  const indexedFingerprints = new Set(indexedResult.fingerprints || []);
+  for (const fingerprint of sourceBefore.fingerprints) {
+    if (indexedFingerprints.has(fingerprint)) coverage.matched_fingerprints += 1;
+  }
+  coverage.missing_fingerprints = coverage.required_fingerprints - coverage.matched_fingerprints;
+  if (coverage.missing_fingerprints > 0) {
+    coverage.status = "stale";
+    coverage.reason = "Core target path does not contain all current session_flush fingerprints";
+    return coverage;
+  }
+
+  coverage.status = "complete";
+  coverage.reason = null;
+  return coverage;
+}
+
 function parseArgs(argv) {
+  let targetDate = null;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--target-date") targetDate = argv[index + 1] || null;
+    else if (arg.startsWith("--target-date=")) targetDate = arg.slice("--target-date=".length) || null;
+  }
   return {
     force: argv.includes("--force"),
+    targetDate,
     help: argv.includes("-h") || argv.includes("--help"),
   };
 }
 
 function printUsage() {
-  console.log("Usage: node bin/sync-memory-index.js [--force]");
+  console.log("Usage: node bin/sync-memory-index.js [--force] [--target-date YYYY-MM-DD]");
 }
 
 function runOpenClawMemoryIndexCli({
@@ -109,43 +249,68 @@ function runOpenClawMemoryIndexCli({
 }
 
 async function runSyncMemoryIndex({
+  targetDate = null,
   force = false,
   getSharedMemoryManagerImpl = null,
   openClawCliSyncImpl = null,
+  runtimeDepsImpl = null,
+  withDbImpl = withDb,
+  readTargetIndexedContentEvidenceImpl = readTargetIndexedContentEvidence,
 } = {}) {
+  if (targetDate !== null && !validTargetDate(targetDate)) {
+    return {
+      ok: false,
+      index_invocation: { status: "not_started", error: "targetDate must be a valid YYYY-MM-DD date" },
+      target_date_coverage: { status: "unverified", target_date: targetDate, path: null, reason: "invalid targetDate" },
+    };
+  }
+  const deps = await (runtimeDepsImpl || loadRuntimeDeps)();
   const {
-    dateStrInTimeZone,
-    tableExists,
-    getSmartAddTimeZone,
     collectIndexedFiles,
     readIndexedPathState,
     CORE_DB_PATH,
     INDEX_SYNC_WATCH_DIRS,
     WORKSPACE,
     getSharedMemoryManager,
-  } = await loadRuntimeDeps();
+  } = deps;
   const getSharedMemoryManagerImplResolved = getSharedMemoryManagerImpl || getSharedMemoryManager;
   const managerResult = await getSharedMemoryManagerImplResolved({ purpose: "cli", allowImplicit: false });
   const manager = managerResult.manager || null;
-  const smartAddTimeZone = getSmartAddTimeZone(managerResult.cfg || null);
   const statusBefore = manager && typeof manager.status === "function" ? manager.status() : null;
   const memoryRoot = statusBefore?.workspaceDir || WORKSPACE;
   const dbPathBefore = statusBefore?.dbPath || CORE_DB_PATH;
   const scannedFiles = collectIndexedFiles(memoryRoot, INDEX_SYNC_WATCH_DIRS);
   const scannedPaths = scannedFiles.map(file => file.relPath);
-  const beforeResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPathBefore, { paths: [], updatedAt: {} });
+  const beforeResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPathBefore, { paths: [], updatedAt: {} }, withDbImpl);
   const before = beforeResult.value;
   const dirtyBefore = Boolean(statusBefore?.dirty);
   const openClawCliSync = openClawCliSyncImpl || runOpenClawMemoryIndexCli;
+  const targetPath = targetDate ? `memory/smart-add/${targetDate}.md` : null;
+  const targetAbsPath = targetPath ? resolve(memoryRoot, targetPath) : null;
+  const targetRelative = targetAbsPath ? relative(resolve(memoryRoot), targetAbsPath) : null;
+  const targetPathSafe = !targetPath || (
+    targetRelative && targetRelative !== ".." && !targetRelative.startsWith(`..${sep}`)
+    && !isAbsolute(targetRelative)
+  );
+  const sourceBeforeResult = targetPath && targetPathSafe
+    ? (() => {
+      try { return { value: snapshotTargetFile(targetAbsPath), error: null }; }
+      catch (error) { return { value: null, error: String(error?.message || error) }; }
+    })()
+    : { value: null, error: targetPath ? "unsafe target path" : null };
+  let invocation = { status: "not_started", via: null, error: null };
+  let syncResult = null;
+  let statusAfter = statusBefore;
 
   try {
-    let syncResult = null;
-    let statusAfter = statusBefore;
-
     if (manager) {
       const syncPayload = { reason: "cli-sync", ...(force ? { force: true } : {}) };
       syncResult = await manager.sync(syncPayload);
+      if (syncResult?.ok === false) {
+        throw new Error(syncResult.error || "OpenClaw memory manager reported index failure");
+      }
       statusAfter = typeof manager.status === "function" ? manager.status() : null;
+      invocation = { status: "succeeded", via: "memory_manager", error: null };
     } else {
       const delegated = await openClawCliSync({ force });
       if (!delegated?.ok) {
@@ -159,55 +324,74 @@ async function runSyncMemoryIndex({
         delegated: true,
         via: "openclaw memory index",
         delegated_to: delegated.delegated_to,
-        stdout: delegated.stdout,
-        stderr: delegated.stderr,
       };
       statusAfter = null;
+      invocation = { status: "succeeded", via: "openclaw_cli", error: null };
     }
-
-    const dbPath = statusAfter?.dbPath || statusBefore?.dbPath || CORE_DB_PATH;
-    const afterResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPath, { paths: [], updatedAt: {} });
-    const after = afterResult.value;
-
-    const indexedCount = after.paths.length;
-    const updatedCount = after.paths.filter(path => (before.updatedAt[path] ?? null) !== (after.updatedAt[path] ?? null)).length;
-    const skippedCount = scannedPaths.filter(path => !after.paths.includes(path)).length;
-
-    const todayRelPath = `memory/smart-add/${dateStrInTimeZone(0, smartAddTimeZone)}.md`;
-    const todayChunkResult = safeWithDb(db => {
-      if (!tableExists(db, "chunks")) return 0;
-      const row = db.prepare("SELECT COUNT(*) AS c FROM chunks WHERE path = ?").get(todayRelPath);
-      return row?.c || 0;
-    }, dbPath, 0);
-    const todayChunkCount = todayChunkResult.value;
-
-    const output = {
-      reason: "cli-sync",
-      force,
-      memory_root: memoryRoot,
-      db_path: dbPath,
-      db_error_before: beforeResult.error,
-      db_error_after: afterResult.error,
-      dirty_before: dirtyBefore,
-      file_scan: {
-        total: scannedPaths.length,
-        indexed: indexedCount,
-        updated: updatedCount,
-        skipped: skippedCount,
-      },
-      manager_status: statusAfter || null,
-      manager_error: manager ? null : (managerResult.error || null),
-      sync_result: syncResult ?? null,
-      today_smart_add_path: todayRelPath,
-      today_chunk_exists: todayChunkCount > 0,
-      today_chunk_count: todayChunkCount,
-      today_chunk_error: todayChunkResult.error,
+  } catch (error) {
+    invocation = {
+      status: "failed",
+      via: manager ? "memory_manager" : "openclaw_cli",
+      error: String(error?.message || error),
     };
-
-    return output;
-  } finally {
-    await manager?.close?.();
   }
+
+  const dbPath = statusAfter?.dbPath || statusBefore?.dbPath || CORE_DB_PATH;
+  const afterResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPath, { paths: [], updatedAt: {} }, withDbImpl);
+  const after = afterResult.value;
+  const indexedCount = after.paths.length;
+  const updatedCount = after.paths.filter(path => (before.updatedAt[path] ?? null) !== (after.updatedAt[path] ?? null)).length;
+  const skippedCount = scannedPaths.filter(path => !after.paths.includes(path)).length;
+
+  const sourceAfterResult = targetPath && targetPathSafe
+    ? (() => {
+      try { return { value: snapshotTargetFile(targetAbsPath), error: null }; }
+      catch (error) { return { value: null, error: String(error?.message || error) }; }
+    })()
+    : { value: null, error: targetPath ? "unsafe target path" : null };
+  const indexedTargetResult = targetPath && targetPathSafe
+    ? safeWithDb(db => readTargetIndexedContentEvidenceImpl(db, targetPath), dbPath, null, withDbImpl)
+    : { value: null, error: targetPath ? "unsafe target path" : null };
+  const targetCoverage = targetDate
+    ? assessTargetDateCoverage({
+      targetDate,
+      targetPath,
+      scannedPaths,
+      sourceBefore: sourceBeforeResult.value,
+      sourceAfter: sourceAfterResult.value,
+      sourceBeforeError: sourceBeforeResult.error,
+      sourceAfterError: sourceAfterResult.error,
+      indexedResult: indexedTargetResult.error
+        ? { error: indexedTargetResult.error }
+        : indexedTargetResult.value,
+    })
+    : { status: "not_requested", target_date: null, path: null, reason: null };
+
+  const output = {
+    ok: invocation.status === "succeeded" && (targetCoverage.status === "complete" || targetCoverage.status === "not_requested"),
+    reason: "cli-sync",
+    force,
+    memory_root: memoryRoot,
+    db_path: dbPath,
+    index_invocation: invocation,
+    target_date_coverage: targetCoverage,
+    db_error_before: beforeResult.error,
+    db_error_after: afterResult.error,
+    dirty_before: dirtyBefore,
+    file_scan: {
+      total: scannedPaths.length,
+      indexed: indexedCount,
+      updated: updatedCount,
+      skipped: skippedCount,
+      target_date_limited: false,
+    },
+    manager_status: statusAfter || null,
+    manager_error: manager ? null : (managerResult.error || null),
+    sync_result: manager ? summarizeManagerSyncResult(syncResult) : (syncResult ?? null),
+    target_smart_add_path: targetPath,
+  };
+  await manager?.close?.();
+  return output;
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -216,9 +400,9 @@ async function main(argv = process.argv.slice(2)) {
     printUsage();
     return 0;
   }
-  const output = await runSyncMemoryIndex({ force: args.force });
+  const output = await runSyncMemoryIndex({ force: args.force, targetDate: args.targetDate });
   console.log(JSON.stringify(output, null, 2));
-  return 0;
+  return output.ok === false ? 1 : 0;
 }
 
 if (require.main === module) {

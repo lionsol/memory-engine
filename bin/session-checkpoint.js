@@ -615,7 +615,9 @@ async function main(argv = process.argv.slice(2)) {
       dry_run: options.dryRun,
     })}`);
 
-    let coreIngestion = { status: options.dryRun ? "skipped_dry_run" : "not_run_in_test_harness" };
+    let coreIngestion = options.dryRun
+      ? { status: "skipped_dry_run", index_invocation: { status: "skipped" }, target_date_coverage: { status: "skipped" } }
+      : { status: "failed", error: "Core index ingress was not available", index_invocation: { status: "not_started" }, target_date_coverage: { status: "unverified" } };
     if (!options.dryRun) {
       const runtimeSync = getRuntime().syncCoreMemoryIndex;
       const syncCoreMemoryIndex = runtimeSync || (require.main === module
@@ -624,17 +626,54 @@ async function main(argv = process.argv.slice(2)) {
       if (typeof syncCoreMemoryIndex === "function") {
         try {
           const result = await syncCoreMemoryIndex({ targetDate, force: false });
-          if (result?.ok === false) throw new Error(result.error || "Core memory index reported failure");
+          const invocation = result?.index_invocation || { status: "unverified", error: null };
+          const coverage = result?.target_date_coverage || { status: "unverified", reason: "target-date coverage evidence missing" };
+          const expectedPath = `memory/smart-add/${targetDate}.md`;
+          const requiredFingerprints = Number(coverage.required_fingerprints);
+          const matchedFingerprints = Number(coverage.matched_fingerprints);
+          const invocationComplete = invocation.status === "succeeded";
+          const coverageComplete = coverage.status === "complete"
+            && coverage.target_date === targetDate
+            && coverage.path === expectedPath
+            && Number.isSafeInteger(requiredFingerprints)
+            && requiredFingerprints > 0
+            && matchedFingerprints === requiredFingerprints;
+          const complete = invocationComplete && coverageComplete && result?.ok !== false;
+          const failureReason = result?.error
+            || invocation.error
+            || coverage.reason
+            || (!invocationComplete ? "Core index invocation did not succeed" : null)
+            || (!coverageComplete ? "target-date input coverage was not verified" : null);
           coreIngestion = {
-            status: "complete",
+            status: complete ? "complete" : "failed",
+            target_date: targetDate,
+            index_invocation: {
+              status: invocation.status || "unverified",
+              via: invocation.via || null,
+              error: invocation.error || null,
+            },
+            target_date_coverage: {
+              status: coverage.status || "unverified",
+              target_date: coverage.target_date || null,
+              path: coverage.path || null,
+              required_fingerprints: Number.isSafeInteger(requiredFingerprints) ? requiredFingerprints : null,
+              matched_fingerprints: Number.isSafeInteger(matchedFingerprints) ? matchedFingerprints : null,
+              missing_fingerprints: Number.isSafeInteger(Number(coverage.missing_fingerprints))
+                ? Number(coverage.missing_fingerprints)
+                : null,
+              reason: coverage.reason || null,
+            },
             indexed_files: result?.file_scan?.indexed ?? null,
             updated_files: result?.file_scan?.updated ?? null,
             skipped_files: result?.file_scan?.skipped ?? null,
+            error: complete ? null : failureReason || "Core target-date input coverage incomplete",
           };
         } catch (error) {
           coreIngestion = {
             status: "failed",
             error: error?.message ? String(error.message) : String(error),
+            index_invocation: { status: "failed", error: error?.message ? String(error.message) : String(error) },
+            target_date_coverage: { status: "not_checked", target_date: targetDate, path: `memory/smart-add/${targetDate}.md` },
           };
         }
       }
@@ -650,7 +689,7 @@ async function main(argv = process.argv.slice(2)) {
     if (!options.dryRun) {
       try {
         if (coreIngestion.status === "failed") {
-          throw new Error(`Core memory index ingress failed: ${coreIngestion.error}`);
+          throw new Error(`Core memory index ingress incomplete: ${coreIngestion.error || "target-date coverage unverified"}`);
         }
         engineReconciliation = await getRuntime().reconcileSessionFlushManagedState({
           trigger: "nightly_checkpoint",
@@ -772,6 +811,8 @@ async function main(argv = process.argv.slice(2)) {
         business_complete: false,
         summary_status: "not_run",
         core_ingestion: coreIngestion.status,
+        core_index_invocation: coreIngestion.index_invocation?.status || "unknown",
+        core_target_date_coverage: coreIngestion.target_date_coverage?.status || "unknown",
         input_complete: false,
         budget_coverage_complete: diagnostics.budgetCoverageComplete,
         budget_uncovered_entries: diagnostics.budgetUncoveredEntries,
@@ -879,6 +920,8 @@ async function main(argv = process.argv.slice(2)) {
         && !vectorTaskBlockedByIsolation,
       summary_status: result.status || (result.timeout ? "timeout" : result.skipped ? "placeholder_skipped" : "valid_summary"),
       core_ingestion: coreIngestion.status,
+      core_index_invocation: coreIngestion.index_invocation?.status || "unknown",
+      core_target_date_coverage: coreIngestion.target_date_coverage?.status || "unknown",
       input_complete: engineReconciliation?.target_date_input_complete === true,
       budget_coverage_complete: diagnostics.budgetCoverageComplete !== false,
       budget_uncovered_entries: diagnostics.budgetUncoveredEntries,
