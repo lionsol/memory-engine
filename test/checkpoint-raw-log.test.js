@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
 const checkpointRawLog = require("../lib/checkpoint/raw-log.js");
+const smartAddContract = require("../lib/smart-add-entry-contract.cjs");
 
 function setFileMtime(filePath, isoString) {
   const time = new Date(isoString);
@@ -224,6 +225,58 @@ test("checkpoint includes manual, agent_smart_add, and session_flush entries", a
   assert.equal(stats.smartAddIncluded, 3);
   assert.equal(stats.smartAddSkippedUnknownProvenance, 0);
   assert.equal(stats.smartAddSkippedCheckpointGenerated, 0);
+});
+
+test("trusted session_flush dialogue survives body headings and budget clipping is explicit", async () => {
+  const fixture = createFixture();
+  const render = (entryId, provenance, text) => smartAddContract.renderSmartAddEntry({
+    entryId,
+    category: provenance === "manual" ? "raw_log" : "raw_log",
+    provenance,
+    text,
+  });
+  const first = render("session-A", "session_flush", [
+    "**User:** session A asks a sufficiently long question about the fixture input",
+    "",
+    "## Body heading",
+    "This heading is part of the dialogue body, not a new smart-add entry.",
+    "",
+    "**Assistant:** session A responds with a sufficiently long answer for the budget test",
+  ].join("\n"));
+  const second = render("session-B", "session_flush", [
+    "**User:** session B asks another sufficiently long question",
+    "",
+    "**Assistant:** session B has a separate answer and session boundary",
+  ].join("\n"));
+  const manual = render("manual-dialogue-looking", "manual", "**User:** trusted note text is not a conversation");
+  writeFileSync(resolve(fixture.smartAddDir, "2026-06-17.md"), [
+    "# Smart Added Memory",
+    "",
+    first,
+    second,
+    manual,
+  ].join("\n"));
+
+  const unbounded = await getLogsForTargetDate(fixture, "2026-06-17", {
+    budgets: { maxFinalCombinedChars: 4000, smartAddChars: 1000, conversationChars: 3000, perSessionChars: 2000, toolSummaryChars: 1000 },
+  });
+  const unboundedStats = checkpointRawLog.getRawLogCollectionStats(unbounded);
+  assert.equal(unbounded.filter(log => log.source === "conversation").length, 2);
+  assert.equal(unbounded.filter(log => log.source === "note").length, 1);
+  assert.equal(unbounded.some(log => log.text.includes("## Body heading")), true);
+  assert.equal(unbounded.some(log => log.text.includes("manual-dialogue-looking")), false);
+  assert.equal(unboundedStats.smartAddConversationIncluded, 2);
+  assert.ok(unboundedStats.charsByRoleAfterBudget.conversation > 0);
+
+  const clipped = await getLogsForTargetDate(fixture, "2026-06-17", {
+    budgets: { maxFinalCombinedChars: 400, smartAddChars: 100, conversationChars: 100, perSessionChars: 100, toolSummaryChars: 100 },
+  });
+  const clippedStats = checkpointRawLog.getRawLogCollectionStats(clipped);
+  assert.equal(clippedStats.budgetCoverageComplete, false);
+  assert.ok(clippedStats.budgetTruncatedCount > 0 || clippedStats.droppedByBudgetCount > 0);
+  assert.ok(clippedStats.budgetUncoveredEntries.some(entry => entry.entry_id === "session-A"));
+  assert.ok(clippedStats.budgetUncoveredEntries.some(entry => entry.entry_id === "session-B"));
+  assert.equal(JSON.stringify(clippedStats.budgetUncoveredEntries).includes("sufficiently long question"), false);
 });
 
 test("pollution chain replay: checkpoint_generated residue is not promoted into next checkpoint evidence", async () => {

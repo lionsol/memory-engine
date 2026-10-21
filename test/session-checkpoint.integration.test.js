@@ -217,6 +217,7 @@ test("session checkpoint with no raw logs never calls LLM", async () => {
 
     assert.equal(llmCalls, 0);
     assert.deepEqual(result, {
+      status: "empty_input",
       memories: 0,
       episode: false,
       configs: 0,
@@ -251,6 +252,7 @@ test("session checkpoint with all-empty logs never calls LLM", async () => {
 
     assert.equal(llmCalls, 0);
     assert.deepEqual(result, {
+      status: "empty_input",
       memories: 0,
       episode: false,
       configs: 0,
@@ -316,7 +318,8 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
       flushCheckpointRawLog: () => ({ ok: true }),
     }, () => checkpoint.main());
 
-    assert.equal(result, undefined);
+    assert.equal(result.businessStatus.status, "valid_summary");
+    assert.equal(result.businessStatus.business_complete, false);
 
     const busy = await checkpoint.withRuntime({
       coreDbPath: fixture.coreDbPath,

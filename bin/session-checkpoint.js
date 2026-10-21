@@ -106,8 +106,13 @@ function buildCheckpointEvidenceDiagnostics(targetDate, rawLogStats = null) {
     smartAddPath: stats.smartAddPath || `memory/smart-add/${targetDate}.md`,
     smartAddInputPolicy: stats.smartAddInputPolicy || checkpointRawLog.SMART_ADD_INPUT_POLICY,
     smartAddIncluded: stats.smartAddIncluded || 0,
+    smartAddConversationIncluded: stats.smartAddConversationIncluded || 0,
     smartAddSkippedUnknownProvenance: stats.smartAddSkippedUnknownProvenance || 0,
     smartAddSkippedCheckpointGenerated: stats.smartAddSkippedCheckpointGenerated || 0,
+    budgetCoverageComplete: stats.budgetCoverageComplete !== false,
+    budgetExcludedCount: stats.droppedByBudgetCount || 0,
+    budgetTruncatedCount: stats.budgetTruncatedCount || 0,
+    budgetUncoveredEntries: Array.isArray(stats.budgetUncoveredEntries) ? stats.budgetUncoveredEntries : [],
     generatedEpisodePath: resolve(rt.episodesDir, `${targetDate}.md`),
     evidenceDateFilter: stats.evidenceDateFilter
       || `targetDate=${targetDate}; timeZone=${rt.timeZone}; smartAdd=memory/smart-add/${targetDate}.md; raw_log=event_at/legacy_event_time bounded to targetDate`,
@@ -350,22 +355,39 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   const allLogs = assessment.allLogs;
   const combinedText = assessment.combinedText;
 
+  if (options.rawLogStats?.budgetCoverageComplete === false) {
+    writeIncompleteEpisode(episodeDate, allLogs.length, {
+      ...diagnostics,
+      incompleteReason: "budget_coverage_incomplete",
+    });
+    return {
+      status: "input_incomplete",
+      memories: 0,
+      episode: false,
+      configs: 0,
+      skipped: true,
+      reason: "budget_coverage_incomplete",
+      writes: writeStats,
+    };
+  }
+
   if (assessment.status === "no_raw_logs") {
     console.log("[checkpoint] No raw logs found — nothing to extract.");
     writeEmptyEpisode(episodeDate, diagnostics);
-    return { memories: 0, episode: false, configs: 0, writes: writeStats };
+    return { status: "empty_input", memories: 0, episode: false, configs: 0, writes: writeStats };
   }
 
   if (assessment.status === "all_logs_empty") {
     console.log("[checkpoint] All logs empty — nothing to extract.");
     writeEmptyEpisode(episodeDate, diagnostics);
-    return { memories: 0, episode: false, configs: 0, writes: writeStats };
+    return { status: "empty_input", memories: 0, episode: false, configs: 0, writes: writeStats };
   }
 
   if (assessment.status === "no_conversation") {
     console.log(`[checkpoint] No conversation logs found (${assessment.allCount} note entries only) — marking as incomplete, skipping LLM.`);
     writeIncompleteEpisode(episodeDate, assessment.allCount, diagnostics);
     return {
+      status: "placeholder_skipped",
       memories: 0,
       episode: false,
       configs: 0,
@@ -385,6 +407,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
     console.error(`[checkpoint] LLM extraction failed: ${error.message}`);
     writeLLMTimeoutEpisode(episodeDate, diagnostics);
     return {
+      status: "timeout",
       memories: 0,
       episode: false,
       configs: 0,
@@ -398,7 +421,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   if (extracted.error === "llm超时") {
     console.log("[checkpoint] llm超时 — both providers failed");
     writeLLMTimeoutEpisode(episodeDate, diagnostics);
-    return { memories: 0, episode: false, configs: 0, timeout: true, writes: writeStats };
+    return { status: "timeout", memories: 0, episode: false, configs: 0, timeout: true, writes: writeStats };
   }
 
   // ── 1. Write structured memories (6 types) ──
@@ -561,6 +584,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   console.log(`[checkpoint] Wrote ${cfgWritten} config(s)`);
 
   return {
+    status: episodeWritten ? "valid_summary" : "placeholder_skipped",
     memories: memWritten,
     episode: episodeWritten,
     configs: cfgWritten,
@@ -583,17 +607,51 @@ async function main(argv = process.argv.slice(2)) {
   console.log(`[checkpoint] === Session Checkpoint ${todayDateStr()} ===`);
 
   try {
-    getRuntime().flushCheckpointRawLog({ targetDate });
+    const flushResult = getRuntime().flushCheckpointRawLog({ targetDate });
+    console.log(`[checkpoint] flush status ${JSON.stringify({
+      performed: true,
+      ok: flushResult?.ok !== false,
+      may_write_smart_add_files: true,
+      dry_run: options.dryRun,
+    })}`);
+
+    let coreIngestion = { status: options.dryRun ? "skipped_dry_run" : "not_run_in_test_harness" };
+    if (!options.dryRun) {
+      const runtimeSync = getRuntime().syncCoreMemoryIndex;
+      const syncCoreMemoryIndex = runtimeSync || (require.main === module
+        ? require("./sync-memory-index.js").runSyncMemoryIndex
+        : null);
+      if (typeof syncCoreMemoryIndex === "function") {
+        try {
+          const result = await syncCoreMemoryIndex({ targetDate, force: false });
+          if (result?.ok === false) throw new Error(result.error || "Core memory index reported failure");
+          coreIngestion = {
+            status: "complete",
+            indexed_files: result?.file_scan?.indexed ?? null,
+            updated_files: result?.file_scan?.updated ?? null,
+            skipped_files: result?.file_scan?.skipped ?? null,
+          };
+        } catch (error) {
+          coreIngestion = {
+            status: "failed",
+            error: error?.message ? String(error.message) : String(error),
+          };
+        }
+      }
+    }
+    console.log(`[checkpoint] Core index ingress ${JSON.stringify(coreIngestion)}`);
 
     // Reconciliation must settle the flushed session_flush input before it is
-    // collected for LLM extraction.  Dry-run deliberately keeps the old
-    // flush/read-only behavior and does not invoke reconciliation, because
-    // reconciliation can write Engine state.
+    // collected for LLM extraction. The sanctioned OpenClaw index ingress
+    // runs after flush; dry-run skips it because it may write Core state.
     let engineReconciliation = null;
     let lanceReconciliation = null;
     let lanceSummary = null;
     if (!options.dryRun) {
       try {
+        if (coreIngestion.status === "failed") {
+          throw new Error(`Core memory index ingress failed: ${coreIngestion.error}`);
+        }
         engineReconciliation = await getRuntime().reconcileSessionFlushManagedState({
           trigger: "nightly_checkpoint",
           targetDate,
@@ -605,6 +663,9 @@ async function main(argv = process.argv.slice(2)) {
           ambiguous_chunk_count: engineReconciliation?.ambiguous_chunk_count || 0,
           engine_existing: engineReconciliation?.engine_existing || 0,
           engine_inserted: engineReconciliation?.engine_inserted || 0,
+          engine_identity_repaired: engineReconciliation?.engine_identity_repaired || 0,
+          engine_identity_missing_before: engineReconciliation?.engine_identity_missing_before || 0,
+          engine_identity_missing_after: engineReconciliation?.engine_identity_missing_after || 0,
           engine_backlog_remaining: engineReconciliation?.engine_backlog_remaining || 0,
           engine_converged: engineReconciliation?.engine_converged === true,
           target_date_input_complete: engineReconciliation?.target_date_input_complete === true,
@@ -668,13 +729,21 @@ async function main(argv = process.argv.slice(2)) {
         smartAddPath: diagnostics.smartAddPath,
         smartAddInputPolicy: diagnostics.smartAddInputPolicy,
         smartAddIncluded: diagnostics.smartAddIncluded,
+        smartAddConversationIncluded: diagnostics.smartAddConversationIncluded,
         smartAddSkippedUnknownProvenance: diagnostics.smartAddSkippedUnknownProvenance,
         smartAddSkippedCheckpointGenerated: diagnostics.smartAddSkippedCheckpointGenerated,
+        budgetCoverageComplete: diagnostics.budgetCoverageComplete,
+        budgetExcludedCount: diagnostics.budgetExcludedCount,
+        budgetTruncatedCount: diagnostics.budgetTruncatedCount,
+        budgetUncoveredEntries: diagnostics.budgetUncoveredEntries,
         generatedEpisodePath: diagnostics.generatedEpisodePath,
+        flushPerformed: true,
+        flushMayWriteSmartAddFiles: true,
       })}`);
       return {
         dryRun: true,
         targetDate,
+        flush: { performed: true, mayWriteSmartAddFiles: true },
         stats: rawLogStats,
         assessment,
       };
@@ -698,6 +767,17 @@ async function main(argv = process.argv.slice(2)) {
       if (reasons.length === 0) reasons.push("target_date_not_converged");
       const reason = reasons.join("; ");
       console.error(`[checkpoint] ❌ Input incomplete after session_flush reconciliation; LLM skipped: ${reason}`);
+      const incompleteStatus = {
+        status: "input_incomplete",
+        business_complete: false,
+        summary_status: "not_run",
+        core_ingestion: coreIngestion.status,
+        input_complete: false,
+        budget_coverage_complete: diagnostics.budgetCoverageComplete,
+        budget_uncovered_entries: diagnostics.budgetUncoveredEntries,
+        reason,
+      };
+      console.log(`[checkpoint] Business status ${JSON.stringify(incompleteStatus)}`);
       writeIncompleteEpisode(targetDate, rawLogs.length, {
         ...diagnostics,
         incompleteReason: reason,
@@ -705,6 +785,7 @@ async function main(argv = process.argv.slice(2)) {
       getRuntime().resolveConfigConflicts();
       const incomplete = new Error(`checkpoint input incomplete: ${reason}`);
       incomplete.code = "CHECKPOINT_INPUT_INCOMPLETE";
+      incomplete.businessStatus = incompleteStatus;
       incomplete.reconciliation = engineReconciliation;
       throw incomplete;
     }
@@ -733,12 +814,25 @@ async function main(argv = process.argv.slice(2)) {
         lance_existing: lanceSummary.lance_existing || 0,
         lance_added: lanceSummary.lance_added || 0,
         lance_failed: lanceSummary.lance_failed || 0,
+        lance_operation_failed: lanceSummary.lance_operation_failed || 0,
+        lance_write_failed: lanceSummary.lance_write_failed || 0,
+        lance_limit_backlog_remaining: lanceSummary.lance_limit_backlog_remaining || 0,
         lance_backlog_remaining: lanceSummary.lance_backlog_remaining || 0,
         lance_converged: lanceSummary.lance_converged === true,
+        lance_membership_complete: lanceSummary.lance_membership_complete === true,
+        lance_membership_state: lanceSummary.lance_membership_state || "unknown",
+        lance_vector_validation_complete: lanceSummary.lance_vector_validation_complete === true,
+        lance_vector_validation_state: lanceSummary.lance_vector_validation_state || "unknown",
+        lance_fingerprint_conflicts: lanceSummary.lance_fingerprint_conflicts || 0,
+        lance_skipped_unknown_legacy: lanceSummary.lance_skipped_unknown_legacy || 0,
+        lance_input_state: lanceSummary.lance_input_state || "unknown",
+        lance_completion_state: lanceSummary.lance_completion_state || "unknown",
+        fingerprint_verification: lanceSummary.fingerprint_verification || "unverified",
+        fingerprint_verification_reason: lanceSummary.fingerprint_verification_reason || null,
         error: lanceSummary.error || null,
       })}`);
-      if (lanceSummary.ok === false && lanceSummary.error) {
-        console.warn(`[checkpoint] session_flush Lance reconciliation incomplete: ${lanceSummary.error}`);
+      if (lanceSummary.ok === false) {
+        console.warn(`[checkpoint] session_flush Lance reconciliation incomplete: ${lanceSummary.error || lanceSummary.lance_vector_validation_state || "unknown reason"}`);
       }
     } catch (error) {
       lanceReconciliation = {
@@ -760,11 +854,58 @@ async function main(argv = process.argv.slice(2)) {
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     if (result.timeout) {
       console.log(`[checkpoint] ⏰ llm超时 — completed in ${elapsed}s`);
+    } else if (result.status === "empty_input") {
+      console.log(`[checkpoint] Empty input — no summary generated (${elapsed}s)`);
     } else if (result.skipped) {
       console.log(`[checkpoint] ⏭ Skipped (no conversation data) — ${elapsed}s`);
+    } else if (result.status !== "valid_summary") {
+      console.log(`[checkpoint] Placeholder/skipped output — no valid summary (${elapsed}s)`);
     } else {
       console.log(`[checkpoint] ✅ Completed in ${elapsed}s — ${result.memories} memories, ${result.episode ? 'episode' : 'no episode'}, ${result.configs} configs, writes=${JSON.stringify(result.writes || emptyCheckpointWriteStats())}, ${repaired} vectors repaired, ${conflicts} conflicts`);
     }
+    const vectorTaskComplete = ["empty_input", "no_active_rows"].includes(lanceSummary?.lance_completion_state)
+      || (lanceSummary?.lance_membership_complete === true
+        && lanceSummary?.lance_vector_validation_complete === true);
+    const vectorTaskBlockedByIsolation = Number(lanceSummary?.lance_skipped_unknown_legacy || 0) > 0;
+    const businessStatus = {
+      status: diagnostics.budgetCoverageComplete === false
+        || engineReconciliation?.target_date_input_complete !== true
+        ? "input_incomplete"
+        : result.status || (result.timeout ? "timeout" : result.skipped ? "placeholder_skipped" : "valid_summary"),
+      business_complete: diagnostics.budgetCoverageComplete !== false
+        && engineReconciliation?.target_date_input_complete === true
+        && result.status === "valid_summary"
+        && vectorTaskComplete
+        && !vectorTaskBlockedByIsolation,
+      summary_status: result.status || (result.timeout ? "timeout" : result.skipped ? "placeholder_skipped" : "valid_summary"),
+      core_ingestion: coreIngestion.status,
+      input_complete: engineReconciliation?.target_date_input_complete === true,
+      budget_coverage_complete: diagnostics.budgetCoverageComplete !== false,
+      budget_uncovered_entries: diagnostics.budgetUncoveredEntries,
+      engine_identity_repaired: engineReconciliation?.engine_identity_repaired || 0,
+      engine_identity_missing_before: engineReconciliation?.engine_identity_missing_before || 0,
+      engine_identity_missing_after: engineReconciliation?.engine_identity_missing_after || 0,
+      extraction: result.status || (result.timeout ? "timeout" : result.skipped ? "placeholder_skipped" : "valid_summary"),
+      vector_completion: lanceSummary?.lance_completion_state || "unknown",
+      vector_membership_complete: lanceSummary?.lance_membership_complete === true,
+      vector_membership_state: lanceSummary?.lance_membership_state || "unknown",
+      vector_validation_complete: lanceSummary?.lance_vector_validation_complete === true,
+      vector_validation_state: lanceSummary?.lance_vector_validation_state || lanceSummary?.fingerprint_verification || "unknown",
+      vector_fingerprint_conflicts: lanceSummary?.lance_fingerprint_conflicts || 0,
+      vector_skipped_unknown_legacy: lanceSummary?.lance_skipped_unknown_legacy || 0,
+      vector_write_failures: lanceSummary?.lance_write_failed || 0,
+      vector_operation_failures: lanceSummary?.lance_operation_failed || 0,
+      vector_limit_backlog: lanceSummary?.lance_limit_backlog_remaining || 0,
+      vector_input: lanceSummary?.lance_input_state || "unknown",
+    };
+    console.log(`[checkpoint] Business status ${JSON.stringify(businessStatus)}`);
+    return {
+      ok: businessStatus.status !== "input_incomplete"
+        && businessStatus.status !== "timeout"
+        && businessStatus.vector_validation_state !== "conflict"
+        && lanceSummary?.ok !== false,
+      businessStatus,
+    };
   } catch (e) {
     console.error("[checkpoint] ❌ Failed:", e.message);
     if (require.main !== module) throw e;
@@ -783,7 +924,12 @@ runtimeRegistry.installRuntimeFallbacks({
 });
 
 if (require.main === module) {
-  main();
+  main().then(result => {
+    if (result?.ok === false) process.exitCode = 1;
+  }).catch(error => {
+    console.error("[checkpoint] ❌ Failed:", error?.message || error);
+    process.exitCode = 1;
+  });
 }
 
 // Public/legacy exports used by tests and external callers.

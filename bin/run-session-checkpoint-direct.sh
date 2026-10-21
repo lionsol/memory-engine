@@ -14,7 +14,6 @@ PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MEMORY_DIR="${MEMORY_ENGINE_MEMORY_DIR:-$WORKSPACE/memory}"
 CORE_DB_PATH="${MEMORY_ENGINE_CORE_DB_PATH:-$HOME/.openclaw/agents/main/agent/openclaw-agent.sqlite}"
 EPISODES_DIR="$MEMORY_DIR/episodes"
-FLUSH_SCRIPT="$PLUGIN_DIR/bin/flush-session-rawlog.js"
 CHECKPOINT_SCRIPT="$PLUGIN_DIR/bin/session-checkpoint.js"
 BUSINESS_TIME_SCRIPT="$PLUGIN_DIR/bin/resolve-business-time.js"
 
@@ -62,7 +61,7 @@ timeZone: $TIME_ZONE
 category: episodic
 source_type: checkpoint_fallback
 smartAddPath: $smart_add_file
-smartAddInputPolicy: trusted_only:manual,agent_smart_add
+smartAddInputPolicy: trusted_only:manual,agent_smart_add,session_flush
 smartAddIncluded: 0
 rawLogTimeBasis: event_at/legacy_event_time
 rawLogTimeBasisNote: prefer event_at as original event time; legacy fallback is only allowed before event_at exists
@@ -118,21 +117,12 @@ main() {
 
   log "Start targetDate=$target_date timeZone=$TIME_ZONE workspace=$WORKSPACE"
 
-  if [ -f "$FLUSH_SCRIPT" ]; then
-    log "Running flush-session-rawlog checkpoint mode"
-    if ! "$NODE_BIN" "$FLUSH_SCRIPT" --checkpoint --target-date "$target_date"; then
-      warn "flush-session-rawlog failed; continuing to session-checkpoint"
-    fi
-  else
-    warn "flush script not found: $FLUSH_SCRIPT"
-  fi
-
-  log "Running canonical session-checkpoint"
+  log "Running canonical session-checkpoint (flush -> Core index ingress -> Engine reconciliation -> extraction)"
   "$NODE_BIN" "$CHECKPOINT_SCRIPT" --target-date "$target_date"
   checkpoint_status=$?
 
   if [ "$checkpoint_status" -eq 0 ] && [ -s "$episode_file" ]; then
-    log "Completed targetDate=$target_date episode=$episode_file"
+    log "Run ended targetDate=$target_date episode=$episode_file process_status=0; see structured Business status for completeness"
     exit 0
   fi
 

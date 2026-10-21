@@ -15,6 +15,7 @@ function createStats() {
     charsBySourceAfterBudget: { smartAdd: 0, dbRawLog: 0, resetTranscript: 0 },
     charsByRoleAfterBudget: {
       note: 0,
+      conversation: 0,
       user: 0,
       assistant_summary: 0,
       assistant_tool_summary: 0,
@@ -41,6 +42,7 @@ test("raw-log normalization keeps role parsing and dedupe keys stable", () => {
 
 test("role inference preserves note user summary tool-summary and metadata buckets", () => {
   assert.equal(normalization.inferRoleKey({ sourceKind: "smartAdd" }), "note");
+  assert.equal(normalization.inferRoleKey({ sourceKind: "smartAdd", source: "conversation" }), "conversation");
   assert.equal(normalization.inferRoleKey({ role: "user" }), "user");
   assert.equal(normalization.inferRoleKey({ role: "assistant", isAssistantSummary: true }), "assistant_summary");
   assert.equal(normalization.inferRoleKey({ role: "assistant", isToolSummary: true }), "assistant_tool_summary");

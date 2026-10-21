@@ -298,12 +298,33 @@ function makeBulkSource() {
   };
 }
 
-function makeLanceStub({ existingIds = [], totalRows = null, failAddIds = [] } = {}) {
+function makeLanceStub({
+  existingIds = [],
+  totalRows = null,
+  failAddIds = [],
+  schemaColumns = ["id", "text", "vector", "timestamp"],
+  vectorDimension = 3,
+  existingFingerprints = {},
+} = {}) {
   const ids = new Set(existingIds);
   const addedIds = [];
+  const addedRows = [];
   const countRowsCalls = [];
+  const selectCalls = [];
   const failSet = new Set(failAddIds);
+  const rowsById = new Map([...ids].map(id => [id, {
+    id,
+    ...(Object.hasOwn(existingFingerprints, id) ? { embedding_fingerprint: existingFingerprints[id] } : {}),
+  }]));
   const table = {
+    async schema() {
+      return {
+        fields: schemaColumns.map(name => ({
+          name,
+          ...(name === "vector" ? { type: { listSize: vectorDimension } } : {}),
+        })),
+      };
+    },
     async countRows() {
       countRowsCalls.push(true);
       return totalRows ?? ids.size;
@@ -315,7 +336,8 @@ function makeLanceStub({ existingIds = [], totalRows = null, failAddIds = [] } =
           predicate = String(value);
           return query;
         },
-        select() {
+        select(columns) {
+          selectCalls.push([...columns]);
           return query;
         },
         limit() {
@@ -324,7 +346,10 @@ function makeLanceStub({ existingIds = [], totalRows = null, failAddIds = [] } =
         async toArray() {
           const requested = [...predicate.matchAll(/'((?:''|[^'])*)'/g)]
             .map(match => match[1].replace(/''/g, "'"));
-          return requested.filter(id => ids.has(id)).map(id => ({ id }));
+          return requested.filter(id => ids.has(id)).map(id => {
+            const row = rowsById.get(id) || { id };
+            return Object.fromEntries(Object.entries(row).filter(([key]) => selectCalls.at(-1)?.includes(key)));
+          });
         },
       };
       return query;
@@ -335,6 +360,8 @@ function makeLanceStub({ existingIds = [], totalRows = null, failAddIds = [] } =
         if (ids.has(row.id)) throw new Error(`duplicate ${row.id}`);
         ids.add(row.id);
         addedIds.push(row.id);
+        addedRows.push(row);
+        rowsById.set(row.id, row);
       }
     },
   };
@@ -342,7 +369,7 @@ function makeLanceStub({ existingIds = [], totalRows = null, failAddIds = [] } =
     exports: {
       connect: async () => ({ openTable: async () => table }),
     },
-    state: { ids, addedIds, countRowsCalls },
+    state: { ids, addedIds, addedRows, countRowsCalls, selectCalls, rowsById },
   };
 }
 
@@ -518,18 +545,26 @@ test("checkpoint sends target-date-complete input to LLM despite historical ambi
     ],
   });
   let llmCalls = 0;
+  const order = [];
   try {
     await withFixtureRuntime(fixture, () => checkpoint.main(["--target-date", "2026-08-10"]), {
-      flushCheckpointRawLog: () => ({ ok: true }),
-      readCheckpointRawLogs: () => [{ source: "conversation", category: "raw_log", text: "**User:** hello" }],
+      flushCheckpointRawLog: () => { order.push("flush"); return { ok: true }; },
+      syncCoreMemoryIndex: async () => { order.push("core_index"); return { ok: true }; },
+      readCheckpointRawLogs: () => { order.push("collect"); return [{ source: "conversation", category: "raw_log", text: "**User:** hello" }]; },
       llmNightlyExtract: async () => {
+        order.push("llm");
         llmCalls += 1;
         return { smart_memories: [], configs: [], episode_summary: "target date summary" };
+      },
+      reconcileSessionFlushManagedState: async options => {
+        order.push("engine");
+        return reconcileSessionFlushManagedState(options);
       },
       repairOrphanVectors: async () => ({ lance_added: 0, lance_converged: true }),
       resolveConfigConflicts: () => 0,
     });
     assert.equal(llmCalls, 1);
+    assert.deepEqual(order, ["flush", "core_index", "engine", "collect", "llm"]);
   } finally {
     fixture.cleanup();
   }
@@ -818,6 +853,10 @@ test("scoped Lance reconciliation is exact, active-only, oldest-first, and bound
     assert.equal(first.lance_missing_before, 11);
     assert.equal(first.lance_added, 10);
     assert.equal(first.lance_backlog_remaining, 1);
+    assert.equal(first.lance_write_failed, 0);
+    assert.equal(first.lance_operation_failed, 0);
+    assert.equal(first.lance_limit_backlog_remaining, 1);
+    assert.equal(first.lance_completion_state, "limit_backlog");
     assert.equal(first.lance_converged, false);
     assert.deepEqual(lance.state.addedIds, [
       "lance-01", "lance-02", "lance-03", "lance-04", "lance-05",
@@ -834,6 +873,36 @@ test("scoped Lance reconciliation is exact, active-only, oldest-first, and bound
       "lance-01", "lance-02", "lance-03", "lance-04", "lance-05",
       "lance-06", "lance-07", "lance-08", "lance-09", "lance-10", "lance-11",
     ]);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("scoped canonical batch failure counts capped backlog as unattempted, not failed", async () => {
+  const source = makeBulkSource();
+  const coreRows = Array.from({ length: 12 }, (_, index) => ({
+    id: `batch-failure-${String(index).padStart(2, "0")}`,
+    path: "memory/smart-add/batch-failure.md",
+    start_line: source.range.startLine,
+    end_line: source.range.endLine,
+    updated_at: index + 1,
+  }));
+  const fixture = createFixture({
+    sourceFiles: { "memory/smart-add/batch-failure.md": source.content },
+    coreRows,
+  });
+  try {
+    const engine = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({ nowSec: 10 }));
+    const lance = makeLanceStub();
+    const result = await scopedLance(fixture, engine, lance, {
+      getCanonicalMemoriesByIds: ids => ({ ok: false, reason: "fixture_unavailable", results: [] }),
+    });
+    assert.equal(result.lance_failed, 10);
+    assert.equal(result.lance_operation_failed, 10);
+    assert.equal(result.lance_limit_backlog_remaining, 2);
+    assert.equal(result.lance_backlog_remaining, 12);
+    assert.equal(result.lance_membership_complete, false);
+    assert.deepEqual(lance.state.addedIds, []);
   } finally {
     fixture.cleanup();
   }
@@ -899,6 +968,268 @@ test("scoped Lance uses stable entity_id and excludes unknown_legacy", async () 
     assert.equal(skipped.lance_added, 0);
     assert.equal(embeddingCalls, 0);
     assert.deepEqual(isolatedLance.state.addedIds, []);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("scoped membership recognizes legacy Core id and does not deduplicate by content hash", async () => {
+  const source = makeBlocksSource();
+  const path = "memory/smart-add/legacy-vector-id.md";
+  const coreId = "legacy-core-vector-id";
+  const fixture = createFixture({
+    sourceFiles: { [path]: source.content },
+    coreRows: [{
+      id: coreId,
+      path,
+      start_line: source.ranges.session_entry.startLine + 5,
+      end_line: source.ranges.session_entry.endLine - 1,
+      updated_at: 1,
+    }],
+  });
+  try {
+    const engineDb = new Database(fixture.engineDbPath);
+    stableIdentity.ensureStableMemoryIdentityTables(engineDb, { addConfidenceColumns: true });
+    engineDb.close();
+    const engine = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({ nowSec: 10 }));
+    const entityId = readEngineRows(fixture)[0].entity_id;
+
+    const legacyIdLance = makeLanceStub({ existingIds: [coreId] });
+    const legacyIdResult = await scopedLance(fixture, engine, legacyIdLance, {
+      getCanonicalMemoriesByIds: () => { throw new Error("existing legacy Core id must suppress a duplicate write"); },
+    });
+    assert.equal(legacyIdResult.lance_existing, 1);
+    assert.equal(legacyIdResult.lance_added, 0);
+
+    const bothIdsLance = makeLanceStub({ existingIds: [coreId, entityId] });
+    const bothIdsResult = await scopedLance(fixture, engine, bothIdsLance, {
+      getCanonicalMemoriesByIds: () => { throw new Error("either exact identity match must suppress another write"); },
+    });
+    assert.equal(bothIdsResult.lance_existing, 1);
+    assert.equal(bothIdsResult.lance_added, 0);
+
+    const unrelatedLance = makeLanceStub({ existingIds: ["unrelated-entity-same-content-hash"] });
+    const unrelatedResult = await scopedLance(fixture, engine, unrelatedLance, {
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => ({
+          memory_id: id,
+          ok: true,
+          memory: {
+            memory_id: id,
+            canonical_id: `canonical:${id}`,
+            source: { text: "same body is not identity" },
+            content_ref: { content_hash: "identical-content-hash" },
+          },
+        })),
+      }),
+    });
+    assert.equal(unrelatedResult.lance_added, 1);
+    assert.deepEqual(unrelatedLance.state.addedIds, [entityId]);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("scoped Lance projects old four-column rows and handles extended fingerprint schema conservatively", async () => {
+  const source = makeBlocksSource();
+  const path = "memory/smart-add/schema-projection.md";
+  const coreId = "schema-projection-core";
+  const fixture = createFixture({
+    sourceFiles: { [path]: source.content },
+    coreRows: [{
+      id: coreId,
+      path,
+      start_line: source.ranges.session_entry.startLine + 5,
+      end_line: source.ranges.session_entry.endLine - 1,
+      updated_at: 1,
+    }],
+  });
+  try {
+    const engineDb = new Database(fixture.engineDbPath);
+    stableIdentity.ensureStableMemoryIdentityTables(engineDb, { addConfidenceColumns: true });
+    engineDb.close();
+    const engine = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({ nowSec: 10 }));
+    const entityId = readEngineRows(fixture)[0].entity_id;
+    const extendedSchema = ["id", "text", "vector", "timestamp", "doc_uuid", "embedding_fingerprint"];
+
+    const existingWithoutFingerprint = makeLanceStub({
+      existingIds: [entityId],
+      schemaColumns: extendedSchema,
+      existingFingerprints: { [entityId]: "nonempty-but-untrusted" },
+    });
+    const alreadyPresent = await scopedLance(fixture, engine, existingWithoutFingerprint, {
+      getCanonicalMemoriesByIds: () => { throw new Error("existing stable identity must not be duplicated"); },
+    });
+    assert.equal(alreadyPresent.fingerprint_verification, "unverified");
+    assert.equal(alreadyPresent.fingerprint_verification_reason, "trusted_engine_fingerprint_missing");
+    assert.equal(alreadyPresent.lance_membership_complete, true);
+    assert.equal(alreadyPresent.lance_vector_validation_complete, false);
+    assert.ok(existingWithoutFingerprint.state.selectCalls.some(columns => columns.includes("embedding_fingerprint")));
+    assert.equal(alreadyPresent.lance_added, 0);
+
+    const dimensionMismatch = makeLanceStub({ schemaColumns: extendedSchema });
+    const mismatch = await scopedLance(fixture, engine, dimensionMismatch, {
+      embedText: async () => [0.1, 0.2],
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => ({
+          memory_id: id,
+          ok: true,
+          memory: {
+            memory_id: id,
+            canonical_id: `canonical:${id}`,
+            source: { text: "dimension check" },
+            content_ref: { content_hash: "dimension-check-hash" },
+          },
+        })),
+      }),
+    });
+    assert.equal(mismatch.lance_added, 0);
+    assert.equal(mismatch.lance_operation_failed, 1);
+    assert.equal(mismatch.lance_write_failed, 0);
+    assert.equal(dimensionMismatch.state.addedRows.length, 0);
+
+    const projectedOldSchema = makeLanceStub();
+    const oldSchemaResult = await scopedLance(fixture, engine, projectedOldSchema, {
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => ({
+          memory_id: id,
+          ok: true,
+          memory: {
+            memory_id: id,
+            canonical_id: `canonical:${id}`,
+            source: { text: "four column projection" },
+            content_ref: { content_hash: "four-column-hash" },
+          },
+        })),
+      }),
+    });
+    assert.equal(oldSchemaResult.fingerprint_verification, "unverified");
+    assert.equal(oldSchemaResult.lance_membership_complete, true);
+    assert.equal(oldSchemaResult.lance_vector_validation_complete, false);
+    assert.deepEqual(Object.keys(projectedOldSchema.state.addedRows[0]).sort(), ["id", "text", "timestamp", "vector"]);
+
+    const trustedVector = [0.1, 0.2, 0.3];
+    const trustedFingerprint = stableIdentity.embeddingFingerprint(trustedVector);
+    const updateIdentityFingerprint = fingerprint => {
+      const db = new Database(fixture.engineDbPath);
+      try {
+        db.prepare("UPDATE memory_identity SET embedding_fingerprint = ? WHERE entity_id = ?")
+          .run(fingerprint, entityId);
+      } finally {
+        db.close();
+      }
+    };
+    updateIdentityFingerprint(trustedFingerprint);
+
+    const verifiedExisting = makeLanceStub({
+      existingIds: [entityId],
+      schemaColumns: extendedSchema,
+      existingFingerprints: { [entityId]: trustedFingerprint },
+    });
+    const verifiedExistingResult = await scopedLance(fixture, engine, verifiedExisting, {
+      getCanonicalMemoriesByIds: () => { throw new Error("exact stable member should not be rewritten"); },
+    });
+    assert.equal(verifiedExistingResult.lance_membership_complete, true);
+    assert.equal(verifiedExistingResult.lance_vector_validation_complete, true);
+    assert.equal(verifiedExistingResult.lance_vector_validation_state, "verified");
+
+    const conflictingExisting = makeLanceStub({
+      existingIds: [entityId],
+      schemaColumns: extendedSchema,
+      existingFingerprints: { [entityId]: "different-fingerprint" },
+    });
+    const conflictingResult = await scopedLance(fixture, engine, conflictingExisting);
+    assert.equal(conflictingResult.ok, false);
+    assert.equal(conflictingResult.lance_membership_complete, true);
+    assert.equal(conflictingResult.lance_vector_validation_state, "conflict");
+    assert.equal(conflictingResult.lance_fingerprint_conflicts, 1);
+
+    updateIdentityFingerprint(null);
+    const extendedWrite = makeLanceStub({ schemaColumns: extendedSchema });
+    const extendedResult = await scopedLance(fixture, engine, extendedWrite, {
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => ({
+          memory_id: id,
+          ok: true,
+          memory: {
+            memory_id: id,
+            canonical_id: `canonical:${id}`,
+            source: { text: "extended schema write" },
+            content_ref: { content_hash: "extended-schema-hash" },
+          },
+        })),
+      }),
+    });
+    assert.equal(extendedResult.lance_added, 1);
+    assert.equal(typeof extendedWrite.state.addedRows[0].embedding_fingerprint, "string");
+    assert.equal(extendedResult.fingerprint_verification, "unverified");
+    assert.equal(extendedResult.lance_membership_complete, true);
+    assert.equal(extendedResult.lance_vector_validation_complete, false);
+
+    updateIdentityFingerprint(trustedFingerprint);
+    const verifiedWrite = makeLanceStub({ schemaColumns: extendedSchema });
+    const verifiedWriteResult = await scopedLance(fixture, engine, verifiedWrite, {
+      embedText: async () => trustedVector,
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => ({
+          memory_id: id,
+          ok: true,
+          memory: {
+            memory_id: id,
+            canonical_id: `canonical:${id}`,
+            source: { text: "trusted extended schema write" },
+            content_ref: { content_hash: "trusted-extended-schema-hash" },
+          },
+        })),
+      }),
+    });
+    assert.equal(verifiedWriteResult.lance_vector_validation_complete, true);
+    assert.equal(verifiedWriteResult.fingerprint_verification, "verified");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("scoped Lance reports actual table.add failures separately from preparation failures", async () => {
+  const source = makeBlocksSource();
+  const path = "memory/smart-add/write-failure.md";
+  const fixture = createFixture({
+    sourceFiles: { [path]: source.content },
+    coreRows: [{
+      id: "write-fail",
+      path,
+      start_line: source.ranges.session_entry.startLine + 5,
+      end_line: source.ranges.session_entry.endLine - 1,
+      updated_at: 1,
+    }],
+  });
+  try {
+    const engine = await withFixtureRuntime(fixture, () => reconcileSessionFlushManagedState({ nowSec: 1 }));
+    const lance = makeLanceStub({ failAddIds: ["write-fail"] });
+    const result = await scopedLance(fixture, engine, lance, {
+      getCanonicalMemoriesByIds: ids => ({
+        ok: true,
+        results: ids.map(id => ({
+          memory_id: id,
+          ok: true,
+          memory: {
+            memory_id: id,
+            canonical_id: `canonical:${id}`,
+            source: { text: "write failure" },
+            content_ref: { content_hash: "write-failure-hash" },
+          },
+        })),
+      }),
+    });
+    assert.equal(result.lance_write_failed, 1);
+    assert.equal(result.lance_operation_failed, 0);
+    assert.equal(result.lance_limit_backlog_remaining, 0);
+    assert.equal(result.lance_completion_state, "write_failed");
   } finally {
     fixture.cleanup();
   }
@@ -1186,6 +1517,57 @@ test("embedding failure preserves Engine state and leaves Lance work retryable",
   }
 });
 
+test("scoped Lance labels truly empty input separately from a nonempty repair backlog", async () => {
+  const fixture = createFixture();
+  try {
+    const lance = makeLanceStub();
+    const result = await scopedLance(fixture, { eligibleCoreRows: [] }, lance);
+    assert.equal(result.lance_input_state, "empty_input");
+    assert.equal(result.lance_completion_state, "empty_input");
+    assert.equal(result.lance_converged, true);
+    assert.equal(lance.state.countRowsCalls.length, 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("dry-run still flushes before reading but skips reconciliation and LLM", async () => {
+  const fixture = createFixture();
+  const calls = [];
+  try {
+    const result = await withFixtureRuntime(fixture, () => checkpoint.main([
+      "--dry-run",
+      "--target-date",
+      "2026-08-10",
+    ]), {
+      flushCheckpointRawLog: () => {
+        calls.push("flush");
+        return { ok: true };
+      },
+      syncCoreMemoryIndex: async () => {
+        calls.push("sync");
+        throw new Error("dry-run must not invoke Core indexing");
+      },
+      readCheckpointRawLogs: () => {
+        calls.push("collect");
+        return [];
+      },
+      reconcileSessionFlushManagedState: async () => {
+        calls.push("engine");
+        throw new Error("dry-run must not reconcile Engine state");
+      },
+      llmNightlyExtract: async () => {
+        calls.push("llm");
+        throw new Error("dry-run must not invoke the model");
+      },
+    });
+    assert.deepEqual(calls, ["flush", "collect"]);
+    assert.deepEqual(result.flush, { performed: true, mayWriteSmartAddFiles: true });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("checkpoint reaches reconciliation after no-data, skipped, and timeout nightly results", async () => {
   for (const scenario of ["no-data", "skipped", "timeout"]) {
     const fixture = createFixture();
@@ -1196,9 +1578,13 @@ test("checkpoint reaches reconciliation after no-data, skipped, and timeout nigh
         : scenario === "skipped"
           ? [{ source: "note", text: "note only", category: "raw_log" }]
           : [{ source: "conversation", text: "**User:** hello", category: "raw_log" }];
-      await withFixtureRuntime(fixture, () => checkpoint.main(), {
+      const checkpointResult = await withFixtureRuntime(fixture, () => checkpoint.main(), {
         flushCheckpointRawLog: () => {
           order.push("flush");
+          return { ok: true };
+        },
+        syncCoreMemoryIndex: async () => {
+          order.push("sync");
           return { ok: true };
         },
         readCheckpointRawLogs: () => {
@@ -1212,12 +1598,24 @@ test("checkpoint reaches reconciliation after no-data, skipped, and timeout nigh
         },
         reconcileSessionFlushManagedState: async () => {
           order.push("engine");
-          return { eligibleCoreRows: [], engine_converged: true };
+          return {
+            eligibleCoreRows: [],
+            engine_converged: true,
+            target_date_input_complete: true,
+            engine_identity_repaired: 49,
+            engine_identity_missing_before: 49,
+            engine_identity_missing_after: 0,
+          };
         },
         repairOrphanVectors: async options => {
           assert.equal(options.scope, "session_flush");
           order.push("lance");
-          return { lance_added: 0, lance_converged: true };
+          return {
+            lance_added: 0,
+            lance_converged: true,
+            lance_input_state: "empty_input",
+            lance_completion_state: "empty_input",
+          };
         },
         resolveConfigConflicts: () => {
           order.push("conflicts");
@@ -1225,12 +1623,95 @@ test("checkpoint reaches reconciliation after no-data, skipped, and timeout nigh
         },
       });
       const expected = scenario === "timeout"
-        ? ["flush", "engine", "collect", "llm", "lance", "conflicts"]
-        : ["flush", "engine", "collect", "lance", "conflicts"];
+        ? ["flush", "sync", "engine", "collect", "llm", "lance", "conflicts"]
+        : ["flush", "sync", "engine", "collect", "lance", "conflicts"];
       assert.deepEqual(order, expected, scenario);
+      assert.equal(checkpointResult.businessStatus.engine_identity_repaired, 49);
+      assert.equal(checkpointResult.businessStatus.engine_identity_missing_before, 49);
+      assert.equal(checkpointResult.businessStatus.engine_identity_missing_after, 0);
+      assert.equal(checkpointResult.businessStatus.vector_completion, "empty_input");
+      assert.equal(checkpointResult.businessStatus.status, scenario === "no-data"
+        ? "empty_input"
+        : scenario === "skipped" ? "placeholder_skipped" : "timeout");
+      assert.equal(checkpointResult.businessStatus.business_complete, false);
+      if (scenario === "timeout") assert.equal(checkpointResult.ok, false);
     } finally {
       fixture.cleanup();
     }
+  }
+});
+
+test("budget-clipped checkpoint reports input_incomplete instead of valid completion", async () => {
+  const fixture = createFixture();
+  let llmCalls = 0;
+  const rawLogs = [{ source: "conversation", text: "**User:** covered portion", category: "raw_log" }];
+  Object.defineProperty(rawLogs, "checkpointStats", {
+    value: {
+      budgetCoverageComplete: false,
+      droppedByBudgetCount: 1,
+      budgetTruncatedCount: 1,
+      budgetUncoveredEntries: [{ entry_id: "session-entry", coverage: "truncated", original_chars: 90, included_chars: 60 }],
+    },
+  });
+  try {
+    const result = await withFixtureRuntime(fixture, () => checkpoint.main(["--target-date", "2026-08-10"]), {
+      flushCheckpointRawLog: () => ({ ok: true }),
+      syncCoreMemoryIndex: async () => ({ ok: true }),
+      reconcileSessionFlushManagedState: async () => ({
+        eligibleCoreRows: [],
+        target_date_input_complete: true,
+        engine_converged: true,
+      }),
+      readCheckpointRawLogs: () => rawLogs,
+      llmNightlyExtract: async () => {
+        llmCalls += 1;
+        return { smart_memories: [], configs: [], episode_summary: "must not be generated from clipped input" };
+      },
+      repairOrphanVectors: async () => ({
+        ok: true,
+        lance_converged: true,
+        lance_membership_complete: true,
+        lance_membership_state: "complete",
+        lance_vector_validation_complete: false,
+        lance_vector_validation_state: "unverified",
+        lance_completion_state: "complete",
+      }),
+      resolveConfigConflicts: () => 0,
+    });
+    assert.equal(result.businessStatus.status, "input_incomplete");
+    assert.equal(result.businessStatus.summary_status, "input_incomplete");
+    assert.equal(result.businessStatus.business_complete, false);
+    assert.equal(result.businessStatus.budget_coverage_complete, false);
+    assert.equal(result.businessStatus.budget_uncovered_entries[0].entry_id, "session-entry");
+    assert.equal(llmCalls, 0);
+    assert.doesNotMatch(readFileSync(resolve(fixture.memoryDir, "episodes", "2026-08-10.md"), "utf8"), /must not be generated/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("Core index ingress failure blocks Engine and LLM completion", async () => {
+  const fixture = createFixture();
+  const calls = [];
+  try {
+    await assert.rejects(() => withFixtureRuntime(fixture, () => checkpoint.main(["--target-date", "2026-08-10"]), {
+      flushCheckpointRawLog: () => { calls.push("flush"); return { ok: true }; },
+      syncCoreMemoryIndex: async () => { calls.push("core_index"); throw new Error("index unavailable"); },
+      reconcileSessionFlushManagedState: async () => {
+        calls.push("engine");
+        throw new Error("Engine must not run after Core ingress failure");
+      },
+      readCheckpointRawLogs: () => { calls.push("collect"); return []; },
+      llmNightlyExtract: async () => { calls.push("llm"); throw new Error("LLM must not run"); },
+    }), error => {
+      assert.equal(error.businessStatus.status, "input_incomplete");
+      assert.equal(error.businessStatus.core_ingestion, "failed");
+      assert.match(error.message, /Core memory index ingress failed/);
+      return true;
+    });
+    assert.deepEqual(calls, ["flush", "core_index", "collect"]);
+  } finally {
+    fixture.cleanup();
   }
 });
 

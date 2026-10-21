@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -85,6 +85,40 @@ test("writeIncompleteEpisode preserves an existing non-empty episode", async () 
   });
 
   assert.equal(readFileSync(episodePath, "utf8"), "# valid completed episode\n");
+});
+
+test("writeIncompleteEpisode identifies budget coverage gaps", async () => {
+  const fixture = createFixture();
+  await checkpoint.withRuntime({
+    episodesDir: fixture.episodesDir,
+    now: () => Date.parse("2026-06-18T01:23:45.000Z"),
+  }, async () => {
+    checkpointMarkers.writeIncompleteEpisode("2026-06-17", 2, {
+      incompleteReason: "budget_coverage_incomplete",
+      budgetCoverageComplete: false,
+      budgetUncoveredEntries: [{ entry_id: "entry-1", coverage: "truncated" }],
+    });
+  });
+  const content = readFileSync(resolve(fixture.episodesDir, "2026-06-17.md"), "utf8");
+  assert.match(content, /预算裁剪未覆盖全部输入/);
+  assert.match(content, /未调用 LLM/);
+  assert.match(content, /entry-1/);
+});
+
+test("writeLLMTimeoutEpisode preserves an existing valid episode", async () => {
+  const fixture = createFixture();
+  const episodePath = resolve(fixture.episodesDir, "2026-06-17.md");
+  try {
+    writeFileSync(episodePath, "# Existing valid episode\n\nverified summary\n");
+    const result = await checkpoint.withRuntime({
+      episodesDir: fixture.episodesDir,
+      now: () => Date.parse("2026-06-18T01:23:45.000Z"),
+    }, () => checkpointMarkers.writeLLMTimeoutEpisode("2026-06-17"));
+    assert.equal(result.preserved, true);
+    assert.equal(readFileSync(episodePath, "utf8"), "# Existing valid episode\n\nverified summary\n");
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
 });
 
 test("writeLLMTimeoutEpisode writes original timeout marker format", async () => {

@@ -88,6 +88,31 @@ test("canonical renderer is heading-first and both parsers retain entry identity
   assert.equal(blocks[0].endLine > blocks[0].startLine, true);
 });
 
+test("markdown headings inside an entry body are not parsed as smart-add boundaries", () => {
+  const first = contract.renderSmartAddEntry({
+    entryId: "entry-with-body-heading",
+    category: "raw_log",
+    provenance: "session_flush",
+    text: "**User:** first message\n\n## Body section\nbody content",
+  });
+  const second = contract.renderSmartAddEntry({
+    entryId: "next-entry",
+    category: "preference",
+    provenance: "manual",
+    text: "second entry content",
+  });
+  const content = `# Smart Added Memory\n\n${first}${second}`;
+
+  const entries = contract.parseSmartAddEntries(content);
+  assert.deepEqual(entries.map(entry => entry.entryId), ["entry-with-body-heading", "next-entry"]);
+  assert.match(entries[0].text, /## Body section\nbody content/);
+  assert.equal(entries[0].provenance, "session_flush");
+
+  const blocks = smartAddIdentity.parseCanonicalSmartAddBlocks(content);
+  assert.deepEqual(blocks.map(block => block.entryId), ["entry-with-body-heading", "next-entry"]);
+  assert.ok(blocks[0].endLine < blocks[1].startLine);
+});
+
 test("production and checkpoint writers render the same canonical entry body", async () => {
   const root = makeRoot();
   const toolDir = resolve(root, "tool");
