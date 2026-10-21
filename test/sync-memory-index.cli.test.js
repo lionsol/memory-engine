@@ -61,6 +61,87 @@ function makeIndexDependencies(fixture, manager) {
   };
 }
 
+function createCoreDialectFixture(dialect, { indexed = true } = {}) {
+  const root = mkdtempSync(resolve(tmpdir(), `memory-engine-core-${dialect}-`));
+  const workspaceDir = resolve(root, "workspace");
+  const smartAddDir = resolve(workspaceDir, "memory/smart-add");
+  const dbPath = resolve(root, "core.sqlite");
+  const targetDate = "2026-08-12";
+  const fingerprint = "a1b2c3d4e5f60718";
+  const targetPath = `memory/smart-add/${targetDate}.md`;
+  mkdirSync(smartAddDir, { recursive: true });
+  writeFileSync(resolve(smartAddDir, `${targetDate}.md`), [
+    "# Smart Added Memory",
+    "",
+    `<!-- smart-add-fingerprint: ${fingerprint} -->`,
+    `## entry-${targetDate}`,
+    "Category: raw_log",
+    "Provenance: session_flush",
+    "",
+    "offline fixture content",
+    "",
+  ].join("\n"), "utf8");
+
+  const db = new Database(dbPath);
+  if (dialect === "memory_index_chunks") {
+    db.exec(`CREATE TABLE memory_index_chunks (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'memory',
+      start_line INTEGER NOT NULL DEFAULT 1,
+      end_line INTEGER NOT NULL DEFAULT 1,
+      hash TEXT NOT NULL DEFAULT 'hash',
+      model TEXT NOT NULL DEFAULT 'model',
+      text TEXT NOT NULL,
+      embedding TEXT NOT NULL DEFAULT '[]',
+      updated_at INTEGER NOT NULL
+    )`);
+  } else if (dialect === "chunks") {
+    db.exec("CREATE TABLE chunks (id TEXT PRIMARY KEY, path TEXT NOT NULL, text TEXT NOT NULL, updated_at INTEGER)");
+  } else if (dialect === "unsupported") {
+    db.exec("CREATE TABLE unrelated (id TEXT PRIMARY KEY)");
+  } else if (dialect === "partial_current") {
+    db.exec("CREATE TABLE memory_index_chunks (id TEXT PRIMARY KEY, path TEXT, text TEXT, updated_at INTEGER)");
+  } else if (dialect === "query_failure") {
+    db.exec("CREATE VIEW chunks AS SELECT id, path, text, updated_at FROM absent_chunks");
+  } else {
+    db.close();
+    throw new Error(`unknown fixture dialect: ${dialect}`);
+  }
+
+  if (indexed && (dialect === "memory_index_chunks" || dialect === "chunks")) {
+    const table = dialect === "memory_index_chunks" ? "memory_index_chunks" : "chunks";
+    db.prepare(`INSERT INTO ${table} (id, path, text, updated_at) VALUES (?, ?, ?, ?)`)
+      .run("indexed-target", targetPath, `<!-- smart-add-fingerprint: ${fingerprint} -->`, 1);
+  }
+  db.close();
+
+  const manager = {
+    status: () => ({ workspaceDir, dbPath, dirty: false }),
+    async sync() { return { ok: true }; },
+    close() {},
+  };
+  const fixture = {
+    root,
+    workspaceDir,
+    dbPath,
+    targetDate,
+    targetPath,
+    fingerprint,
+    manager,
+    cleanup() { rmSync(root, { recursive: true, force: true }); },
+  };
+  return fixture;
+}
+
+async function runDialectFixture(fixture) {
+  return runSyncMemoryIndex({
+    targetDate: fixture.targetDate,
+    runtimeDepsImpl: async () => makeIndexDependencies(fixture, fixture.manager),
+    getSharedMemoryManagerImpl: async () => ({ manager: fixture.manager, cfg: null, error: null }),
+  });
+}
+
 test("sync-memory-index CLI module loads without requiring OpenClaw runtime at import time", () => {
   assert.equal(typeof runSyncMemoryIndex, "function");
 });
@@ -162,7 +243,7 @@ test("sync-memory-index honors targetDate and verifies current target fingerprin
 });
 
 test("sync-memory-index keeps invocation success separate from failed post-read or stale target content", async () => {
-  for (const scenario of ["post_read_error", "missing", "stale"]) {
+  for (const scenario of ["post_read_error", "post_read_invalid", "missing", "stale"]) {
     const fixture = createIndexFixture();
     const targetDate = "2026-08-10";
     const currentFingerprint = "a1b2c3d4e5f60718";
@@ -185,13 +266,19 @@ test("sync-memory-index keeps invocation success separate from failed post-read 
         getSharedMemoryManagerImpl: async () => ({ manager, cfg: null, error: null }),
         ...(scenario === "post_read_error" ? {
           readTargetIndexedContentEvidenceImpl: () => { throw new Error("fixture post-read failure"); },
+        } : scenario === "post_read_invalid" ? {
+          readTargetIndexedContentEvidenceImpl: () => ({ path_present: false, chunk_count: 0, fingerprints: null }),
         } : {}),
       });
       assert.equal(result.index_invocation.status, "succeeded", scenario);
       assert.equal(result.ok, false, scenario);
-      assert.equal(result.target_date_coverage.status, scenario === "post_read_error"
-        ? "read_error"
+      assert.equal(result.target_date_coverage.status, ["post_read_error", "post_read_invalid"].includes(scenario)
+        ? "query_error"
         : scenario === "missing" ? "missing" : "stale");
+      if (["post_read_error", "post_read_invalid"].includes(scenario)) {
+        assert.equal(result.target_date_coverage.matched_fingerprints, null);
+        assert.equal(result.target_date_coverage.missing_fingerprints, null);
+      }
       if (scenario === "stale") {
         assert.equal(result.target_date_coverage.indexed_chunk_count, 1);
         assert.equal(result.target_date_coverage.missing_fingerprints, 1);
@@ -199,5 +286,102 @@ test("sync-memory-index keeps invocation success separate from failed post-read 
     } finally {
       fixture.cleanup();
     }
+  }
+});
+
+test("sync-memory-index reads only memory_index_chunks through the Core compatibility view", async () => {
+  const fixture = createCoreDialectFixture("memory_index_chunks");
+  try {
+    const result = await runDialectFixture(fixture);
+    assert.equal(result.file_scan.status, "ok");
+    assert.equal(result.file_scan.indexed, 1);
+    assert.equal(result.file_scan.updated, 0);
+    assert.equal(result.file_scan.skipped, 0);
+    assert.equal(result.target_date_coverage.status, "complete");
+    assert.equal(result.target_date_coverage.required_fingerprints, 1);
+    assert.equal(result.target_date_coverage.matched_fingerprints, 1);
+    assert.equal(result.target_date_coverage.missing_fingerprints, 0);
+
+    const db = new Database(fixture.dbPath, { readonly: true });
+    assert.equal(db.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name = 'chunks'").get().c, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'view' AND name = 'chunks'").get().c, 0);
+    db.close();
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("sync-memory-index reads legacy chunks through the same readonly path", async () => {
+  const fixture = createCoreDialectFixture("chunks");
+  try {
+    const result = await runDialectFixture(fixture);
+    assert.equal(result.file_scan.status, "ok");
+    assert.equal(result.file_scan.indexed, 1);
+    assert.equal(result.target_date_coverage.status, "complete");
+    assert.equal(result.target_date_coverage.matched_fingerprints, 1);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("successful empty Core reads report zero while unsupported schema reports unknown counts", async () => {
+  const empty = createCoreDialectFixture("chunks", { indexed: false });
+  try {
+    const result = await runDialectFixture(empty);
+    assert.equal(result.file_scan.status, "ok");
+    assert.equal(result.file_scan.indexed, 0);
+    assert.equal(result.file_scan.skipped, 1);
+    assert.equal(result.target_date_coverage.status, "missing");
+    assert.equal(result.target_date_coverage.indexed_chunk_count, 0);
+    assert.equal(result.target_date_coverage.matched_fingerprints, 0);
+    assert.equal(result.target_date_coverage.missing_fingerprints, 1);
+  } finally {
+    empty.cleanup();
+  }
+
+  const unsupported = createCoreDialectFixture("unsupported");
+  try {
+    const result = await runDialectFixture(unsupported);
+    assert.equal(result.file_scan.status, "schema_unsupported");
+    assert.equal(result.file_scan.indexed, null);
+    assert.equal(result.file_scan.updated, null);
+    assert.equal(result.file_scan.skipped, null);
+    assert.equal(result.target_date_coverage.status, "schema_unsupported");
+    assert.equal(result.target_date_coverage.required_fingerprints, 1);
+    assert.equal(result.target_date_coverage.indexed_chunk_count, null);
+    assert.equal(result.target_date_coverage.matched_fingerprints, null);
+    assert.equal(result.target_date_coverage.missing_fingerprints, null);
+  } finally {
+    unsupported.cleanup();
+  }
+
+  const partial = createCoreDialectFixture("partial_current");
+  try {
+    const result = await runDialectFixture(partial);
+    assert.equal(result.file_scan.status, "schema_unsupported");
+    assert.equal(result.file_scan.indexed, null);
+    assert.equal(result.target_date_coverage.status, "schema_unsupported");
+    assert.equal(result.target_date_coverage.matched_fingerprints, null);
+    assert.equal(result.target_date_coverage.missing_fingerprints, null);
+  } finally {
+    partial.cleanup();
+  }
+});
+
+test("Core SQL query failures are explicit and never converted to empty index results", async () => {
+  const fixture = createCoreDialectFixture("query_failure");
+  try {
+    const result = await runDialectFixture(fixture);
+    assert.equal(result.file_scan.status, "query_error");
+    assert.equal(result.file_scan.indexed, null);
+    assert.equal(result.file_scan.updated, null);
+    assert.equal(result.file_scan.skipped, null);
+    assert.equal(result.target_date_coverage.status, "query_error");
+    assert.equal(result.target_date_coverage.required_fingerprints, 1);
+    assert.equal(result.target_date_coverage.indexed_chunk_count, null);
+    assert.equal(result.target_date_coverage.matched_fingerprints, null);
+    assert.equal(result.target_date_coverage.missing_fingerprints, null);
+  } finally {
+    fixture.cleanup();
   }
 });

@@ -4,6 +4,7 @@ const { createHash } = require("node:crypto");
 const { readFileSync, statSync } = require("node:fs");
 const { resolve, relative, sep, isAbsolute } = require("node:path");
 const { parseSmartAddEntries } = require("../lib/smart-add-entry-contract.cjs");
+const { getCoreStoreDescriptor } = require("../lib/db/core-store.cjs");
 
 const SMART_ADD_FINGERPRINT_RE = /<!--\s*smart-add-fingerprint:\s*([a-f0-9]{8,64})\s*-->/gi;
 
@@ -29,17 +30,32 @@ async function loadRuntimeDeps() {
 function withDb(fn, dbPath) {
   const db = new Database(dbPath, { readonly: true });
   try {
+    getCoreStoreDescriptor(db, { schema: "main" });
     return fn(db);
   } finally {
     db.close();
   }
 }
 
-function safeWithDb(fn, dbPath, fallbackValue = null, withDbImpl = withDb) {
+function coreReadErrorStatus(error) {
+  const message = String(error?.message || error);
+  if (error?.code === "CORE_SCHEMA_UNSUPPORTED"
+    || /^Unsupported OpenClaw Core store schema\b/i.test(message)
+    || /no such column:/i.test(message)) {
+    return "schema_unsupported";
+  }
+  return "query_error";
+}
+
+function safeWithDb(fn, dbPath, withDbImpl = withDb) {
   try {
-    return { value: withDbImpl(fn, dbPath), error: null };
+    return { status: "ok", value: withDbImpl(fn, dbPath), error: null };
   } catch (error) {
-    return { value: fallbackValue, error: String(error?.message || error) };
+    return {
+      status: coreReadErrorStatus(error),
+      value: null,
+      error: String(error?.message || error),
+    };
   }
 }
 
@@ -63,9 +79,12 @@ function extractCoreChunkFingerprints(text) {
 }
 
 function readTargetIndexedContentEvidence(db, targetPath) {
+  getCoreStoreDescriptor(db, { schema: "main" });
   const columns = new Set(db.prepare("PRAGMA table_info(chunks)").all().map(row => String(row.name)));
   if (!columns.has("path") || !columns.has("text")) {
-    return { path_present: false, chunk_count: 0, fingerprints: [], error: "Core chunks path/text columns unavailable" };
+    const error = new Error("Core chunks path/text columns unavailable");
+    error.code = "CORE_SCHEMA_UNSUPPORTED";
+    throw error;
   }
   const rows = db.prepare("SELECT text FROM chunks WHERE path = ?").all(targetPath);
   const fingerprints = new Set();
@@ -73,6 +92,7 @@ function readTargetIndexedContentEvidence(db, targetPath) {
     for (const fingerprint of extractCoreChunkFingerprints(row.text)) fingerprints.add(fingerprint);
   }
   return {
+    status: "ok",
     path_present: rows.length > 0,
     chunk_count: rows.length,
     fingerprints: [...fingerprints],
@@ -113,16 +133,19 @@ function assessTargetDateCoverage({
   sourceAfterError,
   indexedResult,
 }) {
+  const requiredFingerprints = sourceBefore?.fingerprints instanceof Set
+    ? sourceBefore.fingerprints.size
+    : null;
   const coverage = {
     status: "unverified",
     target_date: targetDate,
     path: targetPath,
-    required_fingerprints: sourceBefore?.fingerprints?.size || 0,
-    matched_fingerprints: 0,
-    missing_fingerprints: sourceBefore?.fingerprints?.size || 0,
+    required_fingerprints: requiredFingerprints,
+    matched_fingerprints: null,
+    missing_fingerprints: null,
     source_stable: false,
-    indexed_path_present: indexedResult?.path_present === true,
-    indexed_chunk_count: Number(indexedResult?.chunk_count) || 0,
+    indexed_path_present: null,
+    indexed_chunk_count: null,
     reason: null,
   };
 
@@ -147,10 +170,35 @@ function assessTargetDateCoverage({
     coverage.reason = "target file was outside the enumerated index scan scope";
     return coverage;
   }
-  if (indexedResult?.error) {
-    coverage.status = "read_error";
+  if (indexedResult?.status === "schema_unsupported" || indexedResult?.status === "query_error") {
+    coverage.status = indexedResult.status;
     coverage.reason = indexedResult.error;
     return coverage;
+  }
+  if (indexedResult?.error || indexedResult?.status === "read_error") {
+    coverage.status = "query_error";
+    coverage.reason = indexedResult.error || "Core target read failed";
+    return coverage;
+  }
+  if (!indexedResult || (indexedResult.status && indexedResult.status !== "ok")) {
+    coverage.status = "query_error";
+    coverage.reason = "Core target read did not return a successful result";
+    return coverage;
+  }
+  if (typeof indexedResult.path_present !== "boolean"
+    || !Number.isInteger(indexedResult.chunk_count)
+    || indexedResult.chunk_count < 0
+    || !Array.isArray(indexedResult.fingerprints)) {
+    coverage.status = "query_error";
+    coverage.reason = "Core target read returned an invalid result shape";
+    return coverage;
+  }
+
+  coverage.indexed_path_present = indexedResult.path_present;
+  coverage.indexed_chunk_count = indexedResult.chunk_count;
+  if (requiredFingerprints !== null) {
+    coverage.matched_fingerprints = 0;
+    coverage.missing_fingerprints = requiredFingerprints;
   }
   if (!indexedResult?.path_present) {
     coverage.status = "missing";
@@ -281,8 +329,8 @@ async function runSyncMemoryIndex({
   const dbPathBefore = statusBefore?.dbPath || CORE_DB_PATH;
   const scannedFiles = collectIndexedFiles(memoryRoot, INDEX_SYNC_WATCH_DIRS);
   const scannedPaths = scannedFiles.map(file => file.relPath);
-  const beforeResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPathBefore, { paths: [], updatedAt: {} }, withDbImpl);
-  const before = beforeResult.value;
+  const beforeResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPathBefore, withDbImpl);
+  const before = beforeResult.status === "ok" ? beforeResult.value : null;
   const dirtyBefore = Boolean(statusBefore?.dirty);
   const openClawCliSync = openClawCliSyncImpl || runOpenClawMemoryIndexCli;
   const targetPath = targetDate ? `memory/smart-add/${targetDate}.md` : null;
@@ -337,11 +385,15 @@ async function runSyncMemoryIndex({
   }
 
   const dbPath = statusAfter?.dbPath || statusBefore?.dbPath || CORE_DB_PATH;
-  const afterResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPath, { paths: [], updatedAt: {} }, withDbImpl);
-  const after = afterResult.value;
-  const indexedCount = after.paths.length;
-  const updatedCount = after.paths.filter(path => (before.updatedAt[path] ?? null) !== (after.updatedAt[path] ?? null)).length;
-  const skippedCount = scannedPaths.filter(path => !after.paths.includes(path)).length;
+  const afterResult = safeWithDb(db => readIndexedPathState(db, scannedPaths), dbPath, withDbImpl);
+  const after = afterResult.status === "ok" ? afterResult.value : null;
+  const indexedCount = after ? after.paths.length : null;
+  const updatedCount = after && before
+    ? after.paths.filter(path => (before.updatedAt[path] ?? null) !== (after.updatedAt[path] ?? null)).length
+    : null;
+  const skippedCount = after
+    ? scannedPaths.filter(path => !after.paths.includes(path)).length
+    : null;
 
   const sourceAfterResult = targetPath && targetPathSafe
     ? (() => {
@@ -350,8 +402,8 @@ async function runSyncMemoryIndex({
     })()
     : { value: null, error: targetPath ? "unsafe target path" : null };
   const indexedTargetResult = targetPath && targetPathSafe
-    ? safeWithDb(db => readTargetIndexedContentEvidenceImpl(db, targetPath), dbPath, null, withDbImpl)
-    : { value: null, error: targetPath ? "unsafe target path" : null };
+    ? safeWithDb(db => readTargetIndexedContentEvidenceImpl(db, targetPath), dbPath, withDbImpl)
+    : { status: targetPath ? "query_error" : "ok", value: null, error: targetPath ? "unsafe target path" : null };
   const targetCoverage = targetDate
     ? assessTargetDateCoverage({
       targetDate,
@@ -361,24 +413,31 @@ async function runSyncMemoryIndex({
       sourceAfter: sourceAfterResult.value,
       sourceBeforeError: sourceBeforeResult.error,
       sourceAfterError: sourceAfterResult.error,
-      indexedResult: indexedTargetResult.error
-        ? { error: indexedTargetResult.error }
-        : indexedTargetResult.value,
+      indexedResult: indexedTargetResult.status === "ok"
+        ? indexedTargetResult.value
+        : { status: indexedTargetResult.status, error: indexedTargetResult.error },
     })
     : { status: "not_requested", target_date: null, path: null, reason: null };
 
   const output = {
-    ok: invocation.status === "succeeded" && (targetCoverage.status === "complete" || targetCoverage.status === "not_requested"),
+    ok: invocation.status === "succeeded"
+      && beforeResult.status === "ok"
+      && afterResult.status === "ok"
+      && (targetCoverage.status === "complete" || targetCoverage.status === "not_requested"),
     reason: "cli-sync",
     force,
     memory_root: memoryRoot,
     db_path: dbPath,
     index_invocation: invocation,
     target_date_coverage: targetCoverage,
+    db_status_before: beforeResult.status,
+    db_status_after: afterResult.status,
     db_error_before: beforeResult.error,
     db_error_after: afterResult.error,
     dirty_before: dirtyBefore,
     file_scan: {
+      status: afterResult.status,
+      baseline_status: beforeResult.status,
       total: scannedPaths.length,
       indexed: indexedCount,
       updated: updatedCount,
@@ -418,4 +477,6 @@ module.exports = {
   runSyncMemoryIndex,
   main,
   runOpenClawMemoryIndexCli,
+  withDb,
+  readTargetIndexedContentEvidence,
 };
