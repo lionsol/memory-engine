@@ -45,6 +45,10 @@ const { parseSmartAddEntries } = require("../lib/smart-add-entry-contract.cjs");
 const MAX_PENDING_RETRY_FILES = 7;
 const MAX_PENDING_RETRY_ENTRIES = 50;
 
+function nonNegativeSafeIntegerOrNull(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
 function currentIsoString() {
   return new Date(getRuntime().now()).toISOString();
 }
@@ -629,8 +633,9 @@ async function main(argv = process.argv.slice(2)) {
           const invocation = result?.index_invocation || { status: "unverified", error: null };
           const coverage = result?.target_date_coverage || { status: "unverified", reason: "target-date coverage evidence missing" };
           const expectedPath = `memory/smart-add/${targetDate}.md`;
-          const requiredFingerprints = Number(coverage.required_fingerprints);
-          const matchedFingerprints = Number(coverage.matched_fingerprints);
+          const requiredFingerprints = nonNegativeSafeIntegerOrNull(coverage.required_fingerprints);
+          const matchedFingerprints = nonNegativeSafeIntegerOrNull(coverage.matched_fingerprints);
+          const missingFingerprints = nonNegativeSafeIntegerOrNull(coverage.missing_fingerprints);
           const invocationComplete = invocation.status === "succeeded";
           const coverageComplete = coverage.status === "complete"
             && coverage.target_date === targetDate
@@ -656,11 +661,9 @@ async function main(argv = process.argv.slice(2)) {
               status: coverage.status || "unverified",
               target_date: coverage.target_date || null,
               path: coverage.path || null,
-              required_fingerprints: Number.isSafeInteger(requiredFingerprints) ? requiredFingerprints : null,
-              matched_fingerprints: Number.isSafeInteger(matchedFingerprints) ? matchedFingerprints : null,
-              missing_fingerprints: Number.isSafeInteger(Number(coverage.missing_fingerprints))
-                ? Number(coverage.missing_fingerprints)
-                : null,
+              required_fingerprints: requiredFingerprints,
+              matched_fingerprints: matchedFingerprints,
+              missing_fingerprints: missingFingerprints,
               reason: coverage.reason || null,
             },
             indexed_files: result?.file_scan?.indexed ?? null,
@@ -679,6 +682,11 @@ async function main(argv = process.argv.slice(2)) {
       }
     }
     console.log(`[checkpoint] Core index ingress ${JSON.stringify(coreIngestion)}`);
+    const coreTargetDateCoverageCounts = {
+      required_fingerprints: coreIngestion.target_date_coverage?.required_fingerprints ?? null,
+      matched_fingerprints: coreIngestion.target_date_coverage?.matched_fingerprints ?? null,
+      missing_fingerprints: coreIngestion.target_date_coverage?.missing_fingerprints ?? null,
+    };
 
     // Reconciliation must settle the flushed session_flush input before it is
     // collected for LLM extraction. The sanctioned OpenClaw index ingress
@@ -813,6 +821,7 @@ async function main(argv = process.argv.slice(2)) {
         core_ingestion: coreIngestion.status,
         core_index_invocation: coreIngestion.index_invocation?.status || "unknown",
         core_target_date_coverage: coreIngestion.target_date_coverage?.status || "unknown",
+        core_target_date_coverage_counts: coreTargetDateCoverageCounts,
         input_complete: false,
         budget_coverage_complete: diagnostics.budgetCoverageComplete,
         budget_uncovered_entries: diagnostics.budgetUncoveredEntries,
@@ -922,6 +931,7 @@ async function main(argv = process.argv.slice(2)) {
       core_ingestion: coreIngestion.status,
       core_index_invocation: coreIngestion.index_invocation?.status || "unknown",
       core_target_date_coverage: coreIngestion.target_date_coverage?.status || "unknown",
+      core_target_date_coverage_counts: coreTargetDateCoverageCounts,
       input_complete: engineReconciliation?.target_date_input_complete === true,
       budget_coverage_complete: diagnostics.budgetCoverageComplete !== false,
       budget_uncovered_entries: diagnostics.budgetUncoveredEntries,

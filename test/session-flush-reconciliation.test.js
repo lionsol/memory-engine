@@ -1731,6 +1731,77 @@ test("Core index ingress failure blocks Engine and LLM completion", async () => 
   }
 });
 
+test("Core query error preserves unknown target coverage counts and blocks Engine and LLM", async () => {
+  const fixture = createFixture();
+  const calls = [];
+  const logs = [];
+  const originalLog = console.log;
+  const originalError = console.error;
+  try {
+    console.log = (...parts) => logs.push(parts.join(" "));
+    console.error = (...parts) => logs.push(parts.join(" "));
+    await assert.rejects(() => withFixtureRuntime(fixture, () => checkpoint.main(["--target-date", "2026-08-10"]), {
+      flushCheckpointRawLog: () => { calls.push("flush"); return { ok: true }; },
+      syncCoreMemoryIndex: async ({ targetDate }) => {
+        calls.push("core_index");
+        return {
+          ok: false,
+          index_invocation: { status: "succeeded", via: "isolated_fixture" },
+          target_date_coverage: {
+            status: "query_error",
+            target_date: targetDate,
+            path: `memory/smart-add/${targetDate}.md`,
+            required_fingerprints: 4,
+            matched_fingerprints: null,
+            missing_fingerprints: null,
+            reason: "target query failed",
+          },
+        };
+      },
+      reconcileSessionFlushManagedState: async () => {
+        calls.push("engine");
+        throw new Error("Engine must not run after Core query error");
+      },
+      readCheckpointRawLogs: () => { calls.push("collect"); return []; },
+      llmNightlyExtract: async () => { calls.push("llm"); throw new Error("LLM must not run"); },
+    }), error => {
+      assert.equal(error.businessStatus.status, "input_incomplete");
+      assert.equal(error.businessStatus.core_ingestion, "failed");
+      assert.deepEqual(error.businessStatus.core_target_date_coverage_counts, {
+        required_fingerprints: 4,
+        matched_fingerprints: null,
+        missing_fingerprints: null,
+      });
+      return true;
+    });
+
+    const coreLog = logs.find(line => line.startsWith("[checkpoint] Core index ingress "));
+    const coreIngestion = JSON.parse(coreLog.slice("[checkpoint] Core index ingress ".length));
+    assert.deepEqual({
+      required_fingerprints: coreIngestion.target_date_coverage.required_fingerprints,
+      matched_fingerprints: coreIngestion.target_date_coverage.matched_fingerprints,
+      missing_fingerprints: coreIngestion.target_date_coverage.missing_fingerprints,
+    }, {
+      required_fingerprints: 4,
+      matched_fingerprints: null,
+      missing_fingerprints: null,
+    });
+
+    const businessLog = logs.find(line => line.startsWith("[checkpoint] Business status "));
+    const businessStatus = JSON.parse(businessLog.slice("[checkpoint] Business status ".length));
+    assert.deepEqual(businessStatus.core_target_date_coverage_counts, {
+      required_fingerprints: 4,
+      matched_fingerprints: null,
+      missing_fingerprints: null,
+    });
+    assert.deepEqual(calls, ["flush", "core_index", "collect"]);
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+    fixture.cleanup();
+  }
+});
+
 test("successful Core index invocation with failed target post-read blocks Engine reconciliation and LLM", async () => {
   for (const coverage of [
     { status: "read_error", reason: "target file post-read failed" },
