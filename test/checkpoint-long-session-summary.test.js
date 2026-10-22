@@ -14,6 +14,7 @@ const { createSummaryProvider, LIMITS } = require("../lib/checkpoint/bounded-sum
 const { withRuntime } = require("../lib/checkpoint/runtime");
 const { nightlyCheckpoint, main } = require("../bin/session-checkpoint");
 const { snapshotEpisode, publishEpisode } = require("../lib/checkpoint/episode-publication");
+const { withFakeHttps, emitJson, completion } = require("./checkpoint-summary-http-fixture.cjs");
 
 const rawLog = require("../lib/checkpoint/raw-log");
 const contract = require("../lib/smart-add-entry-contract.cjs");
@@ -344,3 +345,113 @@ test("full main reports segmented daily coverage separately from original clippi
     assert.equal(result.businessStatus.vector_limit_backlog, 1870);
   });
 });
+
+test("real JS main + HTTPS decoder: 22,932 source and three same-day entries complete within original limits", async () => {
+  const entries = [entry(source()), ...[366,356,360].map((size, index) => entry(source(size), "other-" + index))];
+  await fixture(async ({ read, path, overrides }) => {
+    await withFakeHttps(async requests => {
+      const result = await withRuntime({ ...overrides, readCheckpointRawLogs: read, summaryProviders: PROVIDERS,
+        flushCheckpointRawLog: () => ({ ok: true }),
+        syncCoreMemoryIndex: () => ({ ok: true, index_invocation: { status: "succeeded" },
+          target_date_coverage: { status: "complete", target_date: DATE, path: "memory/smart-add/" + DATE + ".md",
+            required_fingerprints: 4, matched_fingerprints: 4, missing_fingerprints: 0 } }),
+        reconcileSessionFlushManagedState: () => ({ ok: true, target_date_input_complete: true, eligibleCoreRows: [] }),
+        repairOrphanVectors: () => ({ lance_membership_complete: false, lance_vector_validation_complete: false,
+          lance_completion_state: "limit_backlog", lance_limit_backlog_remaining: 1860 }),
+        resolveConfigConflicts: () => 0,
+      }, () => main(["--target-date", DATE]));
+      const report = result.businessStatus.segmented_summary;
+      assert.equal(requests.length, 6);
+      assert.equal(report.source_chars, 22932);
+      assert.equal(report.entries.length, 4);
+      assert.equal(report.calls_complete, true);
+      assert.equal(report.output_structure_valid, true);
+      assert.equal(report.references_valid, true);
+      assert.equal(report.day_coverage_complete, true);
+      assert.equal(report.semantic_accuracy, "not_verified");
+      assert.ok(report.segments.every(segment => segment.status === "validated"));
+      assert.equal(report.provider.attempts, 6);
+      assert.ok(report.provider.input_chars <= 80000);
+      assert.ok(report.provider.output_reserved <= 14000);
+      assert.ok(report.retained_output_chars <= 7000);
+      assert.equal(result.businessStatus.summary_status, "valid_summary");
+      assert.equal(result.businessStatus.summary_input_complete, true);
+      assert.equal(result.businessStatus.budget_coverage_complete, false);
+      assert.equal(result.businessStatus.business_complete, false);
+      assert.equal(result.businessStatus.vector_limit_backlog, 1860);
+      assert.match(readFileSync(path, "utf8"), /Long session plus/);
+      assert.equal(readFileSync(report.publication.backup, "utf8"), "OLD SUMMARY");
+    }, (request, callback) => {
+      const prompt = request.body.messages[0].content;
+      const object = response(prompt);
+      if (prompt.includes("\nSOURCE\n")) {
+        const header = prompt.split("\nSOURCE\n")[0];
+        assert.ok(header.length + 8 <= 800);
+        assert.match(header, /Exactly one evidence/);
+        object.evidence[0].text = "😀".repeat(80);
+      } else {
+        const other = JSON.parse(prompt.split("\nOTHER\n")[1]);
+        assert.equal(other.length, 3);
+        assert.deepEqual(other.map(item => item.text.length), [366,356,360]);
+      }
+      assert.ok(JSON.stringify(object).length <= (prompt.includes("\nSOURCE\n") ? 600 : 4000));
+      emitJson(callback, completion(JSON.stringify(object)), { bytewise: true });
+    });
+  }, { entries });
+});
+
+for (const kind of ["content", "response_envelope", "provider_tokens"]) {
+  test("real nightly/HTTPS " + kind + " failure preserves old episode and marks first map failed", async () => {
+    await fixture(async ({ read, path }) => {
+      const logs = read({ targetDate: DATE });
+      await withFakeHttps(async requests => {
+        const result = await summarizeLongSession(logs, options(logs, undefined));
+        assert.equal(result.ok, false);
+        assert.equal(result.report.reason, "output_budget");
+        assert.equal(result.report.failure_stage, "map_request");
+        assert.equal(result.report.segments[0].status, "failed");
+        assert.equal(result.report.segments[0].reason, "output_budget");
+        assert.ok(result.report.segments.slice(1).every(part => part.status === "pending"));
+        assert.equal(result.report.source_range_coverage, true);
+        assert.equal(result.report.calls_complete, false);
+        assert.equal(result.report.day_coverage_complete, false);
+        assert.equal(result.report.published, false);
+        assert.equal(requests.length, 1);
+        assert.equal(result.report.provider.attempts, 1);
+        assert.equal(result.report.provider.calls[0].output_budget_kind, kind);
+        assert.equal(readFileSync(path, "utf8"), "OLD SUMMARY");
+      }, (_, callback) => emitJson(callback, kind === "response_envelope"
+        ? completion("short", "stop", { reasoning_content: "private".repeat(2000) })
+        : kind === "provider_tokens" ? completion('{"evidence":', "length")
+        : completion("x".repeat(601))));
+    });
+  });
+}
+
+for (const scenario of ["multiple_evidence", "long_text", "extra_keys", "narrow_range", "invalid_unicode"]) {
+  test("map contract rejects " + scenario + " before reducer and preserves old episode", async () => {
+    await fixture(async ({ read, path }) => {
+      const logs = read({ targetDate: DATE });
+      let attempts = 0;
+      const result = await summarizeLongSession(logs, options(logs, async prompt => {
+        attempts++;
+        const object = response(prompt);
+        if (scenario === "multiple_evidence") object.evidence.push({ ...object.evidence[0] });
+        if (scenario === "long_text") object.evidence[0].text = "x".repeat(161);
+        if (scenario === "extra_keys") object.unexpected = true;
+        if (scenario === "narrow_range") object.evidence[0].start++;
+        if (scenario === "invalid_unicode") object.evidence[0].text = "\ud800";
+        const raw = JSON.stringify(object);
+        assert.ok(raw.length <= 600);
+        return raw;
+      }));
+      assert.equal(result.ok, false);
+      assert.equal(attempts, 1);
+      assert.equal(result.report.segments[0].status, "failed");
+      assert.equal(result.report.failure_stage, scenario === "narrow_range" ? "map_references" : "map_structure");
+      assert.equal(result.report.reason, scenario === "narrow_range" ? "map_reference" : scenario === "long_text" ? "map_text_budget" : "map_structure");
+      assert.equal(result.report.published, false);
+      assert.equal(readFileSync(path, "utf8"), "OLD SUMMARY");
+    });
+  });
+}

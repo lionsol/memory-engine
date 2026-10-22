@@ -63,6 +63,36 @@ requires 450 seconds still available before starting. Scheduler timeouts may
 remain stricter. Per-attempt metadata progress avoids a silent multi-minute
 map phase. No provider response text is logged.
 
+## Compact map output and budget diagnostics
+
+Each map returns exactly one evidence object, with only the documented keys.
+The evidence text is nonempty, well-formed Unicode and at most 160 UTF-16 units.
+The segment ID/hash and complete segment start/end are copied from request
+metadata; invented offsets, a narrower range, extra fields or a second evidence
+item are rejected. The entire serialized response, including JSON escaping,
+must still fit 600 units. This is a tighter, single-summary format within the
+original budget, not an increase of the source/request/output/round limits.
+
+The evidence range denotes the segment supplied to the extraction request.
+Matching that range/hash proves mechanical input association, not that every
+fact was retained or the summary is accurate. A short map can omit detail;
+real semantic quality remains unverified. Prompt compliance is not guaranteed.
+
+Provider max_tokens and the local UTF-16 cap are distinct units and are now
+logged separately. Output failures retain a fixed category: content,
+response_envelope, provider_tokens (finish_reason=length) or content_type.
+Numeric observed content/decoded-envelope lengths are included only when
+measured; unknown lengths remain absent. The envelope cap remains output*8+4096
+decoded UTF-16 units (8,896 for a map). Counts are not raw provider text.
+Arbitrary finish reasons/errors, response bodies and credentials are not copied
+to diagnostics. Output exhaustion remains terminal without fallback/retry.
+
+A bounded response with finish_reason=length cannot count as a complete map
+even if the received content is short and syntactically valid. Ordinary
+llmComplete callers without a response cap retain their existing behavior.
+The failed segment is marked failed with failure_stage and reason; later,
+unattempted segments remain pending. Old-episode protections remain unchanged.
+
 ## Completion and publication
 
 Source-range coverage, call completion, output structure, references, daily
