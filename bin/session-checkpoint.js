@@ -360,6 +360,20 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   const combinedText = assessment.combinedText;
 
   if (options.rawLogStats?.budgetCoverageComplete === false) {
+    const segmented = await require("../lib/checkpoint/long-session-summary").summarizeLongSession(rawLogs, {
+      targetDate: episodeDate, stats: options.rawLogStats, inputReady: options.inputReady === true,
+      parentDeadline: options.parentDeadline, signal: options.signal,
+      transport: getRuntime().summaryTransport, providers: getRuntime().summaryProviders,
+      generatedAt, diagnostics,
+    });
+    if (segmented) {
+      console.log(`[checkpoint] Segmented summary ${JSON.stringify(segmented.report)}`);
+      return {
+        status: segmented.ok ? "valid_summary" : "input_incomplete",
+        memories: 0, episode: segmented.ok, configs: 0, skipped: !segmented.ok,
+        reason: segmented.report.reason, writes: writeStats, segmented: segmented.report,
+      };
+    }
     writeIncompleteEpisode(episodeDate, allLogs.length, {
       ...diagnostics,
       incompleteReason: "budget_coverage_incomplete",
@@ -606,6 +620,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
 
 async function main(argv = process.argv.slice(2)) {
   const start = Date.now();
+  const checkpointDeadline = require("node:perf_hooks").performance.now() + 900000;
   const options = parseCliArgs(argv);
   const targetDate = resolveTargetDate(options);
   console.log(`[checkpoint] === Session Checkpoint ${todayDateStr()} ===`);
@@ -843,8 +858,11 @@ async function main(argv = process.argv.slice(2)) {
     const pendingRecovery = retryPendingCheckpointEntries();
     console.log(`[checkpoint] Pending generated-entry recovery ${JSON.stringify(pendingRecovery)}`);
 
-    // Step 2: Unified nightly checkpoint (1 LLM call → 3 outputs)
-    const result = await nightlyCheckpoint(rawLogs, { targetDate, rawLogStats });
+    // Step 2: Ordinary extraction or the bounded, fully covered long-session summary.
+    const result = await nightlyCheckpoint(rawLogs, { targetDate, rawLogStats,
+      inputReady: engineComplete && coreIngestion.status === "complete",
+      parentDeadline: checkpointDeadline,
+    });
 
     // Step 2.5: Reconcile only active session_flush Engine IDs into LanceDB.
     // This remains after LLM extraction: Engine convergence gates the input,
@@ -917,12 +935,19 @@ async function main(argv = process.argv.slice(2)) {
       || (lanceSummary?.lance_membership_complete === true
         && lanceSummary?.lance_vector_validation_complete === true);
     const vectorTaskBlockedByIsolation = Number(lanceSummary?.lance_skipped_unknown_legacy || 0) > 0;
+    const summaryInputComplete = diagnostics.budgetCoverageComplete !== false
+      || result.segmented?.day_coverage_complete === true;
+    const publicationComplete = result.segmented?.publication?.cleanup_complete !== false
+      && result.segmented?.publication?.mirror?.status !== "failed";
     const businessStatus = {
-      status: diagnostics.budgetCoverageComplete === false
+      publication_complete: publicationComplete,
+      segmented_summary: result.segmented || null,
+      summary_input_complete: summaryInputComplete,
+      status: !summaryInputComplete
         || engineReconciliation?.target_date_input_complete !== true
         ? "input_incomplete"
         : result.status || (result.timeout ? "timeout" : result.skipped ? "placeholder_skipped" : "valid_summary"),
-      business_complete: diagnostics.budgetCoverageComplete !== false
+      business_complete: summaryInputComplete && publicationComplete
         && engineReconciliation?.target_date_input_complete === true
         && result.status === "valid_summary"
         && vectorTaskComplete
@@ -953,7 +978,7 @@ async function main(argv = process.argv.slice(2)) {
     };
     console.log(`[checkpoint] Business status ${JSON.stringify(businessStatus)}`);
     return {
-      ok: businessStatus.status !== "input_incomplete"
+      ok: publicationComplete && businessStatus.status !== "input_incomplete"
         && businessStatus.status !== "timeout"
         && businessStatus.vector_validation_state !== "conflict"
         && lanceSummary?.ok !== false,
