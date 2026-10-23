@@ -58,6 +58,16 @@ function response(prompt) {
     references: [...maps.map(item => ({ segment_id: item.segment_id,
       start: item.evidence[0].start, end: item.evidence[0].end })), ...other.map(item => ({ entry_id: item.id }))] };
 }
+// Synthetic shape/size fixture only: the real 347-unit response body was not retained.
+function mapResponseOfSize(prompt, size) {
+  const object = response(prompt);
+  object.evidence[0].text = "";
+  const remaining = size - JSON.stringify(object).length;
+  assert.ok(remaining > 160);
+  object.evidence[0].text = "😀".repeat(Math.floor(remaining / 2)) + (remaining % 2 ? "界" : "");
+  assert.equal(JSON.stringify(object).length, size);
+  return object;
+}
 async function fixture(fn, { entries = [entry(source()), entry("**User:** other daily decision", "other")] } = {}) {
   const root = mkdtempSync(join(tmpdir(), "checkpoint-segments-"));
   const episodes = join(root, "episodes");
@@ -346,7 +356,7 @@ test("full main reports segmented daily coverage separately from original clippi
   });
 });
 
-test("real JS main + HTTPS decoder: 22,932 source and three same-day entries complete within original limits", async () => {
+test("real JS main + HTTPS decoder: 347-unit maps with 22,932 source and three same-day entries", async () => {
   const entries = [entry(source()), ...[366,356,360].map((size, index) => entry(source(size), "other-" + index))];
   await fixture(async ({ read, path, overrides }) => {
     await withFakeHttps(async requests => {
@@ -371,6 +381,7 @@ test("real JS main + HTTPS decoder: 22,932 source and three same-day entries com
       assert.equal(report.semantic_accuracy, "not_verified");
       assert.ok(report.segments.every(segment => segment.status === "validated"));
       assert.equal(report.provider.attempts, 6);
+      assert.ok(report.provider.calls.filter(call => call.kind === "map").every(call => call.output_chars === 347));
       assert.ok(report.provider.input_chars <= 80000);
       assert.ok(report.provider.output_reserved <= 14000);
       assert.ok(report.retained_output_chars <= 7000);
@@ -383,12 +394,12 @@ test("real JS main + HTTPS decoder: 22,932 source and three same-day entries com
       assert.equal(readFileSync(report.publication.backup, "utf8"), "OLD SUMMARY");
     }, (request, callback) => {
       const prompt = request.body.messages[0].content;
-      const object = response(prompt);
+      const object = prompt.includes("\nSOURCE\n") ? mapResponseOfSize(prompt, 347) : response(prompt);
       if (prompt.includes("\nSOURCE\n")) {
         const header = prompt.split("\nSOURCE\n")[0];
         assert.ok(header.length + 8 <= 800);
         assert.match(header, /Exactly one evidence/);
-        object.evidence[0].text = "😀".repeat(80);
+        assert.ok(object.evidence[0].text.length > 160);
       } else {
         const other = JSON.parse(prompt.split("\nOTHER\n")[1]);
         assert.equal(other.length, 3);
@@ -428,7 +439,47 @@ for (const kind of ["content", "response_envelope", "provider_tokens"]) {
   });
 }
 
-for (const scenario of ["multiple_evidence", "long_text", "extra_keys", "narrow_range", "invalid_unicode"]) {
+
+for (const size of [347, 600, 601]) {
+  test("real map JSON of " + size + " UTF-16 units obeys the total response cap without a text sublimit", async () => {
+    await fixture(async ({ read, path }) => {
+      const logs = read({ targetDate: DATE });
+      await withFakeHttps(async requests => {
+        const result = await summarizeLongSession(logs, options(logs, undefined));
+        if (size <= 600) {
+          assert.equal(result.ok, true);
+          assert.equal(requests.length, 6);
+          assert.equal(result.report.calls_complete, true);
+          assert.equal(result.report.references_valid, true);
+          assert.equal(result.report.day_coverage_complete, true);
+          assert.equal(result.report.semantic_accuracy, "not_verified");
+          assert.ok(result.report.provider.calls.filter(call => call.kind === "map")
+            .every(call => call.output_chars === size && call.output_limit_chars === 600));
+          assert.equal(result.report.published, true);
+          assert.equal(readFileSync(result.report.publication.backup, "utf8"), "OLD SUMMARY");
+        } else {
+          assert.equal(result.ok, false);
+          assert.equal(requests.length, 1);
+          assert.equal(result.report.reason, "output_budget");
+          assert.equal(result.report.failure_stage, "map_request");
+          assert.equal(result.report.segments[0].status, "failed");
+          assert.equal(result.report.provider.attempts, 1);
+          assert.equal(result.report.provider.calls[0].output_budget_kind, "content");
+          assert.equal(result.report.provider.calls[0].observed_output_chars, 601);
+          assert.equal(result.report.provider.calls[0].output_limit_chars, 600);
+          assert.equal(result.report.published, false);
+          assert.equal(readFileSync(path, "utf8"), "OLD SUMMARY");
+        }
+      }, (request, callback) => {
+        const prompt = request.body.messages[0].content;
+        const object = prompt.includes("\nSOURCE\n") ? mapResponseOfSize(prompt, size) : response(prompt);
+        emitJson(callback, completion(JSON.stringify(object)), { bytewise: true });
+      });
+    });
+  });
+}
+
+for (const scenario of ["multiple_evidence", "extra_keys", "narrow_range", "invalid_unicode"]) {
   test("map contract rejects " + scenario + " before reducer and preserves old episode", async () => {
     await fixture(async ({ read, path }) => {
       const logs = read({ targetDate: DATE });
@@ -437,7 +488,6 @@ for (const scenario of ["multiple_evidence", "long_text", "extra_keys", "narrow_
         attempts++;
         const object = response(prompt);
         if (scenario === "multiple_evidence") object.evidence.push({ ...object.evidence[0] });
-        if (scenario === "long_text") object.evidence[0].text = "x".repeat(161);
         if (scenario === "extra_keys") object.unexpected = true;
         if (scenario === "narrow_range") object.evidence[0].start++;
         if (scenario === "invalid_unicode") object.evidence[0].text = "\ud800";
@@ -449,7 +499,7 @@ for (const scenario of ["multiple_evidence", "long_text", "extra_keys", "narrow_
       assert.equal(attempts, 1);
       assert.equal(result.report.segments[0].status, "failed");
       assert.equal(result.report.failure_stage, scenario === "narrow_range" ? "map_references" : "map_structure");
-      assert.equal(result.report.reason, scenario === "narrow_range" ? "map_reference" : scenario === "long_text" ? "map_text_budget" : "map_structure");
+      assert.equal(result.report.reason, scenario === "narrow_range" ? "map_reference" : "map_structure");
       assert.equal(result.report.published, false);
       assert.equal(readFileSync(path, "utf8"), "OLD SUMMARY");
     });

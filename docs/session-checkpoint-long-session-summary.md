@@ -66,12 +66,12 @@ map phase. No provider response text is logged.
 ## Compact map output and budget diagnostics
 
 Each map returns exactly one evidence object, with only the documented keys.
-The evidence text is nonempty, well-formed Unicode and at most 160 UTF-16 units.
-The segment ID/hash and complete segment start/end are copied from request
-metadata; invented offsets, a narrower range, extra fields or a second evidence
-item are rejected. The entire serialized response, including JSON escaping,
-must still fit 600 units. This is a tighter, single-summary format within the
-original budget, not an increase of the source/request/output/round limits.
+The evidence text is nonempty, well-formed Unicode. There is no independent
+160-unit text limit: text and JSON metadata share the 600-unit serialized
+response budget, including escaping. The segment ID/hash and complete segment
+start/end are copied from request metadata; invented offsets, a narrower range,
+extra fields or a second evidence item are rejected. Source/request/output/round
+limits are unchanged.
 
 The evidence range denotes the segment supplied to the extraction request.
 Matching that range/hash proves mechanical input association, not that every

@@ -1,5 +1,11 @@
 # Map output contract and bounded-response diagnostics
 
+> Historical record for the 5446b52 implementation. Its 160-unit evidence-text
+> sublimit caused a later real-run rejection inside the 600-unit total cap.
+> The follow-up removes that sublimit; see
+> [text-sublimit correction](session-checkpoint-map-text-sublimit-removal-validation.md)
+> for the current behavior and verification.
+
 Status: implemented and tested in an isolated worktree; not committed or deployed.
 
 - Product base: `93aa1e077787fa3774f16e18be97edc925322444`.
