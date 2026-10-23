@@ -93,6 +93,35 @@ llmComplete callers without a response cap retain their existing behavior.
 The failed segment is marked failed with failure_stage and reason; later,
 unattempted segments remain pending. Old-episode protections remain unchanged.
 
+## Reducer manifest contract and diagnostics
+
+METADATA now explicitly supplies target_date, covered_segment_ids and
+covered_entry_ids. The reducer must copy them exactly, including the long-source
+entry and every other eligible entry; it must not rename/coerce IDs, omit,
+duplicate or add members. Order is immaterial. References still require an
+exact evidence range for every segment and an entry_id for every OTHER entry.
+The long source is referenced by segment ranges, not by an OTHER-entry reference.
+
+Failures distinguish reducer_target_date, reducer_segment_coverage,
+reducer_entry_coverage, reducer_structure and reducer_reference. Syntax-invalid
+JSON and valid JSON with a non-object root are distinct diagnostic states.
+reducer_validation records the safe expected manifest, missing/duplicate
+expected IDs, unexpected and wrong-type counts, structure errors and reference
+range/coverage failures. Unknown values and summary/response text are not copied.
+Unknown counts remain null. Diagnostic ID displays are capped at 16 with counts
+and explicit truncation flags; validation still checks the full collections.
+
+All manifest differences are inspected even though a single primary error code
+is returned. References remain not_checked until structure and manifest checks
+pass. A prefilled diagnostic cannot bypass recomputation against the actual
+response. calls_complete, structure, references, daily coverage and publication
+remain separate. Mechanical agreement does not verify semantic accuracy.
+
+The explicit fields consume the existing metadata/request budgets; 1,000-unit
+metadata, 800-unit instruction and 6,200-unit reducer input caps are unchanged.
+An oversized context still fails closed rather than omitting entries or
+increasing budgets. No provider retry is added for validation failure.
+
 ## Completion and publication
 
 Source-range coverage, call completion, output structure, references, daily

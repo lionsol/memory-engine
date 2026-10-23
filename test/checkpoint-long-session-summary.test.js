@@ -52,8 +52,10 @@ function response(prompt) {
   const meta = JSON.parse(prompt.split("\nMETADATA\n")[1].split("\nEVIDENCE\n")[0]);
   const maps = JSON.parse(prompt.split("\nEVIDENCE\n")[1].split("\nOTHER\n")[0]);
   const other = JSON.parse(prompt.split("\nOTHER\n")[1]);
-  return { target_date: DATE, covered_segment_ids: maps.map(item => item.segment_id),
-    covered_entry_ids: meta.entries.map(item => item.id),
+  assert.deepEqual(meta.covered_segment_ids, maps.map(item => item.segment_id));
+  assert.deepEqual(meta.covered_entry_ids, meta.entries.map(item => item.id));
+  return { target_date: meta.target_date, covered_segment_ids: [...meta.covered_segment_ids],
+    covered_entry_ids: [...meta.covered_entry_ids],
     episode_summary: "Long session plus the other daily decision.",
     references: [...maps.map(item => ({ segment_id: item.segment_id,
       start: item.evidence[0].start, end: item.evidence[0].end })), ...other.map(item => ({ entry_id: item.id }))] };
@@ -84,6 +86,13 @@ async function fixture(fn, { entries = [entry(source()), entry("**User:** other 
   try {
     return await withRuntime(overrides, () => fn({ state, read, path, root, overrides }));
   } finally { rmSync(root, { recursive: true, force: true }); }
+}
+async function captureProductLogs(action) {
+  const original = console.log;
+  const lines = [];
+  console.log = (...args) => lines.push(args.map(value => typeof value === "string" ? value : JSON.stringify(value)).join(" "));
+  try { return { result: await action(), lines }; }
+  finally { console.log = original; }
 }
 function options(logs, transport, extra = {}) {
   return { targetDate: DATE, stats: logs.checkpointStats, inputReady: true,
@@ -360,7 +369,7 @@ test("real JS main + HTTPS decoder: 347-unit maps with 22,932 source and three s
   const entries = [entry(source()), ...[366,356,360].map((size, index) => entry(source(size), "other-" + index))];
   await fixture(async ({ read, path, overrides }) => {
     await withFakeHttps(async requests => {
-      const result = await withRuntime({ ...overrides, readCheckpointRawLogs: read, summaryProviders: PROVIDERS,
+      const { result, lines } = await captureProductLogs(() => withRuntime({ ...overrides, readCheckpointRawLogs: read, summaryProviders: PROVIDERS,
         flushCheckpointRawLog: () => ({ ok: true }),
         syncCoreMemoryIndex: () => ({ ok: true, index_invocation: { status: "succeeded" },
           target_date_coverage: { status: "complete", target_date: DATE, path: "memory/smart-add/" + DATE + ".md",
@@ -369,12 +378,18 @@ test("real JS main + HTTPS decoder: 347-unit maps with 22,932 source and three s
         repairOrphanVectors: () => ({ lance_membership_complete: false, lance_vector_validation_complete: false,
           lance_completion_state: "limit_backlog", lance_limit_backlog_remaining: 1860 }),
         resolveConfigConflicts: () => 0,
-      }, () => main(["--target-date", DATE]));
+      }, () => main(["--target-date", DATE])));
       const report = result.businessStatus.segmented_summary;
+      assert.ok(Buffer.byteLength(lines.join("\n"), "utf8") < 30000);
+      const businessLine = lines.find(line => line.startsWith("[checkpoint] Business status "));
+      assert.equal(JSON.parse(businessLine.slice("[checkpoint] Business status ".length)).segmented_summary.reducer_validation.status, "passed");
       assert.equal(requests.length, 6);
       assert.equal(report.source_chars, 22932);
       assert.equal(report.entries.length, 4);
       assert.equal(report.calls_complete, true);
+      assert.equal(report.reducer_validation.status, "passed");
+      assert.deepEqual(report.reducer_validation.expected.covered_entry_ids, ["e0", "e1", "e2", "e3"]);
+      assert.deepEqual(report.reducer_validation.expected.covered_segment_ids, [0, 1, 2, 3, 4]);
       assert.equal(report.output_structure_valid, true);
       assert.equal(report.references_valid, true);
       assert.equal(report.day_coverage_complete, true);
@@ -476,6 +491,123 @@ for (const size of [347, 600, 601]) {
         emitJson(callback, completion(JSON.stringify(object)), { bytewise: true });
       });
     });
+  });
+}
+
+
+test("reducer wrong_date reports a precise safe diagnostic and preserves the old episode", async () => {
+  await fixture(async ({ read, path }) => {
+    const logs = read({ targetDate: DATE });
+    await withFakeHttps(async requests => {
+      const result = await summarizeLongSession(logs, options(logs, undefined));
+      assert.equal(result.ok, false);
+      assert.equal(requests.length, 6);
+      assert.equal(result.report.reason, "reducer_target_date");
+      assert.equal(result.report.reducer_validation.target_date.actual, "2026-10-21");
+      assert.deepEqual(result.report.reducer_validation.failure_fields, ["target_date"]);
+      assert.equal(result.report.published, false);
+      assert.equal(readFileSync(path, "utf8"), "OLD SUMMARY");
+    }, (request, callback) => {
+      const prompt = request.body.messages[0].content;
+      const object = response(prompt);
+      if (!prompt.includes("\nSOURCE\n")) object.target_date = "2026-10-21";
+      emitJson(callback, completion(JSON.stringify(object)));
+    });
+  });
+});
+
+
+const reducerFailureCases = [
+  ["missing_segment", "reducer_segment_coverage"],
+  ["extra_segment", "reducer_segment_coverage"],
+  ["duplicate_segment", "reducer_segment_coverage"],
+  ["string_segment", "reducer_segment_coverage"],
+  ["missing_long_entry", "reducer_entry_coverage"],
+  ["missing_other_entry", "reducer_entry_coverage"],
+  ["extra_entry", "reducer_entry_coverage"],
+  ["duplicate_entry", "reducer_entry_coverage"],
+  ["number_entry", "reducer_entry_coverage"],
+  ["invalid_json", "output_structure"],
+  ["array_root", "output_structure"],
+  ["scalar_root", "output_structure"],
+  ["null_root", "output_structure"],
+  ["schema_null_refs", "reducer_structure"],
+  ["missing_reference", "reducer_reference"],
+  ["bad_reference_range", "reducer_reference"],
+  ["multiple_failures", "reducer_target_date"],
+];
+for (const [scenario, reason] of reducerFailureCases) {
+  test("real six-call summary reports reducer " + scenario + " and preserves prior output", async () => {
+    const secret = "PRIVATE_REDUCER_BODY";
+    const entries = [entry(source()), ...[366,356,360].map((size, index) => entry(source(size), "other-" + index))];
+    await fixture(async ({ read, path }) => {
+      const logs = read({ targetDate: DATE });
+      await withFakeHttps(async requests => {
+        const result = await summarizeLongSession(logs, options(logs, undefined));
+        const report = result.report;
+        assert.equal(result.ok, false);
+        assert.equal(requests.length, 6);
+        assert.equal(report.provider.attempts, 6);
+        assert.equal(report.calls_complete, true);
+        assert.ok(report.segments.every(segment => segment.status === "validated"));
+        assert.equal(report.reason, reason);
+        assert.equal(report.failure_stage, "reduce_validation");
+        assert.equal(report.references_valid, false);
+        assert.equal(report.day_coverage_complete, false);
+        assert.equal(report.published, false);
+        assert.equal(readFileSync(path, "utf8"), "OLD SUMMARY");
+        assert.equal(JSON.stringify(report).includes(secret), false);
+        const diagnostic = report.reducer_validation;
+        const invalidObject = ["array_root", "scalar_root", "null_root"].includes(scenario);
+        assert.equal(diagnostic.status, invalidObject ? "invalid_object" : scenario === "invalid_json" ? "invalid_json" : "failed");
+        if (invalidObject) {
+          assert.deepEqual(diagnostic.failure_fields, ["json_object"]);
+          assert.equal(diagnostic.actual_type, { array_root: "array", scalar_root: "string", null_root: "null" }[scenario]);
+        }
+        if (scenario === "missing_long_entry") assert.deepEqual(diagnostic.covered_entry_ids.missing_ids, ["e0"]);
+        if (scenario === "missing_segment") assert.deepEqual(diagnostic.covered_segment_ids.missing_ids, [4]);
+        if (scenario === "duplicate_segment") assert.deepEqual(diagnostic.covered_segment_ids.duplicate_ids, [0]);
+        if (scenario === "string_segment") assert.equal(diagnostic.covered_segment_ids.wrong_type_count, 1);
+        if (scenario === "extra_entry") assert.equal(diagnostic.covered_entry_ids.unexpected_count, 1);
+        if (scenario === "schema_null_refs") assert.deepEqual(diagnostic.structure_errors, ["references"]);
+        if (scenario === "missing_reference") assert.deepEqual(diagnostic.references.missing_other_entry_ids, ["e3"]);
+        if (scenario === "multiple_failures") assert.deepEqual(diagnostic.failure_fields,
+          ["target_date", "covered_segment_ids", "covered_entry_ids"]);
+      }, (request, callback) => {
+        const prompt = request.body.messages[0].content;
+        const object = response(prompt);
+        if (!prompt.includes("\nSOURCE\n")) {
+          assert.match(prompt, /Copy target_date and both covered_\*_ids arrays EXACTLY/);
+          assert.match(prompt, /long source AND every other entry/);
+          assert.ok(prompt.split("\nMETADATA\n")[0].length <= 800);
+          const metadataText = prompt.split("\nMETADATA\n")[1].split("\nEVIDENCE\n")[0];
+          assert.ok(metadataText.length <= 1000);
+          const manifest = JSON.parse(metadataText);
+          assert.deepEqual(manifest.covered_segment_ids, [0, 1, 2, 3, 4]);
+          assert.deepEqual(manifest.covered_entry_ids, ["e0", "e1", "e2", "e3"]);
+          if (scenario === "missing_segment") object.covered_segment_ids.pop();
+          if (scenario === "extra_segment") object.covered_segment_ids.push(99);
+          if (scenario === "duplicate_segment") object.covered_segment_ids.push(0);
+          if (scenario === "string_segment") object.covered_segment_ids[0] = "0";
+          if (scenario === "missing_long_entry") object.covered_entry_ids.shift();
+          if (scenario === "missing_other_entry") object.covered_entry_ids.pop();
+          if (scenario === "extra_entry") object.covered_entry_ids.push(secret);
+          if (scenario === "duplicate_entry") object.covered_entry_ids.push("e0");
+          if (scenario === "number_entry") object.covered_entry_ids[1] = 1;
+          if (scenario === "schema_null_refs") object.references = null;
+          if (scenario === "missing_reference") object.references.pop();
+          if (scenario === "bad_reference_range") object.references[0].end++;
+          if (scenario === "multiple_failures") {
+            object.target_date = "2026-10-21"; object.covered_segment_ids.pop(); object.covered_entry_ids.shift();
+          }
+          if (scenario === "invalid_json") return emitJson(callback, completion("{" + secret));
+          if (scenario === "array_root") return emitJson(callback, completion(JSON.stringify([secret])));
+          if (scenario === "scalar_root") return emitJson(callback, completion(JSON.stringify(secret)));
+          if (scenario === "null_root") return emitJson(callback, completion("null"));
+        }
+        emitJson(callback, completion(JSON.stringify(object)));
+      });
+    }, { entries });
   });
 }
 
