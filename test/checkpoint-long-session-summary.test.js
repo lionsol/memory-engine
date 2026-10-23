@@ -46,27 +46,26 @@ function response(prompt) {
   if (prompt.includes("\nSOURCE\n")) {
     const header = prompt.split("\nSOURCE\n")[0].split("\n").at(-1);
     const meta = JSON.parse(header);
-    return { segment_id: meta.segment_id, source_hash: meta.source_hash,
-      evidence: [{ start: meta.start, end: meta.end, text: "Grounded fixture evidence" }] };
+    return [meta.segment_id, meta.source_hash_b64url, meta.start, meta.end, "Grounded fixture evidence"];
   }
   const meta = JSON.parse(prompt.split("\nMETADATA\n")[1].split("\nEVIDENCE\n")[0]);
   const maps = JSON.parse(prompt.split("\nEVIDENCE\n")[1].split("\nOTHER\n")[0]);
   const other = JSON.parse(prompt.split("\nOTHER\n")[1]);
-  assert.deepEqual(meta.covered_segment_ids, maps.map(item => item.segment_id));
+  assert.deepEqual(meta.covered_segment_ids, maps.map(item => item[0]));
   assert.deepEqual(meta.covered_entry_ids, meta.entries.map(item => item.id));
   return { target_date: meta.target_date, covered_segment_ids: [...meta.covered_segment_ids],
     covered_entry_ids: [...meta.covered_entry_ids],
     episode_summary: "Long session plus the other daily decision.",
-    references: [...maps.map(item => ({ segment_id: item.segment_id,
-      start: item.evidence[0].start, end: item.evidence[0].end })), ...other.map(item => ({ entry_id: item.id }))] };
+    references: [...maps.map(item => ({ segment_id: item[0],
+      start: item[2], end: item[3] })), ...other.map(item => ({ entry_id: item.id }))] };
 }
 // Synthetic shape/size fixture only: the real 347-unit response body was not retained.
 function mapResponseOfSize(prompt, size) {
   const object = response(prompt);
-  object.evidence[0].text = "";
+  object[4] = "";
   const remaining = size - JSON.stringify(object).length;
   assert.ok(remaining > 160);
-  object.evidence[0].text = "😀".repeat(Math.floor(remaining / 2)) + (remaining % 2 ? "界" : "");
+  object[4] = "😀".repeat(Math.floor(remaining / 2)) + (remaining % 2 ? "界" : "");
   assert.equal(JSON.stringify(object).length, size);
   return object;
 }
@@ -413,8 +412,8 @@ test("real JS main + HTTPS decoder: 347-unit maps with 22,932 source and three s
       if (prompt.includes("\nSOURCE\n")) {
         const header = prompt.split("\nSOURCE\n")[0];
         assert.ok(header.length + 8 <= 800);
-        assert.match(header, /Exactly one evidence/);
-        assert.ok(object.evidence[0].text.length > 160);
+        assert.match(header, /exactly five elements/);
+        assert.ok(object[4].length > 160);
       } else {
         const other = JSON.parse(prompt.split("\nOTHER\n")[1]);
         assert.equal(other.length, 3);
@@ -611,7 +610,7 @@ for (const [scenario, reason] of reducerFailureCases) {
   });
 }
 
-for (const scenario of ["multiple_evidence", "extra_keys", "narrow_range", "invalid_unicode"]) {
+for (const scenario of ["extra_element", "legacy_object", "narrow_range", "invalid_unicode"]) {
   test("map contract rejects " + scenario + " before reducer and preserves old episode", async () => {
     await fixture(async ({ read, path }) => {
       const logs = read({ targetDate: DATE });
@@ -619,10 +618,12 @@ for (const scenario of ["multiple_evidence", "extra_keys", "narrow_range", "inva
       const result = await summarizeLongSession(logs, options(logs, async prompt => {
         attempts++;
         const object = response(prompt);
-        if (scenario === "multiple_evidence") object.evidence.push({ ...object.evidence[0] });
-        if (scenario === "extra_keys") object.unexpected = true;
-        if (scenario === "narrow_range") object.evidence[0].start++;
-        if (scenario === "invalid_unicode") object.evidence[0].text = "\ud800";
+        if (scenario === "extra_element") object.push("unexpected");
+        if (scenario === "narrow_range") object[2]++;
+        if (scenario === "invalid_unicode") object[4] = "\ud800";
+        if (scenario === "legacy_object") return JSON.stringify({ segment_id: object[0],
+          source_hash: Buffer.from(object[1], "base64url").toString("hex"),
+          evidence: [{ start: object[2], end: object[3], text: object[4] }] });
         const raw = JSON.stringify(object);
         assert.ok(raw.length <= 600);
         return raw;

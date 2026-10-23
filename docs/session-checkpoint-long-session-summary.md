@@ -65,13 +65,27 @@ map phase. No provider response text is logged.
 
 ## Compact map output and budget diagnostics
 
-Each map returns exactly one evidence object, with only the documented keys.
-The evidence text is nonempty, well-formed Unicode. There is no independent
-160-unit text limit: text and JSON metadata share the 600-unit serialized
-response budget, including escaping. The segment ID/hash and complete segment
-start/end are copied from request metadata; invented offsets, a narrower range,
-extra fields or a second evidence item are rejected. Source/request/output/round
-limits are unchanged.
+Map protocol `tuple-sha256-base64url-v1` returns one JSON array with exactly
+five elements: `[segment_id, source_hash_b64url, start, end, evidence_text]`.
+The first four fields are copied from metadata with their types. The full
+32-byte SHA-256 is encoded as canonical unpadded base64url (43 characters);
+it is not shortened, truncated or replaced by a weaker digest. IDs and offsets
+remain non-coerced safe integers. Evidence text is nonempty, well-formed Unicode.
+
+The adapter checks the entire raw response against 600 UTF-16 units BEFORE
+parsing. Oversize JSON cannot be trimmed, canonicalized or decoded into a pass.
+There is no independent 160-unit text limit. Missing/extra elements, the legacy
+object shape, hash padding/truncation/noncanonical encoding, invented IDs or
+offsets, narrower ranges and invalid text fail closed.
+
+After strict decoding, internal validators still compare all 32 digest bytes
+(as full hex), the exact segment ID and the complete source range. The reducer
+receives the validated compact rows, with their field order explained in the
+instruction; it does not receive expanded verbose objects that could undo the
+wire savings. The report records the protocol version and full source hashes.
+Source/request/output/round limits and all existing publication guards remain
+unchanged. See [protocol review and validation](session-checkpoint-map-output-protocol-review.md)
+for measured overhead, budget arithmetic and limits of the evidence.
 
 The evidence range denotes the segment supplied to the extraction request.
 Matching that range/hash proves mechanical input association, not that every
@@ -117,8 +131,9 @@ pass. A prefilled diagnostic cannot bypass recomputation against the actual
 response. calls_complete, structure, references, daily coverage and publication
 remain separate. Mechanical agreement does not verify semantic accuracy.
 
-The explicit fields consume the existing metadata/request budgets; 1,000-unit
-metadata, 800-unit instruction and 6,200-unit reducer input caps are unchanged.
+The explicit fields and compact-row explanation consume the existing
+metadata/request budgets; 1,000-unit metadata, 800-unit instruction and
+6,200-unit reducer input caps are unchanged.
 An oversized context still fails closed rather than omitting entries or
 increasing budgets. No provider retry is added for validation failure.
 
