@@ -994,6 +994,39 @@ async function main(argv = process.argv.slice(2)) {
       || (lanceSummary?.lance_membership_complete === true
         && lanceSummary?.lance_vector_validation_complete === true);
     const vectorTaskBlockedByIsolation = Number(lanceSummary?.lance_skipped_unknown_legacy || 0) > 0;
+    const vectorFailureCounts = [
+      lanceSummary?.lance_failed, lanceSummary?.lance_operation_failed,
+      lanceSummary?.lance_write_failed, lanceSummary?.lance_fingerprint_conflicts,
+    ];
+    // Scoped repair's ok=false also means capped membership. Only this fully
+    // evidenced, error-free deferral may avoid turning a valid summary into a
+    // process failure; it still cannot imply vector/business convergence.
+    const vectorLimitDeferred = lanceSummary?.ok === false
+      && lanceSummary.lance_input_state === "present"
+      && lanceSummary.lance_completion_state === "limit_backlog"
+      && lanceSummary.lance_membership_state === "limit_backlog"
+      && lanceSummary.lance_membership_complete === false
+      && lanceSummary.lance_converged === false
+      && Number.isSafeInteger(lanceSummary.lance_limit_backlog_remaining)
+      && lanceSummary.lance_limit_backlog_remaining > 0
+      && lanceSummary.lance_backlog_remaining === lanceSummary.lance_limit_backlog_remaining
+      && lanceSummary.lance_skipped_unknown_legacy === 0
+      && ["verified", "unverified"].includes(lanceSummary.lance_vector_validation_state)
+      && vectorFailureCounts.every(value => value === 0)
+      && !lanceSummary.error;
+    const vectorResultKnown = typeof lanceSummary?.ok === "boolean"
+      || typeof lanceReconciliation === "number" || vectorTaskComplete
+      || lanceSummary?.lance_converged === true
+      || ["empty_input", "no_active_rows"].includes(lanceSummary?.lance_completion_state);
+    const vectorOperationFailed = !vectorResultKnown
+      || vectorFailureCounts.some(value => value !== undefined
+        && (!Number.isSafeInteger(value) || value !== 0))
+      || Boolean(lanceSummary?.error)
+      || lanceSummary?.lance_vector_validation_state === "conflict"
+      || ["write_failed", "operation_failed"].includes(lanceSummary?.lance_completion_state)
+      || (lanceSummary?.ok === false && !vectorLimitDeferred);
+    const vectorOperationStatus = vectorOperationFailed ? "failed"
+      : vectorLimitDeferred ? "deferred_limit" : "completed";
     const summaryInputComplete = result.source_version_valid !== false
       && (diagnostics.budgetCoverageComplete !== false || result.segmented?.day_coverage_complete === true);
     const summaryPublication = result.segmented?.publication || result.publication;
@@ -1013,6 +1046,7 @@ async function main(argv = process.argv.slice(2)) {
       business_complete: summaryInputComplete && publicationComplete
         && engineReconciliation?.target_date_input_complete === true
         && result.status === "valid_summary"
+        && !vectorOperationFailed
         && vectorTaskComplete
         && !vectorTaskBlockedByIsolation,
       summary_status: result.status || (result.timeout ? "timeout" : result.skipped ? "placeholder_skipped" : "valid_summary"),
@@ -1027,6 +1061,7 @@ async function main(argv = process.argv.slice(2)) {
       engine_identity_missing_before: engineReconciliation?.engine_identity_missing_before || 0,
       engine_identity_missing_after: engineReconciliation?.engine_identity_missing_after || 0,
       extraction: result.status || (result.timeout ? "timeout" : result.skipped ? "placeholder_skipped" : "valid_summary"),
+      vector_operation_status: vectorOperationStatus,
       vector_completion: lanceSummary?.lance_completion_state || "unknown",
       vector_membership_complete: lanceSummary?.lance_membership_complete === true,
       vector_membership_state: lanceSummary?.lance_membership_state || "unknown",
@@ -1045,7 +1080,7 @@ async function main(argv = process.argv.slice(2)) {
         && businessStatus.status !== "publication_incomplete"
         && businessStatus.status !== "timeout"
         && businessStatus.vector_validation_state !== "conflict"
-        && lanceSummary?.ok !== false,
+        && !vectorOperationFailed,
       businessStatus,
     };
   } catch (e) {

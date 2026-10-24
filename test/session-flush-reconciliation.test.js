@@ -874,6 +874,30 @@ test("scoped Lance reconciliation is exact, active-only, oldest-first, and bound
     assert.equal(first.lance_limit_backlog_remaining, 1);
     assert.equal(first.lance_completion_state, "limit_backlog");
     assert.equal(first.lance_converged, false);
+    // Use the real scoped repair result (including ok=false for capped
+    // membership) at the checkpoint boundary, not a success-shaped stub.
+    const summaryResult = await withFixtureRuntime(fixture, () => checkpoint.main([
+      "--target-date", "2026-08-10",
+    ]), {
+      flushCheckpointRawLog: () => ({ ok: true }),
+      reconcileSessionFlushManagedState: async () => ({
+        ...engine, target_date_input_complete: true,
+      }),
+      readCheckpointRawLogs: () => [{
+        source: "conversation", category: "raw_log", text: "**User:** controlled daily input",
+      }],
+      llmNightlyExtract: async () => ({
+        smart_memories: [], configs: [], episode_summary: "Controlled published daily summary.",
+      }),
+      repairOrphanVectors: async () => first,
+      resolveConfigConflicts: () => 0,
+    });
+    assert.equal(summaryResult.ok, true);
+    assert.equal(summaryResult.businessStatus.summary_status, "valid_summary");
+    assert.equal(summaryResult.businessStatus.vector_operation_status, "deferred_limit");
+    assert.equal(summaryResult.businessStatus.vector_membership_complete, false);
+    assert.equal(summaryResult.businessStatus.business_complete, false);
+    assert.equal(summaryResult.businessStatus.vector_limit_backlog, 1);
     assert.deepEqual(lance.state.addedIds, [
       "lance-01", "lance-02", "lance-03", "lance-04", "lance-05",
       "lance-06", "lance-07", "lance-08", "lance-09", "lance-10",

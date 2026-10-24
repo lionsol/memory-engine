@@ -197,7 +197,7 @@ test("ordinary publication lock failure is reported rather than overwriting or c
   assert.equal(fs.readFileSync(path,"utf8"),"OLD SUMMARY");
  });
 });
-async function runMain(read,runtime,extract){
+async function runMain(read,runtime,extract,overrides={}){
  return withRuntime({...runtime,readCheckpointRawLogs:read,llmNightlyExtract:extract,
   flushCheckpointRawLog:()=>({ok:true}),
   syncCoreMemoryIndex:()=>({ok:true,index_invocation:{status:"succeeded"},
@@ -205,7 +205,7 @@ async function runMain(read,runtime,extract){
     required_fingerprints:4,matched_fingerprints:4,missing_fingerprints:0}}),
   reconcileSessionFlushManagedState:()=>({ok:true,target_date_input_complete:true,eligibleCoreRows:[]}),
   repairOrphanVectors:()=>({lance_membership_complete:true,lance_vector_validation_complete:true}),
-  resolveConfigConflicts:()=>0},()=>checkpoint.main(["--target-date",DATE]));
+  resolveConfigConflicts:()=>0,...overrides},()=>checkpoint.main(["--target-date",DATE]));
 }
 for(const change of ["source","episode"]){
  test("main propagates ordinary "+change+" conflict as failed business status",async()=>{
@@ -221,6 +221,79 @@ for(const change of ["source","episode"]){
   });
  });
 }
+// Production-shaped capped result: the producer deliberately keeps ok=false
+// until membership converges. The main process must distinguish this from errors.
+function limitedLanceResult(){
+ return {ok:false,lance_added:10,lance_eligible:2053,lance_existing:233,
+  lance_failed:0,lance_operation_failed:0,lance_write_failed:0,
+  lance_fingerprint_conflicts:0,lance_limit_backlog_remaining:1810,
+  lance_backlog_remaining:1810,lance_converged:false,
+  lance_membership_complete:false,lance_membership_state:"limit_backlog",
+  lance_vector_validation_complete:false,lance_vector_validation_state:"unverified",
+  lance_skipped_unknown_legacy:0,lance_input_state:"present",
+  lance_completion_state:"limit_backlog",error:null};
+}
+const vectorCases=[
+ ["ordinary bounded backlog",{},true,"deferred_limit",false],
+ ["bounded backlog with verified fingerprints",{lance_vector_validation_state:"verified",lance_vector_validation_complete:true},true,"deferred_limit",false],
+ ["complete membership with unverified vectors",{ok:true,lance_backlog_remaining:0,lance_limit_backlog_remaining:0,lance_converged:true,lance_membership_complete:true,lance_membership_state:"complete",lance_completion_state:"complete"},true,"completed",false],
+ ["complete verified vectors",{ok:true,lance_backlog_remaining:0,lance_limit_backlog_remaining:0,lance_converged:true,lance_membership_complete:true,lance_membership_state:"complete",lance_completion_state:"complete",lance_vector_validation_complete:true,lance_vector_validation_state:"verified"},true,"completed",true],
+ ["write failure",{lance_write_failed:1,lance_failed:1,lance_completion_state:"write_failed"},false,"failed",false],
+ ["operation failure",{lance_operation_failed:1,lance_failed:1,lance_completion_state:"operation_failed"},false,"failed",false],
+ ["fingerprint conflict",{lance_vector_validation_state:"conflict",lance_fingerprint_conflicts:1},false,"failed",false],
+ ["error despite backlog",{error:"fixture read failure"},false,"failed",false],
+ ["unknown failure",{lance_completion_state:"unknown",lance_membership_state:"unknown"},false,"failed",false],
+ ["missing counter",{lance_operation_failed:undefined},false,"failed",false],
+ ["invalid counter",{lance_failed:"0"},false,"failed",false],
+ ["negative counter",{lance_write_failed:-1},false,"failed",false],
+ ["zero limit backlog",{lance_limit_backlog_remaining:0},false,"failed",false],
+ ["unexplained missing membership",{lance_backlog_remaining:1811},false,"failed",false],
+ ["isolated records",{lance_skipped_unknown_legacy:1},false,"failed",false],
+ ["success flag with real failure",{ok:true,lance_write_failed:1},false,"failed",false],
+];
+for(const [name,patch,ok,status,complete] of vectorCases){
+ test("main vector status: "+name,async()=>{
+  await fixture(async({read,path,runtime})=>{
+   const result=await runMain(read,runtime,async()=>answer(),{
+    repairOrphanVectors:async()=>({...limitedLanceResult(),...patch})});
+   assert.equal(result.ok,ok);
+   assert.equal(result.businessStatus.vector_operation_status,status);
+   assert.equal(result.businessStatus.business_complete,complete);
+   assert.equal(result.businessStatus.summary_status,"valid_summary");
+   assert.equal(result.businessStatus.ordinary_publication.published,true);
+   assert.match(fs.readFileSync(path,"utf8"),/Complete controlled ordinary-path summary/);
+   assert.equal(result.businessStatus.vector_limit_backlog,patch.lance_limit_backlog_remaining??1810);
+  });
+ });
+}
+test("unknown vector response and thrown vector error still fail after a valid summary",async()=>{
+ for(const mode of ["empty","throw"]){
+  await fixture(async({read,runtime})=>{
+   const result=await runMain(read,runtime,async()=>answer(),{
+    repairOrphanVectors:async()=>{if(mode==="throw")throw Error("fixture unavailable");return {};}});
+   assert.equal(result.ok,false);
+   assert.equal(result.businessStatus.vector_operation_status,"failed");
+   assert.equal(result.businessStatus.business_complete,false);
+   assert.equal(result.businessStatus.ordinary_publication.published,true);
+  });
+ }
+});
+test("deferred vectors never hide an input conflict or ordinary LLM failure",async()=>{
+ for(const mode of ["source","timeout"]){
+  await fixture(async({state,read,path,runtime})=>{
+   const result=await runMain(read,runtime,async()=>{
+    if(mode==="timeout")throw Error("fixture extraction failure");
+    state.entries[0].text+=" changed";return answer();
+   },{repairOrphanVectors:async()=>limitedLanceResult()});
+   assert.equal(result.ok,false);
+   assert.equal(result.businessStatus.vector_operation_status,"deferred_limit");
+   assert.equal(result.businessStatus.business_complete,false);
+   assert.notEqual(result.businessStatus.summary_status,"valid_summary");
+   assert.equal(fs.readFileSync(path,"utf8"),"OLD SUMMARY");
+  });
+ }
+});
+
 test("committed episode with failed lock cleanup remains recorded as published, while main returns failure",async()=>{
  await fixture(async({read,path,runtime})=>{
   const unlink=fs.unlinkSync;
