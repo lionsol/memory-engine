@@ -2,7 +2,8 @@
 const test = require("node:test"), assert = require("node:assert/strict");
 const { PROTOCOL, buildFactInput, buildFactPrompt, validateAndRenderFacts } = require("../lib/checkpoint/ordinary-summary-facts");
 const inputFor = text => buildFactInput([{text, source:"conversation"}], "2026-10-20");
-const response = (input, facts) => ({protocol:PROTOCOL,target_date:input.target_date,facts,skipped:[]});
+const response = (input, facts) => ({protocol:PROTOCOL,target_date:input.target_date,facts,
+  summary:facts.map((f,i)=>f?.id || "f"+(i+1)),skipped:[]});
 test("numeric selections extract all paragraphs locally without echoing source text",()=>{
   const input=inputFor("**User:** 检查结果。\n\n**Assistant:** 10-18/19 恢复。10-15/16 仍无对话，原因未确认。");
   const reply=response(input,[0,1]), result=validateAndRenderFacts(reply,input);
@@ -58,17 +59,17 @@ test("derived memories use selected original spans and reject metadata outside t
   fact.config.value="dark";
   assert.throws(()=>validateAndRenderFacts(response(input,[fact]),input),{code:"summary_config"});
 });
-test("v1 responses cannot be silently reused against a v2 request",()=>{
+test("older responses cannot be silently reused against a v3 request",()=>{
   const input=inputFor("记录。");
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v2");
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v3");
   assert.throws(()=>validateAndRenderFacts({...response(input,[0]),protocol:"checkpoint-source-facts-v1"},input),
     {code:"summary_structure"});
 });
 test("197 whole-unit selections remain compact even when source paragraphs are long",()=>{
   const input=inputFor(Array.from({length:197},(_,i)=>"记录"+i+"："+"来源内容。".repeat(15)).join("\n\n"));
   const reply=response(input,Array.from({length:197},(_,i)=>i));
-  assert.ok(JSON.stringify(reply).length<1000);
-  assert.equal(validateAndRenderFacts(reply,input).validation.unit_count,197);
+  assert.ok(JSON.stringify(reply).length<3000);
+  assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_budget"});
 });
 test("selecting one sentence still does not establish complete paragraph semantics",()=>{
   const input=inputFor("**Assistant:** 任务 A 成功。任务 B 失败。");

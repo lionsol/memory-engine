@@ -21,10 +21,10 @@ const DATE="2026-10-20";
 const BASE={maxFinalCombinedChars:40000,smartAddChars:16000,conversationChars:24000,
  perSessionChars:8000,toolSummaryChars:4000};
 const ALIGNED={...BASE,perSessionChars:24000,conversationChars:25000};
-const entry=(size,id)=>({text:"**User:** "+id+" "+"A".repeat(size-11-id.length),
+const entry=(size,id)=>({text:"**User:** "+id+" AAAAA。\n"+"A".repeat(size-18-id.length),
  entryId:id,sessionId:id,category:"raw_log",provenance:"session_flush",source:"conversation",
  sourceKind:"smartAdd",timestampMs:null,role:"other",dedupeKey:id});
-const answer=()=>factResponse(currentInput);
+const answer=()=>factResponse(currentInput,()=>({span:[0,0]}));
 function stats(){
  const chars=()=>({smartAdd:0,dbRawLog:0,resetTranscript:0});
  return {droppedDuplicateCount:0,droppedByBudgetCount:0,sourceCharCountsAfter:chars(),

@@ -2,9 +2,9 @@
 
 日期：2026-10-24（Asia/Shanghai）。
 基线：d6fec1c920c0e031db4c8df4d70a6dc9b684bb6b。
-当前修复基线：e965365974e132516528ce7a5ddc9a31fd690dd7。
-范围：普通摘要协议 v2 及离线测试；本次未新增模型调用、未部署或重写历史记录。
-e965365 的一次授权真实验证已执行，因 4096 token 截断而 STOPPED；详见末尾。
+当前修复基线：2f6827527c0523622f3e390295831ca1fe36b1a2。
+范围：普通摘要协议 v3 及离线测试；本次未新增模型调用、未部署或重写历史记录。
+v1 的真实验证被 token 截断；v2 通过预算但复制全文，摘要质量仍 STOPPED；详见末尾。
 
 ## 问题与行为变化
 
@@ -23,9 +23,10 @@ e965365 的一次授权真实验证已执行，因 4096 token 截断而 STOPPED�
 
 ~~~json
 {
-  "protocol": "checkpoint-source-facts-v2",
+  "protocol": "checkpoint-source-facts-v3",
   "target_date": "2026-10-20",
   "facts": [0, {"unit": 1, "span": [0, 1], "kind": "decision"}],
+  "summary": ["f2"],
   "skipped": []
 }
 ~~~
@@ -34,7 +35,7 @@ facts 的整数表示请求中全局零基 unit.index，完整选择该段原文
 对象 {unit:n,span:[a,b]} 选择该段 parts 数组中 a 至 b（含）的连续片段；
 省略 span 则完整选择。parts 按标点和换行机械划分，保留 CRLF、空格及全部字符，
 不保证语义独立。模型不计算字符偏移，也不回写 quote/source_ref。
-v1 响应不能复用于 v2 请求；旧协议或不认识的字段都会被拒绝。
+v1/v2 响应不能复用于 v3 请求；旧协议、缺少 summary 或不认识的字段都会被拒绝。
 每个来源按对话轮次和段落划分，
 保留 entry ID、来源哈希、角色标记及原文 UTF-16 范围；来源元数据优先复用
 收集器已有的私有证据，不改变普通 rawLogs 对象形状或持久身份规则。
@@ -51,20 +52,31 @@ kind 默认 report，其余时间、日期、纠正和因果字段有需要才�
 原文中重复出现的相同句子也通过片段位置精确定位，不依赖字符串唯一匹配。
 可选时间、日期、因果引文及配置 key/value 必须来自选中引文；
 类别、纠正引用及重复/噪声处置保留独立检查。
-最终正文由程序按照来源顺序及原文位置排列摘录，保留说话者归属，
-不再进行第二次自由改写，也不从收集时间推断全局事件时间。
-纠正关联标为模型标注，且保留旧记录，不把关联本身当成独立事实认证。
+facts 是整批证据清单；summary 通过 fact ID 选择正文使用的摘录，两者不再混为一谈。
+每个有事实的来源必须在正文有代表；有尚未被纠正的助手报告时，
+至少选择助手记录或明确标注的 decision/correction，不能仅用用户检查请求代表运行结果。
+事实正文按来源和原文位置排序，保留说话者归属，不进行第二次自由改写。
+
+kind=correction 必须有 supersedes；已被纠正的事实不能进入正文，
+未被后继覆盖的最终纠正必须进入正文。旧事实及纠正关系保留为证据定位。
+元数据 evidence_columns 声明 [fact_id,source_id,start,end,supersedes] 的列含义，
+evidence 保存整批引用，sources 保存 entry ID 和来源哈希；不复制全文到元数据。
+原文继续保留在原始记录，不新增快照或 sidecar；若原始 entry 后来改变或消失，
+定位元数据本身不能重建旧全文。纠正关联仍是模型标注，不是独立事实认证。
+summary_unit_coverage_complete 单独说明正文是否逐段覆盖，不把证据覆盖冒充正文完整性。
 
 ## 写入与失败
 
 整批事实及配置检查通过前，不允许本轮提取生成的 smart-add、confidence 或 episode 写入。
-结构化记忆和配置从同一批已检查引文派生，保留来源归属；原有最多 10 条限制沿用。
+结构化记忆和配置从同一批已检查引文派生，排除明确被 supersedes 覆盖的旧事实，
+保留来源归属；原有最多 10 条限制沿用。
 episode 继续使用既有版本检查、合作锁和原子发布。
 
 | 情况 | 普通提取结果 |
 | --- | --- |
 | 输入预算、格式或 Unicode 无法完整保留 | input_incomplete |
 | 引文、覆盖、结构、范围等检查失败 | summary_invalid |
+| 正文选择、来源代表、纠正关系或正文字符上限失败 | summary_invalid |
 | provider 不可用 | summary_invalid / summary_llm_unavailable |
 | 模型返回截断或输出超过上限 | summary_invalid / output_budget |
 | 合格事实完成发布 | valid_summary，语义仍未独立验证 |
@@ -82,6 +94,8 @@ main 单独报告 ordinary_summary_validation 和 summary_input_complete；
 ## 预算和验证边界
 
 沿用现有输入、max_tokens、超时与 provider 配置，不增加重试。
+v3 新增摘要正文 3000 UTF-16 字符上限，计入标题、归属、引文和纠正说明；
+超限拒绝整批响应，绝不截断。上限不含定位元数据或既有配置附节，也不是 provider token 预算。
 输入上限现在计入 system 指令和序列化数据的字符总量；超过即停止。
 普通 HTTP 输出字符上限为现有 max_tokens × 8，finish_reason=length 必须失败；
 该字符上限不能替代 provider 的 token 上限。
@@ -94,8 +108,9 @@ semantic_quality 始终为 not_independently_verified，不能据此声称真实
 
 分段摘要协议未修改；历史错误摘要及派生记忆未自动清理。
 v1 的真实 10-20 验证因输出预算失败，尚未进入完整语义验收。
-v2 的真实 provider 合规、4096 token 预算适配及逐项质量审阅仍待另行授权验证，
-不能以 fake HTTP、结构覆盖或静态请求大小代替该验收。
+v2 的真实调用完成，但结果是全文摘录，未通过摘要质量验收。
+v3 尚未经过真实模型的自动选择质量验收；fake HTTP、程序构造候选与静态预算不能代替它。
+模型若不标注纠正，或选择同一长来源中的错误重点，程序不能仅凭编号发现全部语义问题。
 
 ## 离线验证
 
@@ -110,6 +125,7 @@ cd /home/lionsol/.devspace/worktrees/memory-engine-cff493d1
 env MEMORY_ENGINE_TEST_DEPENDENCIES=/home/lionsol/.openclaw/extensions/memory-engine \
 /home/lionsol/.local/node24/bin/node \
   --require ./test/checkpoint-dependency-loader.cjs --test --test-concurrency=2 \
+  test/checkpoint-summary-view.test.cjs \
   test/checkpoint-fact-selections.test.cjs \
   test/checkpoint-ordinary-summary-facts.test.cjs \
   test/checkpoint-fact-publication.test.cjs \
@@ -175,4 +191,27 @@ v2 用段落编号及连续 parts 范围取代模型逐字复写。
 - 组合执行最初未取得完整报告；拆分日志定位到假 HTTP 夹具仍检查旧 u.text，
   改为检查 parts 拼回的完整原文后，最终七文件一起执行通过。
 - 本轮未重跑全仓；上面的全仓/共享范围历史失败不因此消除。
-  v2 代码尚未提交、未新增真实模型调用、未部署或修订历史记录。
+  v2 随后已提交 2f68275，并执行一次新的授权模型验证；未部署或修订历史记录。
+
+## v2 真实结果与 v3 离线修复
+
+v2 的单次请求 HTTP 200、约 3.5 秒、finish_reason=stop，completion_tokens=457。
+197 段全部机械覆盖，192 个整数选择及 5 个分类标注；没有 span 或 supersedes。
+三次健康检查、不同日期的原始差异和纠正文字都保留，但 24014 字符正文被渲染成
+36640 字符摘录，未归纳当前状态。因此预算通过，摘要质量仍为 STOPPED。
+候选及复核证据在 ops/memory-engine/
+session-checkpoint-2f68275-isolated-quality-once-20261024-evidence。
+
+v3 保留整批证据校验，新增显式 summary 选择、正文大小和来源代表检查，
+仅将选中事实写入正文；明确纠正的旧事实也不再派生记忆或配置。
+没有新增发布文件、数据库机制、配置项、provider 调用或部署步骤。
+
+- 八文件定向回归：185/185 通过，fail/cancelled/skipped 均为 0，约 14.6 秒。
+- 固定原文只读离线检查：4 来源、197 段，请求 system+数据 39605 字符。
+  将 v2 的真实选择适配为 v3 并全选正文时，明确以 summary_budget 拒绝。
+- 人工指定 7 条引用及一条纠正关系的离线构造结果：正文 1277 字符，
+  定位元数据 6390 字符，保留 197 条证据定位；没有将原文移入元数据。
+  此结果只说明表示与门禁可用，不证明模型会自动作出相同选择或摘要已完整。
+- 原始 10-20 来源与既有 episode 的 SHA 均未变；v3 代码未提交。
+  本轮未重跑全仓，历史全仓失败仍未消除；未增加模型调用或改动运行环境。
+  两次单次调用授权均已消耗，本次离线结果不授权第三次调用。

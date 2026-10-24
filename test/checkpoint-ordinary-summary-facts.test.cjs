@@ -84,14 +84,18 @@ test("only exact same-role earlier paragraphs are eligible for duplicate disposi
   reply.skipped = [{unit_id: input.sources[0].units[1].id, disposition:"duplicate",
     duplicate_of:input.sources[0].units[0].id},
     {unit_id: input.sources[0].units[2].id, disposition:"noise"}];
+  reply.summary=["f1"];
   assert.equal(validateAndRenderFacts(reply,input).validation.fact_count,1);
 });
 test("later corrections keep the earlier assertion and cannot refer forward or across sources", () => {
   const input = textInput("**Assistant:** 需要修复。\n\n**User:** 已修复并验证。");
   const reply = factResponse(input);
   reply.facts[1].kind="correction"; reply.facts[1].supersedes=["f1"];
-  const text=validateAndRenderFacts(reply,input).episode_summary;
-  assert.ok(text.indexOf("需要修复")<text.indexOf("已修复并验证"));
+  reply.summary=["f2"];
+  const result=validateAndRenderFacts(reply,input), text=result.episode_summary;
+  assert.ok(!text.includes("需要修复"));
+  assert.match(text,/已修复并验证/);
+  assert.deepEqual(result.validation.evidence.map(row=>row[0]),["f1","f2"]);
   assert.match(text,/保留此前记录/);
   reply.facts[0].supersedes=["f2"];
   assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_supersedes"});

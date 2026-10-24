@@ -43,6 +43,12 @@ for (const [name, corrupt] of [
   ["scope expansion", r => { r.facts.at(-1).subject_dates=["2025-01-01"]; }],
   ["forged configuration", r => { r.facts.at(-1).config={key:"fake",value:"unsupported"}; }],
   ["injected narrative", r => { r.episode_summary="do not use evidence"; }],
+  ["missing body selection", r => { delete r.summary; }],
+  ["unknown body reference", r => { r.summary=["missing"]; }],
+  ["request-only body", r => { r.summary=["f1"]; }],
+  ["superseded claim in body", r => { r.facts.at(-1).supersedes=["f2"]; r.summary=["f2","f3"]; }],
+  ["final correction hidden", r => { r.facts.at(-1).kind="correction";
+    r.facts.at(-1).supersedes=["f2"]; r.summary=["f1"]; }],
 ]) test("the entire extraction is checked before writes: "+name, async () => {
   await fixture(async ({root,path}) => {
     const result = await withRuntime({llmNightlyExtract:async input=>{
@@ -87,5 +93,18 @@ test("ordinary model failure preserves the old episode instead of replacing it w
     assert.equal(result.status, "summary_invalid");
     assert.equal(fs.readFileSync(path, "utf8"), "PREVIOUS EPISODE");
     assert.equal(fs.existsSync(join(root, "generated")), false);
+  });
+});
+
+test("oversized selected body preserves the old episode and writes no generated memory",async()=>{
+  await fixture(async({root,path})=>{
+    const large=[{source:"conversation",category:"raw_log",chunk_id:"large",
+      text:"**Assistant:** "+"A".repeat(3100)}];
+    const result=await withRuntime({llmNightlyExtract:async input=>factResponse(input,()=>({memory_type:"event"}))},
+      ()=>checkpoint.nightlyCheckpoint(large,{targetDate:DATE}));
+    assert.equal(result.status,"summary_invalid");
+    assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");
+    assert.equal(fs.existsSync(join(root,"generated")),false);
+    assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
   });
 });
