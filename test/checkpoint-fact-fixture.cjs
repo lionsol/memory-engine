@@ -3,7 +3,7 @@ const { PROTOCOL, buildFactInput } = require("../lib/checkpoint/ordinary-summary
 function factResponse(input, decorate = () => ({})) {
   const facts = [];
   for (const source of input.sources) for (const unit of source.units) {
-    facts.push({ source_ref: unit.id, quote: unit.text, ...decorate(unit, facts.length) });
+    facts.push({ unit: unit.index, ...decorate(unit, facts.length) });
   }
   return { protocol: PROTOCOL, target_date: input.target_date, facts, skipped: [] };
 }

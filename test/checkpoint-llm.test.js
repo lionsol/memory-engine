@@ -172,7 +172,9 @@ test("ordinary request separates instructions/data, retains later corrections an
     assert.equal(body.messages[0].role,"system");
     assert.match(body.messages[0].content,/更晚的验证结果、测试结果或用户确认作为当前状态/);
     assert.match(body.messages[0].content,/纠正只覆盖有证据的对象/);
-    assert.deepEqual(JSON.parse(body.messages[1].content),input);
+    const wire=JSON.parse(body.messages[1].content);
+    assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.parts.join(""))),
+      input.sources.flatMap(s=>s.units.map(u=>u.text)));
     assert.ok(!body.messages[0].content.includes("{chunks_text}"));
     assert.ok(!body.messages[0].content.includes("不超过 300"));
     assert.equal(body.max_tokens,4096);assert.equal(calls[0].timeout,120000);

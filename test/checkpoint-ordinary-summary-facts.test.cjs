@@ -25,21 +25,21 @@ test("four-entry evidence preserves health checks, dry-run, different historical
 test("missing any short health entry is rejected despite the full long entry", () => {
   for (const index of [1, 2, 3]) {
     const input = recordedInput(), reply = factResponse(input);
-    const ids = new Set(input.sources[index].units.map(u => u.id));
-    reply.facts = reply.facts.filter(f => !ids.has(f.source_ref));
+    const ids = new Set(input.sources[index].units.map(u => u.index));
+    reply.facts = reply.facts.filter(f => !ids.has(f.unit));
     assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_coverage" });
   }
 });
 test("whole-entry coverage cannot hide a missing paragraph within a long turn", () => {
   const input = recordedInput(), reply = factResponse(input);
-  const id = input.sources[0].units[3].id;
-  reply.facts = reply.facts.filter(f => f.source_ref !== id);
+  const id = input.sources[0].units[3].index;
+  reply.facts = reply.facts.filter(f => f.unit !== id);
   assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_coverage" });
 });
 test("the observed four-day causal merge cannot be invented as an evidence quote", () => {
   const input = recordedInput(), reply = factResponse(input);
   reply.facts[0].quote = "10-15/16/18/19 均因采集时序竞态生成占位。";
-  assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_quote" });
+  assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_fact_structure" });
 });
 test("explicit source causal assertions remain attributed quotations, not independently verified causes", () => {
   const input = textInput("**Assistant:** 初步认为 10-19 因采集顺序生成占位，尚待验证。");
@@ -52,14 +52,14 @@ test("explicit source causal assertions remain attributed quotations, not indepe
   assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_causal_evidence" });
 });
 for (const [name, change, code] of [
-  ["unknown reference", r => { r.facts[0].source_ref = "absent"; }, "summary_fact_structure"],
+  ["unknown reference", r => { r.facts[0].unit = 999; }, "summary_fact_structure"],
   ["scope expansion", r => { r.facts[0].subject_dates = ["10-15"]; }, "summary_fact_scope"],
   ["invented event time", r => { r.facts[0].event_time = "04:10"; }, "summary_fact_scope"],
   ["false noise", r => { r.facts=[]; }, "summary_structure"],
   ["extra narrative", r => { r.episode_summary = "invented"; }, "summary_structure"],
   ["duplicate fact IDs", r => { r.facts[0].id="same"; r.facts.push({...r.facts[0]}); }, "summary_fact_structure"],
   ["unknown skipped unit", r => { r.skipped=[{unit_id:"missing",disposition:"noise"}]; }, "summary_coverage"],
-  ["overlapping skip", r => { r.skipped=[{unit_id:r.facts[0].source_ref,disposition:"noise"}]; }, "summary_coverage"],
+  ["overlapping skip", r => { r.skipped=[{unit_id:"s0.t0.p0",disposition:"noise"}]; }, "summary_coverage"],
   ["invented config", r => { r.facts[0].config={key:"missing",value:"fake"}; }, "summary_config"],
   ["invented category", r => { r.facts[0].memory_type="unknown"; }, "summary_memory_type"],
 ]) test(name, () => {
@@ -121,7 +121,11 @@ test("CRLF paragraph and role ranges point into original text; HTML stays quoted
 });
 test("prompt has a distinct JSON data message and rejects oversized requests without truncation", () => {
   const input=recordedInput(), prompt=buildFactPrompt(input,45000);
-  assert.deepEqual(JSON.parse(prompt.prompt),input);
+  const wire=JSON.parse(prompt.prompt);
+  assert.equal(wire.protocol,input.protocol);
+  assert.deepEqual(wire.sources.map(s=>s.source_hash),input.sources.map(s=>s.source_hash));
+  assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.parts.join(""))),
+    input.sources.flatMap(s=>s.units.map(u=>u.text)));
   assert.ok(!prompt.system.includes("{chunks_text}"));
   assert.ok(!prompt.system.includes("不超过 300"));
   assert.throws(()=>buildFactPrompt(input,prompt.system.length+prompt.prompt.length-1),
@@ -140,15 +144,15 @@ test("short acknowledgements and status replies are not automatically noise", ()
   }
 });
 test("mechanical coverage does not certify all assertions within a paragraph", () => {
-  const input=textInput("**Assistant:** 任务 A 成功，任务 B 失败。"), reply=factResponse(input);
-  reply.facts[0].quote="任务 A 成功";
+  const input=textInput("**Assistant:** 任务 A 成功。任务 B 失败。"), reply=factResponse(input);
+  reply.facts[0].span=[0,0];
   assert.equal(validateAndRenderFacts(reply,input).validation.semantic_quality,
     "not_independently_verified");
 });
 
 test("compact facts derive coverage without a second model-declared manifest",()=>{
   const input=recordedInput(), reply=factResponse(input);
-  assert.ok(reply.facts.every(f=>Object.keys(f).length===2));
+  assert.ok(reply.facts.every(f=>Object.keys(f).length===1));
   assert.equal(validateAndRenderFacts(reply,input).validation.unit_coverage_complete,true);
   reply.coverage=input.sources.flatMap(s=>s.units.map(u=>u.id));
   assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_structure"});

@@ -92,7 +92,7 @@ test("aligned budget goes through existing ordinary reader/bin/LLM HTTP path onc
    },(request,callback)=>{
     requests++;const prompt=request.body.messages.at(-1).content;
     const sent=JSON.parse(prompt);
-    for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
+    for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.parts.join("")===e.text.slice("**User:** ".length))),"full entry missing");
     assert.equal(request.body.max_tokens,4096);
     emitJson(callback,completion(JSON.stringify(answer())),{bytewise:true});
    });
