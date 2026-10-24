@@ -26,6 +26,7 @@ const {
 const { writeEpisodeFiles } = require("../lib/checkpoint/episode-writer");
 const { snapshotEpisode } = require("../lib/checkpoint/episode-publication");
 const checkpointLlm = require("../lib/checkpoint/llm");
+const summaryFacts = require("../lib/checkpoint/ordinary-summary-facts");
 const { writeEmptyEpisode, writeIncompleteEpisode, writeLLMTimeoutEpisode } = require("../lib/checkpoint/markers");
 const { repairOrphanVectors } = require("../lib/checkpoint/orphan-repair");
 const { reconcileSessionFlushManagedState } = require("../lib/checkpoint/session-flush-reconciliation.js");
@@ -356,9 +357,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   const diagnostics = buildCheckpointEvidenceDiagnostics(episodeDate, options.rawLogStats);
   const writeStats = emptyCheckpointWriteStats();
   const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
-  const conversationLogs = assessment.conversationLogs;
   const allLogs = assessment.allLogs;
-  const combinedText = assessment.combinedText;
 
   if (options.rawLogStats?.budgetCoverageComplete === false) {
     const segmented = await require("../lib/checkpoint/long-session-summary").summarizeLongSession(rawLogs, {
@@ -459,35 +458,40 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   const beforeExtraction = versionReason();
   if (beforeExtraction) return versionFailure(beforeExtraction);
 
-  // ── Single LLM call ──
+  // No output from this extraction may be persisted before this gate.
   let extracted;
+  let factInput;
+  function summaryFailure(code) {
+    const reason = typeof code === "string" && /^(summary_[a-z_]+|output_budget)$/.test(code)
+      ? code : "summary_extraction_failed";
+    console.warn(`[checkpoint] Ordinary summary rejected: ${reason}`);
+    return {
+      status: reason.startsWith("summary_input") ? "input_incomplete" : "summary_invalid",
+      reason, memories: 0, episode: false, configs: 0, skipped: true,
+      source_version_valid: sourceVersionValid,
+      summary_input_complete: !reason.startsWith("summary_input"),
+      summary_validation: { evidence_valid: false, unit_coverage_complete: false,
+        semantic_quality: "not_independently_verified", reason },
+      publication: { published: false, reason }, writes: writeStats,
+    };
+  }
   try {
-    extracted = await getRuntime().llmNightlyExtract(combinedText);
+    factInput = summaryFacts.buildFactInput(rawLogs, episodeDate);
+    extracted = await getRuntime().llmNightlyExtract(factInput);
   } catch (error) {
     const changed = versionReason();
     if (changed) return versionFailure(changed);
-    console.error(`[checkpoint] LLM extraction failed: ${error.message}`);
-    writeLLMTimeoutEpisode(episodeDate, diagnostics);
-    return {
-      status: "timeout",
-      memories: 0,
-      episode: false,
-      configs: 0,
-      timeout: true,
-      error: error.message,
-      writes: writeStats,
-    };
+    return summaryFailure(error.code);
   }
-
   const afterExtraction = versionReason();
   if (afterExtraction) return versionFailure(afterExtraction);
-
-  // ── Timeout guard: llm超时 → write marker episode and exit early ──
-  if (extracted.error === "llm超时") {
-    console.log("[checkpoint] llm超时 — both providers failed");
-    writeLLMTimeoutEpisode(episodeDate, diagnostics);
-    return { status: "timeout", memories: 0, episode: false, configs: 0, timeout: true, writes: writeStats };
+  if (extracted?.error === "llm超时") return summaryFailure("summary_llm_unavailable");
+  try {
+    extracted = summaryFacts.validateAndRenderFacts(extracted, factInput);
+  } catch (error) {
+    return summaryFailure(error.code);
   }
+  diagnostics.ordinarySummary = extracted.validation;
 
   // ── 1. Write structured memories (6 types) ──
   let memWritten = 0;
@@ -582,25 +586,8 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
       console.log("[checkpoint] Episode smart-add append skipped by fingerprint dedup");
     }
 
-    // Default to valid; will be overridden if hallucination detected
+    // Text and derivatives were rendered from validated source quotations above.
     episodeWritten = true;
-
-    // Validate: if no real conversation data found, any "讨论/进行/决定" is hallucination
-    if (conversationLogs.length === 0) {
-      const halluPatterns = [
-        /讨论了/, /进行了/, /决定/, /确认/, /提到/,
-        /讨论/, /对话/, /交流/, /沟通/, /商议/
-      ];
-      const isHallucinated = halluPatterns.some(p => p.test(episodeText));
-      if (isHallucinated) {
-        console.warn(`[checkpoint] ⚠️ Episode hallucinated (0 conversation logs, ${allLogs.length} note entries). Discarding.`);
-        episodeWritten = false;
-        writeIncompleteEpisode(episodeDate, allLogs.length, diagnostics);
-      } else {
-        // No conversation but no hallucination keywords — write data-only episode
-        console.log(`[checkpoint] No conversation logs, but episode text doesn't mention discussion. Writing as-is.`);
-      }
-    }
 
     if (episodeWritten) {
       try {
@@ -658,6 +645,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
 
   return {
     status: episodeWritten ? "valid_summary" : "placeholder_skipped",
+    summary_validation: extracted.validation,
     memories: memWritten,
     episode: episodeWritten,
     configs: cfgWritten,
@@ -1028,6 +1016,7 @@ async function main(argv = process.argv.slice(2)) {
     const vectorOperationStatus = vectorOperationFailed ? "failed"
       : vectorLimitDeferred ? "deferred_limit" : "completed";
     const summaryInputComplete = result.source_version_valid !== false
+      && result.summary_input_complete !== false
       && (diagnostics.budgetCoverageComplete !== false || result.segmented?.day_coverage_complete === true);
     const summaryPublication = result.segmented?.publication || result.publication;
     const publicationComplete = summaryPublication?.published !== false
@@ -1038,6 +1027,7 @@ async function main(argv = process.argv.slice(2)) {
       segmented_summary: result.segmented || null,
       ordinary_publication: result.publication || null,
       ordinary_source_version_valid: result.source_version_valid ?? null,
+      ordinary_summary_validation: result.summary_validation || null,
       summary_input_complete: summaryInputComplete,
       status: !summaryInputComplete
         || engineReconciliation?.target_date_input_complete !== true

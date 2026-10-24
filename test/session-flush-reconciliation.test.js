@@ -567,10 +567,10 @@ test("checkpoint sends target-date-complete input to LLM despite historical ambi
       flushCheckpointRawLog: () => { order.push("flush"); return { ok: true }; },
       syncCoreMemoryIndex: async ({ targetDate }) => { order.push("core_index"); return completeCoreIndexResult(targetDate); },
       readCheckpointRawLogs: () => { order.push("collect"); return [{ source: "conversation", category: "raw_log", text: "**User:** hello" }]; },
-      llmNightlyExtract: async () => {
+      llmNightlyExtract: async input => {
         order.push("llm");
         llmCalls += 1;
-        return { smart_memories: [], configs: [], episode_summary: "target date summary" };
+        return require("./checkpoint-fact-fixture.cjs").factResponse(input);
       },
       reconcileSessionFlushManagedState: async options => {
         order.push("engine");
@@ -886,9 +886,7 @@ test("scoped Lance reconciliation is exact, active-only, oldest-first, and bound
       readCheckpointRawLogs: () => [{
         source: "conversation", category: "raw_log", text: "**User:** controlled daily input",
       }],
-      llmNightlyExtract: async () => ({
-        smart_memories: [], configs: [], episode_summary: "Controlled published daily summary.",
-      }),
+      llmNightlyExtract: async input => require("./checkpoint-fact-fixture.cjs").factResponse(input),
       repairOrphanVectors: async () => first,
       resolveConfigConflicts: () => 0,
     });
@@ -1672,7 +1670,7 @@ test("checkpoint reaches reconciliation after no-data, skipped, and timeout nigh
       assert.equal(checkpointResult.businessStatus.vector_completion, "empty_input");
       assert.equal(checkpointResult.businessStatus.status, scenario === "no-data"
         ? "empty_input"
-        : scenario === "skipped" ? "placeholder_skipped" : "timeout");
+        : scenario === "skipped" ? "placeholder_skipped" : "summary_invalid");
       assert.equal(checkpointResult.businessStatus.business_complete, false);
       if (scenario === "timeout") assert.equal(checkpointResult.ok, false);
     } finally {

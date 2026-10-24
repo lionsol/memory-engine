@@ -8,6 +8,14 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
+const { factResponse } = require("./checkpoint-fact-fixture.cjs");
+// These downstream integration tests do not invoke the host Core indexer.
+const completeCoreIndex = async ({ targetDate }) => ({
+  ok: true, status: "complete", index_invocation: { status: "succeeded" },
+  target_date_coverage: { status: "complete", target_date: targetDate,
+    path: `memory/smart-add/${targetDate}.md`, required_fingerprints: 1,
+    matched_fingerprints: 1, missing_fingerprints: 0 },
+});
 const confidenceWriter = require("../lib/checkpoint/confidence-writer.js");
 const smartAddWriter = require("../lib/checkpoint/smart-add-writer.js");
 const stableIdentity = require("../lib/db/stable-memory-identity.cjs");
@@ -276,9 +284,9 @@ test("session checkpoint with conversation logs calls LLM", async () => {
       sessionsDir: fixture.sessionsDir,
       timeZone: "Asia/Shanghai",
       now: () => Date.parse(fixture.now),
-      llmNightlyExtract: async () => {
+      llmNightlyExtract: async input => {
         llmCalls += 1;
-        return { episode_summary: "summary", smart_memories: [], configs: [] };
+        return factResponse(input);
       },
       repairOrphanVectors: async () => 0,
       resolveConfigConflicts: () => 0,
@@ -305,17 +313,16 @@ test("session checkpoint writes only temp outputs, keeps targetDate/generatedAt 
       sessionsDir: fixture.sessionsDir,
       timeZone: "Asia/Shanghai",
       now: () => Date.parse(fixture.now),
-      llmNightlyExtract: async () => ({
-        episode_summary: "MOCK SUMMARY: checkpoint integration test",
-        smart_memories: [],
-        configs: [{ key: "theme", value: "solarized", context: "mock" }],
-      }),
+      llmNightlyExtract: async input => factResponse(input, () => ({
+        config: { key: "theme", value: "solarized" },
+      })),
       repairOrphanVectors: async () => 0,
       resolveConfigConflicts: () => 0,
       readCheckpointRawLogs: () => ([
-        { chunk_id: "conv-1", category: "raw_log", text: "**User:** summarize today", source: "conversation" },
+        { chunk_id: "conv-1", category: "raw_log", text: "**User:** MOCK SUMMARY: checkpoint integration test; theme = solarized", source: "conversation" },
       ]),
       flushCheckpointRawLog: () => ({ ok: true }),
+      syncCoreMemoryIndex: completeCoreIndex,
     }, () => checkpoint.main());
 
     assert.equal(result.businessStatus.status, "valid_summary");
@@ -437,13 +444,10 @@ test("session checkpoint records explicit failure when LLM throws and does not w
     ]));
 
     const episodePath = resolve(fixture.memoryDir, "episodes", "2026-06-16.md");
-    const episode = readFileSync(episodePath, "utf8");
-
-    assert.equal(result.timeout, true);
-    assert.match(String(result.error || ""), /mock llm down/);
-    assert.match(episode, /llm超时/);
-    assert.match(episode, /generatedAt: 2026-06-16T17:30:00.000Z/);
-    assert.doesNotMatch(episode, /MOCK SUMMARY|summarize today/);
+    assert.equal(result.status, "summary_invalid");
+    assert.equal(result.reason, "summary_extraction_failed");
+    assert.equal(existsSync(episodePath), false);
+    assert.equal(existsSync(resolve(fixture.memoryDir, "generated-smart-add")), false);
   } finally {
     fixture.cleanup();
   }
@@ -468,15 +472,13 @@ test("session checkpoint warns and continues when confidence writes fail", async
         sessionsDir: fixture.sessionsDir,
         timeZone: "Asia/Shanghai",
         now: () => Date.parse(fixture.now),
-        llmNightlyExtract: async () => ({
-          episode_summary: "MOCK SUMMARY: warning path",
-          smart_memories: [{ type: "user_preference", text: "User prefers concise warnings." }],
-          configs: [{ key: "theme", value: "solarized", context: "mock" }],
-        }),
+        llmNightlyExtract: async input => factResponse(input, () => ({
+          memory_type: "preference", config: { key: "theme", value: "solarized" },
+        })),
         repairOrphanVectors: async () => 0,
         resolveConfigConflicts: () => 0,
       }, () => stubbedCheckpoint.nightlyCheckpoint([
-        { chunk_id: "conv-1", category: "raw_log", text: "**User:** summarize today", source: "conversation" },
+        { chunk_id: "conv-1", category: "raw_log", text: "**User:** User prefers concise warnings; theme = solarized.", source: "conversation" },
       ]));
     });
 
@@ -496,9 +498,9 @@ test("session checkpoint warns and continues when confidence writes fail", async
     const configWarning = warnings.find((line) => line.includes("section=config"));
 
     assert.ok(smartMemoryWarning);
-    assert.match(smartMemoryWarning, /type=user_preference/);
+    assert.match(smartMemoryWarning, /type=preference/);
     assert.match(smartMemoryWarning, /entryId=\S+/);
-    assert.match(smartMemoryWarning, /category=raw_log/);
+    assert.match(smartMemoryWarning, /category=preference/);
     assert.match(smartMemoryWarning, /error=confidence write exploded/);
 
     assert.ok(episodeWarning);
@@ -530,28 +532,21 @@ test("generated entries use content fingerprints and report pending confidence s
         sessionsDir: fixture.sessionsDir,
         timeZone: "Asia/Shanghai",
         now: () => Date.parse(fixture.now),
-        llmNightlyExtract: async () => ({
-          episode_summary: "",
-          smart_memories: [
-            { type: "user_preference", text: "first generated preference" },
-            { type: "user_preference", text: "second generated preference" },
-          ],
-          configs: [],
-        }),
+        llmNightlyExtract: async input => factResponse(input, () => ({ memory_type: "preference" })),
       }, () => stubbedCheckpoint.nightlyCheckpoint([
-        { chunk_id: "conv-1", category: "raw_log", text: "**User:** hello", source: "conversation" },
+        { chunk_id: "conv-1", category: "raw_log", text: "**User:** first generated preference\n\nsecond generated preference", source: "conversation" },
       ])),
     );
     assert.deepEqual(result.writes, {
-      file_written: 2,
+      file_written: 3,
       confidence_bound: 0,
-      pending: 2,
+      pending: 3,
       failed: 0,
     });
     const smartAddPath = resolve(fixture.memoryDir, "generated-smart-add", "2026-06-17.md");
     const smartAdd = readFileSync(smartAddPath, "utf8");
     const headings = smartAdd.match(/^## ([a-f0-9]{16})$/gm) || [];
-    assert.equal(headings.length, 2);
+    assert.equal(headings.length, 3);
     assert.notEqual(headings[0], headings[1]);
   } finally {
     fixture.cleanup();
@@ -576,18 +571,14 @@ test("pending generated entry is rebound after Core indexing without duplicating
       sessionsDir: fixture.sessionsDir,
       timeZone: "Asia/Shanghai",
       now: () => Date.parse(fixture.now),
-      llmNightlyExtract: async () => ({
-        episode_summary: "",
-        smart_memories: [{ type: "user_preference", text: "pending then indexed preference" }],
-        configs: [],
-      }),
+      llmNightlyExtract: async input => factResponse(input, () => ({ memory_type: "preference" })),
     }, () => stubbedCheckpoint.nightlyCheckpoint([
-      { chunk_id: "conv-1", category: "raw_log", text: "**User:** hello", source: "conversation" },
+      { chunk_id: "conv-1", category: "raw_log", text: "**User:** pending then indexed preference", source: "conversation" },
     ])));
-    assert.equal(first.writes.pending, 1);
+    assert.equal(first.writes.pending, 2);
     const generatedPath = resolve(fixture.memoryDir, "generated-smart-add", "2026-06-17.md");
     const firstContent = readFileSync(generatedPath, "utf8");
-    assert.equal((firstContent.match(/^## [a-f0-9]{16}$/gm) || []).length, 1);
+    assert.equal((firstContent.match(/^## [a-f0-9]{16}$/gm) || []).length, 2);
     const firstEntryId = firstContent.match(/^## ([a-f0-9]{16})$/m)?.[1];
     const firstLines = firstContent.split("\n");
     const firstEntryStart = firstLines.findIndex(line => /^## [a-f0-9]{16}$/.test(line)) + 1;
@@ -610,21 +601,17 @@ test("pending generated entry is rebound after Core indexing without duplicating
       sessionsDir: fixture.sessionsDir,
       timeZone: "Asia/Shanghai",
       now: () => Date.parse(fixture.now),
-      llmNightlyExtract: async () => ({
-        episode_summary: "",
-        smart_memories: [{ type: "user_preference", text: "pending then indexed preference" }],
-        configs: [],
-      }),
+      llmNightlyExtract: async input => factResponse(input, () => ({ memory_type: "preference" })),
     }, () => stubbedCheckpoint.nightlyCheckpoint([
-      { chunk_id: "conv-1", category: "raw_log", text: "**User:** hello", source: "conversation" },
+      { chunk_id: "conv-1", category: "raw_log", text: "**User:** pending then indexed preference", source: "conversation" },
     ])));
     assert.equal(second.writes.file_written, 0);
-    assert.equal(second.writes.confidence_bound, 1);
-    assert.equal(confidenceCalls.length, 2);
+    assert.equal(second.writes.confidence_bound, 2);
+    assert.equal(confidenceCalls.length, 4);
     assert.equal(confidenceCalls[0].entryId, firstEntryId);
-    assert.equal(confidenceCalls[1].entryId, firstEntryId);
+    assert.equal(confidenceCalls[2].entryId, firstEntryId);
     const secondContent = readFileSync(generatedPath, "utf8");
-    assert.equal((secondContent.match(/^## [a-f0-9]{16}$/gm) || []).length, 1);
+    assert.equal((secondContent.match(/^## [a-f0-9]{16}$/gm) || []).length, 2);
   } finally {
     fixture.cleanup();
   }
@@ -703,6 +690,7 @@ test("already-written pending entry is rebound by the bounded retry path without
       now: () => Date.parse("2026-06-17T11:00:00+08:00"),
       flushCheckpointRawLog: () => ({ ok: true }),
       readCheckpointRawLogs: () => [],
+      syncCoreMemoryIndex: completeCoreIndex,
       llmNightlyExtract: async () => {
         llmCalls += 1;
         throw new Error("LLM must not be called for pending-only recovery");
@@ -837,6 +825,7 @@ test("bounded pending recovery skips completed and deferred entries so the 51st 
       ...runtimeOptions,
       flushCheckpointRawLog: () => ({ ok: true }),
       readCheckpointRawLogs: () => [],
+      syncCoreMemoryIndex: completeCoreIndex,
       llmNightlyExtract: async () => {
         llmCalls += 1;
         throw new Error("LLM must not be called for bounded pending recovery");

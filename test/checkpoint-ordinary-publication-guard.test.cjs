@@ -7,6 +7,8 @@ const {dedupeCollectedLogs}=require("../lib/checkpoint/raw-log-dedupe");
 const {withRuntime}=require("../lib/checkpoint/runtime");
 const llm=require("../lib/checkpoint/llm"),config=require("../lib/checkpoint/config");
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
+const {factResponse}=require("./checkpoint-fact-fixture.cjs");
+let currentInput;
 // The subject is the real bin, reader and publisher. Unrelated confidence DB writes
 // are counted at their boundary; every filesystem target is inside a fresh temp root.
 const confidence=require("../lib/checkpoint/confidence-writer");
@@ -22,7 +24,7 @@ const ALIGNED={...BASE,perSessionChars:24000,conversationChars:25000};
 const entry=(size,id)=>({text:"**User:** "+id+" "+"A".repeat(size-11-id.length),
  entryId:id,sessionId:id,category:"raw_log",provenance:"session_flush",source:"conversation",
  sourceKind:"smartAdd",timestampMs:null,role:"other",dedupeKey:id});
-const answer=()=>({smart_memories:[],episode_summary:"Complete controlled ordinary-path summary.",configs:[]});
+const answer=()=>factResponse(currentInput);
 function stats(){
  const chars=()=>({smartAdd:0,dbRawLog:0,resetTranscript:0});
  return {droppedDuplicateCount:0,droppedByBudgetCount:0,sourceCharCountsAfter:chars(),
@@ -52,7 +54,7 @@ async function fixture(action){
  finally{onBind=null;fs.rmSync(root,{recursive:true,force:true});}
 }
 async function run(logs,extract,extra={}){
- return withRuntime({llmNightlyExtract:extract},()=>checkpoint.nightlyCheckpoint(logs,{
+ return withRuntime({llmNightlyExtract:input=>{currentInput=input;return extract(input);}},()=>checkpoint.nightlyCheckpoint(logs,{
   targetDate:DATE,rawLogStats:logs.checkpointStats,inputReady:true,...extra}));
 }
 function noDerived(root){
@@ -86,10 +88,11 @@ test("aligned budget goes through existing ordinary reader/bin/LLM HTTP path onc
     assert.equal(result.status,"valid_summary");assert.equal(result.episode,true);
     assert.equal(result.source_version_valid,true);assert.equal(result.publication.published,true);
     assert.equal(fs.readFileSync(result.publication.backup,"utf8"),"OLD SUMMARY");
-    assert.match(fs.readFileSync(path,"utf8"),/Complete controlled ordinary-path summary/);
+    assert.match(fs.readFileSync(path,"utf8"),/long AAAAA/);
    },(request,callback)=>{
     requests++;const prompt=request.body.messages.at(-1).content;
-    for(const e of state.entries)assert.ok(prompt.includes(e.text),"full entry missing");
+    const sent=JSON.parse(prompt);
+    for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
     assert.equal(request.body.max_tokens,4096);
     emitJson(callback,completion(JSON.stringify(answer())),{bytewise:true});
    });
@@ -198,7 +201,8 @@ test("ordinary publication lock failure is reported rather than overwriting or c
  });
 });
 async function runMain(read,runtime,extract,overrides={}){
- return withRuntime({...runtime,readCheckpointRawLogs:read,llmNightlyExtract:extract,
+ return withRuntime({...runtime,readCheckpointRawLogs:read,
+  llmNightlyExtract:input=>{currentInput=input;return extract(input);},
   flushCheckpointRawLog:()=>({ok:true}),
   syncCoreMemoryIndex:()=>({ok:true,index_invocation:{status:"succeeded"},
    target_date_coverage:{status:"complete",target_date:DATE,path:"memory/smart-add/"+DATE+".md",
@@ -261,7 +265,7 @@ for(const [name,patch,ok,status,complete] of vectorCases){
    assert.equal(result.businessStatus.business_complete,complete);
    assert.equal(result.businessStatus.summary_status,"valid_summary");
    assert.equal(result.businessStatus.ordinary_publication.published,true);
-   assert.match(fs.readFileSync(path,"utf8"),/Complete controlled ordinary-path summary/);
+   assert.match(fs.readFileSync(path,"utf8"),/long AAAAA/);
    assert.equal(result.businessStatus.vector_limit_backlog,patch.lance_limit_backlog_remaining??1810);
   });
  });
@@ -304,7 +308,7 @@ test("committed episode with failed lock cleanup remains recorded as published, 
    assert.equal(result.businessStatus.publication_complete,false);
    assert.equal(result.businessStatus.ordinary_publication.published,true);
    assert.equal(result.businessStatus.ordinary_publication.cleanup_complete,false);
-   assert.match(fs.readFileSync(path,"utf8"),/Complete controlled ordinary-path summary/);
+   assert.match(fs.readFileSync(path,"utf8"),/long AAAAA/);
   }finally{fs.unlinkSync=unlink;}
  });
 });
