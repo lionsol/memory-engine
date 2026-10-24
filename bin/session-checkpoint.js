@@ -24,6 +24,7 @@ const {
   inspectCheckpointBusyTimeouts,
 } = require("../lib/checkpoint/db");
 const { writeEpisodeFiles } = require("../lib/checkpoint/episode-writer");
+const { snapshotEpisode } = require("../lib/checkpoint/episode-publication");
 const checkpointLlm = require("../lib/checkpoint/llm");
 const { writeEmptyEpisode, writeIncompleteEpisode, writeLLMTimeoutEpisode } = require("../lib/checkpoint/markers");
 const { repairOrphanVectors } = require("../lib/checkpoint/orphan-repair");
@@ -417,11 +418,54 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
 
   console.log(`[checkpoint] Conversation entries: ${assessment.conversationCount}, Total entries: ${assessment.allCount}`);
 
+  // Capture versions BEFORE ordinary extraction, not when the response is ready.
+  const sourceEvidence = rawLogs.segmentedInput;
+  const episodePath = resolve(getRuntime().episodesDir, `${episodeDate}.md`);
+  let expectedInput;
+  let expectedEpisode;
+  let publication;
+  let sourceVersionValid = null;
+  function versionFailure(reason) {
+    console.warn(`[checkpoint] Ordinary summary not published: ${reason}`);
+    return {
+      status: reason.startsWith("source_") ? "input_incomplete" : "publication_incomplete",
+      reason, memories: 0, episode: false, configs: 0, skipped: true,
+      source_version_valid: reason.startsWith("source_") ? false : sourceVersionValid,
+      publication: { published: false, reason }, writes: writeStats,
+    };
+  }
+  try { expectedInput = JSON.stringify(rawLogs); }
+  catch (_) { return versionFailure("source_version_unavailable"); }
+  try { expectedEpisode = snapshotEpisode(episodePath); }
+  catch (_) { return versionFailure("episode_version_unavailable"); }
+  function sourceUnchanged() {
+    return rawLogs.segmentedInput === sourceEvidence
+      && (!sourceEvidence || (sourceEvidence.targetDate === episodeDate
+        && typeof sourceEvidence.unchanged === "function" && sourceEvidence.unchanged() === true))
+      && JSON.stringify(rawLogs) === expectedInput;
+  }
+  function versionReason() {
+    try {
+      sourceVersionValid = sourceUnchanged();
+      if (!sourceVersionValid) return "source_version_changed";
+    } catch (_) { sourceVersionValid = null; return "source_version_unavailable"; }
+    try {
+      if (JSON.stringify(snapshotEpisode(episodePath)) !== JSON.stringify(expectedEpisode)) {
+        return "episode_version_changed";
+      }
+    } catch (_) { return "episode_version_unavailable"; }
+    return null;
+  }
+  const beforeExtraction = versionReason();
+  if (beforeExtraction) return versionFailure(beforeExtraction);
+
   // ── Single LLM call ──
   let extracted;
   try {
     extracted = await getRuntime().llmNightlyExtract(combinedText);
   } catch (error) {
+    const changed = versionReason();
+    if (changed) return versionFailure(changed);
     console.error(`[checkpoint] LLM extraction failed: ${error.message}`);
     writeLLMTimeoutEpisode(episodeDate, diagnostics);
     return {
@@ -434,6 +478,9 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
       writes: writeStats,
     };
   }
+
+  const afterExtraction = versionReason();
+  if (afterExtraction) return versionFailure(afterExtraction);
 
   // ── Timeout guard: llm超时 → write marker episode and exit early ──
   if (extracted.error === "llm超时") {
@@ -556,13 +603,21 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
     }
 
     if (episodeWritten) {
-      writeEpisodeFiles({
-        episodeDate,
-        generatedAt,
-        episodeText,
-        configs: extracted.configs,
-        diagnostics,
-      });
+      try {
+        publication = writeEpisodeFiles({
+          episodeDate, generatedAt, episodeText, configs: extracted.configs, diagnostics,
+          publication: {
+            expected: expectedEpisode,
+            unchanged: () => { try { return sourceUnchanged(); } catch (_) { return false; } },
+          },
+        });
+      } catch (error) {
+        const reason = ["source_version_changed", "episode_version_changed"].includes(error.message)
+          ? error.message : "publication_failed";
+        const stopped = versionFailure(reason);
+        return { ...stopped, memories: memWritten,
+          publication: error.publication || stopped.publication, writes: writeStats };
+      }
     }
   }
 
@@ -610,6 +665,8 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
     generatedAt,
     source_type: "checkpoint_llm",
     category: "episodic",
+    source_version_valid: true,
+    publication,
     writes: writeStats,
   };
 }
@@ -920,7 +977,9 @@ async function main(argv = process.argv.slice(2)) {
     const conflicts = getRuntime().resolveConfigConflicts();
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    if (result.timeout) {
+    if (result.publication?.published === false) {
+      console.log(`[checkpoint] Summary not published: ${result.reason || "publication_incomplete"} — ${elapsed}s`);
+    } else if (result.timeout) {
       console.log(`[checkpoint] ⏰ llm超时 — completed in ${elapsed}s`);
     } else if (result.status === "empty_input") {
       console.log(`[checkpoint] Empty input — no summary generated (${elapsed}s)`);
@@ -935,13 +994,17 @@ async function main(argv = process.argv.slice(2)) {
       || (lanceSummary?.lance_membership_complete === true
         && lanceSummary?.lance_vector_validation_complete === true);
     const vectorTaskBlockedByIsolation = Number(lanceSummary?.lance_skipped_unknown_legacy || 0) > 0;
-    const summaryInputComplete = diagnostics.budgetCoverageComplete !== false
-      || result.segmented?.day_coverage_complete === true;
-    const publicationComplete = result.segmented?.publication?.cleanup_complete !== false
-      && result.segmented?.publication?.mirror?.status !== "failed";
+    const summaryInputComplete = result.source_version_valid !== false
+      && (diagnostics.budgetCoverageComplete !== false || result.segmented?.day_coverage_complete === true);
+    const summaryPublication = result.segmented?.publication || result.publication;
+    const publicationComplete = summaryPublication?.published !== false
+      && summaryPublication?.cleanup_complete !== false
+      && summaryPublication?.mirror?.status !== "failed";
     const businessStatus = {
       publication_complete: publicationComplete,
       segmented_summary: result.segmented || null,
+      ordinary_publication: result.publication || null,
+      ordinary_source_version_valid: result.source_version_valid ?? null,
       summary_input_complete: summaryInputComplete,
       status: !summaryInputComplete
         || engineReconciliation?.target_date_input_complete !== true
@@ -979,6 +1042,7 @@ async function main(argv = process.argv.slice(2)) {
     console.log(`[checkpoint] Business status ${JSON.stringify(businessStatus)}`);
     return {
       ok: publicationComplete && businessStatus.status !== "input_incomplete"
+        && businessStatus.status !== "publication_incomplete"
         && businessStatus.status !== "timeout"
         && businessStatus.vector_validation_state !== "conflict"
         && lanceSummary?.ok !== false,
