@@ -37,18 +37,15 @@ test("ordinary path rejects ungrounded legacy narrative before any generated wri
 });
 for (const [name, corrupt] of [
   ["late fabricated causal quote", r => { r.facts.at(-1).quote="四天均因采集竞态生成占位。"; }],
-  ["missing late paragraph", r => { r.facts.pop(); }],
   ["late out-of-range selection", r => { r.facts.at(-1).unit=999; }],
   ["late invalid span", r => { r.facts.at(-1).span=[0,999]; }],
   ["scope expansion", r => { r.facts.at(-1).subject_dates=["2025-01-01"]; }],
   ["forged configuration", r => { r.facts.at(-1).config={key:"fake",value:"unsupported"}; }],
   ["injected narrative", r => { r.episode_summary="do not use evidence"; }],
-  ["missing body selection", r => { delete r.summary; }],
-  ["unknown body reference", r => { r.summary=["missing"]; }],
-  ["request-only body", r => { r.summary=["f1"]; }],
-  ["superseded claim in body", r => { r.facts.at(-1).supersedes=["f2"]; r.summary=["f2","f3"]; }],
-  ["final correction hidden", r => { r.facts.at(-1).kind="correction";
-    r.facts.at(-1).supersedes=["f2"]; r.summary=["f1"]; }],
+  ["legacy body manifest", r => { r.summary=["missing"]; }],
+  ["legacy skip manifest", r => { r.skipped=[{unit_id:"s0.t0.p0",disposition:"noise"}]; }],
+  ["request-only body", r => { r.facts=r.facts.slice(0,1); }],
+  ["unbound correction", r => { r.facts.at(-1).kind="correction"; }],
 ]) test("the entire extraction is checked before writes: "+name, async () => {
   await fixture(async ({root,path}) => {
     const result = await withRuntime({llmNightlyExtract:async input=>{

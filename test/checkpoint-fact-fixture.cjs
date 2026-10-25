@@ -3,11 +3,11 @@ const { PROTOCOL, buildFactInput } = require("../lib/checkpoint/ordinary-summary
 function factResponse(input, decorate = () => ({})) {
   const facts = [];
   for (const source of input.sources) for (const unit of source.units) {
+    const text = unit.text ?? unit.parts.join("");
+    if (/^(?:HEARTBEAT_OK|\[OpenClaw heartbeat poll\])$/.test(text.trim())) continue;
     facts.push({ unit: unit.index, ...decorate(unit, facts.length) });
   }
-  const superseded = new Set(facts.flatMap(fact => fact.supersedes || []));
-  const summary = facts.map((fact, i) => fact.id || "f" + (i + 1)).filter(id => !superseded.has(id));
-  return { protocol: PROTOCOL, target_date: input.target_date, facts, summary, skipped: [] };
+  return { protocol: PROTOCOL, target_date: input.target_date, facts };
 }
 function textInput(text, targetDate = "2026-10-20") {
   return buildFactInput([{ text, source: "conversation", category: "raw_log" }], targetDate);

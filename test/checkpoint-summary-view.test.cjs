@@ -1,105 +1,103 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
-const {PROTOCOL,buildFactInput,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
-const {factResponse,textInput}=require("./checkpoint-fact-fixture.cjs");
-const reply=(input,summary,decorate)=>({...factResponse(input,decorate),summary});
-test("197 reviewed paragraphs can produce a concise body with all evidence locators retained",()=>{
-  const input=textInput("**Assistant:** "+Array.from({length:196},(_,i)=>"背景"+i+"："+ "背景材料。".repeat(10)).concat("最终结果：修复已验证。").join("\n\n"));
-  const result=validateAndRenderFacts(reply(input,["f197"]),input);
+const {PROTOCOL,buildFactInput,buildFactPrompt,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
+const {textInput}=require("./checkpoint-fact-fixture.cjs");
+const reply=(input,facts)=>({protocol:PROTOCOL,target_date:input.target_date,facts});
+test("selected facts produce a concise body while complete input ranges remain independently auditable",()=>{
+  const input=textInput("**Assistant:** "+Array.from({length:196},(_,i)=>"背景"+i+"："+"背景材料。".repeat(10)).concat("最终结果：修复已验证。").join("\n\n"));
+  const result=validateAndRenderFacts(reply(input,[196]),input);
   assert.match(result.episode_summary,/最终结果：修复已验证/);
   assert.ok(!result.episode_summary.includes("背景材料"));
   assert.ok(result.episode_summary.length<3000);
-  assert.equal(result.validation.fact_count,197);
-  assert.equal(result.validation.evidence.length,197);
-  assert.deepEqual(result.validation.summary_fact_ids,["f197"]);
-  assert.equal(result.validation.unit_coverage_complete,true);
-  assert.equal(result.validation.summary_unit_coverage_complete,false);
+  assert.equal(result.validation.input_units.length,197);
+  assert.equal(result.validation.evidence.length,1);
+  assert.equal(result.validation.selected_unit_count,1);
+  assert.deepEqual(result.validation.summary_fact_ids,["f1"]);
+  assert.equal(result.validation.unit_coverage_complete,false);
+  assert.equal(result.validation.source_coverage_complete,true);
   assert.equal(result.validation.semantic_quality,"not_independently_verified");
-  const row=result.validation.evidence[0];
-  assert.equal(row[0],"f1");
-  assert.equal(row[1],"s0");
-  assert.deepEqual(row.slice(2,4),[input.sources[0].units[0].start,input.sources[0].units[0].end]);
+  assert.deepEqual(result.validation.evidence[0].slice(2,4),
+    [input.sources[0].units[196].start,input.sources[0].units[196].end]);
   assert.ok(!JSON.stringify(result.validation).includes("背景材料"));
 });
-for(const summary of [undefined,[],null,"f1",["missing"],["f1","f1"],[0]])test("invalid summary selection fails closed: "+JSON.stringify(summary),()=>{
-  const input=textInput("**Assistant:** 结果正常。"),r=reply(input,summary);
-  if(summary===undefined)delete r.summary;
-  assert.throws(()=>validateAndRenderFacts(r,input),{code:"summary_selection"});
-});
-test("source coverage in evidence cannot hide a missing short source in the body",()=>{
+test("source coverage cannot hide a missing short health record",()=>{
   const input=buildFactInput([
     {text:"**Assistant:** 较长记录。\n\n其他背景。",source:"conversation"},
     {text:"**Assistant:** 01:00 健康检查正常。",source:"conversation"},
     {text:"**Assistant:** 02:00 健康检查正常。",source:"conversation"},
     {text:"**Assistant:** 03:00 健康检查正常。",source:"conversation"}
   ],"2026-10-20");
-  assert.throws(()=>validateAndRenderFacts(reply(input,["f1","f3","f4"]),input),
-    {code:"summary_source_coverage"});
-  const result=validateAndRenderFacts(reply(input,["f1","f3","f4","f5"]),input);
-  assert.match(result.episode_summary,/01:00/);assert.match(result.episode_summary,/02:00/);
-  assert.match(result.episode_summary,/03:00/);
+  assert.throws(()=>validateAndRenderFacts(reply(input,[0,2,3]),input),{code:"summary_source_coverage"});
+  const result=validateAndRenderFacts(reply(input,[0,2,3,4]),input);
+  for(const time of ["01:00","02:00","03:00"])assert.ok(result.episode_summary.includes(time));
 });
-test("a source with assistant results cannot be represented only by its request",()=>{
+test("request-only selection cannot conceal assistant results present in the input",()=>{
   const input=textInput("**User:** 检查 03:00。\n\n**Assistant:** 03:00 三项全部正常。");
-  assert.throws(()=>validateAndRenderFacts(reply(input,["f1"]),input),{code:"summary_source_coverage"});
+  assert.throws(()=>validateAndRenderFacts(reply(input,[0]),input),{code:"summary_source_coverage"});
 });
-test("current correction replaces the body and derived writes while preserving old evidence",()=>{
+test("explicit user decisions can represent their source without unrelated assistant material",()=>{
+  const input=textInput("**Assistant:** 其他任务正常。\n\n**User:** 决定停止本次部署。");
+  const result=validateAndRenderFacts(reply(input,[{unit:1,kind:"decision"}]),input);
+  assert.match(result.episode_summary,/决定停止本次部署/);
+  assert.ok(!result.episode_summary.includes("其他任务正常"));
+});
+test("latest explicit correction renders automatically and suppresses obsolete derived writes",()=>{
   const input=textInput("**Assistant:** mode = old。\n\n**Assistant:** mode = new，旧设置作废。");
-  const r=reply(input,["f2"],(u,i)=>({kind:i?"correction":"report",supersedes:i?["f1"]:[],
-    memory_type:"preference",config:{key:"mode",value:i?"new":"old"}}));
-  const result=validateAndRenderFacts(r,input);
+  const result=validateAndRenderFacts(reply(input,[
+    {unit:0,memory_type:"preference",config:{key:"mode",value:"old"}},
+    {unit:1,kind:"correction",supersedes:["f1"],memory_type:"preference",config:{key:"mode",value:"new"}}
+  ]),input);
   assert.ok(!result.episode_summary.includes("mode = old"));
   assert.match(result.episode_summary,/mode = new/);
   assert.match(result.episode_summary,/纠正关联为模型标注/);
   assert.deepEqual(result.validation.evidence.map(e=>e[0]),["f1","f2"]);
   assert.deepEqual(result.validation.evidence[1][4],["f1"]);
   assert.equal(result.smart_memories.length,1);
-  assert.equal(result.configs.length,1);
-  assert.equal(result.configs[0].value,"new");
+  assert.equal(result.configs.length,1);assert.equal(result.configs[0].value,"new");
 });
-test("selecting a superseded claim is rejected, even alongside the latest correction",()=>{
-  const input=textInput("**Assistant:** 计划 04:10。\n\n**Assistant:** 04:10 作废。");
-  const r=reply(input,["f1","f2"],(u,i)=>i?{kind:"correction",supersedes:["f1"]}:{});
-  assert.throws(()=>validateAndRenderFacts(r,input),{code:"summary_superseded"});
-});
-test("the latest explicit correction must be visible rather than left only in metadata",()=>{
-  const input=textInput("**Assistant:** 计划 04:10。\n\n**Assistant:** 04:10 作废。\n\n其他工作正常。");
-  const r=reply(input,["f3"],(u,i)=>i===1?{kind:"correction",supersedes:["f1"]}:{});
-  assert.throws(()=>validateAndRenderFacts(r,input),{code:"summary_correction_missing"});
-});
-test("correction chains need only the final leaf in the body",()=>{
+test("correction chains render their final leaf while retaining each prior locator",()=>{
   const input=textInput("**Assistant:** 旧计划。\n\n第二计划。\n\n最终计划。");
-  const r=reply(input,["f3"],(u,i)=>i?{kind:"correction",supersedes:["f"+i]}:{});
-  assert.match(validateAndRenderFacts(r,input).episode_summary,/最终计划/);
+  const result=validateAndRenderFacts(reply(input,[0,{unit:1,kind:"correction",supersedes:["f1"]},
+    {unit:2,kind:"correction",supersedes:["f2"]}]),input);
+  assert.match(result.episode_summary,/最终计划/);
+  assert.ok(!result.episode_summary.includes("旧计划"));
+  assert.ok(!result.episode_summary.includes("第二计划"));
+  assert.equal(result.validation.evidence.length,3);
 });
-test("an explicit correction cannot omit its correction link",()=>{
-  const input=textInput("**Assistant:** 旧状态。\n\n新状态。");
-  const r=reply(input,["f2"],(u,i)=>i?{kind:"correction"}:{});
-  assert.throws(()=>validateAndRenderFacts(r,input),{code:"summary_correction_link"});
+test("explicit correction without an earlier source-bound link is rejected",()=>{
+  const input=textInput("**Assistant:** 新状态。");
+  assert.throws(()=>validateAndRenderFacts(reply(input,[{unit:0,kind:"correction"}]),input),
+    {code:"summary_correction_link"});
 });
-test("the summary body has a hard size bound instead of truncating evidence",()=>{
-  const input=textInput("**Assistant:** "+"A".repeat(3100));
-  assert.throws(()=>validateAndRenderFacts(reply(input,["f1"]),input),{code:"summary_budget"});
+test("control markers are handled locally without renumbering real source units",()=>{
+  const input=buildFactInput([{text:"**Assistant:** 正常。\n\nHEARTBEAT_OK\n\n另一次正常。",source:"conversation"},
+    {text:"[OpenClaw heartbeat poll]",source:"conversation"}],"2026-10-20");
+  const wire=JSON.parse(buildFactPrompt(input,45000).prompt);
+  assert.deepEqual(wire.sources[0].units.map(u=>u.index),[0,2]);
+  assert.equal(wire.sources[1].units.length,0);
+  const result=validateAndRenderFacts(reply(input,[0,2]),input);
+  assert.deepEqual(result.validation.excluded_control_unit_ids,["s0.t0.p1","s1.t0.p0"]);
+  assert.equal(result.validation.input_units.length,4);
+  assert.equal(result.validation.content_unit_count,2);
+  assert.equal(result.validation.unit_coverage_complete,true);
+  assert.throws(()=>validateAndRenderFacts(reply(input,[1]),input),{code:"summary_noise"});
 });
-test("full-copy output from the v2 failure is rejected by the summary bound",()=>{
+for(const field of ["summary","skipped","coverage"])test("old bookkeeping fields are rejected rather than normalized: "+field,()=>{
+  const input=textInput("**Assistant:** 正常。"),r=reply(input,[0]);
+  r[field]=field==="summary"?["f1"]:[];
+  assert.throws(()=>validateAndRenderFacts(r,input),{code:"summary_structure"});
+});
+test("full-copy output remains invalid under the unchanged 3000-character bound",()=>{
   const input=textInput("**Assistant:** "+Array.from({length:197},(_,i)=>"记录"+i+"："+"原文。".repeat(12)).join("\n\n"));
-  const r=reply(input,Array.from({length:197},(_,i)=>"f"+(i+1)));
-  assert.throws(()=>validateAndRenderFacts(r,input),{code:"summary_budget"});
+  assert.throws(()=>validateAndRenderFacts(reply(input,Array.from({length:197},(_,i)=>i)),input),
+    {code:"summary_budget"});
 });
-test("a source containing only allowed control noise need not appear in the body",()=>{
-  const input=buildFactInput([{text:"**Assistant:** 正常。",source:"conversation"},
-    {text:"HEARTBEAT_OK",source:"conversation"}],"2026-10-20");
-  const r=reply(input,["f1"]);r.facts.pop();
-  r.skipped=[{unit_id:input.sources[1].units[0].id,disposition:"noise"}];
-  assert.match(validateAndRenderFacts(r,input).episode_summary,/正常/);
+test("source quotations still cannot certify omitted assertions or unmarked corrections",()=>{
+  const input=textInput("**Assistant:** 任务 A 成功。任务 B 失败。");
+  const result=validateAndRenderFacts(reply(input,[{unit:0,span:[0,0]}]),input);
+  assert.ok(!result.episode_summary.includes("任务 B"));
+  assert.equal(result.validation.semantic_quality,"not_independently_verified");
 });
-test("an explicit user decision can represent its source without copying an unrelated assistant report",()=>{
-  const input=textInput("**Assistant:** 其他任务正常。\n\n**User:** 决定停止本次部署。");
-  const r=reply(input,["f2"],(u,i)=>i?{kind:"decision"}:{});
-  const result=validateAndRenderFacts(r,input);
-  assert.match(result.episode_summary,/决定停止本次部署/);
-  assert.ok(!result.episode_summary.includes("其他任务正常"));
-});
-test("wire protocol version declares the two-output contract",()=>{
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v3");
+test("the simplified output contract has a distinct protocol version",()=>{
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v4");
 });

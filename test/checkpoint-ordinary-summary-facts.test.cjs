@@ -27,14 +27,16 @@ test("missing any short health entry is rejected despite the full long entry", (
     const input = recordedInput(), reply = factResponse(input);
     const ids = new Set(input.sources[index].units.map(u => u.index));
     reply.facts = reply.facts.filter(f => !ids.has(f.unit));
-    assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_coverage" });
+    assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_source_coverage" });
   }
 });
-test("whole-entry coverage cannot hide a missing paragraph within a long turn", () => {
-  const input = recordedInput(), reply = factResponse(input);
-  const id = input.sources[0].units[3].index;
-  reply.facts = reply.facts.filter(f => f.unit !== id);
-  assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_coverage" });
+test("partial selection retains a complete input audit without claiming paragraph completeness", () => {
+  const input=recordedInput(),reply=factResponse(input);
+  reply.facts=reply.facts.filter(f=>f.unit!==input.sources[0].units[3].index);
+  const result=validateAndRenderFacts(reply,input);
+  assert.equal(result.validation.unit_coverage_complete,false);
+  assert.equal(result.validation.input_units.length,input.sources.flatMap(s=>s.units).length);
+  assert.equal(result.validation.semantic_quality,"not_independently_verified");
 });
 test("the observed four-day causal merge cannot be invented as an evidence quote", () => {
   const input = recordedInput(), reply = factResponse(input);
@@ -58,8 +60,8 @@ for (const [name, change, code] of [
   ["false noise", r => { r.facts=[]; }, "summary_structure"],
   ["extra narrative", r => { r.episode_summary = "invented"; }, "summary_structure"],
   ["duplicate fact IDs", r => { r.facts[0].id="same"; r.facts.push({...r.facts[0]}); }, "summary_fact_structure"],
-  ["unknown skipped unit", r => { r.skipped=[{unit_id:"missing",disposition:"noise"}]; }, "summary_coverage"],
-  ["overlapping skip", r => { r.skipped=[{unit_id:"s0.t0.p0",disposition:"noise"}]; }, "summary_coverage"],
+  ["unknown skipped unit", r => { r.skipped=[{unit_id:"missing",disposition:"noise"}]; }, "summary_structure"],
+  ["overlapping skip", r => { r.skipped=[{unit_id:"s0.t0.p0",disposition:"noise"}]; }, "summary_structure"],
   ["invented config", r => { r.facts[0].config={key:"missing",value:"fake"}; }, "summary_config"],
   ["invented category", r => { r.facts[0].memory_type="unknown"; }, "summary_memory_type"],
 ]) test(name, () => {
@@ -67,31 +69,22 @@ for (const [name, change, code] of [
   change(reply);
   assert.throws(() => validateAndRenderFacts(reply, input), {code});
 });
-test("substantive paragraphs cannot be dropped as noise or a same-topic duplicate", () => {
-  for (const disposition of ["noise", "duplicate"]) {
-    const input = textInput("**User:** 什么结果？\n\n**Assistant:** 任务失败。");
-    const reply = factResponse(input); reply.facts.pop();
-    const row = {unit_id:input.sources[0].units[1].id,disposition};
-    reply.skipped.push(row);
-    if (disposition==="duplicate") row.duplicate_of=input.sources[0].units[0].id;
-    assert.throws(() => validateAndRenderFacts(reply, input), {code:"summary_"+disposition});
-  }
+test("substantive results cannot be represented only by user requests", () => {
+  const input=textInput("**User:** 什么结果？\n\n**Assistant:** 任务失败。");
+  const reply=factResponse(input);reply.facts.pop();
+  assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_source_coverage"});
 });
-test("only exact same-role earlier paragraphs are eligible for duplicate disposition", () => {
-  const input = textInput("**User:** 再检查。\n\n再检查。\n\n**Assistant:** HEARTBEAT_OK");
-  const reply = factResponse(input);
-  reply.facts = reply.facts.slice(0, 1);
-  reply.skipped = [{unit_id: input.sources[0].units[1].id, disposition:"duplicate",
-    duplicate_of:input.sources[0].units[0].id},
-    {unit_id: input.sources[0].units[2].id, disposition:"noise"}];
-  reply.summary=["f1"];
-  assert.equal(validateAndRenderFacts(reply,input).validation.fact_count,1);
+test("identical paragraphs stay auditable while only exact control markers are excluded", () => {
+  const input=textInput("**User:** 再检查。\n\n再检查。\n\n**Assistant:** HEARTBEAT_OK");
+  const result=validateAndRenderFacts(factResponse(input),input);
+  assert.equal(result.validation.input_units.length,3);
+  assert.equal(result.validation.content_unit_count,2);
+  assert.equal(result.validation.evidence.length,2);
 });
 test("later corrections keep the earlier assertion and cannot refer forward or across sources", () => {
   const input = textInput("**Assistant:** 需要修复。\n\n**User:** 已修复并验证。");
   const reply = factResponse(input);
   reply.facts[1].kind="correction"; reply.facts[1].supersedes=["f1"];
-  reply.summary=["f2"];
   const result=validateAndRenderFacts(reply,input), text=result.episode_summary;
   assert.ok(!text.includes("需要修复"));
   assert.match(text,/已修复并验证/);
@@ -140,11 +133,13 @@ test("malformed Unicode cannot silently remove a source from coverage", () => {
     {text:String.fromCharCode(0xd800),source:"conversation"}], DATE), {code:"summary_input_unicode"});
 });
 test("short acknowledgements and status replies are not automatically noise", () => {
-  for (const answer of ["OK","收到","谢谢","你好"]) {
+  for(const answer of ["OK","收到","谢谢","你好"]){
     const input=textInput("**User:** 请确认检查结果。\n\n**Assistant:** "+answer);
-    const reply=factResponse(input); reply.facts.pop();
-    reply.skipped=[{unit_id:input.sources[0].units[1].id,disposition:"noise"}];
-    assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_noise"});
+    const wire=JSON.parse(buildFactPrompt(input,45000).prompt);
+    assert.equal(wire.sources[0].units[1].parts.join(""),answer);
+    const result=validateAndRenderFacts(factResponse(input),input);
+    assert.ok(result.episode_summary.includes(answer));
+    assert.equal(result.validation.excluded_control_unit_ids.length,0);
   }
 });
 test("mechanical coverage does not certify all assertions within a paragraph", () => {
@@ -161,10 +156,9 @@ test("compact facts derive coverage without a second model-declared manifest",()
   reply.coverage=input.sources.flatMap(s=>s.units.map(u=>u.id));
   assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_structure"});
 });
-test("identical results in separate turns cannot be discarded as duplicates",()=>{
+test("identical results in separate turns remain distinct source facts",()=>{
   const input=textInput("**Assistant:** 任务正常。\n\n**User:** 再检查。\n\n**Assistant:** 任务正常。");
-  const reply=factResponse(input); reply.facts.pop();
-  reply.skipped=[{unit_id:input.sources[0].units[2].id,disposition:"duplicate",
-    duplicate_of:input.sources[0].units[0].id}];
-  assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_duplicate"});
+  const result=validateAndRenderFacts(factResponse(input),input);
+  assert.equal(result.validation.fact_count,3);
+  assert.equal((result.episode_summary.match(/任务正常/g)||[]).length,2);
 });

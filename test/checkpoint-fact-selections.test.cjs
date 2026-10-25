@@ -2,8 +2,7 @@
 const test = require("node:test"), assert = require("node:assert/strict");
 const { PROTOCOL, buildFactInput, buildFactPrompt, validateAndRenderFacts } = require("../lib/checkpoint/ordinary-summary-facts");
 const inputFor = text => buildFactInput([{text, source:"conversation"}], "2026-10-20");
-const response = (input, facts) => ({protocol:PROTOCOL,target_date:input.target_date,facts,
-  summary:facts.map((f,i)=>f?.id || "f"+(i+1)),skipped:[]});
+const response = (input, facts) => ({protocol:PROTOCOL,target_date:input.target_date,facts});
 test("numeric selections extract all paragraphs locally without echoing source text",()=>{
   const input=inputFor("**User:** 检查结果。\n\n**Assistant:** 10-18/19 恢复。10-15/16 仍无对话，原因未确认。");
   const reply=response(input,[0,1]), result=validateAndRenderFacts(reply,input);
@@ -47,7 +46,7 @@ test("short sources remain mandatory under compact selections",()=>{
     {text:"**Assistant:** 01:00 健康检查全部通过。",source:"conversation"},
     {text:"**Assistant:** 02:00 健康检查全部通过。",source:"conversation"},
     {text:"**Assistant:** 03:00 健康检查全部通过。",source:"conversation"}],"2026-10-20");
-  assert.throws(()=>validateAndRenderFacts(response(input,[0,1,2,3]),input),{code:"summary_coverage"});
+  assert.throws(()=>validateAndRenderFacts(response(input,[0,1,2,3]),input),{code:"summary_source_coverage"});
   assert.match(validateAndRenderFacts(response(input,[0,1,2,3,4]),input).episode_summary,/03:00/);
 });
 test("derived memories use selected original spans and reject metadata outside that span",()=>{
@@ -59,9 +58,9 @@ test("derived memories use selected original spans and reject metadata outside t
   fact.config.value="dark";
   assert.throws(()=>validateAndRenderFacts(response(input,[fact]),input),{code:"summary_config"});
 });
-test("older responses cannot be silently reused against a v3 request",()=>{
+test("older responses cannot be silently reused against a v4 request",()=>{
   const input=inputFor("记录。");
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v3");
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v4");
   assert.throws(()=>validateAndRenderFacts({...response(input,[0]),protocol:"checkpoint-source-facts-v1"},input),
     {code:"summary_structure"});
 });
