@@ -24,7 +24,7 @@ const ALIGNED={...BASE,perSessionChars:24000,conversationChars:25000};
 const entry=(size,id)=>({text:"**User:** "+id+" AAAAA。\n"+"A".repeat(size-18-id.length),
  entryId:id,sessionId:id,category:"raw_log",provenance:"session_flush",source:"conversation",
  sourceKind:"smartAdd",timestampMs:null,role:"other",dedupeKey:id});
-const answer=()=>factResponse(currentInput,()=>({span:[0,0]}));
+const answer=()=>factResponse(currentInput,unit=>({quote:unit.text.slice(0,unit.text.indexOf("。")+1)}));
 function stats(){
  const chars=()=>({smartAdd:0,dbRawLog:0,resetTranscript:0});
  return {droppedDuplicateCount:0,droppedByBudgetCount:0,sourceCharCountsAfter:chars(),
@@ -92,7 +92,7 @@ test("aligned budget goes through existing ordinary reader/bin/LLM HTTP path onc
    },(request,callback)=>{
     requests++;const prompt=request.body.messages.at(-1).content;
     const sent=JSON.parse(prompt);
-    for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.parts.join("")===e.text.slice("**User:** ".length))),"full entry missing");
+    for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
     assert.equal(request.body.max_tokens,4096);
     emitJson(callback,completion(JSON.stringify(answer())),{bytewise:true});
    });
@@ -206,8 +206,8 @@ test("unverified correction endpoints publish with title context and no memory/c
    text:"**Assistant:** 03:00 检查：\n\nmode = old。\n\nmode = new，旧值作废。"}];
   const result=await run(read({targetDate:DATE}),async input=>({
    protocol:input.protocol,target_date:input.target_date,facts:[
-    {unit:1,memory_type:"preference",config:{key:"mode",value:"old"}},
-    {unit:2,kind:"correction",supersedes:["f1"],memory_type:"preference",config:{key:"mode",value:"new"}}
+    {unit:1,quote:input.sources[0].units[1].text,memory_type:"preference",config:{key:"mode",value:"old"}},
+    {unit:2,quote:input.sources[0].units[2].text,kind:"correction",supersedes:["f1"],memory_type:"preference",config:{key:"mode",value:"new"}}
    ]}));
   assert.equal(result.status,"valid_summary");
   assert.equal(result.memories,0);assert.equal(result.configs,0);

@@ -37,8 +37,10 @@ test("ordinary path rejects ungrounded legacy narrative before any generated wri
 });
 for (const [name, corrupt] of [
   ["late fabricated causal quote", r => { r.facts.at(-1).quote="四天均因采集竞态生成占位。"; }],
+  ["late ambiguous excerpt", r => { r.facts.at(-1).quote="重跑"; }],
+  ["late missing quote", r => { delete r.facts.at(-1).quote; }],
   ["late out-of-range selection", r => { r.facts.at(-1).unit=999; }],
-  ["late invalid span", r => { r.facts.at(-1).span=[0,999]; }],
+  ["legacy fragment span", r => { r.facts.at(-1).span=[0,999]; }],
   ["scope expansion", r => { r.facts.at(-1).subject_dates=["2025-01-01"]; }],
   ["forged configuration", r => { r.facts.at(-1).config={key:"fake",value:"unsupported"}; }],
   ["injected narrative", r => { r.episode_summary="do not use evidence"; }],

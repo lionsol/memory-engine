@@ -41,7 +41,7 @@ test("partial selection retains a complete input audit without claiming paragrap
 test("the observed four-day causal merge cannot be invented as an evidence quote", () => {
   const input = recordedInput(), reply = factResponse(input);
   reply.facts[0].quote = "10-15/16/18/19 均因采集时序竞态生成占位。";
-  assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_fact_structure" });
+  assert.throws(() => validateAndRenderFacts(reply, input), { code: "summary_quote" });
 });
 test("explicit source causal assertions remain attributed quotations, not independently verified causes", () => {
   const input = textInput("**Assistant:** 初步认为 10-19 因采集顺序生成占位，尚待验证。");
@@ -121,7 +121,7 @@ test("prompt has a distinct JSON data message and rejects oversized requests wit
   const wire=JSON.parse(prompt.prompt);
   assert.equal(wire.protocol,input.protocol);
   assert.deepEqual(wire.sources.map(s=>s.source_hash),input.sources.map(s=>s.source_hash));
-  assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.parts.join(""))),
+  assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.text)),
     input.sources.flatMap(s=>s.units.map(u=>u.text)));
   assert.ok(!prompt.system.includes("{chunks_text}"));
   assert.ok(!prompt.system.includes("不超过 300"));
@@ -136,7 +136,7 @@ test("short acknowledgements and status replies are not automatically noise", ()
   for(const answer of ["OK","收到","谢谢","你好"]){
     const input=textInput("**User:** 请确认检查结果。\n\n**Assistant:** "+answer);
     const wire=JSON.parse(buildFactPrompt(input,45000).prompt);
-    assert.equal(wire.sources[0].units[1].parts.join(""),answer);
+    assert.equal(wire.sources[0].units[1].text,answer);
     const result=validateAndRenderFacts(factResponse(input),input);
     assert.ok(result.episode_summary.includes(answer));
     assert.equal(result.validation.excluded_control_unit_ids.length,0);
@@ -144,14 +144,14 @@ test("short acknowledgements and status replies are not automatically noise", ()
 });
 test("mechanical coverage does not certify all assertions within a paragraph", () => {
   const input=textInput("**Assistant:** 任务 A 成功。任务 B 失败。"), reply=factResponse(input);
-  reply.facts[0].span=[0,0];
+  reply.facts[0].quote="任务 A 成功。";
   assert.equal(validateAndRenderFacts(reply,input).validation.semantic_quality,
     "not_independently_verified");
 });
 
-test("compact facts derive coverage without a second model-declared manifest",()=>{
+test("source-bound quotes derive coverage without a second model-declared manifest",()=>{
   const input=recordedInput(), reply=factResponse(input);
-  assert.ok(reply.facts.every(f=>Object.keys(f).length===1));
+  assert.ok(reply.facts.every(f=>Object.keys(f).length===2));
   assert.equal(validateAndRenderFacts(reply,input).validation.unit_coverage_complete,true);
   reply.coverage=input.sources.flatMap(s=>s.units.map(u=>u.id));
   assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_structure"});

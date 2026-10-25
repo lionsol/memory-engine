@@ -1,8 +1,7 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
 const {PROTOCOL,buildFactInput,buildFactPrompt,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
-const {textInput}=require("./checkpoint-fact-fixture.cjs");
-const reply=(input,facts)=>({protocol:PROTOCOL,target_date:input.target_date,facts});
+const {textInput,selectedResponse:reply}=require("./checkpoint-fact-fixture.cjs");
 test("selected facts produce a concise body while complete input ranges remain independently auditable",()=>{
   const input=textInput("**Assistant:** "+Array.from({length:196},(_,i)=>"背景"+i+"："+"背景材料。".repeat(10)).concat("最终结果：修复已验证。").join("\n\n"));
   const result=validateAndRenderFacts(reply(input,[196]),input);
@@ -95,10 +94,10 @@ test("full-copy output remains invalid under the unchanged 3000-character bound"
 });
 test("source quotations still cannot certify omitted assertions or unmarked corrections",()=>{
   const input=textInput("**Assistant:** 任务 A 成功。任务 B 失败。");
-  const result=validateAndRenderFacts(reply(input,[{unit:0,span:[0,0]}]),input);
+  const result=validateAndRenderFacts(reply(input,[{unit:0,quote:"任务 A 成功。"}]),input);
   assert.ok(!result.episode_summary.includes("任务 B"));
   assert.equal(result.validation.semantic_quality,"not_independently_verified");
 });
 test("the simplified output contract has a distinct protocol version",()=>{
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v5");
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v6");
 });

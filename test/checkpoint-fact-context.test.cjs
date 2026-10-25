@@ -2,7 +2,7 @@
 const test = require("node:test"), assert = require("node:assert/strict");
 const { PROTOCOL, buildFactInput, buildFactPrompt, validateAndRenderFacts } = require("../lib/checkpoint/ordinary-summary-facts");
 const inputFor = text => buildFactInput([{text,source:"conversation"}], "2026-10-20");
-const reply = (input,facts) => ({protocol:PROTOCOL,target_date:input.target_date,facts});
+const { selectedResponse: reply } = require("./checkpoint-fact-fixture.cjs");
 
 test("model correction links cannot hide unrelated source claims or produce derived writes",()=>{
   const input=inputFor("**Assistant:** 采集顺序已修复。\n\n新条目身份已有修复路径。\n\nmtime 不能证明部署时间。");
@@ -31,10 +31,10 @@ test("result paragraphs retain the nearest standalone heading within their own t
   for(const [,source,start,end] of contexts){assert.equal(source,"s0");assert.equal(text.slice(start,end),"健康检查通过（03:00）：");}
 });
 
-test("spans cannot detach result lines from an in-paragraph heading, including CRLF",()=>{
+test("literal excerpts cannot detach result lines from an in-paragraph heading, including CRLF",()=>{
   const text="**Assistant:** 健康检查通过（03:00）：\r\n- LLM：OK\r\n- Vision：OK";
   const input=inputFor(text);
-  const result=validateAndRenderFacts(reply(input,[{unit:0,span:[1,2],memory_type:"event"}]),input);
+  const result=validateAndRenderFacts(reply(input,[{unit:0,quote:"- LLM：OK\r\n- Vision：OK",memory_type:"event"}]),input);
   assert.match(result.episode_summary,/健康检查通过（03:00）：/);
   assert.match(result.smart_memories[0].text,/03:00/);
   const row=result.validation.context_evidence[0];
