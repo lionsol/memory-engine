@@ -114,7 +114,8 @@ for(const mode of ["ok","invalid","missing_required","concurrent_episode"]){
   test("two-step selection preserves the whole publication gate: "+mode,async()=>{
     await fixture(async({root,path})=>{
       const large=[{source:"conversation",category:"raw_log",chunk_id:"large",
-        text:"**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果：决定停止部署。"}];
+        text:"**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果：决定停止部署。"
+          +(mode==="missing_required"?"\n\n每日上限十条。":"")}];
       let attempts=0;
       await withFakeHttps(async requests=>{
         const result=await withRuntime({llmNightlyExtract:checkpointLlm.llmNightlyExtract},
@@ -141,7 +142,7 @@ for(const mode of ["ok","invalid","missing_required","concurrent_episode"]){
         attempts++;
         if(attempts===1){
           const response=factResponse(JSON.parse(request.body.messages.at(-1).content));
-          if(mode==="missing_required")response.facts[0].facet="constraint";
+          if(mode==="missing_required")response.facts[2].facet="constraint";
           return emitJson(callback,completion(JSON.stringify(response)));
         }
         assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");

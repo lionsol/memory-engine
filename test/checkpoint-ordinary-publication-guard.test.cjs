@@ -100,6 +100,34 @@ test("aligned budget goes through existing ordinary reader/bin/LLM HTTP path onc
   assert.equal(requests,1);
  });
 });
+test("provably infeasible extraction stops after one fake HTTP call and leaves the old episode and derived stores untouched",async()=>{
+ await fixture(async({read,path,root})=>{
+  const logs=read({targetDate:DATE});
+  const oldRequest=config.resolveCheckpointLlmRequestConfig,oldProviders=config.resolveCheckpointProviders;
+  config.resolveCheckpointLlmRequestConfig=()=>oldRequest({});
+  config.resolveCheckpointProviders=()=>oldProviders({});
+  let requests=0;
+  try{
+   await withFakeHttps(async()=>{
+    const result=await run(logs,llm.llmNightlyExtract);
+    assert.equal(result.status,"summary_invalid");
+    assert.equal(result.reason,"summary_selection_infeasible");
+    assert.equal(result.episode,false);
+    assert.equal(fs.readFileSync(path,"utf8"),"OLD SUMMARY");
+    noDerived(root);
+    assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
+   },(request,callback)=>{
+    requests++;
+    assert.equal(requests,1,"infeasible evidence must not reach the selector or fallback");
+    const response=factResponse(currentInput);
+    response.facts[0].facet="constraint";
+    response.facts[0].memory_type="event";
+    emitJson(callback,completion(JSON.stringify(response)));
+   });
+  }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
+  assert.equal(requests,1);
+ });
+});
 test("source changes during LLM preserve old episode before any derived write",async()=>{
  await fixture(async({state,read,path,root})=>{
   const logs=read({targetDate:DATE});

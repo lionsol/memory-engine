@@ -4,6 +4,46 @@ const {buildFactInput,buildSummarySelection,validateAndRenderFacts,SUMMARY_SELEC
 const {textInput,selectedResponse:reply,factResponse}=require("./checkpoint-fact-fixture.cjs");
 const oversized=()=>textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果：未解决，决定停止部署。");
 
+test("mandatory evidence that cannot fit is rejected before constructing a selector prompt",()=>{
+  const input=textInput("**Assistant:** "+"限制。".repeat(1700));
+  const response=reply(input,[{unit:0,facet:"constraint"}]),before=JSON.stringify(response);
+  assert.throws(()=>buildSummarySelection(response,input,45000),e=>
+    e.code==="summary_selection_infeasible"&&e.minimumSummaryChars>5000&&e.maxSummaryChars===5000);
+  assert.equal(JSON.stringify(response),before);
+});
+test("independent outcome groups each contribute their cheapest required representative",()=>{
+  const input=textInput("**Assistant:** "+"甲".repeat(2500)+"\n\n"+"乙".repeat(2500));
+  const response=reply(input,[{unit:0,event_id:"a"},{unit:1,event_id:"b"}]);
+  assert.throws(()=>buildSummarySelection(response,input,45000),e=>
+    e.code==="summary_selection_infeasible"&&e.minimumSummaryChars>5000);
+});
+test("the impossibility lower bound accounts for escaped multiline render items",()=>{
+  const input=textInput("**Assistant:** "+"<&\r\n".repeat(410));
+  const response=reply(input,[{unit:0,facet:"uncertainty"}]);
+  assert.ok(response.facts[0].quote.length<5000);
+  assert.throws(()=>buildSummarySelection(response,input,45000),{code:"summary_selection_infeasible"});
+});
+test("shared attribution is not charged once per fact to falsely reject a feasible selection",()=>{
+  const input=textInput("**Assistant:** "+"背景".repeat(3000)+"\n\n"+
+    Array.from({length:110},(_,i)=>"事项"+i+"已核对。").join("\n\n"));
+  const response=reply(input,[{unit:0,facet:"context"},...Array.from({length:110},(_,i)=>({unit:i+1,event_id:"e"+i}))]);
+  const packet=JSON.parse(buildSummarySelection(response,input,45000).prompt);
+  const ids=response.facts.slice(1).map((_,i)=>"f"+(i+2));
+  assert.ok(packet.candidates.slice(1).reduce((n,f)=>n+f.cost,0)>5000);
+  assert.ok(validateAndRenderFacts(response,input,{selected_fact_ids:ids}).episode_summary.length<=5000);
+});
+test("a mandatory outcome already covers its event without being counted twice",()=>{
+  const input=textInput("**Assistant:** "+"甲".repeat(3900)+"\n\n"+"乙".repeat(2600));
+  const response=reply(input,[{unit:0,kind:"decision",event_id:"same"},{unit:1,event_id:"same"}]);
+  assert.ok(buildSummarySelection(response,input,45000));
+  assert.ok(validateAndRenderFacts(response,input,{selected_fact_ids:["f1"]}).episode_summary.length<=5000);
+});
+test("all original quotations are validated before the feasibility test",()=>{
+  const input=textInput("**Assistant:** "+"限制。".repeat(1700)+"\n\n独立结果。");
+  const response=reply(input,[{unit:0,facet:"constraint"},{unit:1,quote:"改写结果。"}]);
+  assert.throws(()=>buildSummarySelection(response,input,45000),{code:"summary_quote"});
+});
+
 test("selection is unnecessary for a body that already fits",()=>{
   const input=textInput("**Assistant:** 最终结果正常。");
   assert.equal(buildSummarySelection(factResponse(input),input,45000),null);
