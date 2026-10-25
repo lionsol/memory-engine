@@ -7,7 +7,7 @@ const {dedupeCollectedLogs}=require("../lib/checkpoint/raw-log-dedupe");
 const {withRuntime}=require("../lib/checkpoint/runtime");
 const llm=require("../lib/checkpoint/llm"),config=require("../lib/checkpoint/config");
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
-const {factResponse}=require("./checkpoint-fact-fixture.cjs");
+const {factResponse,planResponse}=require("./checkpoint-fact-fixture.cjs");
 let currentInput;
 // The subject is the real bin, reader and publisher. Unrelated confidence DB writes
 // are counted at their boundary; every filesystem target is inside a fresh temp root.
@@ -74,7 +74,7 @@ test("recorded four lengths replay baseline, session-only adjustment and aligned
   assert.equal(defaults.perSessionChars,8000);assert.equal(defaults.conversationChars,24000);
  });
 });
-test("aligned budget goes through existing ordinary reader/bin/LLM HTTP path once with every full entry",async()=>{
+test("aligned budget goes through planning and quotation HTTP paths with every full entry",async()=>{
  await fixture(async({state,read,path})=>{
   const logs=read({targetDate:DATE});assert.equal(logs.checkpointStats.budgetCoverageComplete,true);
   assert.equal(logs[0].text.length,22932);
@@ -94,13 +94,14 @@ test("aligned budget goes through existing ordinary reader/bin/LLM HTTP path onc
     const sent=JSON.parse(prompt);
     for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
     assert.equal(request.body.max_tokens,4096);
-    emitJson(callback,completion(JSON.stringify(answer())),{bytewise:true});
+    const response=sent.stage==="plan"?planResponse(currentInput,answer().facts):answer();
+    emitJson(callback,completion(JSON.stringify(response)),{bytewise:true});
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
-  assert.equal(requests,1);
+  assert.equal(requests,2);
  });
 });
-test("provably infeasible extraction stops after one fake HTTP call and leaves the old episode and derived stores untouched",async()=>{
+test("oversized planned quotation stops after two fake HTTP calls and preserves the old episode and derived stores",async()=>{
  await fixture(async({read,path,root})=>{
   const logs=read({targetDate:DATE});
   const oldRequest=config.resolveCheckpointLlmRequestConfig,oldProviders=config.resolveCheckpointProviders;
@@ -111,21 +112,22 @@ test("provably infeasible extraction stops after one fake HTTP call and leaves t
    await withFakeHttps(async()=>{
     const result=await run(logs,llm.llmNightlyExtract);
     assert.equal(result.status,"summary_invalid");
-    assert.equal(result.reason,"summary_selection_infeasible");
+    assert.equal(result.reason,"summary_budget");
     assert.equal(result.episode,false);
     assert.equal(fs.readFileSync(path,"utf8"),"OLD SUMMARY");
     noDerived(root);
     assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
    },(request,callback)=>{
     requests++;
-    assert.equal(requests,1,"infeasible evidence must not reach the selector or fallback");
+    assert.ok(requests<=2,"oversized quotes must not trigger a selector or fallback");
     const response=factResponse(currentInput);
     response.facts[0].facet="constraint";
     response.facts[0].memory_type="event";
-    emitJson(callback,completion(JSON.stringify(response)));
+    const packet=JSON.parse(request.body.messages.at(-1).content);
+    emitJson(callback,completion(JSON.stringify(packet.stage==="plan"?planResponse(currentInput,response.facts):response)));
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
-  assert.equal(requests,1);
+  assert.equal(requests,2);
  });
 });
 test("source changes during LLM preserve old episode before any derived write",async()=>{

@@ -5,34 +5,6 @@ const inputFor=text=>buildFactInput([{text,source:"conversation"}],"2026-10-20")
 const response=(input,facts)=>({protocol:PROTOCOL,target_date:input.target_date,
   facts:facts.map(f=>f&&typeof f==="object"&&!Array.isArray(f)?{event_id:"fixture",facet:"outcome",...f}:f)});
 
-test("the extraction demonstration is valid source-bound evidence with distinct final states and minimal quotations",()=>{
-  const prompt=buildFactPrompt(inputFor("**Assistant:** 实际构建已完成。"),45000);
-  const match=prompt.system.match(/^EXTRACTION_EXAMPLE: (.+)$/m);
-  assert.ok(match,"the extractor needs an explicit final-state selection demonstration");
-  const example=JSON.parse(match[1]);
-  const input=inputFor("**Assistant:** "+example.units.map(u=>u.text).join("\n\n"));
-  const result=validateAndRenderFacts({protocol:PROTOCOL,target_date:input.target_date,facts:example.facts},input);
-  assert.deepEqual(example.facts.map(f=>f.unit),[2,3,4,5]);
-  assert.ok(example.units[3].text.includes(example.facts[1].quote));
-  assert.ok(example.facts[1].quote.length<example.units[3].text.length);
-  assert.match(result.episode_summary,/令牌过期/);
-  assert.match(result.episode_summary,/每批上限仍为2GB，保持不变/);
-  assert.match(result.episode_summary,/南岬校验任务仍失败，原因尚未确认/);
-  assert.doesNotMatch(result.episode_summary,/暂怀疑网络|northcape.txt|调试命令/);
-  assert.deepEqual(result.validation.required_fact_ids,["f1","f3","f4"]);
-  assert.ok(result.episode_summary.length<=5000);
-});
-test("instruction examples never become source units or permit copying their facts into another source",()=>{
-  const input=inputFor("**Assistant:** 实际构建已完成。"),prompt=buildFactPrompt(input,45000),wire=JSON.parse(prompt.prompt);
-  const match=prompt.system.match(/^EXTRACTION_EXAMPLE: (.+)$/m);
-  assert.ok(match);
-  const example=JSON.parse(match[1]);
-  assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.text)),["实际构建已完成。"]);
-  assert.ok(!prompt.prompt.includes("北岬"));
-  const bad=response(input,[{...example.facts[0],unit:0}]);
-  assert.throws(()=>validateAndRenderFacts(bad,input),{code:"summary_quote"});
-});
-
 test("request field contract separates correction kind from the required evidence facet and counts its input cost",()=>{
   const input=inputFor("**Assistant:** 不能从文件时间推断部署时刻。");
   const prompt=buildFactPrompt(input,45000),wire=JSON.parse(prompt.prompt);
@@ -126,8 +98,8 @@ test("derived memories and metadata stay within the selected literal evidence",(
 
 test("v1-v5 output cannot be repaired or reused against a literal-quote v6 request",()=>{
   const input=inputFor("记录。");
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v7");
-  for(const version of [1,2,3,4,5,6]){
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v8");
+  for(const version of [1,2,3,4,5,6,7]){
     assert.throws(()=>validateAndRenderFacts({...response(input,[{unit:0,quote:"记录。"}]),
       protocol:"checkpoint-source-facts-v"+version},input),{code:"summary_structure"});
   }

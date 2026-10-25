@@ -110,47 +110,59 @@ test("oversized selected body preserves the old episode and writes no generated 
 
 const checkpointLlm=require("../lib/checkpoint/llm");
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
-for(const mode of ["ok","invalid","missing_required","concurrent_episode"]){
-  test("two-step selection preserves the whole publication gate: "+mode,async()=>{
+for(const mode of ["ok","retired_derivation","invalid_plan","missing_required","retired","concurrent_episode"]){
+  test("plan then quote preserves the whole publication gate: "+mode,async()=>{
     await fixture(async({root,path})=>{
       const large=[{source:"conversation",category:"raw_log",chunk_id:"large",
-        text:"**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果：决定停止部署。"
-          +(mode==="missing_required"?"\n\n每日上限十条。":"")}];
+        text:"**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果：决定停止部署。\n\n每日上限十条。"}];
       let attempts=0;
       await withFakeHttps(async requests=>{
         const result=await withRuntime({llmNightlyExtract:checkpointLlm.llmNightlyExtract},
           ()=>checkpoint.nightlyCheckpoint(large,{targetDate:DATE}));
-        assert.equal(requests.length,2);
-        if(mode==="ok"){
+        assert.equal(requests.length,mode==="invalid_plan"?1:2);
+        if(["ok","retired_derivation"].includes(mode)){
           assert.equal(result.status,"valid_summary");
-          assert.equal(result.memories,0);
-          assert.equal(result.configs,0);
-          assert.equal(result.writes.file_written,1); // Existing episodic smart-add, after selection passes.
+          assert.equal(result.memories,0);assert.equal(result.configs,0);
+          assert.equal(result.writes.file_written,1); // Existing episodic write after both phases pass.
           const body=fs.readFileSync(path,"utf8");
-          assert.match(body,/最终结果：决定停止部署/);
+          assert.match(body,/最终结果：决定停止部署/);assert.match(body,/每日上限十条/);
           assert.ok(!body.includes("背景。"));
-          assert.equal(result.summary_validation.summary_selection_applied,true);
-          assert.deepEqual(result.summary_validation.summary_fact_ids,["f2"]);
+          assert.equal(result.summary_validation.event_plan_coverage_complete,true);
+          assert.equal(result.summary_validation.model_event_plan_verified,false);
+          assert.deepEqual(result.summary_validation.plan_retired,[["s0","deploy",0]]);
         }else{
           assert.equal(fs.existsSync(join(root,"generated")),false);
           assert.equal(fs.readFileSync(path,"utf8"),mode==="concurrent_episode"?"CONCURRENT SUMMARY":"PREVIOUS EPISODE");
-          if(mode==="missing_required")assert.equal(result.reason,"summary_required_facts");
+          if(mode==="invalid_plan")assert.equal(result.reason,"summary_plan_evidence");
+          if(mode==="missing_required")assert.equal(result.reason,"summary_plan_fact_coverage");
+          if(mode==="retired")assert.equal(result.reason,"summary_plan_retired_fact");
           assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
           assert.equal(result.episode,false);
         }
       },(request,callback)=>{
-        attempts++;
-        if(attempts===1){
-          const response=factResponse(JSON.parse(request.body.messages.at(-1).content));
-          if(mode==="missing_required")response.facts[2].facet="constraint";
-          return emitJson(callback,completion(JSON.stringify(response)));
+        attempts++;assert.ok(attempts<=2,"a third request is forbidden");
+        const packet=JSON.parse(request.body.messages.at(-1).content);
+        if(packet.stage==="plan"){
+          const plan={protocol:packet.protocol,target_date:packet.target_date,events:[{
+            id:"deploy",source_id:"s0",topic:"部署的最终决定与每日限制",retired_units:[0],
+            evidence:[{unit:1,facet:"outcome"},{unit:2,facet:"constraint"}]
+          }]};
+          if(mode==="invalid_plan")plan.events[0].evidence[0].unit=999;
+          return emitJson(callback,completion(JSON.stringify(plan)));
         }
         assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");
         assert.equal(fs.existsSync(join(root,"generated")),false);
+        const response=require("./checkpoint-fact-fixture.cjs").plannedFactResponse(packet);
+        if(mode==="retired_derivation"){
+          response.facts[0].memory_type="preference";
+          response.facts[0].config={key:"结果",value:"停止"};
+        }
+        if(mode==="missing_required")response.facts.pop();
+        if(mode==="retired")response.facts.push({unit:0,quote:"背景。".repeat(1900),event_id:"deploy",facet:"outcome"});
         if(mode==="concurrent_episode")fs.writeFileSync(path,"CONCURRENT SUMMARY");
-        emitJson(callback,completion(JSON.stringify({selected_fact_ids:[mode==="invalid"?"unknown":"f2"]})));
+        emitJson(callback,completion(JSON.stringify(response)));
       });
-      assert.equal(attempts,2);
+      assert.equal(attempts,mode==="invalid_plan"?1:2);
     });
   });
 }
