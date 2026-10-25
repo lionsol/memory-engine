@@ -2,7 +2,8 @@
 const test=require("node:test"),assert=require("node:assert/strict");
 const {PROTOCOL,buildFactInput,buildFactPrompt,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
 const inputFor=text=>buildFactInput([{text,source:"conversation"}],"2026-10-20");
-const response=(input,facts)=>({protocol:PROTOCOL,target_date:input.target_date,facts});
+const response=(input,facts)=>({protocol:PROTOCOL,target_date:input.target_date,
+  facts:facts.map(f=>f&&typeof f==="object"&&!Array.isArray(f)?{event_id:"fixture",facet:"outcome",...f}:f)});
 
 test("literal excerpts are located exactly without model-computed fragment or character offsets",()=>{
   const original="**Assistant:** 第一项正常。第二项未确认。\r\n第三项失败。";
@@ -67,8 +68,8 @@ test("derived memories and metadata stay within the selected literal evidence",(
 
 test("v1-v5 output cannot be repaired or reused against a literal-quote v6 request",()=>{
   const input=inputFor("记录。");
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v6");
-  for(const version of [1,2,3,4,5]){
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v7");
+  for(const version of [1,2,3,4,5,6]){
     assert.throws(()=>validateAndRenderFacts({...response(input,[{unit:0,quote:"记录。"}]),
       protocol:"checkpoint-source-facts-v"+version},input),{code:"summary_structure"});
   }

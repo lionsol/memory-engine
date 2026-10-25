@@ -110,7 +110,7 @@ test("oversized selected body preserves the old episode and writes no generated 
 
 const checkpointLlm=require("../lib/checkpoint/llm");
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
-for(const mode of ["ok","invalid","concurrent_episode"]){
+for(const mode of ["ok","invalid","missing_required","concurrent_episode"]){
   test("two-step selection preserves the whole publication gate: "+mode,async()=>{
     await fixture(async({root,path})=>{
       const large=[{source:"conversation",category:"raw_log",chunk_id:"large",
@@ -132,13 +132,18 @@ for(const mode of ["ok","invalid","concurrent_episode"]){
           assert.deepEqual(result.summary_validation.summary_fact_ids,["f2"]);
         }else{
           assert.equal(fs.existsSync(join(root,"generated")),false);
-          assert.equal(fs.readFileSync(path,"utf8"),mode==="invalid"?"PREVIOUS EPISODE":"CONCURRENT SUMMARY");
+          assert.equal(fs.readFileSync(path,"utf8"),mode==="concurrent_episode"?"CONCURRENT SUMMARY":"PREVIOUS EPISODE");
+          if(mode==="missing_required")assert.equal(result.reason,"summary_required_facts");
           assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
           assert.equal(result.episode,false);
         }
       },(request,callback)=>{
         attempts++;
-        if(attempts===1)return emitJson(callback,completion(JSON.stringify(factResponse(JSON.parse(request.body.messages.at(-1).content)))));
+        if(attempts===1){
+          const response=factResponse(JSON.parse(request.body.messages.at(-1).content));
+          if(mode==="missing_required")response.facts[0].facet="constraint";
+          return emitJson(callback,completion(JSON.stringify(response)));
+        }
         assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");
         assert.equal(fs.existsSync(join(root,"generated")),false);
         if(mode==="concurrent_episode")fs.writeFileSync(path,"CONCURRENT SUMMARY");

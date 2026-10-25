@@ -2,8 +2,8 @@
 
 日期：2026-10-25（Asia/Shanghai）。
 基线：d6fec1c920c0e031db4c8df4d70a6dc9b684bb6b。
-当前候选基线：7fb5e24dd2ea229cd22936fd212adf2585052754，后续未提交修改见文末。
-范围：普通摘要协议 v6 的源码和离线修复；本轮未新增模型调用、未部署或重写历史记录。
+当前候选基线：b83a2be2106c13a6a47352dc68cde0471d362aa4，后续未提交修改见文末。
+范围：普通摘要协议 v7 的源码和离线修复；本轮未新增模型调用、未部署或重写历史记录。
 v1–v6 六次真实验证均未形成质量合格摘要；本轮离线协议修正不能替代自动选择质量验收。
 
 ## 问题与行为变化
@@ -24,24 +24,26 @@ llmNightlyExtract 内部仅在全部证据合法但正文超限时增加一次�
 
 ~~~json
 {
-  "protocol": "checkpoint-source-facts-v6",
+  "protocol": "checkpoint-source-facts-v7",
   "target_date": "2026-10-20",
-  "facts": [{"unit": 1, "quote": "决定停止部署。", "kind": "decision"}]
+  "facts": [{"unit": 1, "quote": "决定停止部署。", "event_id": "deploy", "facet": "constraint", "kind": "decision"}]
 }
 ~~~
 
-每条事实必须为 {unit:n,quote:"连续原文短引文"}；unit 是全局零基段落编号。
+每条事实必须包含 unit、quote、event_id、facet；unit 是全局零基段落编号，quote 是连续原文短引文。
+event_id 是同来源内的模型事项分类，不是持久身份；facet 为 outcome|constraint|uncertainty|cause|context。
+不同对象、日期和运行不应合并状态或原因；原文明示的对比可以整体引用并保留差异。分类本身未独立核验。
 请求保留 unit.text 完整原文，取消 parts 及 span。模型只选择少量完整判断，不计算片段或字符位置。
 quote 必须在指定段落中精确、唯一出现；标点、空格、CRLF 均不规范化，不允许跨段拼接。
 缺失/不匹配引文报 summary_quote，重复歧义报 summary_quote_ambiguous；模型应补足相邻原文以定位。
-v1–v5、整数选择及 span 响应均不能复用于 v6；summary、skipped、coverage 等旧清单也被拒绝，
+v1–v6、整数选择及 span 响应均不能复用于 v7；summary、skipped、coverage 等旧清单也被拒绝，
 不通过自动删除冲突字段或修补旧响应来接受失败候选。
 每个来源按对话轮次和段落划分，
 保留 entry ID、来源哈希、角色标记及原文 UTF-16 范围；来源元数据优先复用
 收集器已有的私有证据，不改变普通 rawLogs 对象形状或持久身份规则。
 没有来源 ID 时使用内容摘要作为本次证据定位信息，不生成新的持久身份。
 
-v6 的 facts 仅包含支撑简明摘要的关键事实，不要求模型逐段登记全部输入。
+v7 的 facts 仅包含支撑简明摘要的关键事实，不要求模型逐段登记全部输入。
 完整输入的段落编号和范围由程序记录，不以模型重复列出编号证明它读懂了内容。
 仅独立 HEARTBEAT_OK/[OpenClaw heartbeat poll] 两类控制标记由程序从模型消息排除，
 原始编号不重排，原文哈希不变，排除位置仍在本地输入审计内。
@@ -62,7 +64,7 @@ OK、收到、问候以及不同轮次的相同结果不会自动排除；模型
 这只保留可识别的结构上下文，不保证所有事件对象、时间或限制都已完整提取。
 
 kind=correction 可单独引用最终纠正；supersedes 可选，若填写仍须引用同来源中更早且已绑定的事实。
-同源/先后关系不证明语义纠正：程序显示双方原文和未核验关系提示；所有 correction 及关系两端均不派生记忆/配置。
+同源/先后关系不证明语义纠正：程序显示双方原文和未核验关系提示；所有 correction、关系两端及 context 背景均不派生记忆/配置。
 若只需最终状态，模型应直接选最终证据，无须先登记旧提议。
 model_correction_links_verified 恒为 false；derived_excluded_fact_ids 记录因此排除派生的事实。
 context_columns/context_evidence 定位实际附加的标题原文，不将其冒充模型主动选择的事实。
@@ -71,6 +73,9 @@ evidence_columns 声明 [fact_id,source_id,start,end,supersedes]，evidence 仅�
 sources 保留 entry ID 和来源哈希，excluded_control_unit_ids 记录程序排除的控制标记。
 使用选证时另记 summary_selection_applied、candidate_fact_count，以及按既有列格式编码的
 candidate_evidence/candidate_context_evidence；evidence 和 fact_count 仍只描述最终入选证据。
+event_columns/fact_events 记录入选事实的事项/角色；candidate_events 保留全部候选分类。
+required_fact_ids 由程序根据第一步分类生成；declared_event_coverage_complete 仅表示声明的结果事项有代表，
+model_event_groups_verified 和 model_evidence_facets_verified 恒为 false，不认证真实事项是否分全、分对。
 不复制全文进元数据，也不把“输入审计完整”改称“模型已提取所有事实”。
 
 source_coverage_complete 表示每个非控制来源均有代表；
@@ -82,7 +87,7 @@ unit_coverage_complete/summary_unit_coverage_complete 分别据已选引用和�
 ## 写入与失败
 
 整批事实及配置检查通过前，不允许本轮提取生成的 smart-add、confidence 或 episode 写入。
-结构化记忆和配置从同一批已检查引文及其标题上下文派生，排除所有 correction 及未核验 supersedes 关系的两端，
+结构化记忆和配置从同一批已检查引文及其标题上下文派生，排除 context、所有 correction 及未核验 supersedes 关系的两端，
 保留来源归属；原有最多 10 条限制沿用。未标注的旧结论仍可能被选择，本补丁不认证其时效。
 episode 继续使用既有版本检查、合作锁和原子发布。
 
@@ -421,3 +426,25 @@ fail/cancelled/skipped=0，语法及 git diff --check 通过。
 第一阶段可能遗漏事实，第二阶段不能补造；真实自动选证仍待受控验收。
 既有 58 条提取使用 4428 completion token，生产 4096 配置未改，
 离线回放不证明默认额度可端到端完成。本轮无 API 调用、部署或历史重写。
+
+## v7：将事项覆盖声明前移
+
+b83a2be 真实两阶段验收将 57 条证据选为 21 条、3530 字符，机械通过；
+但选证舍弃已提取的每日 10 条限制、自然样本和取消证据不足结论，质量未通过。
+单纯结构分组得到 47 组，其最低独立成本之和估算为 9754；这是保守成本，不是最优长度证明，
+因此不直接将每个标题或轮次当作必须保留的独立事项，也不按此样例写关键词规则。
+
+第一阶段现在必须声明事项及证据角色。第二阶段只能选择既有 ID，不能改分类：
+每个包含 outcome 的来源内事项至少保留一个结果；constraint/uncertainty/cause 全部保留，
+decision/correction 不因被标成 context 而失去保留要求；背景仍可不入选。
+遗漏必保留证据报 summary_required_facts，遗漏声明结果事项报 summary_event_coverage。
+缺少/非法分类报 summary_event_structure，旧协议直接拒绝，不自动补标签。
+context 可作为原文引用展示，但不派生长期记忆/配置；现有纠正关联两端保护继续保留。
+
+手工对旧候选加分类仅作可行性诊断：旧的 21 条选择会被拒绝；
+一个满足声明要求的 25 条选择为 4150 字符。这不修改原始响应，也不是自动模型质量证明。
+10 文件定向回归 235/235 通过，fail/cancelled/skipped=0；
+新增跨事项遗漏、限制丢失、缺字段、背景派生隔离及发布失败零写入回归。
+完整输入仍为 197 段审计/193 段可见；调用轮数、5000 正文上限及生产 4096 token 未改。
+第一步仍可能漏提取或误分类，声明覆盖不等于真实语义完整，尚待真实验收。
+本轮无 API 调用、部署或历史重写。

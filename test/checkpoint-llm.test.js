@@ -308,7 +308,7 @@ test("oversized selector input stops before a second request instead of truncati
   await nightlyFixture(({callback,input})=>{
     const first=factResponse(input).facts[0];
     emitJsonResponse(callback,{choices:[{message:{content:JSON.stringify({
-      protocol:input.protocol,target_date:input.target_date,facts:Array.from({length:512},()=>({...first}))
+      protocol:input.protocol,target_date:input.target_date,facts:Array.from({length:256},()=>({...first}))
     })},finish_reason:"stop"}]});
   },async calls=>{
     await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_selection_input_budget"});
@@ -316,6 +316,18 @@ test("oversized selector input stops before a second request instead of truncati
   },{maxInputChars:5000});
 });
 
+test("missing event declarations fail before ID selection without inferring a catalog",async()=>{
+  const input=textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果正常。");
+  await nightlyFixture(({callback,input})=>{
+    const response=factResponse(input);
+    delete response.facts[0].event_id;
+    delete response.facts[0].facet;
+    emitJsonResponse(callback,{choices:[{message:{content:JSON.stringify(response)},finish_reason:"stop"}]});
+  },async calls=>{
+    await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_event_structure"});
+    assert.equal(calls.length,1);
+  });
+});
 test("invalid quotes fail before any selection request",async()=>{
   const input=textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果正常。");
   await nightlyFixture(({callback,input})=>{

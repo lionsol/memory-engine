@@ -5,7 +5,7 @@ function selectedResponse(input, selections) {
   const units = input.sources.flatMap(source => source.units);
   const facts = selections.map(selection => {
     const fact = typeof selection === "number" ? { unit: selection } : selection;
-    return { quote: units[fact.unit]?.text, ...fact };
+    return { event_id: "fixture", facet: "outcome", quote: units[fact.unit]?.text, ...fact };
   });
   return { protocol: PROTOCOL, target_date: input.target_date, facts };
 }

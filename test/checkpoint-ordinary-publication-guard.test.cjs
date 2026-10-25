@@ -206,8 +206,8 @@ test("unverified correction endpoints publish with title context and no memory/c
    text:"**Assistant:** 03:00 检查：\n\nmode = old。\n\nmode = new，旧值作废。"}];
   const result=await run(read({targetDate:DATE}),async input=>({
    protocol:input.protocol,target_date:input.target_date,facts:[
-    {unit:1,quote:input.sources[0].units[1].text,memory_type:"preference",config:{key:"mode",value:"old"}},
-    {unit:2,quote:input.sources[0].units[2].text,kind:"correction",supersedes:["f1"],memory_type:"preference",config:{key:"mode",value:"new"}}
+    {unit:1,quote:input.sources[0].units[1].text,event_id:"mode",facet:"context",memory_type:"preference",config:{key:"mode",value:"old"}},
+    {unit:2,quote:input.sources[0].units[2].text,event_id:"mode",facet:"constraint",kind:"correction",supersedes:["f1"],memory_type:"preference",config:{key:"mode",value:"new"}}
    ]}));
   assert.equal(result.status,"valid_summary");
   assert.equal(result.memories,0);assert.equal(result.configs,0);
@@ -226,7 +226,7 @@ test("standalone final corrections publish with no preference or config derivati
    text:"**Assistant:** 03:00 最终确认：\n\nmode = new，旧设置作废。"}];
   const result=await run(read({targetDate:DATE}),async input=>({
    protocol:input.protocol,target_date:input.target_date,facts:[{
-    unit:1,quote:input.sources[0].units[1].text,kind:"correction",
+    unit:1,quote:input.sources[0].units[1].text,event_id:"mode",facet:"constraint",kind:"correction",
     memory_type:"preference",config:{key:"mode",value:"new"}
    }]}));
   assert.equal(result.status,"valid_summary");

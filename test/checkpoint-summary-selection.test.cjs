@@ -86,3 +86,81 @@ test("private selection annotation retains original fact IDs and does not alter 
   assert.deepEqual(validateAndRenderFacts(response,input).validation.summary_fact_ids,["f2"]);
   assert.equal(JSON.stringify(response),before);
 });
+
+function eventFixture(){
+  const input=textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n事项甲已完成。\n\n事项乙仍待验证。\n\n每日上限为十条。\n\n取消没有运行证据。\n\n原因已确认：采集顺序错误。");
+  const response=reply(input,[
+    {unit:0,event_id:"background",facet:"context"},
+    {unit:1,event_id:"a",facet:"outcome"},
+    {unit:2,event_id:"b",facet:"outcome"},
+    {unit:3,event_id:"a",facet:"constraint"},
+    {unit:4,event_id:"b",facet:"uncertainty"},
+    {unit:5,event_id:"a",facet:"cause"}
+  ]);
+  return {input,response};
+}
+test("requirements come from extraction events and facets before selection",()=>{
+  const {input,response}=eventFixture();
+  const packet=JSON.parse(buildSummarySelection(response,input,45000).prompt);
+  assert.deepEqual(packet.required_fact_ids,["f4","f5","f6"]);
+  assert.deepEqual(packet.events,[
+    {source_id:"s0",event_id:"a",outcome_fact_ids:["f2"]},
+    {source_id:"s0",event_id:"b",outcome_fact_ids:["f3"]}
+  ]);
+  assert.throws(()=>validateAndRenderFacts(response,input,{selected_fact_ids:["f2"]}),
+    {code:"summary_required_facts"});
+  assert.throws(()=>validateAndRenderFacts(response,input,{selected_fact_ids:["f2","f4","f5","f6"]}),
+    {code:"summary_event_coverage"});
+  const rendered=validateAndRenderFacts(response,input,{selected_fact_ids:["f2","f3","f4","f5","f6"]});
+  assert.equal(rendered.validation.declared_event_coverage_complete,true);
+  assert.equal(rendered.validation.model_event_groups_verified,false);
+  assert.equal(rendered.validation.model_evidence_facets_verified,false);
+  assert.equal(rendered.validation.candidate_events.length,6);
+  assert.equal(rendered.validation.fact_events.length,5);
+  assert.equal(rendered.validation.semantic_quality,"not_independently_verified");
+});
+for(const [field,value]of [["event_id",undefined],["event_id",""],["event_id",12],["event_id","x".repeat(65)],
+  ["facet",undefined],["facet",null],["facet","report"],["facet",[]]]){
+  test("missing or invalid event/facet annotations fail instead of being inferred: "+field+"/"+String(value),()=>{
+    const input=textInput("**Assistant:** 结果正常。"),response=factResponse(input);
+    if(value===undefined)delete response.facts[0][field];else response.facts[0][field]=value;
+    assert.throws(()=>validateAndRenderFacts(response,input),{code:"summary_event_structure"});
+    assert.throws(()=>buildSummarySelection(response,input,45000),{code:"summary_event_structure"});
+  });
+}
+test("assistant context alone cannot represent an available outcome",()=>{
+  const {input,response}=eventFixture();
+  assert.throws(()=>validateAndRenderFacts(response,input,{selected_fact_ids:["f1"]}),
+    {code:"summary_source_coverage"});
+});
+test("decision and correction kinds stay mandatory even when mislabeled context",()=>{
+  const input=textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n结果正常。\n\n决定停止部署。");
+  const response=reply(input,[{unit:0,facet:"context"},1,{unit:2,kind:"decision",facet:"context"}]);
+  assert.throws(()=>validateAndRenderFacts(response,input,{selected_fact_ids:["f2"]}),
+    {code:"summary_required_facts"});
+  assert.match(validateAndRenderFacts(response,input,{selected_fact_ids:["f2","f3"]}).episode_summary,/决定停止部署/);
+});
+test("equal event IDs in different sources cannot collapse independent outcomes",()=>{
+  const input=buildFactInput(["甲","乙"].map(name=>({source:"conversation",
+    text:"**Assistant:** "+"背景。".repeat(1000)+"\n\n"+name+"检查正常。"})),"2026-10-20");
+  const response=reply(input,[{unit:0,facet:"context",event_id:"same"}, {unit:1,event_id:"same"},
+    {unit:2,facet:"context",event_id:"same"},{unit:3,event_id:"same"}]);
+  const packet=JSON.parse(buildSummarySelection(response,input,45000).prompt);
+  assert.equal(packet.events.length,2);
+  assert.deepEqual(packet.events.map(e=>e.source_id),["s0","s1"]);
+  assert.equal(validateAndRenderFacts(response,input,{selected_fact_ids:["f2","f4"]}).validation.declared_event_coverage_complete,true);
+});
+
+test("context stays quoted but cannot become a durable memory or configuration",()=>{
+  const input=textInput("**Assistant:** mode = old，已被后续纠正。\n\n最终结果：检查已完成。");
+  const response=reply(input,[
+    {unit:0,facet:"context",memory_type:"pattern",config:{key:"mode",value:"old"}},
+    {unit:1,memory_type:"event"}
+  ]);
+  const rendered=validateAndRenderFacts(response,input);
+  assert.match(rendered.episode_summary,/mode = old/);
+  assert.deepEqual(rendered.configs,[]);
+  assert.equal(rendered.smart_memories.length,1);
+  assert.match(rendered.smart_memories[0].text,/最终结果：检查已完成/);
+  assert.deepEqual(rendered.validation.derived_excluded_fact_ids,["f1"]);
+});

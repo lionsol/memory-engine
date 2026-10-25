@@ -151,7 +151,7 @@ test("mechanical coverage does not certify all assertions within a paragraph", (
 
 test("source-bound quotes derive coverage without a second model-declared manifest",()=>{
   const input=recordedInput(), reply=factResponse(input);
-  assert.ok(reply.facts.every(f=>Object.keys(f).length===2));
+  assert.ok(reply.facts.every(f=>JSON.stringify(Object.keys(f).sort())===JSON.stringify(["event_id","facet","quote","unit"])));
   assert.equal(validateAndRenderFacts(reply,input).validation.unit_coverage_complete,true);
   reply.coverage=input.sources.flatMap(s=>s.units.map(u=>u.id));
   assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_structure"});
