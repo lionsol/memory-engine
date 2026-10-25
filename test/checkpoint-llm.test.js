@@ -170,6 +170,8 @@ test("ordinary request separates instructions/data, retains later corrections an
     assert.match(validateAndRenderFacts(result,input).episode_summary,/10:00 已修复并验证/);
     assert.equal(calls.length,1);const body=calls[0].body;
     assert.equal(body.messages[0].role,"system");
+    assert.match(body.messages[0].content,/^EXTRACTION_EXAMPLE: /m);
+    assert.ok(!body.messages[1].content.includes("北岬"));
     assert.match(body.messages[0].content,/若保留旧判断，必须同时保留改变其含义的纠正/);
     assert.match(body.messages[0].content,/时间更晚本身不构成纠正证据/);
     assert.match(body.messages[0].content,/禁止对不同事项建立关联/);
