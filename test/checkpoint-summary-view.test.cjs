@@ -64,10 +64,43 @@ test("correction chains retain every quotation instead of trusting transitive su
   assert.ok(result.episode_summary.includes("第二计划"));
   assert.equal(result.validation.evidence.length,3);
 });
-test("explicit correction without an earlier source-bound link is rejected",()=>{
-  const input=textInput("**Assistant:** 新状态。");
-  assert.throws(()=>validateAndRenderFacts(reply(input,[{unit:0,kind:"correction"}]),input),
-    {code:"summary_correction_link"});
+test("a standalone final correction is quoted without inventing an earlier fact or derived writes",()=>{
+  const input=textInput("**Assistant:** mode = new，旧设置作废。");
+  const result=validateAndRenderFacts(reply(input,[{unit:0,kind:"correction",
+    memory_type:"preference",config:{key:"mode",value:"new"}}]),input);
+  assert.match(result.episode_summary,/mode = new，旧设置作废/);
+  assert.ok(!result.episode_summary.includes("前述记录引用"));
+  assert.deepEqual(result.validation.evidence[0][4],[]);
+  assert.deepEqual(result.validation.derived_excluded_fact_ids,["f1"]);
+  assert.deepEqual(result.smart_memories,[]);assert.deepEqual(result.configs,[]);
+  assert.equal(result.validation.semantic_quality,"not_independently_verified");
+});
+test("standalone corrections cannot conceal omitted independent health sources",()=>{
+  const input=buildFactInput([
+    {text:"**Assistant:** 调度提议已撤回。\n\n先前的版本判断有误。\n\nmtime 不能证明启用时间。",source:"conversation"},
+    {text:"**Assistant:** 03:00 三项检查正常。",source:"conversation"},
+    {text:"**Assistant:** 02:00 三项检查正常。",source:"conversation"},
+    {text:"**Assistant:** 01:00 三项检查正常。",source:"conversation"}
+  ],"2026-10-20");
+  const rejected=reply(input,[{unit:0,kind:"correction"},{unit:1,kind:"correction"},
+    {unit:2,kind:"correction"},3]);
+  const before=JSON.stringify(rejected);
+  assert.throws(()=>validateAndRenderFacts(rejected,input),{code:"summary_source_coverage"});
+  assert.equal(JSON.stringify(rejected),before);
+  const complete=validateAndRenderFacts(reply(input,[...rejected.facts,4,5]),input);
+  assert.equal(complete.validation.source_coverage_complete,true);
+  assert.deepEqual(complete.validation.derived_excluded_fact_ids,["f1","f2","f3"]);
+});
+test("optional correction links still reject unknown, forward and cross-source references",()=>{
+  const input=buildFactInput([
+    {text:"**Assistant:** 来源 A 的结果。",source:"conversation"},
+    {text:"**Assistant:** 来源 B 的最终纠正。",source:"conversation"}
+  ],"2026-10-20");
+  for(const facts of [
+    [0,{unit:1,kind:"correction",supersedes:["missing"]}],
+    [{unit:0,kind:"correction",supersedes:["f2"]},1],
+    [0,{unit:1,kind:"correction",supersedes:["f1"]}]
+  ])assert.throws(()=>validateAndRenderFacts(reply(input,facts),input),{code:"summary_supersedes"});
 });
 test("control markers are handled locally without renumbering real source units",()=>{
   const input=buildFactInput([{text:"**Assistant:** 正常。\n\nHEARTBEAT_OK\n\n另一次正常。",source:"conversation"},

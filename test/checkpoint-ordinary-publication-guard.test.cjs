@@ -220,6 +220,25 @@ test("unverified correction endpoints publish with title context and no memory/c
   assert.equal(result.summary_validation.model_correction_links_verified,false);
  });
 });
+test("standalone final corrections publish with no preference or config derivatives",async()=>{
+ await fixture(async({state,read,path})=>{
+  state.entries=[{...entry(150,"final-correction"),
+   text:"**Assistant:** 03:00 最终确认：\n\nmode = new，旧设置作废。"}];
+  const result=await run(read({targetDate:DATE}),async input=>({
+   protocol:input.protocol,target_date:input.target_date,facts:[{
+    unit:1,quote:input.sources[0].units[1].text,kind:"correction",
+    memory_type:"preference",config:{key:"mode",value:"new"}
+   }]}));
+  assert.equal(result.status,"valid_summary");
+  assert.equal(result.memories,0);assert.equal(result.configs,0);
+  assert.equal(result.writes.file_written,1);assert.equal(binds.length,1); // Existing episodic write only.
+  const published=fs.readFileSync(path,"utf8");
+  assert.match(published,/mode = new，旧设置作废/);assert.match(published,/03:00 最终确认/);
+  assert.ok(!published.includes("前述记录引用"));
+  assert.deepEqual(result.summary_validation.derived_excluded_fact_ids,["f1"]);
+  assert.deepEqual(result.summary_validation.evidence[0][4],[]);
+ });
+});
 async function runMain(read,runtime,extract,overrides={}){
  return withRuntime({...runtime,readCheckpointRawLogs:read,
   llmNightlyExtract:input=>{currentInput=input;return extract(input);},

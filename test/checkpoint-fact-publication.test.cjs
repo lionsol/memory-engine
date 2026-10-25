@@ -47,7 +47,7 @@ for (const [name, corrupt] of [
   ["legacy body manifest", r => { r.summary=["missing"]; }],
   ["legacy skip manifest", r => { r.skipped=[{unit_id:"s0.t0.p0",disposition:"noise"}]; }],
   ["request-only body", r => { r.facts=r.facts.slice(0,1); }],
-  ["unbound correction", r => { r.facts.at(-1).kind="correction"; }],
+  ["unknown correction target", r => { r.facts.at(-1).kind="correction"; r.facts.at(-1).supersedes=["missing"]; }],
 ]) test("the entire extraction is checked before writes: "+name, async () => {
   await fixture(async ({root,path}) => {
     const result = await withRuntime({llmNightlyExtract:async input=>{
