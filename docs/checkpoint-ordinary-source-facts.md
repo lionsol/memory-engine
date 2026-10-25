@@ -2,7 +2,7 @@
 
 日期：2026-10-25（Asia/Shanghai）。
 基线：d6fec1c920c0e031db4c8df4d70a6dc9b684bb6b。
-当前候选基线：b83a2be2106c13a6a47352dc68cde0471d362aa4，后续未提交修改见文末。
+当前候选基线：6a5478f81073856f7e3bc370504e640fbc1b1569，后续未提交修改见文末。
 范围：普通摘要协议 v7 的源码和离线修复；本轮未新增模型调用、未部署或重写历史记录。
 v1–v6 六次真实验证均未形成质量合格摘要；本轮离线协议修正不能替代自动选择质量验收。
 
@@ -32,6 +32,9 @@ llmNightlyExtract 内部仅在全部证据合法但正文超限时增加一次�
 
 每条事实必须包含 unit、quote、event_id、facet；unit 是全局零基段落编号，quote 是连续原文短引文。
 event_id 是同来源内的模型事项分类，不是持久身份；facet 为 outcome|constraint|uncertainty|cause|context。
+请求的 fact_contract 单独列出必填字段、kind/facet 各自枚举及 kind=report 缺省值，枚举由校验器同一常量生成；它是模型字段说明，不是 provider 强制 JSON Schema，也不作为响应字段。
+kind=correction/decision 不属于 facet；例如纠正证据不足应填 kind=correction、facet=uncertainty。
+字段说明计入完整请求输入预算；没有新增分类值、响应字段、配置或自动纠错。
 不同对象、日期和运行不应合并状态或原因；原文明示的对比可以整体引用并保留差异。分类本身未独立核验。
 请求保留 unit.text 完整原文，取消 parts 及 span。模型只选择少量完整判断，不计算片段或字符位置。
 quote 必须在指定段落中精确、唯一出现；标点、空格、CRLF 均不规范化，不允许跨段拼接。
@@ -448,3 +451,17 @@ context 可作为原文引用展示，但不派生长期记忆/配置；现有�
 完整输入仍为 197 段审计/193 段可见；调用轮数、5000 正文上限及生产 4096 token 未改。
 第一步仍可能漏提取或误分类，声明覆盖不等于真实语义完整，尚待真实验收。
 本轮无 API 调用、部署或历史重写。
+
+## v7 字段说明澄清
+
+6a5478f 真实验收正常返回 67 条候选、5506 completion token；其中 5 条使用 facet=correction，
+触发 summary_event_structure，未进入第二次选证；原始响应保留，未自动移字段或改写引文。
+原说明在介绍 facet 时混列 decision/correction，未明确两者属于 kind；本次拆开字段说明，
+并在请求中由同一枚举常量生成 fact_contract，展示合法的 kind/facet 组合。
+验证器及 v7 响应协议不变：facet=correction 仍拒绝；kind=correction 与 facet=uncertainty
+可以共存，且继续禁止派生记忆/配置。此修改仅是请求候选，不能证明模型将遵循枚举。
+完整真实输入仍为 4 来源、197 段审计/193 段可见；请求 42012 字符，低于 45000 上限。
+原始 67 条响应离线重放仍以 summary_event_structure 拒绝；没有移字段、修引文或启动第二次请求。
+使用上述既有隔离依赖加载命令，10 文件定向回归 238/238 通过，fail/cancelled/skipped=0；语法检查通过。
+初次直接运行时两个发布测试因 worktree 缺少 better-sqlite3 在加载阶段失败；按既有 test-only loader 读取已安装依赖后通过，未安装或修改运行依赖。
+本轮无新增 API 调用、部署或历史重写，生产 4096 token 与正文 5000 字符上限不变。

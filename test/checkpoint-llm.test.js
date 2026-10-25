@@ -175,6 +175,9 @@ test("ordinary request separates instructions/data, retains later corrections an
     assert.match(body.messages[0].content,/禁止对不同事项建立关联/);
     assert.match(body.messages[0].content,/程序保留双方引文，不据此隐藏任何记录/);
     const wire=JSON.parse(body.messages[1].content);
+    assert.equal(wire.fact_contract.enums.kind.includes("correction"),true);
+    assert.equal(wire.fact_contract.enums.facet.includes("correction"),false);
+    assert.deepEqual(wire.fact_contract.required,["unit","quote","event_id","facet"]);
     assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.text)),
       input.sources.flatMap(s=>s.units.map(u=>u.text)));
     assert.ok(!body.messages[0].content.includes("{chunks_text}"));

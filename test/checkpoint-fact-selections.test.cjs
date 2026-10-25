@@ -5,6 +5,36 @@ const inputFor=text=>buildFactInput([{text,source:"conversation"}],"2026-10-20")
 const response=(input,facts)=>({protocol:PROTOCOL,target_date:input.target_date,
   facts:facts.map(f=>f&&typeof f==="object"&&!Array.isArray(f)?{event_id:"fixture",facet:"outcome",...f}:f)});
 
+test("request field contract separates correction kind from the required evidence facet and counts its input cost",()=>{
+  const input=inputFor("**Assistant:** 不能从文件时间推断部署时刻。");
+  const prompt=buildFactPrompt(input,45000),wire=JSON.parse(prompt.prompt);
+  assert.deepEqual(wire.fact_contract.required,["unit","quote","event_id","facet"]);
+  assert.deepEqual(wire.fact_contract.enums.facet,["outcome","constraint","uncertainty","cause","context"]);
+  assert.deepEqual(wire.fact_contract.enums.kind,["observation","report","decision","hypothesis","correction","request"]);
+  assert.deepEqual(wire.fact_contract.defaults,{kind:"report"});
+  const exact=prompt.system.length+prompt.prompt.length;
+  assert.deepEqual(buildFactPrompt(input,exact),prompt);
+  assert.throws(()=>buildFactPrompt(input,exact-1),{code:"summary_input_budget"});
+});
+test("a correction kind can express uncertainty without producing derived memory or configuration",()=>{
+  const input=inputFor("**Assistant:** mode = old 的生效时间不能确认。");
+  const result=validateAndRenderFacts(response(input,[{unit:0,quote:input.sources[0].units[0].text,
+    kind:"correction",facet:"uncertainty",memory_type:"event",config:{key:"mode",value:"old"}}]),input);
+  assert.deepEqual(result.validation.required_fact_ids,["f1"]);
+  assert.deepEqual(result.validation.derived_excluded_fact_ids,["f1"]);
+  assert.deepEqual(result.smart_memories,[]);
+  assert.deepEqual(result.configs,[]);
+  assert.match(result.episode_summary,/correction/);
+  assert.match(result.episode_summary,/生效时间不能确认/);
+});
+test("a correction value in facet is rejected unchanged instead of silently becoming a kind",()=>{
+  const input=inputFor("**Assistant:** 部署时刻不能确认。");
+  const bad=response(input,[{unit:0,quote:input.sources[0].units[0].text,facet:"correction"}]);
+  const before=JSON.stringify(bad);
+  assert.throws(()=>validateAndRenderFacts(bad,input),{code:"summary_event_structure"});
+  assert.equal(JSON.stringify(bad),before);
+});
+
 test("literal excerpts are located exactly without model-computed fragment or character offsets",()=>{
   const original="**Assistant:** 第一项正常。第二项未确认。\r\n第三项失败。";
   const input=inputFor(original),wire=JSON.parse(buildFactPrompt(input,45000).prompt);
