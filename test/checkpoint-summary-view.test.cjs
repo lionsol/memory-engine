@@ -120,7 +120,7 @@ for(const field of ["summary","skipped","coverage"])test("old bookkeeping fields
   r[field]=field==="summary"?["f1"]:[];
   assert.throws(()=>validateAndRenderFacts(r,input),{code:"summary_structure"});
 });
-test("full-copy output remains invalid under the unchanged 3000-character bound",()=>{
+test("full-copy output remains invalid under the 5000-character bound",()=>{
   const input=textInput("**Assistant:** "+Array.from({length:197},(_,i)=>"记录"+i+"："+"原文。".repeat(12)).join("\n\n"));
   assert.throws(()=>validateAndRenderFacts(reply(input,Array.from({length:197},(_,i)=>i)),input),
     {code:"summary_budget"});

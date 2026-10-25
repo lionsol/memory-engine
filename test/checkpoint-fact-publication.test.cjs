@@ -98,7 +98,7 @@ test("ordinary model failure preserves the old episode instead of replacing it w
 test("oversized selected body preserves the old episode and writes no generated memory",async()=>{
   await fixture(async({root,path})=>{
     const large=[{source:"conversation",category:"raw_log",chunk_id:"large",
-      text:"**Assistant:** "+"A".repeat(3100)}];
+      text:"**Assistant:** "+"A".repeat(5100)}];
     const result=await withRuntime({llmNightlyExtract:async input=>factResponse(input,()=>({memory_type:"event"}))},
       ()=>checkpoint.nightlyCheckpoint(large,{targetDate:DATE}));
     assert.equal(result.status,"summary_invalid");

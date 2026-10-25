@@ -12,7 +12,8 @@ test("literal excerpts are located exactly without model-computed fragment or ch
   const quote="第二项未确认。\r\n第三项失败。";
   const result=validateAndRenderFacts(response(input,[{unit:0,quote}]),input);
   const start=original.indexOf(quote);
-  assert.match(result.episode_summary,new RegExp("原文范围 "+start+":"+(start+quote.length)));
+  assert.doesNotMatch(result.episode_summary,/原文范围 \d+:\d+/);
+  for(const line of quote.split(/\r?\n/))assert.ok(result.episode_summary.includes(line));
   assert.deepEqual(result.validation.evidence[0].slice(2,4),[start,start+quote.length]);
   assert.ok(!result.episode_summary.includes("第一项正常"));
 });
@@ -74,10 +75,20 @@ test("v1-v5 output cannot be repaired or reused against a literal-quote v6 reque
   assert.throws(()=>validateAndRenderFacts(response(input,[{unit:0,span:[0,1]}]),input),{code:"summary_fact_structure"});
 });
 
-test("literal quotes retain the 3000-character body bound without truncation",()=>{
-  const input=inputFor("**Assistant:** "+"结果。".repeat(1200));
-  assert.throws(()=>validateAndRenderFacts(response(input,[{unit:0,quote:input.sources[0].units[0].text}]),input),
-    {code:"summary_budget"});
+test("the 5000-character body boundary accepts exact fits and rejects overflow without truncation",()=>{
+  const sample=inputFor("**Assistant:** 文");
+  assert.equal(JSON.parse(buildFactPrompt(sample,45000).prompt).summary_budget.max_chars,5000);
+  const overhead=validateAndRenderFacts(response(sample,[{unit:0,quote:"文"}]),sample).episode_summary.length-1;
+  const fits=inputFor("**Assistant:** "+"文".repeat(5000-overhead));
+  const result=validateAndRenderFacts(response(fits,[{unit:0,quote:fits.sources[0].units[0].text}]),fits);
+  assert.equal(result.episode_summary.length,5000);
+  assert.equal(result.validation.semantic_quality,"not_independently_verified");
+  const overflow=inputFor("**Assistant:** "+"文".repeat(5001-overhead));
+  const selection=response(overflow,[{unit:0,quote:overflow.sources[0].units[0].text}]);
+  const before=JSON.stringify(selection);
+  assert.throws(()=>validateAndRenderFacts(selection,overflow),
+    e=>e.code==="summary_budget"&&e.observedSummaryChars===5001&&e.maxSummaryChars===5000);
+  assert.equal(JSON.stringify(selection),before);
 });
 
 test("exact excerpts still cannot certify omitted assertions or unmarked corrections",()=>{

@@ -48,14 +48,40 @@ test("context and escaping are included in the visible full-unit render cost",()
   const result=validateAndRenderFacts(reply(input,[1]),input);
   assert.ok(wire.sources[0].units[1].cost>input.sources[0].units[1].text.length);
   assert.ok(result.episode_summary.length<=wire.summary_budget.header_chars+wire.sources[0].units[1].cost);
-  assert.equal(wire.summary_budget.max_chars,3000);
+  assert.equal(wire.summary_budget.max_chars,5000);
   assert.match(result.episode_summary,/&lt;result&gt;&amp;OK/);
 });
 
-test("required context counts toward the unchanged body budget and is never truncated",()=>{
-  const input=inputFor("**Assistant:** "+"标题".repeat(1500)+"：\n\n结果正常。");
+test("required context counts toward the body budget and is never truncated",()=>{
+  const input=inputFor("**Assistant:** "+"标题".repeat(2500)+"：\n\n结果正常。");
   assert.throws(()=>validateAndRenderFacts(reply(input,[1]),input),
-    e=>e.code==="summary_budget"&&e.observedSummaryChars>3000);
+    e=>e.code==="summary_budget"&&e.observedSummaryChars>5000);
+});
+
+test("compact body groups consecutive source roles while exact fact and context ranges remain in metadata",()=>{
+  const input=buildFactInput([
+    {text:"**Assistant:** 检查对象：\n\n结果甲。\n\n结果乙。\n\n**User:** 决定停止。\n\n**Assistant:** 已停止。",source:"conversation"},
+    {text:"**Assistant:** 独立检查正常。",source:"conversation"}
+  ],"2026-10-20");
+  const result=validateAndRenderFacts(reply(input,[1,2,{unit:3,kind:"decision"},4,5]),input);
+  const body=result.episode_summary;
+  assert.deepEqual([...body.matchAll(/^#### (.+)$/gm)].map(m=>m[1]),[
+    "s0 · 助手报告（未独立核验）","s0 · 用户原述",
+    "s0 · 助手报告（未独立核验）","s1 · 助手报告（未独立核验）"
+  ]);
+  assert.doesNotMatch(body,/原文范围 \d+:\d+|s0\.t\d+\.p\d+/);
+  assert.match(body,/\[f3\] decision/);
+  assert.match(body,/检查对象：/);
+  assert.deepEqual(result.validation.summary_fact_ids,["f1","f2","f3","f4","f5"]);
+  for(const [id,source,start,end] of result.validation.evidence){
+    const sourceInput=input.sources.find(s=>s.id===source);
+    const sourceText=["**Assistant:** 检查对象：\n\n结果甲。\n\n结果乙。\n\n**User:** 决定停止。\n\n**Assistant:** 已停止。","**Assistant:** 独立检查正常。"][input.sources.indexOf(sourceInput)];
+    const selected=["结果甲。","结果乙。","决定停止。","已停止。","独立检查正常。"][Number(id.slice(1))-1];
+    assert.equal(sourceText.slice(start,end),selected);
+    assert.ok(body.includes(selected));
+  }
+  assert.equal(result.validation.context_evidence.length,2);
+  assert.equal(result.validation.semantic_quality,"not_independently_verified");
 });
 
 // Captured d2cb4c9 provider selections; text below is synthetic/de-identified, not the private source.
@@ -77,5 +103,5 @@ test("captured over-selection still fails closed instead of silently dropping fa
   const input=buildFactInput(counts.map((n,source)=>({source:"conversation",
     text:"**Assistant:** "+Array.from({length:n},(_,i)=>"来源"+source+"段"+i+"："+ "实际结果及限制。".repeat(20)).join("\n\n")})),"2026-10-20");
   assert.throws(()=>validateAndRenderFacts(reply(input,capturedFacts),input),
-    e=>e.code==="summary_budget"&&e.observedSummaryChars>3000);
+    e=>e.code==="summary_budget"&&e.observedSummaryChars>5000);
 });
