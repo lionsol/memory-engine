@@ -2,7 +2,7 @@
 
 日期：2026-10-25（Asia/Shanghai）。
 基线：d6fec1c920c0e031db4c8df4d70a6dc9b684bb6b。
-当前候选基线：6363dc330b6262782298d4ca9cd6d139e918bca4，后续未提交修改见文末。
+当前候选基线：7fb5e24dd2ea229cd22936fd212adf2585052754，后续未提交修改见文末。
 范围：普通摘要协议 v6 的源码和离线修复；本轮未新增模型调用、未部署或重写历史记录。
 v1–v6 六次真实验证均未形成质量合格摘要；本轮离线协议修正不能替代自动选择质量验收。
 
@@ -13,6 +13,7 @@ v1–v6 六次真实验证均未形成质量合格摘要；本轮离线协议修
 结构化记忆也可能在摘要内容检查前写入。
 
 新路径为 buildFactInput → llmNightlyExtract → validateAndRenderFacts → 既有写入/发布。
+llmNightlyExtract 内部仅在全部证据合法但正文超限时增加一次编号选证；最终所有门禁仍在写入前执行。
 来源数据以独立 JSON 消息发送，指令置于 system 消息；不再保留未替换的占位符，
 也不再用 substring 静默截断或要求一段 300 字自由叙述。
 
@@ -54,7 +55,8 @@ OK、收到、问候以及不同轮次的相同结果不会自动排除；模型
 每个有非控制内容的来源都必须在最终正文有代表。
 若原始输入有助手记录，不能仅选用户检查请求；必须选助手记录或明确的 decision/correction。
 此条件检查原始输入，不能靠先丢掉助手记录来绕过。角色检查也不证明实际结果的语义完整性。
-所有已选事实按来源和原文位置进入正文，不再有第二份正文选择清单，也不因模型关系标注隐藏引文。
+最终入选事实按来源和原文位置进入正文，不因模型纠正标注自动隐藏引文。
+没有独立选证步骤时，提取响应的全部事实进入正文；超限选证时，未入选候选只保留定位审计，不产生记忆/配置。
 同轮次中，最近的独立标题或当前段首标题自动附作上下文，保留原文定位。
 标题按 Markdown 标题、加粗标题及单行冒号结尾识别；跨轮次不继承。
 这只保留可识别的结构上下文，不保证所有事件对象、时间或限制都已完整提取。
@@ -67,6 +69,8 @@ context_columns/context_evidence 定位实际附加的标题原文，不将其�
 input_unit_columns 声明 [unit_index,source_id,start,end]，input_units 审计完整原始输入；
 evidence_columns 声明 [fact_id,source_id,start,end,supersedes]，evidence 仅定位已选事实；
 sources 保留 entry ID 和来源哈希，excluded_control_unit_ids 记录程序排除的控制标记。
+使用选证时另记 summary_selection_applied、candidate_fact_count，以及按既有列格式编码的
+candidate_evidence/candidate_context_evidence；evidence 和 fact_count 仍只描述最终入选证据。
 不复制全文进元数据，也不把“输入审计完整”改称“模型已提取所有事实”。
 
 source_coverage_complete 表示每个非控制来源均有代表；
@@ -103,7 +107,8 @@ main 单独报告 ordinary_summary_validation 和 summary_input_complete；
 
 ## 预算和验证边界
 
-沿用现有输入、max_tokens、超时与 provider 配置，不增加重试。
+沿用每次请求的输入、max_tokens、超时与 provider 配置。合法候选超限时新增一次独立选证请求，不重试提取或选证；
+因此会多消耗一次请求及其超时窗口，不是零成本的本地压缩。
 当前候选的摘要正文上限为 5000 UTF-16 字符（此前为 3000），计入标题、归属、引文和纠正说明；
 超限拒绝整批响应，绝不截断。上限不含定位元数据或既有配置附节，也不是 provider token 预算。
 请求中的 summary_budget 声明总额及固定标题成本；unit.cost 使用同一渲染器计算完整引用及标题上下文，
@@ -113,7 +118,9 @@ main 单独报告 ordinary_summary_validation 和 summary_input_complete；
 输入上限现在计入 system 指令和序列化数据的字符总量；超过即停止。
 普通 HTTP 输出字符上限为现有 max_tokens × 8，finish_reason=length 必须失败；
 该字符上限不能替代 provider 的 token 上限。
-仅传输失败沿用至多一次 fallback；无效 JSON、截断或无效事实不进行质量重试。
+提取阶段仅传输失败沿用至多一次 fallback；无效 JSON、截断或无效事实不进行质量重试。
+选证使用提取成功的同一 provider/model，最多一次请求，不再 fallback。通常共一次或两次请求；
+若提取先回退后成功且需要选证，总计最多三次。选证输入/响应、关联或最终预算失败都终止本轮。
 
 引用有效、段落覆盖完整不等于事实完整或推断正确。
 单一段落中的短摘录仍可能遗漏该段其他信息，测试明确保留这一边界。
@@ -141,6 +148,7 @@ cd /home/lionsol/.devspace/worktrees/memory-engine-cff493d1
 env MEMORY_ENGINE_TEST_DEPENDENCIES=/home/lionsol/.openclaw/extensions/memory-engine \
 /home/lionsol/.local/node24/bin/node \
   --require ./test/checkpoint-dependency-loader.cjs --test --test-concurrency=2 \
+  test/checkpoint-summary-selection.test.cjs \
   test/checkpoint-fact-context.test.cjs \
   test/checkpoint-summary-view.test.cjs \
   test/checkpoint-fact-selections.test.cjs \
@@ -391,3 +399,25 @@ fail/cancelled/skipped=0，语法及 git diff --check 通过。
 旧的冻结验收记录和结论不改写。5000 只是待验收的候选预算，不构成语义合格证明。
 手补 26 条只在内存诊断，未发布或改写历史。生产 max_tokens 仍为 4096；
 前述 16K 仅为显式授权的单次测试额度。本轮没有新 API 调用或部署。
+
+## 独立编号选证
+
+7fb5e24 真实验收返回 58 条精确引文，正文 11401 字符，未通过 5000 上限。
+本轮把候选证据核验与预算内选证拆为两个实际步骤，不再让同一回答兼做全部工作。
+只有合法候选超限时才构造选证输入；任何一条候选引文无效都直接停止，不靠删除坏事实修补响应。
+选证只返回 {"selected_fact_ids":["f1","f3"]}，未知/重复/空编号、额外字段和再次超限均拒绝。
+同一已标注纠正关联的两端必须一起保留或一起不选，派生禁止集合从完整候选计算。
+最终仍检查原始来源的代表和角色要求；未标注纠正及长来源内部遗漏仍需语义审阅。
+
+选择结果以内存 Symbol 传递，原始 facts、ID 及 v6 公共 JSON 不改写；发布前再次核验。
+第二步不复制引文、不改事实、不重新提取。定位元数据分别记录全部合法候选与最终入选事实。
+成功发布仍沿用既有 episodic smart-add；假 HTTP 发布测试仅证明选证前及失败路径零写入，
+没有借该文件系统夹具宣称 confidence 数据库绑定已验收。
+
+58 条真实结果的选证输入为 16701 字符；手选 11 个既有 ID 后正文 1987 字符，
+58 条候选/11 条入选定位都保留。手选回放不是自动质量证明，原始 58 条仍不能直接通过，
+先前改写 opencode 的 52 条响应仍在选证前被拒绝。
+10 文件定向回归 220/220 通过，fail/cancelled/skipped=0；语法及 git diff --check 通过。
+第一阶段可能遗漏事实，第二阶段不能补造；真实自动选证仍待受控验收。
+既有 58 条提取使用 4428 completion token，生产 4096 配置未改，
+离线回放不证明默认额度可端到端完成。本轮无 API 调用、部署或历史重写。

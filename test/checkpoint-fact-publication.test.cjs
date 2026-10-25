@@ -107,3 +107,44 @@ test("oversized selected body preserves the old episode and writes no generated 
     assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
   });
 });
+
+const checkpointLlm=require("../lib/checkpoint/llm");
+const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
+for(const mode of ["ok","invalid","concurrent_episode"]){
+  test("two-step selection preserves the whole publication gate: "+mode,async()=>{
+    await fixture(async({root,path})=>{
+      const large=[{source:"conversation",category:"raw_log",chunk_id:"large",
+        text:"**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果：决定停止部署。"}];
+      let attempts=0;
+      await withFakeHttps(async requests=>{
+        const result=await withRuntime({llmNightlyExtract:checkpointLlm.llmNightlyExtract},
+          ()=>checkpoint.nightlyCheckpoint(large,{targetDate:DATE}));
+        assert.equal(requests.length,2);
+        if(mode==="ok"){
+          assert.equal(result.status,"valid_summary");
+          assert.equal(result.memories,0);
+          assert.equal(result.configs,0);
+          assert.equal(result.writes.file_written,1); // Existing episodic smart-add, after selection passes.
+          const body=fs.readFileSync(path,"utf8");
+          assert.match(body,/最终结果：决定停止部署/);
+          assert.ok(!body.includes("背景。"));
+          assert.equal(result.summary_validation.summary_selection_applied,true);
+          assert.deepEqual(result.summary_validation.summary_fact_ids,["f2"]);
+        }else{
+          assert.equal(fs.existsSync(join(root,"generated")),false);
+          assert.equal(fs.readFileSync(path,"utf8"),mode==="invalid"?"PREVIOUS EPISODE":"CONCURRENT SUMMARY");
+          assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
+          assert.equal(result.episode,false);
+        }
+      },(request,callback)=>{
+        attempts++;
+        if(attempts===1)return emitJson(callback,completion(JSON.stringify(factResponse(JSON.parse(request.body.messages.at(-1).content)))));
+        assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");
+        assert.equal(fs.existsSync(join(root,"generated")),false);
+        if(mode==="concurrent_episode")fs.writeFileSync(path,"CONCURRENT SUMMARY");
+        emitJson(callback,completion(JSON.stringify({selected_fact_ids:[mode==="invalid"?"unknown":"f2"]})));
+      });
+      assert.equal(attempts,2);
+    });
+  });
+}

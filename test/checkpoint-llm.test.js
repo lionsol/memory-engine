@@ -254,3 +254,76 @@ test("provider diagnostics retain model/timing without logging source text or cr
   assert.ok(entries.some(e=>/LLM succeeded provider=siliconflow.*durationMs=/.test(e.message)));
   assert.ok(entries.every(e=>!e.message.includes("Bearer ")&&!e.message.includes("sensitive-looking content")));
 });
+
+test("oversized valid evidence gets one ID-only selection on the same provider",async()=>{
+  const input=textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果：决定停止部署。");
+  await nightlyFixture(({callback,input},n)=>{
+    if(n===1)reply(callback,input);
+    else{
+      assert.ok(input.candidates.length===2);
+      emitJsonResponse(callback,{choices:[{message:{content:'{"selected_fact_ids":["f2"]}'},finish_reason:"stop"}]});
+    }
+  },async calls=>{
+    const response=await checkpointLlm.llmNightlyExtract(input);
+    const result=validateAndRenderFacts(response,input);
+    assert.equal(calls.length,2);
+    assert.deepEqual(calls.map(c=>c.url),["https://ds.example/chat/completions","https://ds.example/chat/completions"]);
+    assert.match(result.episode_summary,/最终结果：决定停止部署/);
+    assert.ok(!result.episode_summary.includes("背景。"));
+    assert.deepEqual(result.validation.summary_fact_ids,["f2"]);
+    assert.equal(result.validation.candidate_fact_count,2);
+    assert.equal(response.facts.length,2);
+  });
+});
+test("the selector follows the successful fallback provider, with at most three transport attempts",async()=>{
+  const input=textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果正常。");
+  await nightlyFixture(({callback,input},n)=>{
+    if(n===1)emitJsonResponse(callback,{error:{message:"primary unavailable"}});
+    else if(n===2)reply(callback,input);
+    else emitJsonResponse(callback,{choices:[{message:{content:'{"selected_fact_ids":["f2"]}'},finish_reason:"stop"}]});
+  },async calls=>{
+    const response=await checkpointLlm.llmNightlyExtract(input);
+    assert.match(validateAndRenderFacts(response,input).episode_summary,/最终结果正常/);
+    assert.deepEqual(calls.map(c=>c.url),["https://ds.example/chat/completions","https://sf.example/chat/completions","https://sf.example/chat/completions"]);
+  });
+});
+for(const mode of ["transport","json","ids","length","budget"]){
+  test("selection failure stops without another provider request: "+mode,async()=>{
+    const input=textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果正常。");
+    await nightlyFixture(({callback,input},n)=>{
+      if(n===1)return reply(callback,input);
+      if(mode==="transport")return emitJsonResponse(callback,{error:{message:"selector unavailable"}});
+      const content=mode==="json"?"bad JSON":JSON.stringify({selected_fact_ids:mode==="ids"?["unknown"]:mode==="budget"?["f1","f2"]:["f2"]});
+      emitJsonResponse(callback,{choices:[{message:{content},finish_reason:mode==="length"?"length":"stop"}]});
+    },async calls=>{
+      const code={transport:"summary_selection_llm_unavailable",json:"summary_selection_response_json",
+        ids:"summary_selection",length:"output_budget",budget:"summary_budget"}[mode];
+      await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code});
+      assert.equal(calls.length,2);
+    });
+  });
+}
+test("oversized selector input stops before a second request instead of truncating candidates",async()=>{
+  const input=textInput("**Assistant:** 单条结果。");
+  await nightlyFixture(({callback,input})=>{
+    const first=factResponse(input).facts[0];
+    emitJsonResponse(callback,{choices:[{message:{content:JSON.stringify({
+      protocol:input.protocol,target_date:input.target_date,facts:Array.from({length:512},()=>({...first}))
+    })},finish_reason:"stop"}]});
+  },async calls=>{
+    await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_selection_input_budget"});
+    assert.equal(calls.length,1);
+  },{maxInputChars:5000});
+});
+
+test("invalid quotes fail before any selection request",async()=>{
+  const input=textInput("**Assistant:** "+"背景。".repeat(1900)+"\n\n最终结果正常。");
+  await nightlyFixture(({callback,input})=>{
+    const response=factResponse(input);
+    response.facts[0].quote="被改写的背景";
+    emitJsonResponse(callback,{choices:[{message:{content:JSON.stringify(response)},finish_reason:"stop"}]});
+  },async calls=>{
+    await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_quote"});
+    assert.equal(calls.length,1);
+  });
+});
