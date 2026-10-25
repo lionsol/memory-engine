@@ -171,7 +171,8 @@ test("ordinary request separates instructions/data, retains later corrections an
     assert.equal(calls.length,1);const body=calls[0].body;
     assert.equal(body.messages[0].role,"system");
     assert.match(body.messages[0].content,/更晚的验证结果、测试结果或用户确认作为当前状态/);
-    assert.match(body.messages[0].content,/纠正只覆盖有证据的对象/);
+    assert.match(body.messages[0].content,/禁止对不同事项建立关联/);
+    assert.match(body.messages[0].content,/程序保留双方引文，不据此隐藏任何记录/);
     const wire=JSON.parse(body.messages[1].content);
     assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.parts.join(""))),
       input.sources.flatMap(s=>s.units.map(u=>u.text)));

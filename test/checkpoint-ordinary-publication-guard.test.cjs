@@ -200,6 +200,26 @@ test("ordinary publication lock failure is reported rather than overwriting or c
   assert.equal(fs.readFileSync(path,"utf8"),"OLD SUMMARY");
  });
 });
+test("unverified correction endpoints publish with title context and no memory/config derivatives",async()=>{
+ await fixture(async({state,read,path})=>{
+  state.entries=[{...entry(150,"context"),
+   text:"**Assistant:** 03:00 检查：\n\nmode = old。\n\nmode = new，旧值作废。"}];
+  const result=await run(read({targetDate:DATE}),async input=>({
+   protocol:input.protocol,target_date:input.target_date,facts:[
+    {unit:1,memory_type:"preference",config:{key:"mode",value:"old"}},
+    {unit:2,kind:"correction",supersedes:["f1"],memory_type:"preference",config:{key:"mode",value:"new"}}
+   ]}));
+  assert.equal(result.status,"valid_summary");
+  assert.equal(result.memories,0);assert.equal(result.configs,0);
+  assert.equal(result.writes.file_written,1); // Existing episodic smart-add only.
+  assert.equal(binds.length,1);
+  const published=fs.readFileSync(path,"utf8");
+  for(const text of ["03:00 检查","mode = old","mode = new","保留双方引文"])assert.ok(published.includes(text));
+  assert.deepEqual(result.summary_validation.derived_excluded_fact_ids,["f1","f2"]);
+  assert.equal(result.summary_validation.context_evidence.length,2);
+  assert.equal(result.summary_validation.model_correction_links_verified,false);
+ });
+});
 async function runMain(read,runtime,extract,overrides={}){
  return withRuntime({...runtime,readCheckpointRawLogs:read,
   llmNightlyExtract:input=>{currentInput=input;return extract(input);},

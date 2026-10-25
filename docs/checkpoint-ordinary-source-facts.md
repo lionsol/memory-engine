@@ -1,10 +1,10 @@
 # 普通 checkpoint：来源事实提取与发布门禁
 
-日期：2026-10-24（Asia/Shanghai）。
+日期：2026-10-25（Asia/Shanghai）。
 基线：d6fec1c920c0e031db4c8df4d70a6dc9b684bb6b。
-当前修复基线：6d36438ae2a7dcdf95f90eb9b3989fc13bac13c7。
-范围：普通摘要协议 v4 的离线简化；本次未新增模型调用、未部署或重写历史记录。
-v1/v2/v3 三次真实验证均未形成质量合格摘要；本轮先复审并简化，不自动继续实测。
+当前修复基线：d2cb4c91fd3d8a48b920b160f4801e607b82d971。
+范围：普通摘要协议 v5 的源码和离线修复；本轮未新增模型调用、未部署或重写历史记录。
+v1/v2/v3/v4 四次真实验证均未形成质量合格摘要；v5 的离线结果不能替代自动选择质量验收。
 
 ## 问题与行为变化
 
@@ -23,7 +23,7 @@ v1/v2/v3 三次真实验证均未形成质量合格摘要；本轮先复审并�
 
 ~~~json
 {
-  "protocol": "checkpoint-source-facts-v4",
+  "protocol": "checkpoint-source-facts-v5",
   "target_date": "2026-10-20",
   "facts": [{"unit": 1, "span": [0, 1], "kind": "decision"}]
 }
@@ -33,14 +33,14 @@ facts 的整数表示请求中全局零基 unit.index，完整选择该段原文
 对象 {unit:n,span:[a,b]} 选择该段 parts 数组中 a 至 b（含）的连续片段；
 省略 span 则完整选择。parts 按标点和换行机械划分，保留 CRLF、空格及全部字符，
 不保证语义独立。模型不计算字符偏移，也不回写 quote/source_ref。
-v1/v2/v3 响应不能复用于 v4 请求；summary、skipped、coverage 等旧清单均被拒绝，
+v1/v2/v3/v4 响应不能复用于 v5 请求；summary、skipped、coverage 等旧清单均被拒绝，
 不通过自动删除冲突字段或修补旧响应来接受失败候选。
 每个来源按对话轮次和段落划分，
 保留 entry ID、来源哈希、角色标记及原文 UTF-16 范围；来源元数据优先复用
 收集器已有的私有证据，不改变普通 rawLogs 对象形状或持久身份规则。
 没有来源 ID 时使用内容摘要作为本次证据定位信息，不生成新的持久身份。
 
-v4 的 facts 仅包含支撑简明摘要的关键事实，不要求模型逐段登记全部输入。
+v5 的 facts 仅包含支撑简明摘要的关键事实，不要求模型逐段登记全部输入。
 完整输入的段落编号和范围由程序记录，不以模型重复列出编号证明它读懂了内容。
 仅独立 HEARTBEAT_OK/[OpenClaw heartbeat poll] 两类控制标记由程序从模型消息排除，
 原始编号不重排，原文哈希不变，排除位置仍在本地输入审计内。
@@ -55,10 +55,16 @@ OK、收到、问候以及不同轮次的相同结果不会自动排除；模型
 每个有非控制内容的来源都必须在最终正文有代表。
 若原始输入有助手记录，不能仅选用户检查请求；必须选助手记录或明确的 decision/correction。
 此条件检查原始输入，不能靠先丢掉助手记录来绕过。角色检查也不证明实际结果的语义完整性。
-所有未被后继纠正的已选事实按来源和原文位置进入正文，不再有第二份正文选择清单。
+所有已选事实按来源和原文位置进入正文，不再有第二份正文选择清单，也不因模型关系标注隐藏引文。
+同轮次中，最近的独立标题或当前段首标题自动附作上下文，保留原文定位。
+标题按 Markdown 标题、加粗标题及单行冒号结尾识别；跨轮次不继承。
+这只保留可识别的结构上下文，不保证所有事件对象、时间或限制都已完整提取。
 
 kind=correction 必须有 supersedes，引用同来源中更早且已绑定的事实。
-程序自动隐藏被纠正的旧结论，并排除其派生记忆/配置；旧引用和关系仍保留。
+同源/先后关系不证明语义纠正：程序显示双方原文和未核验关系提示；关系两端均不派生记忆/配置。
+若只需最终状态，模型应直接选最终证据，无须先登记旧提议。
+model_correction_links_verified 恒为 false；derived_excluded_fact_ids 记录因此排除派生的事实。
+context_columns/context_evidence 定位实际附加的标题原文，不将其冒充模型主动选择的事实。
 input_unit_columns 声明 [unit_index,source_id,start,end]，input_units 审计完整原始输入；
 evidence_columns 声明 [fact_id,source_id,start,end,supersedes]，evidence 仅定位已选事实；
 sources 保留 entry ID 和来源哈希，excluded_control_unit_ids 记录程序排除的控制标记。
@@ -73,8 +79,8 @@ unit_coverage_complete/summary_unit_coverage_complete 分别据已选引用和�
 ## 写入与失败
 
 整批事实及配置检查通过前，不允许本轮提取生成的 smart-add、confidence 或 episode 写入。
-结构化记忆和配置从同一批已检查引文派生，排除明确被 supersedes 覆盖的旧事实，
-保留来源归属；原有最多 10 条限制沿用。
+结构化记忆和配置从同一批已检查引文及其标题上下文派生，排除未核验 supersedes 关系的两端，
+保留来源归属；原有最多 10 条限制沿用。未标注的旧结论仍可能被选择，本补丁不认证其时效。
 episode 继续使用既有版本检查、合作锁和原子发布。
 
 | 情况 | 普通提取结果 |
@@ -101,6 +107,9 @@ main 单独报告 ordinary_summary_validation 和 summary_input_complete；
 沿用现有输入、max_tokens、超时与 provider 配置，不增加重试。
 沿用 v3 的摘要正文 3000 UTF-16 字符上限，计入标题、归属、引文和纠正说明；
 超限拒绝整批响应，绝不截断。上限不含定位元数据或既有配置附节，也不是 provider token 预算。
+请求中的 summary_budget 声明总额及固定标题成本；unit.cost 使用同一渲染器计算完整引用及标题上下文，
+按最长合法 ID/kind 保守预留，包含 HTML 转义、换行缩进和定位。span 成本随选择变化，关系提示另占空间；
+这些是选择提示，最终渲染长度才是门禁。summary_budget 错误携带 observedSummaryChars/maxSummaryChars。
 输入上限现在计入 system 指令和序列化数据的字符总量；超过即停止。
 普通 HTTP 输出字符上限为现有 max_tokens × 8，finish_reason=length 必须失败；
 该字符上限不能替代 provider 的 token 上限。
@@ -114,13 +123,14 @@ semantic_quality 始终为 not_independently_verified，不能据此声称真实
 分段摘要协议未修改；历史错误摘要及派生记忆未自动清理。
 v1 的真实 10-20 验证因输出预算失败，尚未进入完整语义验收。
 v2 的真实调用完成，但结果是全文摘录，未通过摘要质量验收。
-v3 实测被冲突的覆盖处置拒绝，且所选正文原文下限已超长；v4 尚未进行真实模型验收。
+v3 实测被冲突的覆盖处置拒绝，且所选正文原文下限已超长；v4 实测仍超长，且有语义错配，见下。
 fake HTTP、程序构造候选与静态预算不能代替自动选择质量验收。
 模型若不标注纠正，或选择同一长来源中的错误重点，程序不能仅凭编号发现全部语义问题。
 
 ## 离线验证
 
-回归采用脱敏合成样例和假 HTTP，不是原始模型输出重放。
+常规回归采用脱敏合成样例和假 HTTP。新增回归固定 v4 的真实 44 条选择结构，
+在脱敏合成文本上重放其选择和关系；原始私有输入另作只读离线诊断，不将手选候选称为模型输出。
 覆盖三次检查、maintenance dry-run、daily stats、日期根因范围、纠正、
 整批检查前零写入、源/目标版本冲突、并发发布及身份/pending 恢复。
 三项旧集成测试的 Core 索引入口夹具缺失在基线可复现，
@@ -131,6 +141,7 @@ cd /home/lionsol/.devspace/worktrees/memory-engine-cff493d1
 env MEMORY_ENGINE_TEST_DEPENDENCIES=/home/lionsol/.openclaw/extensions/memory-engine \
 /home/lionsol/.local/node24/bin/node \
   --require ./test/checkpoint-dependency-loader.cjs --test --test-concurrency=2 \
+  test/checkpoint-fact-context.test.cjs \
   test/checkpoint-summary-view.test.cjs \
   test/checkpoint-fact-selections.test.cjs \
   test/checkpoint-ordinary-summary-facts.test.cjs \
@@ -254,5 +265,32 @@ v3 选择了早期“迁移/回填时序竞态”归因段（unit 3），却没�
   这只证明表示和门禁可用，不证明模型会选择同样事实。
 - 原始 v3 响应未修补，仍以 summary_structure 拒绝；按 v4 构造的全选非控制段落
   仍以 summary_budget 拒绝，没有用缩短输入、放大正文上限或容忍旧响应来过关。
-- 本轮未新增模型调用，未重跑全仓、未部署、未改历史或运行配置；v4 尚未提交。
-  已消耗的三次授权不会因本地修复恢复；后续实测仍需新的产品决策与授权。
+- 以上为 v4 提交前离线结果；随后提交 d2cb4c9，并经 Owner 重开验收授权一次实测。
+  本地修复不会恢复已消耗的授权；后续实测仍需独立授权。
+
+## v4 真实失败与 v5 离线修复
+
+v4 单次请求 HTTP 200，finish_reason=stop，completion_tokens=469；响应完整，无 fallback。
+44 条整段选择、0 个 span、5 条纠正标注；原文共 7439 字符。
+v4 按模型关系隐藏四条记录后，40 条引文仍有 6351 字符，未含定位说明即超过 3000；
+产品以 summary_budget 拒绝，未生成候选。维护和 Daily Stats 结果未选择，03:00 检查缺少标题时间。
+早期竞态归因未撤下；unit49 的 entryId 纠正指向 unit32 的采集顺序修复，
+unit51 的 mtime 纠正指向 unit42 的身份修复状态，错误隐藏了不同事项的有效证据。
+证据位于 ops/memory-engine/session-checkpoint-d2cb4c9-isolated-quality-once-20261025-evidence。
+
+v5 的边界修复：纠正标注不再获得删除引文的权力，两端不产生记忆或配置；
+结构标题自动伴随结果呈现；渲染成本在请求中明示。协议号升级以拒绝旧语义响应。
+这没有解决所有语义选择问题，也没有通过事后截断或扩大预算来接受失败输出。
+
+固定源离线诊断：197 段审计、193 段可见，请求总内容 42213 字符，仍低于 45000。
+原始 v4 响应不作修补时以 summary_structure 拒绝；仅改协议号的诊断副本仍以 summary_budget 拒绝，
+按 v5 保留双方原文及标题的拟渲染正文为 12228 字符，没有生成合格候选。
+人工选择 8 条证据的正向控制为 1636 字符，含三次检查的时间/结果、maintenance dry-run、
+Daily Stats、不同日期恢复差异、代码顺序归因和最终作废决定；这是人工构造，只验证指定事实的表示与预算，不是完整摘要验收，也不证明模型会自动选择。
+
+离线验证：9 文件 184/184 通过，fail/cancelled/skipped 均为 0，约 13.1 秒。
+新增 6 项上下文/纠正/成本回归在旧代码先失败，修复后通过；另增实际 bin/publisher 集成检查，
+确认纠正关系两端的 preference/config 均不派生，既有 episodic 写入仍按原流程执行。
+首次组合回归 182/183，一项失败是指令文案断言仍依赖旧描述；同步新语义后重跑 9 文件全通过。
+语法检查和 git diff --check 通过。未重跑全仓，上述历史全仓失败结论不变。
+本轮没有模型调用、部署、历史修订或运行配置变更。

@@ -58,9 +58,9 @@ test("derived memories use selected original spans and reject metadata outside t
   fact.config.value="dark";
   assert.throws(()=>validateAndRenderFacts(response(input,[fact]),input),{code:"summary_config"});
 });
-test("older responses cannot be silently reused against a v4 request",()=>{
+test("older responses cannot be silently reused against a v5 request",()=>{
   const input=inputFor("记录。");
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v4");
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v5");
   assert.throws(()=>validateAndRenderFacts({...response(input,[0]),protocol:"checkpoint-source-facts-v1"},input),
     {code:"summary_structure"});
 });

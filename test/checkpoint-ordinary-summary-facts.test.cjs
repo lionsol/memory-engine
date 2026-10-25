@@ -86,10 +86,10 @@ test("later corrections keep the earlier assertion and cannot refer forward or a
   const reply = factResponse(input);
   reply.facts[1].kind="correction"; reply.facts[1].supersedes=["f1"];
   const result=validateAndRenderFacts(reply,input), text=result.episode_summary;
-  assert.ok(!text.includes("需要修复"));
+  assert.ok(text.includes("需要修复"));
   assert.match(text,/已修复并验证/);
   assert.deepEqual(result.validation.evidence.map(row=>row[0]),["f1","f2"]);
-  assert.match(text,/保留此前记录/);
+  assert.match(text,/保留双方引文/);
   reply.facts[0].supersedes=["f2"];
   assert.throws(()=>validateAndRenderFacts(reply,input),{code:"summary_supersedes"});
 });

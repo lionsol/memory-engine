@@ -41,27 +41,28 @@ test("explicit user decisions can represent their source without unrelated assis
   assert.match(result.episode_summary,/决定停止本次部署/);
   assert.ok(!result.episode_summary.includes("其他任务正常"));
 });
-test("latest explicit correction renders automatically and suppresses obsolete derived writes",()=>{
+test("model correction history preserves both quotations and blocks both endpoints from derived writes",()=>{
   const input=textInput("**Assistant:** mode = old。\n\n**Assistant:** mode = new，旧设置作废。");
   const result=validateAndRenderFacts(reply(input,[
     {unit:0,memory_type:"preference",config:{key:"mode",value:"old"}},
     {unit:1,kind:"correction",supersedes:["f1"],memory_type:"preference",config:{key:"mode",value:"new"}}
   ]),input);
-  assert.ok(!result.episode_summary.includes("mode = old"));
+  assert.ok(result.episode_summary.includes("mode = old"));
   assert.match(result.episode_summary,/mode = new/);
   assert.match(result.episode_summary,/纠正关联为模型标注/);
   assert.deepEqual(result.validation.evidence.map(e=>e[0]),["f1","f2"]);
   assert.deepEqual(result.validation.evidence[1][4],["f1"]);
-  assert.equal(result.smart_memories.length,1);
-  assert.equal(result.configs.length,1);assert.equal(result.configs[0].value,"new");
+  assert.equal(result.smart_memories.length,0);
+  assert.equal(result.configs.length,0);
+  assert.deepEqual(result.validation.derived_excluded_fact_ids,["f1","f2"]);
 });
-test("correction chains render their final leaf while retaining each prior locator",()=>{
+test("correction chains retain every quotation instead of trusting transitive suppression",()=>{
   const input=textInput("**Assistant:** 旧计划。\n\n第二计划。\n\n最终计划。");
   const result=validateAndRenderFacts(reply(input,[0,{unit:1,kind:"correction",supersedes:["f1"]},
     {unit:2,kind:"correction",supersedes:["f2"]}]),input);
   assert.match(result.episode_summary,/最终计划/);
-  assert.ok(!result.episode_summary.includes("旧计划"));
-  assert.ok(!result.episode_summary.includes("第二计划"));
+  assert.ok(result.episode_summary.includes("旧计划"));
+  assert.ok(result.episode_summary.includes("第二计划"));
   assert.equal(result.validation.evidence.length,3);
 });
 test("explicit correction without an earlier source-bound link is rejected",()=>{
@@ -99,5 +100,5 @@ test("source quotations still cannot certify omitted assertions or unmarked corr
   assert.equal(result.validation.semantic_quality,"not_independently_verified");
 });
 test("the simplified output contract has a distinct protocol version",()=>{
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v4");
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v5");
 });
