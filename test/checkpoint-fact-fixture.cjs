@@ -31,8 +31,10 @@ function planResponse(input, facts = factResponse(input).facts) {
   }
   return { protocol:PROTOCOL,target_date:input.target_date,events:[...events.values()] };
 }
-function candidateSelectionResponse(input, ids = input.candidates.map(candidate => candidate.id)) {
-  return { selected_candidate_ids: ids };
+function candidateSelectionResponse(input, ids = input.candidates.filter(candidate => !candidate.id.startsWith("p")).map(candidate => candidate.id)) {
+  const selected = new Set(ids), omitted = input.candidates.filter(candidate => !selected.has(candidate.id)).map(candidate => candidate.id);
+  // Synthetic fixtures only: background is not a semantic judgment about provider data.
+  return { selected_candidate_ids: ids, omissions: omitted.length ? [{ ids: omitted, reason: "background" }] : [] };
 }
 function providerResponse(input) {
   return input.stage==="plan"?planResponse(input):candidateSelectionResponse(input);

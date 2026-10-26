@@ -2,7 +2,8 @@
 const test=require("node:test"),assert=require("node:assert/strict");
 const {PROTOCOL,EVENT_PLAN,buildFactInput,buildEventPlanPrompt,buildCandidateSelectionPrompt,completeCandidateSelection,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
 const {validateEventPlan}=require("../lib/checkpoint/ordinary-event-plan");
-const {textInput,planResponse}=require("./checkpoint-fact-fixture.cjs");
+const {textInput,planResponse,candidateSelectionResponse}=require("./checkpoint-fact-fixture.cjs");
+const selection=(plan,input,ids)=>candidateSelectionResponse(JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt),ids);
 const copy=value=>JSON.parse(JSON.stringify(value));
 const ref=(input,unit,facet="outcome",kind="report",quote=input.sources.flatMap(s=>s.units)[unit].text)=>({unit,quote,facet,kind});
 function sample(){
@@ -13,7 +14,7 @@ function sample(){
 }
 function selected(plan,input,ids){
  const prompt=buildCandidateSelectionPrompt(plan,input,45000),wire=JSON.parse(prompt.prompt);
- const response=completeCandidateSelection(plan,{selected_candidate_ids:ids||wire.candidates.map(c=>c.id)},input);
+ const response=completeCandidateSelection(plan,candidateSelectionResponse(wire,ids),input);
  return {prompt,wire,response};
 }
 function cost(wire,ids){
@@ -56,7 +57,7 @@ for(const [name,change,code] of [
  const {input,plan}=sample();change(plan);const before=JSON.stringify(plan);
  assert.throws(()=>buildCandidateSelectionPrompt(plan,input,45000),{code});assert.equal(JSON.stringify(plan),before);
 });
-for(const protocol of ["checkpoint-source-facts-v7","checkpoint-source-facts-v8","checkpoint-source-facts-v9","checkpoint-source-facts-v10"])
+for(const protocol of ["checkpoint-source-facts-v7","checkpoint-source-facts-v8","checkpoint-source-facts-v9","checkpoint-source-facts-v10","checkpoint-source-facts-v11"])
  test("old input refused before planning: "+protocol,()=>{
   const {input}=sample();input.protocol=protocol;
   assert.throws(()=>buildEventPlanPrompt(input,45000),{code:"summary_input_protocol"});
@@ -67,11 +68,11 @@ test("source coverage and same-source binding still apply to candidates and fina
  assert.throws(()=>validateEventPlan(cross,input),{code:"summary_plan_evidence"});
  const missing=copy(plan);missing.events.pop();
  assert.throws(()=>validateEventPlan(missing,input),{code:"summary_plan_source_coverage"});
- assert.throws(()=>completeCandidateSelection(plan,{selected_candidate_ids:["c1"]},input),{code:"summary_source_coverage"});
+ assert.throws(()=>completeCandidateSelection(plan,selection(plan,input,["c1"]),input),{code:"summary_source_coverage"});
 });
 test("user request alone cannot represent an assistant source after selection",()=>{
  const input=textInput("**User:** 检查归档。\n\n**Assistant:** 归档完成。"),plan=planResponse(input);
- assert.throws(()=>completeCandidateSelection(plan,{selected_candidate_ids:["c1"]},input),{code:"summary_source_coverage"});
+ assert.throws(()=>completeCandidateSelection(plan,selection(plan,input,["c1"]),input),{code:"summary_source_coverage"});
 });
 test("control markers remain unavailable as candidates",()=>{
  const input=textInput("**Assistant:** HEARTBEAT_OK\n\n完成。"),plan=planResponse(input);
@@ -136,8 +137,8 @@ test("large provisional pools can select a feasible final result without freezin
  const input=textInput("**Assistant:** "+Array.from({length:24},(_,i)=>"旧运行"+i+"的记录。"+"背景".repeat(125)+"。").concat("最终只需记录：任务成功。").join("\n\n"));
  const plan=planResponse(input);plan.events[0].evidence[0].kind="decision";plan.events[0].evidence[0].facet="constraint";
  const all=JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt).candidates.map(c=>c.id);
- assert.throws(()=>completeCandidateSelection(plan,{selected_candidate_ids:all},input),e=>e.code==="summary_budget"&&e.observedSummaryChars>5000);
- const result=validateAndRenderFacts(completeCandidateSelection(plan,{selected_candidate_ids:["c25"]},input),input);
+ assert.throws(()=>completeCandidateSelection(plan,selection(plan,input,all),input),e=>e.code==="summary_budget"&&e.observedSummaryChars>5000);
+ const result=validateAndRenderFacts(completeCandidateSelection(plan,selection(plan,input,["c25"]),input),input);
  assert.match(result.episode_summary,/任务成功/);assert.doesNotMatch(result.episode_summary,/旧运行/);
  assert.equal(result.validation.candidate_count,25);assert.equal(result.validation.selected_candidate_count,1);
 });
@@ -149,17 +150,17 @@ test("displayed cost formula equals the actual renderer across role switches, es
  for(let mask=1;mask<2**wire.candidates.length;mask++){
   const ids=wire.candidates.filter((_,i)=>mask&(1<<i)).map(c=>c.id);
   try{
-   const result=validateAndRenderFacts(completeCandidateSelection(plan,{selected_candidate_ids:ids},input),input);
+   const result=validateAndRenderFacts(completeCandidateSelection(plan,selection(plan,input,ids),input),input);
    assert.equal(result.episode_summary.length,cost(wire,ids));checked++;
-  }catch(error){if(error.code!=="summary_source_coverage")throw error;}
+  }catch(error){if(!["summary_source_coverage","summary_candidate_overlap"].includes(error.code))throw error;}
  }
  assert.ok(checked>10);
 });
-test("same-paragraph old claims cannot be restored by returning a new candidate identifier",()=>{
+test("full paragraph alternatives do not authorize changing a chosen narrow quote",()=>{
  const input=textInput("**Assistant:** 旧判断：无限回填。每日十条上限。最终只处理当日。");
  const plan=planResponse(input,[{unit:0,quote:"每日十条上限。",event_id:"queue",facet:"constraint"},
   {unit:0,quote:"最终只处理当日。",event_id:"queue",facet:"outcome"}]);
- const {response,prompt}=selected(plan,input);assert.ok(!prompt.prompt.includes("无限回填"));
+ const {response,prompt}=selected(plan,input);assert.ok(prompt.prompt.includes("无限回填"));
  response.facts[0].quote="旧判断：无限回填。";
  assert.throws(()=>validateAndRenderFacts(response,input),{code:"summary_plan_fact_scope"});
 });

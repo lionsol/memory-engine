@@ -108,9 +108,40 @@ test("oversized selected body preserves the old episode and writes no generated 
   });
 });
 
+
+for(const mode of ["paragraph_ok","paragraph_overlap","paragraph_unaccounted"]){
+ test("complete paragraph alternative retains qualifications through the real publisher: "+mode,async()=>{
+  await fixture(async({root,path})=>{
+   const text="自然样本15条。valid=true，来源为用户。取消事件0条，不能证明取消路径生效。";
+   const logs=[{source:"conversation",category:"raw_log",chunk_id:"qualified",text:"**Assistant:** "+text}];
+   await withFakeHttps(async requests=>{
+    const result=await withRuntime({llmNightlyExtract:checkpointLlm.llmNightlyExtract},()=>checkpoint.nightlyCheckpoint(logs,{targetDate:DATE}));
+    assert.equal(requests.length,2);
+    if(mode==="paragraph_ok"){
+     assert.equal(result.status,"valid_summary");assert.equal(result.memories,0);assert.equal(result.configs,0);
+     assert.ok(fs.readFileSync(path,"utf8").includes(text));
+     assert.equal(result.summary_validation.model_omission_reasons_verified,false);
+    }else{
+     assert.equal(result.reason,mode==="paragraph_overlap"?"summary_candidate_overlap":"summary_candidate_omissions");
+     assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");assert.equal(fs.existsSync(join(root,"generated")),false);
+     assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
+    }
+   },(request,callback)=>{
+    const packet=JSON.parse(request.body.messages.at(-1).content);
+    const response=packet.stage==="plan"?{protocol:packet.protocol,target_date:packet.target_date,events:[
+     {id:"sample",source_id:"s0",evidence:[{unit:0,quote:"自然样本15条。",facet:"outcome"}]}]}:
+     {selected_candidate_ids:mode==="paragraph_overlap"?["c1","p0"]:["p0"],
+      omissions:mode==="paragraph_ok"?[{ids:["c1"],reason:"covered",by:["p0"]}]:[]};
+    emitJson(callback,completion(JSON.stringify(response)));
+   });
+  });
+ });
+}
+
 const checkpointLlm=require("../lib/checkpoint/llm");
+const {candidateSelectionResponse}=require("./checkpoint-fact-fixture.cjs");
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
-for(const mode of ["ok","invalid_plan","unknown","duplicate","empty","extra_fields","all_over_budget","mutate_kind","concurrent_episode","transport"]){
+for(const mode of ["ok","invalid_plan","unknown","duplicate","empty","extra_fields","all_over_budget","mutate_kind","concurrent_episode","transport","missing_omissions","unaccounted","false_budget","invalid_supersession"]){
  test("costed final ID selection preserves publication gates: "+mode,async()=>{
   await fixture(async({root,path})=>{
    const source=[{source:"conversation",category:"raw_log",chunk_id:"source",
@@ -135,7 +166,8 @@ for(const mode of ["ok","invalid_plan","unknown","duplicate","empty","extra_fiel
      assert.equal(fs.existsSync(join(root,"generated")),false);
      assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
      const reason=({invalid_plan:"summary_plan_evidence",all_over_budget:"summary_budget",mutate_kind:"summary_plan_fact_scope",
-      transport:"summary_candidate_llm_unavailable"})[mode]||"summary_candidate_selection";
+      transport:"summary_candidate_llm_unavailable",missing_omissions:"summary_candidate_omissions",unaccounted:"summary_candidate_omissions",
+      false_budget:"summary_candidate_budget_reason",invalid_supersession:"summary_candidate_omission_scope"})[mode]||"summary_candidate_selection";
      if(mode!=="concurrent_episode")assert.equal(result.reason,reason);
     }
    },(request,callback)=>{
@@ -151,12 +183,16 @@ for(const mode of ["ok","invalid_plan","unknown","duplicate","empty","extra_fiel
     assert.equal(packet.stage,"select");assert.ok(packet.candidates.every(c=>Number.isSafeInteger(c.cost)));
     assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");assert.equal(fs.existsSync(join(root,"generated")),false);
     if(mode==="transport")return emitJson(callback,{error:{message:"offline selector failure"}});
-    const response={selected_candidate_ids:["c2","c3"]};
+    const response=candidateSelectionResponse(packet,["c2","c3"]);
     if(mode==="unknown")response.selected_candidate_ids=["unknown"];
     if(mode==="duplicate")response.selected_candidate_ids=["c2","c2"];
     if(mode==="empty")response.selected_candidate_ids=[];
     if(mode==="extra_fields"){response.memory_type="event";response.config={key:"结果",value:"停止"};}
-    if(mode==="all_over_budget")response.selected_candidate_ids=packet.candidates.map(c=>c.id);
+    if(mode==="all_over_budget"){response.selected_candidate_ids=packet.candidates.map(c=>c.id);response.omissions=[];}
+    if(mode==="missing_omissions")delete response.omissions;
+    if(mode==="unaccounted")response.omissions=[];
+    if(mode==="false_budget"){response.selected_candidate_ids=["c2"];response.omissions=[{ids:["c1"],reason:"background"},{ids:["c3"],reason:"budget"}];}
+    if(mode==="invalid_supersession"){response.selected_candidate_ids=["c1","c2"];response.omissions=[{ids:["c3"],reason:"superseded",by:["c2"]}];}
     if(mode==="concurrent_episode")fs.writeFileSync(path,"CONCURRENT SUMMARY");
     emitJson(callback,completion(JSON.stringify(response)));
    });
@@ -184,8 +220,8 @@ for(const mode of ["mixed_ok","mixed_extra_quote","mixed_overlap"]){
     if(packet.stage==="plan")return emitJson(callback,completion(JSON.stringify({protocol:packet.protocol,target_date:packet.target_date,events:[
      {id:"queue",source_id:"s0",evidence:[{unit:0,quote:mode==="mixed_overlap"?"每日上限十条。最终确认：只处理当日队列。":"每日上限十条。",facet:"constraint"},
       {unit:0,quote:"最终确认：只处理当日队列。",facet:"outcome"}]}]})));
-    assert.ok(!JSON.stringify(packet).includes("无限回填"));assert.ok(!JSON.stringify(packet).includes("未选的说明"));
-    const response={selected_candidate_ids:packet.candidates.map(c=>c.id)};
+    assert.ok(packet.candidates.some(c=>c.origin==="original_paragraph"&&c.quote.includes("无限回填")));
+    const response=candidateSelectionResponse(packet);
     if(mode==="mixed_extra_quote")response.facts=[{unit:0,quote:"旧判断：无限回填。"}];
     emitJson(callback,completion(JSON.stringify(response)));
    });
@@ -218,9 +254,9 @@ for(const mode of ["table_ok","table_plan_cell","table_mutate_cell","table_unkno
     const packet=JSON.parse(request.body.messages.at(-1).content);
     if(packet.stage==="plan")return emitJson(callback,completion(JSON.stringify({protocol:packet.protocol,target_date:packet.target_date,events:[
      {id:"latency",source_id:"s0",evidence:[{unit:0,quote:mode==="table_plan_cell"?"333":row,facet:"outcome"}]}]})));
-    assert.ok(packet.candidates[0].context.some(c=>c.kind==="table_header"&&c.text===header));
-    assert.ok(!JSON.stringify(packet).includes("未选行"));
-    emitJson(callback,completion(JSON.stringify({selected_candidate_ids:mode==="table_unknown_header"?["header"]:["c1"]})));
+    assert.ok(packet.candidates.find(c=>c.id==="c1").context.some(c=>c.kind==="table_header"&&c.text===header));
+    assert.ok(packet.candidates.some(c=>c.origin==="original_paragraph"&&c.quote.includes("未选行")));
+    emitJson(callback,completion(JSON.stringify(candidateSelectionResponse(packet,mode==="table_unknown_header"?["header"]:["c1"]))));
    });
   });
  });

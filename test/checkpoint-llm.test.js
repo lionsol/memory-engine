@@ -231,7 +231,7 @@ test("final IDs may remove obsolete candidate events and constraints to meet the
  const input=textInput("**Assistant:** "+"过时背景。".repeat(1200)+"\n\n最终结果正常。");
  await nightlyFixture(({callback,input})=>{
   if(input.stage==="plan"){const p=planResponse(input);p.events[0].evidence[0].facet="constraint";return content(callback,p);}
-  content(callback,{selected_candidate_ids:["c2"]});
+  content(callback,candidateSelectionResponse(input,["c2"]));
  },async calls=>{
   const response=await checkpointLlm.llmNightlyExtract(input),result=validateAndRenderFacts(response,input);
   assert.equal(calls.length,2);assert.match(result.episode_summary,/最终结果正常/);assert.doesNotMatch(result.episode_summary,/过时背景/);
@@ -241,7 +241,7 @@ test("final IDs may remove obsolete candidate events and constraints to meet the
 });
 test("ID selection must still cover every source",async()=>{
  const input=buildFactInput([{source:"conversation",text:"**Assistant:** 甲完成。"},{source:"conversation",text:"**Assistant:** 乙正常。"}],"2026-10-20");
- await nightlyFixture(({callback,input})=>input.stage==="plan"?reply(callback,input):content(callback,{selected_candidate_ids:["c1"]}),async calls=>{
+ await nightlyFixture(({callback,input})=>input.stage==="plan"?reply(callback,input):content(callback,candidateSelectionResponse(input,["c1"])),async calls=>{
   await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_source_coverage"});assert.equal(calls.length,2);
  });
 });

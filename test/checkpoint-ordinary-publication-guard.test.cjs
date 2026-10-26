@@ -7,7 +7,7 @@ const {dedupeCollectedLogs}=require("../lib/checkpoint/raw-log-dedupe");
 const {withRuntime}=require("../lib/checkpoint/runtime");
 const llm=require("../lib/checkpoint/llm"),config=require("../lib/checkpoint/config");
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
-const {factResponse,planResponse}=require("./checkpoint-fact-fixture.cjs");
+const {factResponse,planResponse,candidateSelectionResponse}=require("./checkpoint-fact-fixture.cjs");
 let currentInput;
 // The subject is the real bin, reader and publisher. Unrelated confidence DB writes
 // are counted at their boundary; every filesystem target is inside a fresh temp root.
@@ -96,11 +96,11 @@ test("aligned budget sends every full entry to planning and costed literal candi
      for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
     }else{
      assert.ok(sent.candidates.every(c=>Number.isSafeInteger(c.cost)));
-     assert.deepEqual(sent.candidates.map(c=>c.quote),answer().facts.map(f=>f.quote));
-     assert.ok(!prompt.includes("A".repeat(50)),"unselected paragraph tail reached quotation");
+     assert.deepEqual(sent.candidates.filter(c=>c.origin==="model_excerpt").map(c=>c.quote),answer().facts.map(f=>f.quote));
+     assert.ok(sent.candidates.some(c=>c.origin==="original_paragraph"&&c.quote.includes("A".repeat(50))),"complete paragraph alternative missing");
     }
     assert.equal(request.body.max_tokens,4096);
-    const response=sent.stage==="plan"?planResponse(currentInput,answer().facts):{selected_candidate_ids:sent.candidates.map(c=>c.id)};
+    const response=sent.stage==="plan"?planResponse(currentInput,answer().facts):candidateSelectionResponse(sent);
     emitJson(callback,completion(JSON.stringify(response)),{bytewise:true});
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
@@ -130,7 +130,7 @@ test("oversized final ID selection stops after two fake HTTP calls and preserves
     response.facts[0].facet="constraint";
     response.facts[0].memory_type="event";
     const packet=JSON.parse(request.body.messages.at(-1).content);
-    emitJson(callback,completion(JSON.stringify(packet.stage==="plan"?planResponse(currentInput,response.facts):{selected_candidate_ids:packet.candidates.map(c=>c.id)})));
+    emitJson(callback,completion(JSON.stringify(packet.stage==="plan"?planResponse(currentInput,response.facts):candidateSelectionResponse(packet))));
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
   assert.equal(requests,2);

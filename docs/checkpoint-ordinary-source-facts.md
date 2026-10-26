@@ -1,91 +1,127 @@
-# 普通 checkpoint：候选证据与预算内选择
+# 普通 checkpoint：完整原段备选与遗漏审计
 
 日期：2026-10-26（Asia/Shanghai）。
-当前 v11 源码已提交为 958c4b091fb5d6270714f7f25c8135d00fcd5899。
-本轮固定样本真实验收2次请求：预算/来源绑定通过，语义验收失败；无发布或部署。
-v10 的98段全必选在旧格式下无解的结论仍保留；v11 改变的是最终选择契约，不把该失败输出自动转为质量通过。
+当前v12源码候选基于 `a8d8ec54ede6488fec6688e243bd8d1da859d655`，尚未提交。
+本轮源码、离线回归与人工选择重放；真实请求/发布/部署均为0。
+v11已解决本次传输/正文预算，但语义仍失败，原始验收记录完整保留在下文。
 
-## 当前 v11 路径
+## 当前v12路径及边界
 
-普通提取为“完整来源提出候选 → 带实际成本的最终编号选择 → 程序生成事实及正文 → 既有发布门禁”。
-正常仍为两次逻辑调用；第一轮仅在传输不可用时沿用一次既有 provider 回退，
-第二轮固定成功 provider/model，无重试/回退/第三轮。实际传输请求上限仍为三次。
-正文上限5000字符、生产默认4096 token均不变，没有新配置或runtime变更。
-两步路径继续只生成来源日报及既有episodic记录，不派生长期记忆/配置。
+普通提取仍为“完整来源提出候选 → 最终编号及遗漏理由 → 程序生成事实及正文 → 既有发布门禁”。
+正常两次逻辑调用；第一轮仅传输不可用时沿用一次既有provider回退，
+第二轮固定成功provider/model，无重试、回退或第三轮，实际传输上限仍为三次。
+正文5000字符、生产默认4096 token不变；无新配置、runtime、DB schema或AutoRecall变更。
+只生成来源日报及既有episodic记录，不派生长期记忆/配置。
 
-## 第一步：候选不是全部必选
+第一轮使用v12 protocol/target_date/events，事件字段仍仅id/source_id/evidence，
+引用仍仅unit/quote/facet/可选kind。完整来源保留原始全局段号及哈希，
+仅排除两种既有独立heartbeat控制标记。引文必须在同来源指定原段连续、精确、唯一，
+模型引文之间不能重叠；表格保留完整数据行，列名由程序定位。
+各非控制来源须有代表，有助手结果时不能仅保留用户检查请求。
+第一轮归组及标签未独立核验，不将所有候选或所有旧constraint自动冻结为必选。
 
-请求保留完整来源、原始全局段号和来源哈希，只排除既有两类独立heartbeat控制标记。
-返回 v11 的 protocol/target_date/events，每个事件只有id/source_id/evidence，
-引用包含unit/quote/facet，可选kind默认report。topic、退役字段、额外字段继续拒绝。
-quote须在指定原段连续、精确且唯一；候选互不重叠，不跨来源使用，不改写原文。
-表格结果保留完整数据行，列名由程序定位。所有来源须有代表，有助手结果时不能只选用户检查请求。
+## 完整原段是可选证据，不是自动扩写
 
-第一轮事项仅是候选归组。每个候选constraint/decision/correction及outcome组，
-都不再自动冻结成最终正文的强制集合；第二轮必须判断当前有效性、去重并保留重要限制。
-分类/归组本身未独立核验。候选池缺失的关键事实，第二轮无法补回；
-混合新旧判断的候选也不能在第二轮内部改写，应在第一轮拆成足够精确的完整判断。
+模型引文按第一轮顺序分配c1/c2等编号，原文字段及标签保持不变。
+对于被引用但尚无完整原段候选的unit，程序另生成p加原始段号的备选，
+如p176。其quote严格等于该原段全文；没有补写、拼接、推断或跨段搜索。
+这使第二轮能选择短摘录漏掉的同段限定，例如有效性、窗口、仍待验证的说明。
+完全未进入第一轮的段落仍无法补回，原段之外没有自动新增证据。
 
-## 第二步：只选择编号，程序保留文字和标签
+p编号使用中性report/outcome及paragraph_段号归组，origin为original_paragraph；
+它不是继承某一短摘录的correction标签或新增的模型判断。
+c编号origin为model_excerpt。所有标签及原文范围在程序生成时固定，发布前重新核对。
+两种候选都显示实际渲染cost及来源角色。程序不会因模型选择c编号而自动替换为p编号。
+选择有范围重叠的长短候选会拒绝，不能以重复引文扩大覆盖声明。
+原段可能混合已撤回说法或其他事项，不能机械优先最长备选。
 
-程序为候选按第一轮归组/引用顺序分配c1、c2等稳定编号；
-候选展示按最终正文的原始来源/段落/位置顺序排列，保留来源角色和原始上下文。
-请求stage为select，不再要求模型返回facts、引文、kind、facet或新因果说明。
-唯一允许的回复是：
+模型引文与完整原段备选合计最多512项，超过报summary_candidate_pool_budget。
+完整候选、上下文与指令全部计入maxInputChars，超限报summary_plan_input_budget，不裁切或静默去掉备选。
+
+## 最终选择必须交代所有未选项
+
+第二轮stage仍为select，不复制引文、标签或facts。回复形状为：
 
 ~~~json
-{"selected_candidate_ids":["c1","c8","c19"]}
+{
+  "selected_candidate_ids": ["c1", "p12"],
+  "omissions": [
+    {"ids": ["c2"], "reason": "superseded", "by": ["p12"]}
+  ]
+}
 ~~~
 
-空、重复、未知编号、旧selected_fact_ids字段、facts或其他额外字段均拒绝。
-可以不选过时/重复候选及其整个旧事项；不能把候选全部留到下游再期待自动删减。
-最终仍须覆盖每个非控制来源，有助手结果时保留助手结果或明确用户decision/correction。
-重要条件/不确定性是否选全仍是语义任务，不能用来源覆盖旗标代替验收。
+每个候选只能且必须出现一次：已选数组或omissions.ids。即使全选，omissions也须为数组。
+空/重复/未知已选编号、遗漏未交代项、重复交代、同时选中又排除、额外字段均拒绝。
+遗漏可以按相同理由和by分组；理由仅允许：
 
-程序从候选逐字生成事实，沿用id/unit/quote/event_id/facet/kind。
-第二轮不再复制或缩短引文，也不再负责抄写非默认kind。
-发布前逐项核对这些字段，模型/调用者不能改标签、缩短范围或注入派生字段。
-超预算、字段不一致或来源/episode冲突均失败，不静默修复、裁切、放宽上限或追加调用。
-未知/旧protocol在第一次请求前拒绝；没有生产兼容转换器。
+| reason | 程序检查 |
+|---|---|
+| covered | by非空且均已选、同来源，至少一项原文范围完整包含该未选项 |
+| superseded | by非空且均已选、同来源，每项范围都在旧项结束之后或从其结束处开始 |
+| redundant | by非空且均已选、同来源；语义重复尚未独立核验 |
+| background | 不得有by；重要性判断尚未独立核验 |
+| budget | 不得有by；逐项加入当前已选正文后确实超过5000字符，否则拒绝 |
 
-## 实际渲染成本
+budget不能用来交代与已选范围重叠的备选，范围冲突应通过选择本身处理。
+计算使用原文、标题/表格列名、转义、编号及来源/角色切换的实际渲染，
+不是估算token，也不是把整批未选项一次加入后借总额超限解释每一项。
+遗漏结构错误为summary_candidate_omissions，越界/跨来源/倒序等引用为summary_candidate_omission_scope，
+虚假预算理由为summary_candidate_budget_reason，已选范围重叠为summary_candidate_overlap。
 
-每个候选的cost由程序renderItem计算，包含完整引文、HTML转义、事实标记、
-原始标题/表格列名及条目间隔。group_cost包含来源/角色标题及间隔，
-group_key标识来源/角色；候选已按正文顺序排序。
-精确公式（JS字符串长度，非token估计）为：
+提示要求先比较对象、日期、运行的最终状态，结论与必要条件共同选择，
+保留独立结果、明确更正及未解决限制，再删重复过程/路径；不能把预算误解为越短越好。
+这些语义要求仍由模型执行。程序**不能**证明superseded真的构成更正，
+也不能证明background确实不重要；模型仍可能错误标理由，或选中矛盾双方而不声明纠正。
+完整交代、来源覆盖与预算通过均不等于语义PASS，不恢复所有候选全必选规则。
 
-~~~text
-header_chars
-+ 每个已选候选的 cost
-+ 已选序列首次或相对前一已选项 group_key 改变时的 group_cost
-~~~
+## 渲染、内部审计与发布保护
 
-相同group被其他组隔开后再次出现，仍计标题成本；编号回复的排列不改变最终渲染顺序。
-不把来源标题反复按单条独立渲染收费，也不忽略上下文/转义成本。
-成本只是帮助模型选择，最终仍实际渲染并严格核对5000上限。超限直接拒绝，不自动删除任何编号。
+实际正文成本仍为header_chars + 已选cost之和 +
+已选序列首次或相对前一已选项group_key改变时的group_cost。
+相同来源/角色组被其他组隔开后再次出现仍收费；按原文排序，不按回复编号顺序。
+cost包含完整引文、HTML转义、事实标记、标题及表格列名。
+表格整行/列名及CRLF、代码竖线、多表格隔离等范围规则沿用ordinary-evidence-context。
+最终实际渲染仍严格核对5000字符，失败不裁切、不重写或追加调用。
 
-表格列名和整行结构沿用ordinary-evidence-context.js的原文范围检查，
-支持已测试的CRLF、转义/代码内竖线、多表格隔离和完整表格不重复补头。
-表头是上下文，不授权新增事实；输入预算包含完整候选、成本和上下文，超限不切片。
+EVENT_PLAN的Symbol注解保留规范候选池与复制后的选择/遗漏数组，
+程序完成后及发布前重新核对。JSON不能伪造Symbol，也不能注入派生字段或改变已选文字/标签。
+元数据新增paragraph_candidate_ids、candidate_omissions_complete、candidate_omissions，
+model_omission_reasons_verified恒为false。candidate_evidence记录全部备选，plan_evidence记录已选范围。
+selected_candidate_coverage_complete仅说明输出与声明编号一致，
+candidate_pool_coverage_complete仅说明是否全选；存在重叠备选时通常不能全选，不是质量指标。
+model_final_selection_verified及model_event_plan_verified仍为false；所有已选事实仍禁止长期派生。
+旧required-all的buildSummarySelection/SUMMARY_SELECTION只是历史离线工具，不进入当前路径。
 
-## 内部注解、审计与失败保护
+来源/旧episode快照、合作锁、版本检查及原子发布逻辑沿用；
+episodic写入后的late conflict仍可能留下已写记录，并非跨存储事务。
+旧protocol在请求前拒绝；生产中没有v11到v12转换或模型响应修复路径。
 
-EVENT_PLAN只在内存中保存候选池和最终编号选择，模型JSON不能构造这个Symbol；
-程序完成后及发布前都重新核对候选、选择和原文。原始provider回复不改写。
-元数据分别记录candidate_count/selected_candidate_count、selected/excluded_candidate_ids、
-全部candidate_evidence和选中的plan_evidence。未选不等于噪音、虚假或已撤回。
-selected_candidate_coverage_complete仅表示程序生成的事实覆盖了声明最终编号；
-candidate_pool_coverage_complete仅表示是否全选，model_final_selection_verified恒为false。
-移除旧event_plan_coverage_complete，避免把候选全覆盖与最终选择混为一谈。
-既有declared_event_coverage_complete只针对已选正文归组，不强制覆盖所有第一轮候选事项。
+## v12离线验证与限制
 
-候选、最终选择、kind/facet和纠正关系均未独立核验，所有最终事实仍禁止长期派生。
-独立注入提取器未附候选注解的可信隔离测试不代表默认生产协议。
-旧buildSummarySelection/SUMMARY_SELECTION保留为历史离线诊断，其“所有声明关键候选必留”规则不进入v11路径。
+15个相关测试文件362/362通过，fail/cancelled/skipped/todo=0。
+覆盖完整原段的原文和限定、重叠拒绝、候选上限及完整输入成本、遗漏全交代、
+同来源/后续/包含范围、真实与虚假预算理由、发布前再次检查，
+以及非法选择保留旧episode且派生写入为0。
+原有来源冲突、并发episode、表格、传输、token预算及reconciliation回归继续通过。
 
-失败保护、来源/旧episode快照及episodic发布沿用既有逻辑；没有DB schema或AutoRecall改动。
-合作锁/版本检查/原子发布不是跨存储事务，episodic写入后的late conflict仍可能留下已写记录。
+固定来源使用未修改的v11真实55引文池作为诊断：
+先断言原v11协议被拒绝，仅在测试内构造v12协议头，不改任何模型文字/标签。
+程序增加28个完整原段备选，共83项；完整首轮输入40412字符，第二轮35735字符。
+人工选择30项，预测成本=实际正文=4453字符；编号及遗漏回复834字符。
+示例使用p42/p176/p182保留实际恢复尚待自然首跑验证、自然样本窗口/资格以及取消证据限制，
+以c14标注c13旧1830推断被后文纠正，并补回独立Daily Stats及延迟限制。
+未选项的人工background分类不是认定它们不重要，更不是全日完整性证明。
+
+诊断脚本及JSON报告：
+`/home/lionsol/.openclaw/ops/memory-engine/checkpoint-v12-qualified-candidates-offline-20261026.cjs`，
+以及同名.json。脚本复核原始来源、历史episode、v11两轮响应及candidate.md哈希未变，
+外部请求、publisher及长期记忆/配置输出均为0。
+
+这是人工选择的可行性诊断，不是v12自动模型质量或4096-token实测。
+原始延迟数字的算术不一致仍未认证。更长的候选输入可能触及预算，
+新的完整遗漏回复也可能增加输出token；两者都须由提交后的真实验收检查。
+全日关键覆盖、旧判断是否正确剔除、必要限定是否共同保留，仍待自动模型输出核验。
 
 ## 2026-10-26 v11 真实验收：预算通过，语义仍失败
 
