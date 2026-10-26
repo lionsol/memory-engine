@@ -1,21 +1,23 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
-const {PROTOCOL,EVENT_PLAN,buildFactInput,buildPlannedFactPrompt,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
-const {textInput,selectedResponse,planResponse,plannedFactResponse}=require("./checkpoint-fact-fixture.cjs");
+const {PROTOCOL,EVENT_PLAN,buildFactInput,buildCandidateSelectionPrompt,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
+const {textInput,selectedResponse,planResponse}=require("./checkpoint-fact-fixture.cjs");
+const {selectPlanFacts}=require("../lib/checkpoint/ordinary-event-plan");
 const header="| 分段 | n | p50 | max |\n|---|---|---|---|";
 const row="| embedding | 15 | 333 | 3139 |";
 function selected(text,quote=row){
  const input=textInput("**Assistant:** "+text);
  const plan=planResponse(input,[{unit:0,quote,event_id:"latency",facet:"outcome"}]);
- const prompt=buildPlannedFactPrompt(plan,input,45000),wire=JSON.parse(prompt.prompt),response=plannedFactResponse(wire);
- Object.defineProperty(response,EVENT_PLAN,{value:plan});
+ const prompt=buildCandidateSelectionPrompt(plan,input,45000),wire=JSON.parse(prompt.prompt),selection={selected_candidate_ids:wire.candidates.map(c=>c.id)};
+ const chosen=selectPlanFacts(plan,selection,input),response={protocol:PROTOCOL,target_date:input.target_date,facts:chosen.facts};
+ Object.defineProperty(response,EVENT_PLAN,{value:{plan,selection}});
  return {input,plan,prompt,wire,response};
 }
 test("selected table rows retain literal column names in the quote request and final body",()=>{
  const {input,prompt,wire,response}=selected(header+"\n"+row+"\n| 未选行 | 1 | 99 | 100 |");
  assert.ok(prompt.prompt.includes("p50"));assert.ok(prompt.prompt.includes("max"));
  assert.ok(!prompt.prompt.includes("未选行"));
- const contexts=wire.sources[0].units[0].contexts;
+ const contexts=wire.candidates[0].context;
  assert.deepEqual(contexts.map(c=>[c.kind,c.text]),[["table_header",header]]);
  const result=validateAndRenderFacts(response,input);
  assert.match(result.episode_summary,/表格列名（原文）/);
@@ -28,17 +30,17 @@ test("selected table rows retain literal column names in the quote request and f
 test("CRLF, escaped pipes and code-span pipes keep original context ranges",()=>{
  const text="表格：\r\n| 指标 | p\\|50 | `max|值` |\r\n|---|---|---|\r\n| `emb|等待` | 333 | 3139 |";
  const {input,wire,response}=selected(text,"| `emb|等待` | 333 | 3139 |");
- assert.deepEqual(wire.sources[0].units[0].contexts.map(c=>c.kind),["heading","table_header"]);
+ assert.deepEqual(wire.candidates[0].context.map(c=>c.kind),["heading","table_header"]);
  const result=validateAndRenderFacts(response,input);
  for(const [,source,start,end] of result.validation.context_evidence){
   assert.equal(source,"s0");
-  assert.ok(wire.sources[0].units[0].contexts.some(c=>c.text===("**Assistant:** "+text).slice(start,end)));
+  assert.ok(wire.candidates[0].context.some(c=>c.text===("**Assistant:** "+text).slice(start,end)));
  }
  assert.ok(result.episode_summary.includes("p\\|50"));
 });
 test("full-table quotations do not duplicate their own column header as extra context",()=>{
  const quote=header+"\n"+row,{input,response,wire}=selected(quote,quote);
- assert.equal(wire.sources[0].units[0].contexts,undefined);
+ assert.deepEqual(wire.candidates[0].context,[]);
  const result=validateAndRenderFacts(response,input);
  assert.equal(result.validation.context_evidence.length,0);
  assert.equal((result.episode_summary.match(/p50/g)||[]).length,1);
@@ -47,7 +49,7 @@ test("different tables in one paragraph keep only the intersected table's column
  const first="| A | B |\n|---|---|\n| 旧行 | 1 |";
  const second="| 项目 | max |\n|---|---|\n| 新行 | 2 |";
  const {input,wire,response}=selected(first+"\n说明不是表格。\n"+second,"| 新行 | 2 |");
- assert.deepEqual(wire.sources[0].units[0].contexts.map(c=>c.text),["| 项目 | max |\n|---|---|"]);
+ assert.deepEqual(wire.candidates[0].context.map(c=>c.text),["| 项目 | max |\n|---|---|"]);
  const body=validateAndRenderFacts(response,input).episode_summary;
  assert.doesNotMatch(body,/旧行|\| A \| B/);assert.match(body,/项目.*max/);
 });
@@ -60,7 +62,7 @@ test("column context never leaks from another source or earlier table paragraph"
 for(const quote of ["333","| embedding | 15 | 333","embedding | 15 | 333 | 3139"])
  test("planning refuses detached table cells before quotation: "+quote,()=>{
   const input=textInput("**Assistant:** "+header+"\n"+row),plan=planResponse(input,[{unit:0,quote,event_id:"latency",facet:"outcome"}]);
-  assert.throws(()=>buildPlannedFactPrompt(plan,input,45000),{code:"summary_plan_table_row_scope"});
+  assert.throws(()=>buildCandidateSelectionPrompt(plan,input,45000),{code:"summary_plan_table_row_scope"});
  });
 test("quote stage cannot detach a number from an otherwise valid planned data row",()=>{
  const {input,response}=selected(header+"\n"+row);response.facts[0].quote="333";

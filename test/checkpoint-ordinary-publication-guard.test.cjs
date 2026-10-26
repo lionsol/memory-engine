@@ -74,7 +74,7 @@ test("recorded four lengths replay baseline, session-only adjustment and aligned
   assert.equal(defaults.perSessionChars,8000);assert.equal(defaults.conversationChars,24000);
  });
 });
-test("aligned budget sends every full entry to planning and only selected literal scopes to quotation",async()=>{
+test("aligned budget sends every full entry to planning and costed literal candidates to final selection",async()=>{
  await fixture(async({state,read,path})=>{
   const logs=read({targetDate:DATE});assert.equal(logs.checkpointStats.budgetCoverageComplete,true);
   assert.equal(logs[0].text.length,22932);
@@ -95,19 +95,19 @@ test("aligned budget sends every full entry to planning and only selected litera
     if(sent.stage==="plan"){
      for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
     }else{
-     assert.ok(sent.sources.flatMap(s=>s.units).every(u=>u.text===undefined));
-     assert.deepEqual(sent.event_plan.events.flatMap(e=>e.evidence.map(r=>r.quote)),answer().facts.map(f=>f.quote));
+     assert.ok(sent.candidates.every(c=>Number.isSafeInteger(c.cost)));
+     assert.deepEqual(sent.candidates.map(c=>c.quote),answer().facts.map(f=>f.quote));
      assert.ok(!prompt.includes("A".repeat(50)),"unselected paragraph tail reached quotation");
     }
     assert.equal(request.body.max_tokens,4096);
-    const response=sent.stage==="plan"?planResponse(currentInput,answer().facts):answer();
+    const response=sent.stage==="plan"?planResponse(currentInput,answer().facts):{selected_candidate_ids:sent.candidates.map(c=>c.id)};
     emitJson(callback,completion(JSON.stringify(response)),{bytewise:true});
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
   assert.equal(requests,2);
  });
 });
-test("oversized planned quotation stops after two fake HTTP calls and preserves the old episode and derived stores",async()=>{
+test("oversized final ID selection stops after two fake HTTP calls and preserves the old episode and derived stores",async()=>{
  await fixture(async({read,path,root})=>{
   const logs=read({targetDate:DATE});
   const oldRequest=config.resolveCheckpointLlmRequestConfig,oldProviders=config.resolveCheckpointProviders;
@@ -130,7 +130,7 @@ test("oversized planned quotation stops after two fake HTTP calls and preserves 
     response.facts[0].facet="constraint";
     response.facts[0].memory_type="event";
     const packet=JSON.parse(request.body.messages.at(-1).content);
-    emitJson(callback,completion(JSON.stringify(packet.stage==="plan"?planResponse(currentInput,response.facts):response)));
+    emitJson(callback,completion(JSON.stringify(packet.stage==="plan"?planResponse(currentInput,response.facts):{selected_candidate_ids:packet.candidates.map(c=>c.id)})));
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
   assert.equal(requests,2);

@@ -31,18 +31,13 @@ function planResponse(input, facts = factResponse(input).facts) {
   }
   return { protocol:PROTOCOL,target_date:input.target_date,events:[...events.values()] };
 }
-function plannedFactResponse(input, decorate = () => ({})) {
-  if (!input.event_plan) return factResponse(input,decorate);
-  const refs=input.event_plan.events.flatMap(event=>event.evidence.map(ref=>({
-    unit:ref.unit,quote:ref.quote,event_id:event.id,facet:ref.facet,kind:ref.kind||"report"
-  })));
-  const units=new Map(input.sources.flatMap(source=>source.units).map(unit=>[unit.index,unit]));
-  return selectedResponse(input,refs.map((ref,i)=>({...ref,...decorate({...units.get(ref.unit),text:ref.quote},i)})));
+function candidateSelectionResponse(input, ids = input.candidates.map(candidate => candidate.id)) {
+  return { selected_candidate_ids: ids };
 }
-function providerResponse(input, decorate) {
-  return input.stage==="plan"?planResponse(input):plannedFactResponse(input,decorate);
+function providerResponse(input) {
+  return input.stage==="plan"?planResponse(input):candidateSelectionResponse(input);
 }
 function textInput(text, targetDate = "2026-10-20") {
   return buildFactInput([{ text, source: "conversation", category: "raw_log" }], targetDate);
 }
-module.exports = { factResponse, selectedResponse, planResponse, plannedFactResponse, providerResponse, textInput };
+module.exports = { factResponse, selectedResponse, planResponse, candidateSelectionResponse, providerResponse, textInput };
