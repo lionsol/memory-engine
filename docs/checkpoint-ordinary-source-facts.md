@@ -1,8 +1,8 @@
 # 普通 checkpoint：完整原段备选与遗漏审计
 
 日期：2026-10-26（Asia/Shanghai）。
-当前v12源码候选基于 `a8d8ec54ede6488fec6688e243bd8d1da859d655`，尚未提交。
-本轮源码、离线回归与人工选择重放；真实请求/发布/部署均为0。
+当前v12源码已提交为 `f5577f3111d53c2ea10c7fca7bd8c71a73d0fb26`。
+本轮固定样本真实请求1次，第二轮输入超限而停止；最终选择未执行，无发布或部署。
 v11已解决本次传输/正文预算，但语义仍失败，原始验收记录完整保留在下文。
 
 ## 当前v12路径及边界
@@ -97,7 +97,78 @@ model_final_selection_verified及model_event_plan_verified仍为false；所有�
 episodic写入后的late conflict仍可能留下已写记录，并非跨存储事务。
 旧protocol在请求前拒绝；生产中没有v11到v12转换或模型响应修复路径。
 
-## v12离线验证与限制
+## 2026-10-26 v12真实验收：第二轮输入超限
+
+验收绑定源码提交 `f5577f3111d53c2ea10c7fca7bd8c71a73d0fb26`，启动前工作区干净。
+2026-10-26 19:57 CST 执行；执行器先通过16种假传输检查，外部请求0。
+真实执行仅1次请求，DeepSeek Flash、thinking disabled、temperature0.1、
+每次上限16384 token/45000字符/120秒，回退none、重试0。
+第一轮HTTP200、finish_reason=stop，合法v12候选通过原文/枚举/来源/表格等校验，
+但构造第二轮时触发summary_plan_input_budget并停止。没有发送第二轮，也没有补测或更换协议后重试。
+
+| 项目 | 观察值 |
+|---|---:|
+| 首轮完整输入字符 | 40412 |
+| 首轮prompt/completion tokens | 17491 / 5669 |
+| 首轮事项/引文 | 38 / 96 |
+| 新增完整原段备选/合计候选 | 31 / 127 |
+| 第二轮system/JSON字符 | 1147 / 53744 |
+| 第二轮完整字符/上限 | 54891 / 45000 |
+| 超限字符 | 9891 |
+
+技术裁决为**INPUT_BUDGET_FAIL**；最终选择及其遗漏理由没有执行，
+没有最终正文、5000字符测量或自动语义质量结论，不能记为v12质量PASS。
+本次首轮5669 completion tokens还超过未改变的生产默认4096，
+所以首轮token可行性仍是独立未解决项，不能用上一轮3250的观察替代本次结果。
+
+候选池仍包含unit26/35旧“永远追不上”及unit80暂时缺少产物的说法；
+本轮池中也含自然样本valid/source/trigger和取消证据限制。
+这些只是可选材料，尚不能判定最终是否正确剔除旧判断或保留必要限定。
+上一轮人工55候选池可放入输入，不证明本轮96候选池也能放入。
+
+### 离线无损表示诊断
+
+仅对纯构建函数使用显式较高诊断上限，量出被拒绝的数据包；
+未改生产配置、未发送超限请求、未修复或回写provider原文。
+127候选的引文共15207字符，其中完整原段7513字符，
+候选context对象JSON累计10731字符，整个candidates数组53308字符。
+若只删除原段备选，数据包为38932字符，但这会撤掉v12用来补回同段限定的能力，
+因此没有把删备选当作本次通过或重试方案。
+
+进一步仅将每条候选反复出现的字段名提取为candidate_columns，
+候选值按同一顺序放入candidate_rows；其余元数据、全部文字、标签、范围、上下文和成本不变。
+JSON序列化后反序列化，并按列名重建，assert.deepEqual与原始完整wire一致。
+使用现有system时总长度为**40301字符**，节省14590字符，不删除127项中的任何一项。
+这仅证明传输表示存在可去除的重复开销；当前产品仍使用对象格式，
+新格式的解码指令开销、模型理解能力、选择质量和完整输入限制尚未验证。
+
+下一源码步骤应先实现并验证保留全部候选的无损紧凑表示，
+再独立处理首轮输出长度；不能继续仅追加提示词或提高输入上限来认定问题已解。
+不得硬编码本次编号、删除限定或把全部候选重新强制保留。
+
+执行器：
+`/home/lionsol/.openclaw/ops/memory-engine/checkpoint-v12-f5577f3-20261026.cjs`
+（SHA256 `1975fa088ee74e45439721a1b3abe39986a7982ef973e85f5237d2a7f34d6c23`）。
+证据目录：
+`/home/lionsol/.openclaw/ops/memory-engine/checkpoint-v12-f5577f3-20261026-evidence/`，
+包含result.json、第一轮request/provider-response/content、source-snapshot及独立review.json；
+不存在select-request.json或candidate.md。
+离线复核：
+`/home/lionsol/.openclaw/ops/memory-engine/checkpoint-v12-f5577f3-offline-audit-20261026.cjs`。
+它只写独立审计报告，不新增外部请求或生成可发布摘要。
+
+| 绑定内容 | SHA256 |
+|---|---|
+| 来源 | `9b119fdc8c72918cbdc97d2000200b6d14cf71fc3c9b75c0827b2c33e903dbf6` |
+| 历史episode | `9d97282da2e9e3a8480d0a1b0264f54a15bd209b345f8cc6584738ce704f8f33` |
+| 第一轮请求 | `35b1b81284b99c5884046cdd229cfc5dc1e7cab0b7f0e25b42bcb6f8fc45dda3` |
+| 第一轮provider响应 | `f1231e041dc62051bab338ec8b32833e57f3063baacd53b2fa24353898f91cde` |
+| 第一轮模型content | `90e820e0b71aa17e2c82b0dc0c70d38ba18cc0785c76e3a5f8a84022fad8a3a3` |
+
+来源、历史episode、原始provider文件及生产4096配置复核未变，
+publisher/checkpoint/scheduler调用均为0；本轮仅验收证据及本文档变更，未部署。
+
+## v12提交前离线验证与限制
 
 15个相关测试文件362/362通过，fail/cancelled/skipped/todo=0。
 覆盖完整原段的原文和限定、重叠拒绝、候选上限及完整输入成本、遗漏全交代、
