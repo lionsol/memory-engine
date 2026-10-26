@@ -129,7 +129,7 @@ for(const mode of ["ok","retired_derivation","invalid_plan","missing_required","
           assert.ok(!body.includes("背景。"));
           assert.equal(result.summary_validation.event_plan_coverage_complete,true);
           assert.equal(result.summary_validation.model_event_plan_verified,false);
-          assert.deepEqual(result.summary_validation.plan_retired,[["s0","deploy",0]]);
+          assert.deepEqual(result.summary_validation.plan_retired.map(row=>row.slice(0,3)),[["s0","deploy",0]]);
         }else{
           assert.equal(fs.existsSync(join(root,"generated")),false);
           assert.equal(fs.readFileSync(path,"utf8"),mode==="concurrent_episode"?"CONCURRENT SUMMARY":"PREVIOUS EPISODE");
@@ -144,8 +144,10 @@ for(const mode of ["ok","retired_derivation","invalid_plan","missing_required","
         const packet=JSON.parse(request.body.messages.at(-1).content);
         if(packet.stage==="plan"){
           const plan={protocol:packet.protocol,target_date:packet.target_date,events:[{
-            id:"deploy",source_id:"s0",topic:"部署的最终决定与每日限制",retired_units:[0],
-            evidence:[{unit:1,facet:"outcome"},{unit:2,facet:"constraint"}]
+            id:"deploy",source_id:"s0",topic:"部署的最终决定与每日限制",
+            retired_evidence:[{unit:0,quote:packet.sources[0].units[0].text}],
+            evidence:[{unit:1,quote:packet.sources[0].units[1].text,facet:"outcome"},
+              {unit:2,quote:packet.sources[0].units[2].text,facet:"constraint"}]
           }]};
           if(mode==="invalid_plan")plan.events[0].evidence[0].unit=999;
           return emitJson(callback,completion(JSON.stringify(plan)));
@@ -163,6 +165,53 @@ for(const mode of ["ok","retired_derivation","invalid_plan","missing_required","
         emitJson(callback,completion(JSON.stringify(response)));
       });
       assert.equal(attempts,mode==="invalid_plan"?1:2);
+    });
+  });
+}
+
+for(const mode of ["mixed_ok","mixed_escape","mixed_retired","mixed_overlap"]){
+  test("mixed-paragraph scope validation precedes publication: "+mode,async()=>{
+    await fixture(async({root,path})=>{
+      const text="**Assistant:** 旧判断：无限回填。每日上限十条。最终确认：只处理当日队列。未选的说明。";
+      const mixedLogs=[{source:"conversation",category:"raw_log",chunk_id:"mixed",text}];
+      await withFakeHttps(async requests=>{
+        const result=await withRuntime({llmNightlyExtract:checkpointLlm.llmNightlyExtract},
+          ()=>checkpoint.nightlyCheckpoint(mixedLogs,{targetDate:DATE}));
+        assert.equal(requests.length,mode==="mixed_overlap"?1:2);
+        if(mode==="mixed_ok"){
+          assert.equal(result.status,"valid_summary");
+          assert.equal(result.memories,0);assert.equal(result.configs,0);assert.equal(result.writes.file_written,1);
+          const body=fs.readFileSync(path,"utf8");
+          assert.match(body,/每日上限十条/);assert.match(body,/只处理当日队列/);
+          assert.doesNotMatch(body,/无限回填|未选的说明/);
+        }else{
+          assert.equal(result.status,"summary_invalid");
+          assert.equal(result.reason,({mixed_escape:"summary_plan_quote_scope",mixed_retired:"summary_plan_retired_fact",
+            mixed_overlap:"summary_plan_retired"})[mode]);
+          assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
+          assert.equal(fs.existsSync(join(root,"generated")),false);
+          assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");
+        }
+      },(request,callback)=>{
+        const packet=JSON.parse(request.body.messages.at(-1).content);
+        if(packet.stage==="plan"){
+          const plan={protocol:packet.protocol,target_date:packet.target_date,events:[{id:"queue",source_id:"s0",
+            topic:"当前队列范围及有效上限",
+            evidence:[{unit:0,quote:"每日上限十条。",facet:"constraint"},{unit:0,quote:"最终确认：只处理当日队列。",facet:"outcome"}],
+            retired_evidence:[{unit:0,quote:mode==="mixed_overlap"?"旧判断：无限回填。每日上限十条。":"旧判断：无限回填。"}]}]};
+          return emitJson(callback,completion(JSON.stringify(plan)));
+        }
+        assert.ok(!JSON.stringify(packet).includes("无限回填"));
+        assert.ok(!JSON.stringify(packet).includes("未选的说明"));
+        assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");
+        assert.equal(fs.existsSync(join(root,"generated")),false);
+        const response=require("./checkpoint-fact-fixture.cjs").plannedFactResponse(packet);
+        // Even annotated default reports in the retired event must not create derived writes.
+        response.facts[0].memory_type="event";response.facts[0].config={key:"每日",value:"十条"};
+        if(mode==="mixed_escape")response.facts[1].quote="未选的说明。";
+        if(mode==="mixed_retired")response.facts[1].quote="旧判断：无限回填。";
+        emitJson(callback,completion(JSON.stringify(response)));
+      });
     });
   });
 }

@@ -74,7 +74,7 @@ test("recorded four lengths replay baseline, session-only adjustment and aligned
   assert.equal(defaults.perSessionChars,8000);assert.equal(defaults.conversationChars,24000);
  });
 });
-test("aligned budget goes through planning and quotation HTTP paths with every full entry",async()=>{
+test("aligned budget sends every full entry to planning and only selected literal scopes to quotation",async()=>{
  await fixture(async({state,read,path})=>{
   const logs=read({targetDate:DATE});assert.equal(logs.checkpointStats.budgetCoverageComplete,true);
   assert.equal(logs[0].text.length,22932);
@@ -92,7 +92,13 @@ test("aligned budget goes through planning and quotation HTTP paths with every f
    },(request,callback)=>{
     requests++;const prompt=request.body.messages.at(-1).content;
     const sent=JSON.parse(prompt);
-    for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
+    if(sent.stage==="plan"){
+     for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
+    }else{
+     assert.ok(sent.sources.flatMap(s=>s.units).every(u=>u.text===undefined));
+     assert.deepEqual(sent.event_plan.events.flatMap(e=>e.evidence.map(r=>r.quote)),answer().facts.map(f=>f.quote));
+     assert.ok(!prompt.includes("A".repeat(50)),"unselected paragraph tail reached quotation");
+    }
     assert.equal(request.body.max_tokens,4096);
     const response=sent.stage==="plan"?planResponse(currentInput,answer().facts):answer();
     emitJson(callback,completion(JSON.stringify(response)),{bytewise:true});

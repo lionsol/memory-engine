@@ -25,9 +25,9 @@ function planResponse(input, facts = factResponse(input).facts) {
     const source = units.get(fact.unit).source_id, eventId = fact.event_id || "fixture";
     const key = source + "/" + eventId;
     if (!events.has(key)) events.set(key,{id:eventId,source_id:source,topic:"Synthetic final state",
-      evidence:[],retired_units:[]});
-    const evidence = {unit:fact.unit,facet:fact.facet||"outcome",kind:fact.kind||"report"};
-    if (!events.get(key).evidence.some(ref=>ref.unit===evidence.unit&&ref.facet===evidence.facet))
+      evidence:[],retired_evidence:[]});
+    const evidence = {unit:fact.unit,quote:fact.quote,facet:fact.facet||"outcome",kind:fact.kind||"report"};
+    if (!events.get(key).evidence.some(ref=>ref.unit===evidence.unit&&ref.quote===evidence.quote&&ref.facet===evidence.facet))
       events.get(key).evidence.push(evidence);
   }
   return { protocol:PROTOCOL,target_date:input.target_date,events:[...events.values()] };
@@ -35,10 +35,10 @@ function planResponse(input, facts = factResponse(input).facts) {
 function plannedFactResponse(input, decorate = () => ({})) {
   if (!input.event_plan) return factResponse(input,decorate);
   const refs=input.event_plan.events.flatMap(event=>event.evidence.map(ref=>({
-    unit:ref.unit,event_id:event.id,facet:ref.facet,kind:ref.kind||"report"
+    unit:ref.unit,quote:ref.quote,event_id:event.id,facet:ref.facet,kind:ref.kind||"report"
   })));
   const units=new Map(input.sources.flatMap(source=>source.units).map(unit=>[unit.index,unit]));
-  return selectedResponse(input,refs.map((ref,i)=>({...ref,...decorate(units.get(ref.unit),i)})));
+  return selectedResponse(input,refs.map((ref,i)=>({...ref,...decorate({...units.get(ref.unit),text:ref.quote},i)})));
 }
 function providerResponse(input, decorate) {
   return input.stage==="plan"?planResponse(input):plannedFactResponse(input,decorate);
