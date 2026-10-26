@@ -1,8 +1,8 @@
 # 普通 checkpoint：候选证据与预算内选择
 
 日期：2026-10-26（Asia/Shanghai）。
-当前 v11 源码候选基于 90f11db4b044299f0865ebb4cfcd097404f89fbd，尚未提交。
-本轮仅源码修改、离线回归和人工编号选择重放，无真实模型请求、发布或部署。
+当前 v11 源码已提交为 958c4b091fb5d6270714f7f25c8135d00fcd5899。
+本轮固定样本真实验收2次请求：预算/来源绑定通过，语义验收失败；无发布或部署。
 v10 的98段全必选在旧格式下无解的结论仍保留；v11 改变的是最终选择契约，不把该失败输出自动转为质量通过。
 
 ## 当前 v11 路径
@@ -87,7 +87,74 @@ candidate_pool_coverage_complete仅表示是否全选，model_final_selection_ve
 失败保护、来源/旧episode快照及episodic发布沿用既有逻辑；没有DB schema或AutoRecall改动。
 合作锁/版本检查/原子发布不是跨存储事务，episodic写入后的late conflict仍可能留下已写记录。
 
-## 本轮 v11 离线验证
+## 2026-10-26 v11 真实验收：预算通过，语义仍失败
+
+验收绑定源码提交 `958c4b091fb5d6270714f7f25c8135d00fcd5899`，工作区干净；
+固定来源和历史episode使用前述原始哈希。2026-10-26 18:48 CST 执行，
+真实请求恰好2次，均HTTP200、finish_reason=stop，无回退、重试或第三轮。
+执行器先通过11种假传输成功/拒绝/失败测试，测试外部请求为0。
+模型DeepSeek Flash、thinking disabled、temperature0.1；验收每次上限16384 token、
+输入45000字符、超时120秒。生产默认4096及正文5000字符未改。
+
+| 阶段 | 输入字符（含system） | completion tokens | 结果 |
+|---|---:|---:|---|
+| plan | 40412 | 3250 | 24组、55个合法候选，4个来源、193段可见原文 |
+| select | 20072 | 80 | 24个合法编号，31个候选未选 |
+| 程序渲染 | — | — | 2714字符，预测成本与实际完全一致 |
+
+程序技术结果为CANDIDATE_READY_FOR_REVIEW；人工语义审计为**SEMANTIC_FAIL**。
+本次观察输出token均低于4096，但实际请求上限是16384，
+未另跑4096上限，也不据此证明其他样本的首轮token预算。
+
+保留正确的部分：01/02/03健康检查、maintenance dry-run、
+10-18/19已恢复与10-15/16无可恢复数据的区别、04:10撤回/无03:45、
+632与1241的PASS原述、49条未绑定及尚无路径运行证据、取消PENDING和0事件。
+模型第二轮只返回编号，程序沿用原文和标签；长期记忆/配置均为0。
+
+具体失败分开定位如下：
+
+| 阶段 | 原始证据 | 问题 |
+|---|---|---|
+| 候选与选择 | c13/unit35，c14/unit43 | 旧“1830条按10条/日仍追不上”与后续明确反驳同时进入最终正文，未标出旧结论已撤回 |
+| 选择 | c2/unit2 | 独立Daily Stats正常写入已在池中，却被丢弃 |
+| 选择 | c8/unit32、c12/unit42、c15/unit51 | 最终flush→reconcile→collect、ID/identity更正、mtime不能证明启用时间的更正被丢弃 |
+| 选择 | c46–c50/unit178/180/181 | 延迟、FTS不可得、无法归因与max不能当p95等观察/限制全部被丢弃 |
+| 候选 | unit176 | 只收15条及started/completed，漏明确UTC窗口、LIMIT200已达上限、valid/source/trigger证明 |
+| 候选 | c12/unit42 | 截取正面修复状态时漏掉同段“实际恢复数量仍等自然首跑验证” |
+| 候选 | unit182 | 只有PENDING标题和0事件，漏“不能证明生效或路径触发”的证据限制 |
+| 归属 | c22、c32 | 保留632/1241数字，但内部event_id不展示，正文未充分说明验收对象/任务范围 |
+
+正文仍余2286字符，不能把上述遗漏归因为5000预算必然不足。
+独立离线反例只从**未修改的本次候选池**移除c13，补入c2/c8/c12/c15/c46–c50，
+共32个编号，预测=实际4107字符。它不是模型结果、修复后的验收或全日完备参考；
+仍无法补回首轮不存在的资格条件，且延迟原文算术不一致保持未核验。
+没有回写原始模型响应或candidate.md，也没有为补测追加请求。
+
+后续应修复“最终状态及其必要限定如何共同进入选择”的契约，
+同时处理候选缺失和选择丢弃；单纯来源覆盖、合法编号和预算无法判定语义正确。
+不要硬编码此样本编号/关键词，不恢复所有候选强制保留，也不把提示词修改直接记为质量PASS。
+
+执行器：
+`/home/lionsol/.openclaw/ops/memory-engine/checkpoint-v11-958c4b0-20261026.cjs`
+（SHA256 `1cb3825827d712e4744cfbd14fb74ec2ab0c0db5431807ebe343c074d9dc3a85`）。
+证据目录：
+`/home/lionsol/.openclaw/ops/memory-engine/checkpoint-v11-958c4b0-20261026-evidence/`，
+含result.json、两轮原始request/provider响应/content、event-plan.json、
+extracted-facts.json、validated-candidate.json、candidate.md及独立review.json。
+离线复核脚本为同ops目录的`checkpoint-v11-958c4b0-offline-audit-20261026.cjs`。
+
+| 绑定内容 | SHA256 |
+|---|---|
+| 第一轮请求 | `041872b25e8dee95efe241a4850b1e47597f01ca78f0732f8fe610344c03bbdf` |
+| 第一轮模型content | `92d704310a76682fb9a094298b0dd5e0254231f693cc70e96539bc69cfde476e` |
+| 第二轮请求 | `0b6624d5609822df506103a59cf42f7a98ec6fa27dba9849d24c7c8f20bff185` |
+| 第二轮模型content | `bb824f7132e041722752eba9dc8be883d17a2da06b33391e902bfe3fb1e2c8f3` |
+| 未修改的程序正文 | `fe9fbb747c7fd80c187686d13a46e93e3d4fb6020fab7f44d930adea795ceffa` |
+
+原始来源、历史episode及生产4096配置复核未变；publisher/checkpoint/scheduler调用均为0。
+本轮仅验收证据和本文档变更，无部署或运行时修改。
+
+## v11 提交前离线验证
 
 14文件定向回归337/337通过，fail/cancelled/skipped/todo=0。
 验证候选可不全选、重要标签由程序保留、选证超过实际预算拒绝、非法编号/额外字段拒绝、
