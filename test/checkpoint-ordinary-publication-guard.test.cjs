@@ -74,7 +74,7 @@ test("recorded four lengths replay baseline, session-only adjustment and aligned
   assert.equal(defaults.perSessionChars,8000);assert.equal(defaults.conversationChars,24000);
  });
 });
-test("aligned budget sends every full entry to planning and costed literal candidates to final selection",async()=>{
+test("aligned budget sends every full entry once and renders final short scopes",async()=>{
  await fixture(async({state,read,path})=>{
   const logs=read({targetDate:DATE});assert.equal(logs.checkpointStats.budgetCoverageComplete,true);
   assert.equal(logs[0].text.length,22932);
@@ -92,22 +92,18 @@ test("aligned budget sends every full entry to planning and costed literal candi
    },(request,callback)=>{
     requests++;const prompt=request.body.messages.at(-1).content;
     const sent=candidateWire(JSON.parse(prompt));
-    if(sent.stage==="plan"){
-     for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
-    }else{
-     assert.ok(sent.candidates.every(c=>Number.isSafeInteger(c.cost)));
-     assert.deepEqual(sent.candidates.filter(c=>c.origin==="model_excerpt").map(c=>c.quote),answer().facts.map(f=>f.quote));
-     assert.ok(sent.candidates.some(c=>c.origin==="original_paragraph"&&c.quote.includes("A".repeat(50))),"complete paragraph alternative missing");
-    }
+    assert.equal(sent.stage,"final_evidence");
+    for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
+    assert.equal(sent.candidate_rows,undefined);
     assert.equal(request.body.max_tokens,4096);
-    const response=sent.stage==="plan"?modelPlanResponse(planResponse(currentInput,answer().facts)):candidateSelectionResponse(sent);
+    const response=modelPlanResponse(planResponse(currentInput,answer().facts));
     emitJson(callback,completion(JSON.stringify(response)),{bytewise:true});
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
-  assert.equal(requests,2);
+  assert.equal(requests,1);
  });
 });
-test("oversized final ID selection stops after two fake HTTP calls and preserves the old episode and derived stores",async()=>{
+test("oversized final extraction stops after one fake HTTP call and preserves the old episode and derived stores",async()=>{
  await fixture(async({read,path,root})=>{
   const logs=read({targetDate:DATE});
   const oldRequest=config.resolveCheckpointLlmRequestConfig,oldProviders=config.resolveCheckpointProviders;
@@ -125,15 +121,15 @@ test("oversized final ID selection stops after two fake HTTP calls and preserves
     assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
    },(request,callback)=>{
     requests++;
-    assert.ok(requests<=2,"oversized quotes must not trigger a selector or fallback");
+    assert.ok(requests<=1,"oversized quotes must not trigger a selector or fallback");
     const response=factResponse(currentInput);
     response.facts[0].facet="constraint";
     response.facts[0].memory_type="event";
     const packet=candidateWire(JSON.parse(request.body.messages.at(-1).content));
-    emitJson(callback,completion(JSON.stringify(packet.stage==="plan"?modelPlanResponse(planResponse(currentInput,response.facts)):candidateSelectionResponse(packet))));
+    emitJson(callback,completion(JSON.stringify(modelPlanResponse(planResponse(currentInput,response.facts)))));
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
-  assert.equal(requests,2);
+  assert.equal(requests,1);
  });
 });
 test("source changes during LLM preserve old episode before any derived write",async()=>{

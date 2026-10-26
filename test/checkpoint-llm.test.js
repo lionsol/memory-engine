@@ -136,7 +136,7 @@ test("llmComplete preserves non-2xx error-body behavior", async () => {
 
 
 const { factResponse, planResponse, candidateSelectionResponse, providerResponse, textInput, candidateWire, modelPlanResponse } = require("./checkpoint-fact-fixture.cjs");
-const { validateAndRenderFacts, EVENT_PLAN, buildFactInput } = require("../lib/checkpoint/ordinary-summary-facts");
+const { validateAndRenderFacts, FINAL_EVIDENCE, buildFactInput } = require("../lib/checkpoint/ordinary-summary-facts");
 async function nightlyFixture(handler,action,overrides={}){
  const config={maxInputChars:45000,maxTokens:4096,timeoutMs:120000,...overrides},calls=[];
  const patches=[
@@ -154,32 +154,32 @@ async function nightlyFixture(handler,action,overrides={}){
 }
 function content(callback,value,finish_reason="stop"){emitJsonResponse(callback,{choices:[{message:{content:typeof value==="string"?value:JSON.stringify(value?.events?modelPlanResponse(value):value)},finish_reason}]});}
 const reply=(callback,input)=>content(callback,providerResponse(input));
-test("ordinary flow proposes candidates then selects IDs on the same provider; code preserves all labels and quotes",async()=>{
+test("ordinary flow directly extracts final literal evidence in one successful call",async()=>{
  const input=textInput("**Assistant:** 最终原因：令牌过期。\n\n归档已完成。");
  await nightlyFixture(({callback,input})=>{
-  if(input.stage==="plan"){const p=planResponse(input);p.events[0].evidence[0].kind="correction";p.events[0].evidence[0].facet="cause";return content(callback,p);}
-  reply(callback,input);
+  assert.equal(input.stage,"final_evidence");
+  const p=planResponse(input);p.events[0].evidence[0].kind="correction";p.events[0].evidence[0].facet="cause";content(callback,p);
  },async calls=>{
   const response=await checkpointLlm.llmNightlyExtract(input);
-  assert.equal(calls.length,2);assert.deepEqual(calls.map(c=>JSON.parse(c.body.messages[1].content).stage),["plan","select"]);
-  assert.deepEqual(calls.map(c=>c.url),["https://ds.example/chat/completions","https://ds.example/chat/completions"]);
-  const first=JSON.parse(calls[0].body.messages[1].content),second=candidateWire(JSON.parse(calls[1].body.messages[1].content));
-  assert.deepEqual(first.sources.flatMap(s=>s.units.map(u=>u.text)),input.sources.flatMap(s=>s.units.map(u=>u.text)));
-  assert.equal(first.fact_contract,undefined);assert.equal(second.event_plan,undefined);
-  assert.ok(second.candidates.every(c=>Number.isSafeInteger(c.cost)&&Number.isSafeInteger(c.group_cost)));
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].url,"https://ds.example/chat/completions");
+  const wire=JSON.parse(calls[0].body.messages[1].content);
+  assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.text)),input.sources.flatMap(s=>s.units.map(u=>u.text)));
+  assert.equal(wire.fact_contract,undefined);assert.equal(wire.candidate_rows,undefined);
   assert.equal(response.facts[0].kind,"correction");assert.equal(response.facts[0].facet,"cause");
-  assert.ok(response[EVENT_PLAN]);assert.ok(!JSON.stringify(response).includes("selected_candidate_ids"));
+  assert.ok(response[FINAL_EVIDENCE]);
   const result=validateAndRenderFacts(response,input);
-  assert.equal(result.validation.selected_candidate_coverage_complete,true);assert.equal(result.validation.model_final_selection_verified,false);
-  for(const call of calls){assert.equal(call.body.max_tokens,4096);assert.equal(call.timeout,120000);}
+  assert.equal(result.validation.final_evidence_selection_applied,true);
+  assert.equal(result.validation.model_final_selection_verified,false);
+  assert.equal(calls[0].body.max_tokens,4096);assert.equal(calls[0].timeout,120000);
  });
 });
-test("first transport fallback is followed by ID selection on the successful provider with at most three attempts",async()=>{
+test("transport fallback uses the same complete input and finishes without a selector",async()=>{
  await nightlyFixture(({callback,input},n)=>{if(n===1)return emitJsonResponse(callback,{error:{message:"primary unavailable"}});reply(callback,input);},async calls=>{
   const input=textInput("**Assistant:** 最终完成。"),response=await checkpointLlm.llmNightlyExtract(input);
-  assert.equal(validateAndRenderFacts(response,input).validation.selected_candidate_coverage_complete,true);
-  assert.deepEqual(calls.map(c=>c.url),["https://ds.example/chat/completions","https://sf.example/chat/completions","https://sf.example/chat/completions"]);
-  assert.deepEqual(calls[0].body.messages,calls[1].body.messages);assert.equal(calls[2].body.model,calls[1].body.model);
+  assert.equal(validateAndRenderFacts(response,input).validation.final_evidence_selection_applied,true);
+  assert.deepEqual(calls.map(c=>c.url),["https://ds.example/chat/completions","https://sf.example/chat/completions"]);
+  assert.deepEqual(calls[0].body.messages,calls[1].body.messages);
  });
 });
 for(const fallbackProvider of ["none","deepseek"])test("first transport has no redundant fallback for "+fallbackProvider,async()=>{
@@ -212,38 +212,28 @@ for(const mode of ["old_facts","object_plan","missing_event","bad_ref","bad_face
   await assert.rejects(checkpointLlm.llmNightlyExtract(textInput("**Assistant:** 完成。")),{code});assert.equal(calls.length,1);
  });
 });
-for(const mode of ["transport","json","facts","unknown","duplicate","empty","length","budget"])test("selection failure stops at two requests without repair or retry: "+mode,async()=>{
- const input=textInput("**Assistant:** "+(mode==="budget"?"背景。".repeat(1900):"背景。")+"\n\n最终正常。");
+for(const mode of ["budget","length","selector"])test("invalid final output has no selector or retry: "+mode,async()=>{
+ const input=textInput("**Assistant:** "+(mode==="budget"?"背景。".repeat(1900):"最终正常。"));
  await nightlyFixture(({callback,input})=>{
-  if(input.stage==="plan")return reply(callback,input);
-  if(mode==="transport")return emitJsonResponse(callback,{error:{message:"selector unavailable"}});
-  if(mode==="json")return content(callback,"invalid JSON");
-  let response=candidateSelectionResponse(input);
-  if(mode==="facts")response={facts:[]};if(mode==="unknown")response.selected_candidate_ids=["unknown"];
-  if(mode==="duplicate")response.selected_candidate_ids.push(response.selected_candidate_ids[0]);
-  if(mode==="empty")response.selected_candidate_ids=[];
-  content(callback,response,mode==="length"?"length":"stop");
+  content(callback,mode==="selector"?{selected_candidate_ids:["c1"],omissions:[]}:planResponse(input),mode==="length"?"length":"stop");
  },async calls=>{
-  const code=({transport:"summary_candidate_llm_unavailable",json:"summary_response_json",length:"output_budget",budget:"summary_budget"})[mode]||"summary_candidate_selection";
-  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code});assert.equal(calls.length,2);
+  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:({budget:"summary_budget",length:"output_budget",selector:"summary_plan_structure"})[mode]});
+  assert.equal(calls.length,1);
  });
 });
-test("final IDs may remove obsolete candidate events and constraints to meet the actual body budget",async()=>{
+test("only final selected excerpts are rendered; omitted long background is never expanded",async()=>{
  const input=textInput("**Assistant:** "+"过时背景。".repeat(1200)+"\n\n最终结果正常。");
- await nightlyFixture(({callback,input})=>{
-  if(input.stage==="plan"){const p=planResponse(input);p.events[0].evidence[0].facet="constraint";return content(callback,p);}
-  content(callback,candidateSelectionResponse(input,["c2"]));
- },async calls=>{
-  const response=await checkpointLlm.llmNightlyExtract(input),result=validateAndRenderFacts(response,input);
-  assert.equal(calls.length,2);assert.match(result.episode_summary,/最终结果正常/);assert.doesNotMatch(result.episode_summary,/过时背景/);
-  assert.equal(result.validation.candidate_count,2);assert.equal(result.validation.selected_candidate_count,1);
-  assert.equal(result.validation.candidate_pool_coverage_complete,false);
+ await nightlyFixture(({callback,input})=>content(callback,planResponse(input,[{unit:1,quote:"最终结果正常。"}])),async calls=>{
+  const result=validateAndRenderFacts(await checkpointLlm.llmNightlyExtract(input),input);
+  assert.equal(calls.length,1);assert.match(result.episode_summary,/最终结果正常/);assert.doesNotMatch(result.episode_summary,/过时背景/);
+  assert.equal(result.validation.final_evidence_count,1);
+  assert.equal(result.validation.candidate_omissions_complete,undefined);
  });
 });
-test("ID selection must still cover every source",async()=>{
+test("final evidence must still cover every source",async()=>{
  const input=buildFactInput([{source:"conversation",text:"**Assistant:** 甲完成。"},{source:"conversation",text:"**Assistant:** 乙正常。"}],"2026-10-20");
- await nightlyFixture(({callback,input})=>input.stage==="plan"?reply(callback,input):content(callback,candidateSelectionResponse(input,["c1"])),async calls=>{
-  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_source_coverage"});assert.equal(calls.length,2);
+ await nightlyFixture(({callback,input})=>content(callback,planResponse(input,[{unit:0,quote:"甲完成。"}])),async calls=>{
+  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_plan_source_coverage"});assert.equal(calls.length,1);
  });
 });
 test("request token/time limits remain per call without a new persistent configuration",async()=>{
@@ -268,21 +258,12 @@ test("first response token/envelope limits cannot trigger a retry or selector",a
   await assert.rejects(checkpointLlm.llmNightlyExtract(textInput("body")),{code:"output_budget"});assert.equal(calls.length,1);
  });
 });
-test("oversized costed candidate input is rejected locally before request two without slicing",async()=>{
- await nightlyFixture(({callback,input})=>{
-  const p=planResponse(input),base=p.events[0];
-  p.events=Array.from({length:256},(_,i)=>({...base,id:"e"+i,evidence:[{unit:0,quote:String.fromCharCode(0x4e00+i),facet:"outcome"}]}));content(callback,p);
- },async calls=>{
-  const input=textInput("**Assistant:** "+Array.from({length:256},(_,i)=>String.fromCharCode(0x4e00+i)).join(""));
-  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_plan_input_budget"});assert.equal(calls.length,1);
- },{maxInputChars:5000,maxTokens:16384});
-});
 test("diagnostics preserve provider/timing without source text or raw plans",async()=>{
  const {entries,logger}=createLogger();
  await withPatchedConsole(logger,()=>nightlyFixture(({callback,input},n)=>{
   if(n===1)return emitJsonResponse(callback,{error:{message:"ds failed"}});reply(callback,input);
  },()=>checkpointLlm.llmNightlyExtract(textInput("sensitive-looking content"))));
  assert.ok(entries.some(e=>/LLM failed provider=deepseek.*durationMs=/.test(e.message)));
- assert.ok(entries.some(e=>/LLM select provider=siliconflow/.test(e.message)));
+ assert.ok(entries.some(e=>/LLM fallback succeeded provider=siliconflow/.test(e.message)));
  assert.ok(entries.every(e=>!e.message.includes("Bearer ")&&!e.message.includes("sensitive-looking content")));
 });

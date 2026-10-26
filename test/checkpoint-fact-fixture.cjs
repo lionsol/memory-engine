@@ -59,7 +59,7 @@ function candidateSelectionResponse(raw, ids) {
   return { selected_candidate_ids: ids, omissions: omitted.length ? [{ ids: omitted, reason: "background" }] : [] };
 }
 function providerResponse(input) {
-  return input.stage==="plan"?modelPlanResponse(planResponse(input)):candidateSelectionResponse(input);
+  return ["plan","final_evidence"].includes(input.stage)?modelPlanResponse(planResponse(input)):candidateSelectionResponse(input);
 }
 function textInput(text, targetDate = "2026-10-20") {
   return buildFactInput([{ text, source: "conversation", category: "raw_log" }], targetDate);

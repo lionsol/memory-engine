@@ -98,7 +98,7 @@ test("derived memories and metadata stay within the selected literal evidence",(
 
 test("v1-v5 output cannot be repaired or reused against a literal-quote v6 request",()=>{
   const input=inputFor("记录。");
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v13");
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v14");
   for(const version of [1,2,3,4,5,6,7]){
     assert.throws(()=>validateAndRenderFacts({...response(input,[{unit:0,quote:"记录。"}]),
       protocol:"checkpoint-source-facts-v"+version},input),{code:"summary_structure"});

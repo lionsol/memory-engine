@@ -132,5 +132,5 @@ test("source quotations still cannot certify omitted assertions or unmarked corr
   assert.equal(result.validation.semantic_quality,"not_independently_verified");
 });
 test("the simplified output contract has a distinct protocol version",()=>{
-  assert.equal(PROTOCOL,"checkpoint-source-facts-v13");
+  assert.equal(PROTOCOL,"checkpoint-source-facts-v14");
 });
