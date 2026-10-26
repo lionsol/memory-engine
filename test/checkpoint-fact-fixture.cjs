@@ -31,15 +31,37 @@ function planResponse(input, facts = factResponse(input).facts) {
   }
   return { protocol:PROTOCOL,target_date:input.target_date,events:[...events.values()] };
 }
-function candidateSelectionResponse(input, ids = input.candidates.filter(candidate => !candidate.id.startsWith("p")).map(candidate => candidate.id)) {
+function modelPlanResponse(plan) {
+  // Encode constructed fixtures only. Preserve malformed object fixtures verbatim;
+  // never delete unknown fields to make a negative fixture acceptable.
+  const allowed = (value, names) => value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).every(key => names.includes(key));
+  if (!Array.isArray(plan.events) || plan.events.some(event =>
+    !allowed(event, ["id", "source_id", "evidence"]) || !Array.isArray(event.evidence)
+    || event.evidence.some(ref => !allowed(ref, ["unit", "quote", "facet", "kind"])))) return plan;
+  return { ...plan, events: plan.events.map(event => [event.source_id, event.evidence.map(ref => {
+    const row = [ref.unit, ref.quote], kind = ref.kind === undefined ? "report" : ref.kind;
+    if (ref.facet !== "outcome" || kind !== "report") row.push(ref.facet);
+    if (kind !== "report") row.push(kind);
+    return row;
+  })]) };
+}
+function candidateWire(wire) {
+  if (wire.stage !== "select" || wire.candidates) return wire;
+  const { candidate_columns: columns, candidate_rows: rows } = wire;
+  return { ...wire, candidates: rows.map(row => Object.fromEntries(columns.map((column, i) => [column, row[i]]))) };
+}
+function candidateSelectionResponse(raw, ids) {
+  const input = candidateWire(raw);
+  ids ??= input.candidates.filter(candidate => !candidate.id.startsWith("p")).map(candidate => candidate.id);
   const selected = new Set(ids), omitted = input.candidates.filter(candidate => !selected.has(candidate.id)).map(candidate => candidate.id);
   // Synthetic fixtures only: background is not a semantic judgment about provider data.
   return { selected_candidate_ids: ids, omissions: omitted.length ? [{ ids: omitted, reason: "background" }] : [] };
 }
 function providerResponse(input) {
-  return input.stage==="plan"?planResponse(input):candidateSelectionResponse(input);
+  return input.stage==="plan"?modelPlanResponse(planResponse(input)):candidateSelectionResponse(input);
 }
 function textInput(text, targetDate = "2026-10-20") {
   return buildFactInput([{ text, source: "conversation", category: "raw_log" }], targetDate);
 }
-module.exports = { factResponse, selectedResponse, planResponse, candidateSelectionResponse, providerResponse, textInput };
+module.exports = { factResponse, selectedResponse, planResponse, modelPlanResponse, candidateWire, candidateSelectionResponse, providerResponse, textInput };

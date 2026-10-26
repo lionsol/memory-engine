@@ -1,11 +1,11 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
 const {buildFactInput,buildCandidateSelectionPrompt,completeCandidateSelection,validateAndRenderFacts,EVENT_PLAN}=require("../lib/checkpoint/ordinary-summary-facts");
-const {textInput,planResponse}=require("./checkpoint-fact-fixture.cjs");
+const {textInput,planResponse,candidateWire}=require("./checkpoint-fact-fixture.cjs");
 function paragraph(){
  const input=textInput("**Assistant:** 窗口内自然请求15条。valid=true，来源为用户。取消事件0条，不能证明路径被触发。\n\n另一个未进入规划的事项。");
  const plan=planResponse(input,[{unit:0,quote:"窗口内自然请求15条。",event_id:"sample",facet:"outcome"}]);
- return {input,plan,wire:JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt)};
+ return {input,plan,wire:candidateWire(JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt))};
 }
 const result=(plan,input,selection)=>validateAndRenderFacts(completeCandidateSelection(plan,selection,input),input);
 test("complete original paragraph is an explicit costed alternative with its omitted qualifications",()=>{

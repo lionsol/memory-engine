@@ -127,19 +127,20 @@ for(const mode of ["paragraph_ok","paragraph_overlap","paragraph_unaccounted"]){
      assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
     }
    },(request,callback)=>{
-    const packet=JSON.parse(request.body.messages.at(-1).content);
+    const packet=candidateWire(JSON.parse(request.body.messages.at(-1).content));
     const response=packet.stage==="plan"?{protocol:packet.protocol,target_date:packet.target_date,events:[
      {id:"sample",source_id:"s0",evidence:[{unit:0,quote:"自然样本15条。",facet:"outcome"}]}]}:
      {selected_candidate_ids:mode==="paragraph_overlap"?["c1","p0"]:["p0"],
       omissions:mode==="paragraph_ok"?[{ids:["c1"],reason:"covered",by:["p0"]}]:[]};
-    emitJson(callback,completion(JSON.stringify(response)));
+    emitJson(callback,completion(providerJson(response)));
    });
   });
  });
 }
 
 const checkpointLlm=require("../lib/checkpoint/llm");
-const {candidateSelectionResponse}=require("./checkpoint-fact-fixture.cjs");
+const {candidateSelectionResponse,candidateWire,modelPlanResponse}=require("./checkpoint-fact-fixture.cjs");
+const providerJson=value=>JSON.stringify(value?.events?modelPlanResponse(value):value);
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
 for(const mode of ["ok","invalid_plan","unknown","duplicate","empty","extra_fields","all_over_budget","mutate_kind","concurrent_episode","transport","missing_omissions","unaccounted","false_budget","invalid_supersession"]){
  test("costed final ID selection preserves publication gates: "+mode,async()=>{
@@ -171,14 +172,14 @@ for(const mode of ["ok","invalid_plan","unknown","duplicate","empty","extra_fiel
      if(mode!=="concurrent_episode")assert.equal(result.reason,reason);
     }
    },(request,callback)=>{
-    const packet=JSON.parse(request.body.messages.at(-1).content);
+    const packet=candidateWire(JSON.parse(request.body.messages.at(-1).content));
     if(packet.stage==="plan"){
      const plan={protocol:packet.protocol,target_date:packet.target_date,events:[
       {id:"old",source_id:"s0",evidence:[{unit:0,quote:packet.sources[0].units[0].text,facet:"constraint"}]},
       {id:"final",source_id:"s0",evidence:[{unit:1,quote:packet.sources[0].units[1].text,facet:"outcome",kind:"decision"},
        {unit:2,quote:packet.sources[0].units[2].text,facet:"constraint"}]}]};
      if(mode==="invalid_plan")plan.events[0].evidence[0].unit=999;
-     return emitJson(callback,completion(JSON.stringify(plan)));
+     return emitJson(callback,completion(providerJson(plan)));
     }
     assert.equal(packet.stage,"select");assert.ok(packet.candidates.every(c=>Number.isSafeInteger(c.cost)));
     assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");assert.equal(fs.existsSync(join(root,"generated")),false);
@@ -194,7 +195,7 @@ for(const mode of ["ok","invalid_plan","unknown","duplicate","empty","extra_fiel
     if(mode==="false_budget"){response.selected_candidate_ids=["c2"];response.omissions=[{ids:["c1"],reason:"background"},{ids:["c3"],reason:"budget"}];}
     if(mode==="invalid_supersession"){response.selected_candidate_ids=["c1","c2"];response.omissions=[{ids:["c3"],reason:"superseded",by:["c2"]}];}
     if(mode==="concurrent_episode")fs.writeFileSync(path,"CONCURRENT SUMMARY");
-    emitJson(callback,completion(JSON.stringify(response)));
+    emitJson(callback,completion(providerJson(response)));
    });
   });
  });
@@ -216,14 +217,14 @@ for(const mode of ["mixed_ok","mixed_extra_quote","mixed_overlap"]){
      assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");assert.equal(fs.existsSync(join(root,"generated")),false);
     }
    },(request,callback)=>{
-    const packet=JSON.parse(request.body.messages.at(-1).content);
-    if(packet.stage==="plan")return emitJson(callback,completion(JSON.stringify({protocol:packet.protocol,target_date:packet.target_date,events:[
+    const packet=candidateWire(JSON.parse(request.body.messages.at(-1).content));
+    if(packet.stage==="plan")return emitJson(callback,completion(providerJson({protocol:packet.protocol,target_date:packet.target_date,events:[
      {id:"queue",source_id:"s0",evidence:[{unit:0,quote:mode==="mixed_overlap"?"每日上限十条。最终确认：只处理当日队列。":"每日上限十条。",facet:"constraint"},
       {unit:0,quote:"最终确认：只处理当日队列。",facet:"outcome"}]}]})));
     assert.ok(packet.candidates.some(c=>c.origin==="original_paragraph"&&c.quote.includes("无限回填")));
     const response=candidateSelectionResponse(packet);
     if(mode==="mixed_extra_quote")response.facts=[{unit:0,quote:"旧判断：无限回填。"}];
-    emitJson(callback,completion(JSON.stringify(response)));
+    emitJson(callback,completion(providerJson(response)));
    });
   });
  });
@@ -251,12 +252,12 @@ for(const mode of ["table_ok","table_plan_cell","table_mutate_cell","table_unkno
      assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");assert.equal(fs.existsSync(join(root,"generated")),false);
     }
    },(request,callback)=>{
-    const packet=JSON.parse(request.body.messages.at(-1).content);
-    if(packet.stage==="plan")return emitJson(callback,completion(JSON.stringify({protocol:packet.protocol,target_date:packet.target_date,events:[
+    const packet=candidateWire(JSON.parse(request.body.messages.at(-1).content));
+    if(packet.stage==="plan")return emitJson(callback,completion(providerJson({protocol:packet.protocol,target_date:packet.target_date,events:[
      {id:"latency",source_id:"s0",evidence:[{unit:0,quote:mode==="table_plan_cell"?"333":row,facet:"outcome"}]}]})));
     assert.ok(packet.candidates.find(c=>c.id==="c1").context.some(c=>c.kind==="table_header"&&c.text===header));
     assert.ok(packet.candidates.some(c=>c.origin==="original_paragraph"&&c.quote.includes("未选行")));
-    emitJson(callback,completion(JSON.stringify(candidateSelectionResponse(packet,mode==="table_unknown_header"?["header"]:["c1"]))));
+    emitJson(callback,completion(providerJson(candidateSelectionResponse(packet,mode==="table_unknown_header"?["header"]:["c1"]))));
    });
   });
  });

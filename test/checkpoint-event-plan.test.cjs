@@ -2,8 +2,8 @@
 const test=require("node:test"),assert=require("node:assert/strict");
 const {PROTOCOL,EVENT_PLAN,buildFactInput,buildEventPlanPrompt,buildCandidateSelectionPrompt,completeCandidateSelection,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
 const {validateEventPlan}=require("../lib/checkpoint/ordinary-event-plan");
-const {textInput,planResponse,candidateSelectionResponse}=require("./checkpoint-fact-fixture.cjs");
-const selection=(plan,input,ids)=>candidateSelectionResponse(JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt),ids);
+const {textInput,planResponse,candidateSelectionResponse,candidateWire}=require("./checkpoint-fact-fixture.cjs");
+const selection=(plan,input,ids)=>candidateSelectionResponse(candidateWire(JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt)),ids);
 const copy=value=>JSON.parse(JSON.stringify(value));
 const ref=(input,unit,facet="outcome",kind="report",quote=input.sources.flatMap(s=>s.units)[unit].text)=>({unit,quote,facet,kind});
 function sample(){
@@ -13,7 +13,7 @@ function sample(){
  return {input,plan};
 }
 function selected(plan,input,ids){
- const prompt=buildCandidateSelectionPrompt(plan,input,45000),wire=JSON.parse(prompt.prompt);
+ const prompt=buildCandidateSelectionPrompt(plan,input,45000),wire=candidateWire(JSON.parse(prompt.prompt));
  const response=completeCandidateSelection(plan,candidateSelectionResponse(wire,ids),input);
  return {prompt,wire,response};
 }
@@ -25,7 +25,7 @@ function cost(wire,ids){
  return total;
 }
 test("full source planning is followed by costed ID selection, with no quote/label rewrite",()=>{
- const {input,plan}=sample(),first=JSON.parse(buildEventPlanPrompt(input,45000).prompt);
+ const {input,plan}=sample(),first=candidateWire(JSON.parse(buildEventPlanPrompt(input,45000).prompt));
  assert.deepEqual(first.sources[0].units.map(u=>u.text),input.sources[0].units.map(u=>u.text));
  const {wire,response,prompt}=selected(plan,input);
  assert.equal(wire.stage,"select");assert.equal(wire.event_plan,undefined);
@@ -57,7 +57,7 @@ for(const [name,change,code] of [
  const {input,plan}=sample();change(plan);const before=JSON.stringify(plan);
  assert.throws(()=>buildCandidateSelectionPrompt(plan,input,45000),{code});assert.equal(JSON.stringify(plan),before);
 });
-for(const protocol of ["checkpoint-source-facts-v7","checkpoint-source-facts-v8","checkpoint-source-facts-v9","checkpoint-source-facts-v10","checkpoint-source-facts-v11"])
+for(const protocol of ["checkpoint-source-facts-v7","checkpoint-source-facts-v8","checkpoint-source-facts-v9","checkpoint-source-facts-v10","checkpoint-source-facts-v11","checkpoint-source-facts-v12"])
  test("old input refused before planning: "+protocol,()=>{
   const {input}=sample();input.protocol=protocol;
   assert.throws(()=>buildEventPlanPrompt(input,45000),{code:"summary_input_protocol"});
@@ -136,7 +136,7 @@ test("candidate audit and selected evidence are distinguished in persistent meta
 test("large provisional pools can select a feasible final result without freezing obsolete constraints/events",()=>{
  const input=textInput("**Assistant:** "+Array.from({length:24},(_,i)=>"旧运行"+i+"的记录。"+"背景".repeat(125)+"。").concat("最终只需记录：任务成功。").join("\n\n"));
  const plan=planResponse(input);plan.events[0].evidence[0].kind="decision";plan.events[0].evidence[0].facet="constraint";
- const all=JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt).candidates.map(c=>c.id);
+ const all=candidateWire(JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt)).candidates.map(c=>c.id);
  assert.throws(()=>completeCandidateSelection(plan,selection(plan,input,all),input),e=>e.code==="summary_budget"&&e.observedSummaryChars>5000);
  const result=validateAndRenderFacts(completeCandidateSelection(plan,selection(plan,input,["c25"]),input),input);
  assert.match(result.episode_summary,/任务成功/);assert.doesNotMatch(result.episode_summary,/旧运行/);
@@ -145,7 +145,7 @@ test("large provisional pools can select a feasible final result without freezin
 test("displayed cost formula equals the actual renderer across role switches, escaping, context and arbitrary selections",()=>{
  const input=buildFactInput([{source:"conversation",text:"**Assistant:** 检查标题：\n\n结果 <a>&。\n\n**User:** 决定停止。\n\n**Assistant:** 已停止。\n\n| A | B |\n|---|---|\n| 行 | 2 |"},
  {source:"conversation",text:"**Assistant:** 独立正常。"}],"2026-10-20"),plan=planResponse(input);
- const wire=JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt);
+ const wire=candidateWire(JSON.parse(buildCandidateSelectionPrompt(plan,input,45000).prompt));
  let checked=0;
  for(let mask=1;mask<2**wire.candidates.length;mask++){
   const ids=wire.candidates.filter((_,i)=>mask&(1<<i)).map(c=>c.id);

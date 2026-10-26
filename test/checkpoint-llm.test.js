@@ -135,7 +135,7 @@ test("llmComplete preserves non-2xx error-body behavior", async () => {
 });
 
 
-const { factResponse, planResponse, candidateSelectionResponse, providerResponse, textInput } = require("./checkpoint-fact-fixture.cjs");
+const { factResponse, planResponse, candidateSelectionResponse, providerResponse, textInput, candidateWire, modelPlanResponse } = require("./checkpoint-fact-fixture.cjs");
 const { validateAndRenderFacts, EVENT_PLAN, buildFactInput } = require("../lib/checkpoint/ordinary-summary-facts");
 async function nightlyFixture(handler,action,overrides={}){
  const config={maxInputChars:45000,maxTokens:4096,timeoutMs:120000,...overrides},calls=[];
@@ -146,13 +146,13 @@ async function nightlyFixture(handler,action,overrides={}){
   [checkpointConfig,"getDSBaseUrl",()=>"https://ds.example"],[checkpointConfig,"getSFBaseUrl",()=>"https://sf.example/v1"],
   [https,"request",createRequestStub(request=>{
    const body=JSON.parse(request.req.body);calls.push({url:String(request.url),body,timeout:request.req.timeoutMs});
-   handler({...request,body,input:JSON.parse(body.messages.at(-1).content)},calls.length);
+   handler({...request,body,input:candidateWire(JSON.parse(body.messages.at(-1).content))},calls.length);
   })]
  ];
  async function apply(i){if(i===patches.length)return action(calls);const[o,k,v]=patches[i];return withPatched(o,k,v,()=>apply(i+1));}
  return apply(0);
 }
-function content(callback,value,finish_reason="stop"){emitJsonResponse(callback,{choices:[{message:{content:typeof value==="string"?value:JSON.stringify(value)},finish_reason}]});}
+function content(callback,value,finish_reason="stop"){emitJsonResponse(callback,{choices:[{message:{content:typeof value==="string"?value:JSON.stringify(value?.events?modelPlanResponse(value):value)},finish_reason}]});}
 const reply=(callback,input)=>content(callback,providerResponse(input));
 test("ordinary flow proposes candidates then selects IDs on the same provider; code preserves all labels and quotes",async()=>{
  const input=textInput("**Assistant:** 最终原因：令牌过期。\n\n归档已完成。");
@@ -163,7 +163,7 @@ test("ordinary flow proposes candidates then selects IDs on the same provider; c
   const response=await checkpointLlm.llmNightlyExtract(input);
   assert.equal(calls.length,2);assert.deepEqual(calls.map(c=>JSON.parse(c.body.messages[1].content).stage),["plan","select"]);
   assert.deepEqual(calls.map(c=>c.url),["https://ds.example/chat/completions","https://ds.example/chat/completions"]);
-  const first=JSON.parse(calls[0].body.messages[1].content),second=JSON.parse(calls[1].body.messages[1].content);
+  const first=JSON.parse(calls[0].body.messages[1].content),second=candidateWire(JSON.parse(calls[1].body.messages[1].content));
   assert.deepEqual(first.sources.flatMap(s=>s.units.map(u=>u.text)),input.sources.flatMap(s=>s.units.map(u=>u.text)));
   assert.equal(first.fact_contract,undefined);assert.equal(second.event_plan,undefined);
   assert.ok(second.candidates.every(c=>Number.isSafeInteger(c.cost)&&Number.isSafeInteger(c.group_cost)));
@@ -199,9 +199,10 @@ for(const raw of ["plain private text",'prefix {"events":[]} suffix','{"events":
  }));
  assert.ok(entries.every(e=>!e.message.includes(raw)&&!e.message.includes("private body")));
 });
-for(const mode of ["old_facts","missing_event","bad_ref","bad_facet","topic","old_protocol"])test("invalid candidates stop before ID selection: "+mode,async()=>{
+for(const mode of ["old_facts","object_plan","missing_event","bad_ref","bad_facet","topic","old_protocol"])test("invalid candidates stop before ID selection: "+mode,async()=>{
  await nightlyFixture(({callback,input})=>{
   if(mode==="old_facts")return content(callback,factResponse(input));
+  if(mode==="object_plan")return content(callback,JSON.stringify(planResponse(input))); // Raw object wire must not be auto-encoded.
   const p=planResponse(input);
   if(mode==="missing_event")delete p.events;if(mode==="bad_ref")p.events[0].evidence[0].unit=999;
   if(mode==="bad_facet")p.events[0].evidence[0].facet="correction";if(mode==="topic")p.events[0].topic="bad";

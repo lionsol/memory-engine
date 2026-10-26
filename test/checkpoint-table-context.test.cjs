@@ -1,14 +1,14 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
 const {PROTOCOL,EVENT_PLAN,buildFactInput,buildCandidateSelectionPrompt,validateAndRenderFacts}=require("../lib/checkpoint/ordinary-summary-facts");
-const {textInput,selectedResponse,planResponse,candidateSelectionResponse}=require("./checkpoint-fact-fixture.cjs");
+const {textInput,selectedResponse,planResponse,candidateSelectionResponse,candidateWire}=require("./checkpoint-fact-fixture.cjs");
 const {selectPlanFacts}=require("../lib/checkpoint/ordinary-event-plan");
 const header="| 分段 | n | p50 | max |\n|---|---|---|---|";
 const row="| embedding | 15 | 333 | 3139 |";
 function selected(text,quote=row){
  const input=textInput("**Assistant:** "+text);
  const plan=planResponse(input,[{unit:0,quote,event_id:"latency",facet:"outcome"}]);
- const prompt=buildCandidateSelectionPrompt(plan,input,45000),wire=JSON.parse(prompt.prompt),selection=candidateSelectionResponse(wire);
+ const prompt=buildCandidateSelectionPrompt(plan,input,45000),wire=candidateWire(JSON.parse(prompt.prompt)),selection=candidateSelectionResponse(wire);
  const chosen=selectPlanFacts(plan,selection,input),response={protocol:PROTOCOL,target_date:input.target_date,facts:chosen.facts};
  Object.defineProperty(response,EVENT_PLAN,{value:{plan,selection}});
  return {input,plan,prompt,wire,response};
