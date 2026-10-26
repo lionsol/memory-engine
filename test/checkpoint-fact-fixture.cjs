@@ -24,8 +24,7 @@ function planResponse(input, facts = factResponse(input).facts) {
   for (const fact of facts) {
     const source = units.get(fact.unit).source_id, eventId = fact.event_id || "fixture";
     const key = source + "/" + eventId;
-    if (!events.has(key)) events.set(key,{id:eventId,source_id:source,topic:"Synthetic final state",
-      evidence:[],retired_evidence:[]});
+    if (!events.has(key)) events.set(key,{id:eventId,source_id:source,evidence:[]});
     const evidence = {unit:fact.unit,quote:fact.quote,facet:fact.facet||"outcome",kind:fact.kind||"report"};
     if (!events.get(key).evidence.some(ref=>ref.unit===evidence.unit&&ref.quote===evidence.quote&&ref.facet===evidence.facet))
       events.get(key).evidence.push(evidence);

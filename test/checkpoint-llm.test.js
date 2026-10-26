@@ -286,7 +286,7 @@ test("first-stage response envelope still obeys the existing token-based charact
 test("oversized plan metadata is refused locally before the second request, without slicing",async()=>{
   await nightlyFixture(({callback,input})=>{
     const plan=planResponse(input),base=plan.events[0];
-    plan.events=Array.from({length:256},(_,i)=>({...base,id:"e"+i,topic:"topic".repeat(20),
+    plan.events=Array.from({length:256},(_,i)=>({...base,id:"e"+i,
       evidence:[{unit:0,quote:String.fromCharCode(0x4e00+i),facet:"outcome"}]}));
     content(callback,plan);
   },async calls=>{
