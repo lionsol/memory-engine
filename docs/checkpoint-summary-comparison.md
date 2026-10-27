@@ -1,6 +1,6 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-27（Asia/Shanghai）。状态：预算写作实验候选仅离线验证；最新真实裁决仍为V2_FULL_SAMPLE_FAIL_BUDGET。
+日期：2026-10-27（Asia/Shanghai）。状态：预算写作真实验证失败，BUDGET_WRITE_FAIL_NO_REWRITE。
 v2执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
@@ -69,10 +69,82 @@ v2执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 草稿content SHA-256：`bdfa7941e1fa834a16de078cdf462e8b6a4c619394dcd6155a70f7cc46e850f3`。
 模块SHA-256：`ac08e454e19f2f9f78c8179cc1915c065855907e05cf7f126b83ec095932f194`。
 
-提交后下一阶段只对冻结草稿做1次真实写作验证：
-逐项核对更正、阶段范围、样本资格、取消证据不足和独立结果；
-预算通过而关键条件丢失同样判失败。完整新输入端到端和holdout仍待后续验证。
+上述为提交前离线记录；提交后的冻结草稿单次真实写作验证已失败，详见下节。
+完整新输入端到端和holdout仍待后续验证。
 本候选改变了失败后的开发方向，不把过去“暂不追加阶段”的历史决策改写为已验证成功。
+
+## 预算写作真实验证：17项逐字照抄，未执行压缩
+
+执行HEAD：`9e2da3fb5fe282c44d36b80e797c872f0976b721`。
+2026-10-27 19:28:30–19:28:40（Asia/Shanghai）。
+执行器自检7种模拟场景通过，模拟阶段外部请求0。
+随后仅执行冻结草稿写作1次；没有重新调用direct，没有重试、回退、发布或部署。
+HEAD/干净工作树、模块、执行器、源样本、episode和冻结草稿哈希复核全部通过。
+
+请求仍使用官方DeepSeek端点、deepseek-flash、temperature=0.1、thinking disabled，
+max_tokens=16384、timeout=120000ms、输入上限45000字符。
+响应HTTP200、finish_reason=stop，provider_model=deepseek-flash，不是token截断或传输失败。
+
+| 项目 | 实测 |
+| --- | ---: |
+| 输入字符 | 40548 |
+| prompt / completion / total tokens | 19115 / 2670 / 21785 |
+| 原始JSON内容字符 | 5824 |
+| 返回texts数量 | 17 |
+| 与草稿text逐字相同 | 17 / 17 |
+| 超过各自max_text_chars | 17 / 17 |
+| 仅texts合计 / 固定版式 | 5636 / 772字符 |
+| 诊断总正文长度 | 6408字符 |
+| 目标 / 硬上限 | 4500 / 5000字符 |
+| 请求 / 重试 / 发布 | 1 / 0 / 0 |
+
+首个拒绝为rewrite_item_budget。
+回复version、binding和texts数量均正确，但没有改写任何一项正文。
+因此5824字符的JSON响应比旧响应更短，来自省掉重复标题与引用字段，
+不代表摘要正文缩短；原5636字符正文完整照抄。
+
+例如第1项244/161、第5项95/64、第12项702/464、
+第14项414/273字符（实际/上限）；全部17项超限。
+这不是个别项稍微超限、其他项留有余量导致的过严拒绝：
+合计仍超过5000硬上限1408字符，不能通过允许项间借用解决。
+未修补、截断或重新分配后放行本次输出；没有有效候选正文文件。
+
+### 请求与响应审计
+
+审计重新从冻结输入/草稿调用buildRewritePrompt，逐字核对实际发送的system和user内容，
+并核对plan、请求/响应/内容哈希以及provider envelope中的原始content。
+实际使用的是已提交预算写作构建器；没有误用direct提示词或fake响应。
+17条逐字相同由数组全等断言确认，不是人工观感。
+原始result.json保留semantic_review=NOT_EVALUATED；
+独立review记录本次任务执行失败及全部逐项长度。
+
+没有新的改写文字可评估：原草稿核验阶段范围不够明确、残差算术等问题原样保留。
+引用与事项结构固定只能保证结构未变，不能迫使模型执行压缩。
+离线容量证明和54项回归仍证明程序预算与拒绝机制正确，
+不能作为模型能完成任务的证据。
+
+### 裁决与下一步
+
+BUDGET_WRITE_FAIL_NO_REWRITE。摘要事实Bug未修复，未取得生产发布资格。
+目前只能确认：这一次完整输入、该模型与设置下，模型遵循了回复结构但未执行正文改写。
+不能据一次失败断言所有模型都无法处理，也不能直接归因到上下文长度、模型能力、
+提示词歧义或输入干扰中的任一项。
+
+暂停继续扩展协议和门禁。下一步先准备一个短输入、单事项的有界压缩探针，
+检验相同模型/设置是否能执行基本改写，再决定是否比较长输入干扰或其他模型设置。
+不把又一轮完整重跑当作定位，不以修改上限或放行旧输出获得PASS。
+本轮唯一请求已结束，不追加调用。端到端与holdout仍未完成。
+
+证据位于 `/home/lionsol/.openclaw/ops/memory-engine/`：
+
+- 执行器：`checkpoint-budget-write-9e2da3f-20261027.cjs`。
+- 原始请求、响应、输入、草稿、plan、结果：`checkpoint-budget-write-9e2da3f-20261027-evidence/`。
+- 审计：`checkpoint-budget-write-9e2da3f-20261027-audit.cjs`。
+- 复核：`checkpoint-budget-write-9e2da3f-20261027-review.json`。
+- 执行器SHA-256：`14722c556b6965ba3c98bb11bcc17815e07ace5da1f7d7d633d260422bb8c0d0`。
+- request：`5294b1b86b0a10a860ba918eb45fb229736e0e771c29cb6959ce3e6d75de83c1`。
+- response：`9ad30bf32000e01cdf980858ebc3aa51d2f50b0a6c42e95dc293df679da4eee3`。
+- content：`1df3a351aaf16d300dec2112fc632b57228917643db44f77380d156bf2864a4e`。
 
 ## v2直接摘要（历史）
 
