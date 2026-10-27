@@ -28,13 +28,13 @@ test("source drift invalidates both summary and ledger",()=>{
  assert.throws(()=>lab.validateSummary(i,s),{code:"comparison_binding"});
  assert.throws(()=>lab.buildPrompt(i,"compose",{ledger:l}),{code:"comparison_binding"});
 });
-test("unknown, repeated, absent and contradictory reference annotations rejected",()=>{
+test("unknown, repeated, absent and entirely withdrawn support rejected",()=>{
  for(const change of [s=>s.items[0].evidence=["unknown"],s=>s.items[0].evidence.push(s.items[0].evidence[0]),s=>s.items[0].evidence=[],s=>s.items[0].corrects=s.items[0].evidence]){
   const i=input(),s=summary(i);change(s);assert.throws(()=>lab.validateSummary(i,s),{code:"comparison_reference"});
  }
 });
 test("boundaries reject schema injection and old response protocols",()=>{
- for(const change of [s=>s.facts=[],s=>s.version="checkpoint-source-facts-v15",s=>s.items[0].quote="injected"]){
+ for(const change of [s=>s.facts=[],s=>s.version="checkpoint-source-facts-v15",s=>s.version="checkpoint-summary-comparison-v1",s=>s.items[0].quote="injected"]){
   const i=input(),s=summary(i);change(s);assert.throws(()=>lab.validateSummary(i,s));
  }
 });
@@ -79,6 +79,43 @@ test("budget rejection never truncates or requests a replacement",async()=>{
  const i=input(),seen=[];
  const out=await lab.runComparison(i,async p=>{seen.push(p.stage);return JSON.stringify(p.stage==="organize"?ledger(i):summary(i));},{summaryMaxChars:10});
  assert.equal(out.results.direct.error,"comparison_summary_budget");assert.equal(out.results.staged.error,"comparison_summary_budget");assert.equal(seen.length,3);
+});
+test("historical evidence may be marked corrected when live support is also cited",()=>{
+ const i=input(),s=summary(i);s.items[0].evidence.push(s.items[0].corrects[0]);
+ const r=lab.validateSummary(i,s);
+ assert.equal(r.evidence.length,2);
+ assert.deepEqual(r.evidence.find(x=>x.id===s.items[0].corrects[0]).referencedAs,["evidence","corrects"]);
+ assert.equal(r.validation.semantic_correctness,"NOT_EVALUATED");
+});
+test("direct-only executor invokes once with no staged fallback on all failure classes",async()=>{
+ const i=input();
+ for(const mode of ["success","json","binding","reference","budget","transport"]){
+  let calls=0;
+  const out=await lab.runDirect(i,async p=>{
+   calls++;assert.equal(p.stage,"direct");
+   if(mode==="transport")throw Object.assign(new Error("offline"),{code:"offline"});
+   if(mode==="json")return "invalid";
+   const s=summary(i);
+   if(mode==="binding")s.binding="wrong";
+   if(mode==="reference")s.items[0].evidence=["unknown"];
+   if(mode==="budget")s.items[0].text="x".repeat(5001);
+   return JSON.stringify(s);
+  });
+  assert.equal(calls,1);assert.equal(out.requests.length,1);assert.equal(out.results.staged,undefined);
+  assert.equal(out.results.direct.status,mode==="success"?"READY_FOR_REVIEW":"REJECTED");
+ }
+});
+test("direct input-budget failure stops before transport",async()=>{
+ let calls=0;const out=await lab.runDirect(input(),async()=>{calls++;return "{}";},{maxInputChars:10});
+ assert.equal(calls,0);assert.equal(out.results.direct.error,"comparison_input_budget");
+});
+test("all fixture source text and metadata survive compact transport exactly",()=>{
+ for(const c of cases){
+  const i=buildFactInput(c.logs,"2026-10-20"),p=JSON.parse(lab.buildPrompt(i,"direct").prompt);
+  assert.equal(p.summary_max_chars,5000);assert.ok(p.summary_target_chars<5000);
+  assert.deepEqual(p.SOURCE.sources.flatMap(s=>s.units.map(u=>u[3])),i.sources.flatMap(s=>s.units.map(u=>u.text)));
+  for(const s of p.SOURCE.sources)assert.equal(s.source_hash,i.sources.find(x=>x.id===s.id).source_hash);
+ }
 });
 test("ledger supports conditions/unresolved without truncation or mutable validation result",()=>{
  const i=input(),l=ledger(i),copy=lab.validateLedger(i,l);copy.items[0].conditions=[];

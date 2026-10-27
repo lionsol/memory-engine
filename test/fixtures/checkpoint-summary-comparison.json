@@ -78,6 +78,60 @@
         "取消修复已PASS",
         "把4572ms称为p95"
       ]
+    },
+    {
+      "id": "phase_local_execution_boundary",
+      "focus": "先执行后只读核验，局部未执行不能扩为全天",
+      "logs": [
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "09:00 执行阶段：已重跑前两天的 episode，生成真实摘要并备份旧文件。"
+        },
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "14:00 只读核验阶段：本次没有运行 checkpoint，没有修改配置；只更新了核验报告。"
+        }
+      ],
+      "required": [
+        "09:00已重跑episode",
+        "14:00本次核验未运行checkpoint",
+        "执行和核验范围分别保留"
+      ],
+      "forbidden": [
+        "全天未运行checkpoint",
+        "全程唯一修改是报告"
+      ]
+    },
+    {
+      "id": "natural_sample_eligibility",
+      "focus": "压缩时保留样本资格和窗口限制",
+      "logs": [
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "UTC 2026-10-19 08:57:33 至 2026-10-20 12:27:18，LIMIT 200 返回200行已达上限；自然请求15条，traffic_origin=natural_user_turn、source=before_prompt_build、trigger=user且valid=true，15/15均有started/completed。"
+        },
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "端到端p50=1908ms、max=4572ms；窗口max不是p95，不能推广为生产p95。FTS/BM25分段字段缺失，不等于FTS耗时为0。"
+        }
+      ],
+      "required": [
+        "UTC窗口起止",
+        "LIMIT200已达上限",
+        "natural_user_turn/source/trigger/valid资格",
+        "started/completed",
+        "max非p95",
+        "FTS采集缺口非零值"
+      ],
+      "forbidden": [
+        "仅保留15条而丢资格依据",
+        "生产p95为4572ms",
+        "FTS耗时0"
+      ]
     }
   ]
 }
