@@ -1,6 +1,6 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-27（Asia/Shanghai）。状态：短输入单事项探针也未满足字数，SHORT_SINGLE_ITEM_FAIL_LENGTH。
+日期：2026-10-27（Asia/Shanghai）。状态：纯文本已知单项压缩通过，PASS_SINGLE_KNOWN_ITEM_ONLY；完整摘要仍未通过。
 v2执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
@@ -214,6 +214,56 @@ SHORT_SINGLE_ITEM_FAIL_LENGTH。
 - request：`9ba08889300258d0af265b5da3bb14b0fdead84ae44ff9de052b00fdda7adbd3`。
 - response：`946f04fe9e9ab51815eb1079020260f78b505bca89a518efe5a76cf7b565b5f7`。
 - content：`d20af699fdfdc292e764e33ca43a825dee6df43fe56dd2e3ae20af7db7f8797e`。
+
+## 纯文本单事项探针：95字压到59字，局部通过
+
+执行HEAD：`5ea95d65eafc2eef8b51e70bb6bdcfecfed550f5`。
+2026-10-27 19:44:58–19:44:59（Asia/Shanghai）实际请求1次，重试0、回退none。
+执行器7项离线自检通过（0次外部请求），不计入模型语义验收。
+
+沿用上轮同一事项的3段原文、95字符草稿和模型设置；
+审计确认输入原文、草稿及原文映射与短结构化探针完全一致。
+本轮指令直接要求64字符以内的纯文本摘要，说明标点、数字、英文字母均按UTF-16计数，
+去掉plan、binding和JSON输出要求；未提供56字人工参考答案。
+输入645字符，使用deepseek-flash、temperature 0.1、thinking disabled、
+max_tokens 16384、timeout 120000ms；未改变生产4096 token配置。
+
+### 实际输出与复核
+
+HTTP 200、finish_reason stop；prompt/completion/total tokens为346/33/379。
+模型原始正文为59字符，未裁剪、修补、去除包装或重新生成：
+
+> 已撤回“10:51:54部署”说法；mtime可被继承，不能单独作部署时刻证据，启用时刻以Gateway加载记录为准。
+
+机械检查为READY_FOR_REVIEW；单独人工复核裁决为PASS_SINGLE_KNOWN_ITEM_ONLY：
+旧部署说法已撤回、mtime不能单独证明部署时刻、启用时刻以Gateway加载记录为准三点均保留，
+未编造已核实的部署时刻，59字符满足64字符上限。
+
+| 请求 | 输入字符 | 输出正文字符 | 64字符限制 |
+| --- | ---: | ---: | --- |
+| 上轮短结构化探针 | 2784 | 92 | 失败 |
+| 本轮纯文本探针 | 645 | 59 | 通过 |
+
+这证明该模型在简化请求下能完成这个已知单项的压缩。
+指令表述、字数表达、输入长度和输出格式同时改变，不能认定JSON单独导致此前失败。
+只有1个已知事项；未验证复杂资格条件、全部17项、端到端流程或holdout。
+完整摘要Bug仍未解决，未发布、部署或接入生产。
+
+下一步使用同样的简化请求模式，验证资格条件更密集的单项，
+先检查压缩是否丢失有效样本条件，再考虑多项执行或产品改造。
+
+### 证据
+
+证据位于 `/home/lionsol/.openclaw/ops/memory-engine/`：
+
+- 执行器：`checkpoint-budget-plain-5ea95d6-20261027.cjs`。
+- 原文映射、输入、草稿、请求/响应及机械结果：`checkpoint-budget-plain-5ea95d6-20261027-evidence/`。
+- 审计：`checkpoint-budget-plain-5ea95d6-20261027-audit.cjs`。
+- 人工复核：`checkpoint-budget-plain-5ea95d6-20261027-review.json`。
+- 执行器SHA-256：`2752f84510299ca4193703fd1618317c83c1cba771301c222ac4a99af1be3625`。
+- request：`14b5eb9dd2405b8c8501493b5c26d35b3e4912798546aabb284b836ecba47ccc`。
+- response：`3fb896bb76fbf4419b4f2fb5908b7c5ca9fe7da967e2660b8ddfae85bcad0dd7`。
+- content：`830450c555ec708ae8c33f861ba1a343bdfe79258d308fff2bb3679ccfde2cd4`。
 
 ## v2直接摘要（历史）
 
