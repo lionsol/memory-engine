@@ -132,6 +132,45 @@
         "生产p95为4572ms",
         "FTS耗时0"
       ]
+    },
+    {
+      "id": "partial_correction_preserves_valid_constraint",
+      "focus": "同段仅撤回部分判断，保留限额与证据不足边界",
+      "logs": [
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "旧报告判断：entryId仍按日期加时间生成，checkpoint没见INSERT INTO memory_identity，因此ID碰撞和identity漏写未修复。每日最多补10条未变。"
+        },
+        {
+          "role": "user",
+          "source": "conversation",
+          "text": "更正：实际入口使用opts.entryId || fingerprint；identity由共享assignStableMemoryIdentity()补齐。兼容函数存在和某目录grep无SQL不能证明代码缺少修复路径。每日10条是明确保留的限制，历史unknown_legacy不能当新版可回填队列。"
+        },
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "撤回旧ID规则仍在使用、identity无补齐路径这两项判断。新条目已有修复路径，历史歧义延后处理、不猜测绑定；实际恢复量待自然首跑。"
+        },
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "本次只读按原49个ID回查，仍49条entity_id为空；尚无修复路径自然运行证据，不能据此判产品失败，也不能把后续全部关联自动归因于该修复。"
+        }
+      ],
+      "required": [
+        "明确撤回旧ID规则与identity无补齐路径两项误判",
+        "保留fingerprint入口与共享identity补齐路径",
+        "每日10条是保留限制，不随误判一起撤回",
+        "历史歧义不猜测绑定，实际恢复量仍待自然运行验证",
+        "49条当前为空不能证明产品失败或修复归因"
+      ],
+      "forbidden": [
+        "把已撤回的旧ID/无SQL判断再次当成当前未修复结论",
+        "把每日10条保留限制也当成已撤回的误判",
+        "用49条为空断言没有identity补齐代码",
+        "把尚待自然首跑的恢复效果写成已验证成功"
+      ]
     }
   ]
 }
