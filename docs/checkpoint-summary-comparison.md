@@ -1,6 +1,6 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-27（Asia/Shanghai）。状态：纯文本已知单项压缩通过，PASS_SINGLE_KNOWN_ITEM_ONLY；完整摘要仍未通过。
+日期：2026-10-27（Asia/Shanghai）。状态：纯文本条件密集事项超限并遗漏必要条件，FAIL_LENGTH_AND_REQUIRED_CONDITION；完整摘要仍未通过。
 v2执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
@@ -264,6 +264,50 @@ HTTP 200、finish_reason stop；prompt/completion/total tokens为346/33/379。
 - request：`14b5eb9dd2405b8c8501493b5c26d35b3e4912798546aabb284b836ecba47ccc`。
 - response：`3fb896bb76fbf4419b4f2fb5908b7c5ca9fe7da967e2660b8ddfae85bcad0dd7`。
 - content：`830450c555ec708ae8c33f861ba1a343bdfe79258d308fff2bb3679ccfde2cd4`。
+
+## 条件密集单事项探针：317字超限且遗漏source值
+
+执行HEAD：`1ab74c40d5410e90af62d9df442ddeba0274a707`。
+2026-10-27 20:01:11–20:01:12（Asia/Shanghai）实际请求1次，重试0、回退none。
+7项执行器离线自检通过（0次外部请求），不作为模型质量证据。
+
+使用冻结v2草稿第13项“AutoRecall 自然样本身份核验”：
+414字符草稿及其引用的2段原文，未改原文内容或角色。
+沿用上轮纯文本指令模式，仅将64字符上限换成此前全稿分配的273字符；
+模型、temperature 0.1、thinking disabled、max_tokens 16384、timeout 120000ms均不变。
+请求前保存独立review-spec，规定时间窗口、筛选条件、去重计数、完整状态及不确定归因必须保留；
+全表/窗口/历史辅助计数可省略。该复核清单未加入模型请求，未提供人工参考答案。
+
+### 实际结果
+
+输入1202字符，HTTP 200、finish_reason stop，prompt/completion/total tokens为644/159/803。
+原始输出317字符，比273上限多44，机械检查REJECTED/plain_length；未裁剪或修补：
+
+> PASS：LIMIT 200取200行达上限（全表4168行），窗口UTC 2026-10-19 08:57:33至2026-10-20 12:27:18内63个trace去重得自然请求15条；natural_user_turn且valid=true为15/15，source、agent_id/run_id/session_id、trigger=user均15/15；15/15有started与completed，另1条unknown/valid=false已排除；全历史1652个trace中0个有started无completed。较上轮14条差1条，初步归因最新请求完成于12:27:18Z，但缺上轮报告运行时刻，无法确证。
+
+人工复核为FAIL_LENGTH_AND_REQUIRED_CONDITION：
+`source=before_prompt_build`被压缩为只有字段名的`source`，具体资格条件丢失。
+时间窗口、LIMIT已满、15条去重自然请求、natural_user_turn/valid=true、
+trigger=user、身份字段、started/completed、无效样本排除及“初步归因/无法确证”仍保留。
+输出保留了允许省略的辅助计数，却遗漏必要source值；长度超限与语义遗漏同时发生。
+这里审查的是对原报告的改写，没有独立核验其运行时事实。
+
+简单mtime事项的59字成功不能推广到条件密集事项。
+本轮没有证明简化请求可以稳定满足字数和条件保真；完整摘要Bug仍未解决。
+不再追加单事项提示词探针。下一步复用现有ledger.conditions/unresolved，
+验证由程序固定呈现必要条件、先扣除固定开销、只压缩解释文字的隔离候选。
+条件提取正确性仍须对照原文复核，这不是语义自动保证，也不增加生产协议或门禁。
+本轮未发布、部署或改变生产配置，holdout及完整端到端验收未执行。
+
+证据位于 `/home/lionsol/.openclaw/ops/memory-engine/`：
+
+- 执行器：`checkpoint-budget-qual-1ab74c4-20261027.cjs`。
+- 原文映射、草稿、请求前复核清单、请求/响应及机械结果：`checkpoint-budget-qual-1ab74c4-20261027-evidence/`。
+- 审计：`checkpoint-budget-qual-1ab74c4-20261027-audit.cjs`；人工复核：`checkpoint-budget-qual-1ab74c4-20261027-review.json`。
+- 执行器SHA-256：`ea015b93d0ec91a14140eb7ef9f4e6447e615a600777399c05e678083d98a4d3`。
+- request：`de1f8efe74f4dcab4319e6e109c5e63d1ba5d57622798ac8c2cb8050b081c6bd`。
+- response：`2e72aa37c763c68e630883be178c4b6a4ba9090f3c3ea3201cbd633bfd792ec5`。
+- content：`d9954213ce809ca2a9576612298fba16eccacc66a8d2b9292ee93b032f1012a9`。
 
 ## v2直接摘要（历史）
 
