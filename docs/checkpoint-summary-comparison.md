@@ -1,13 +1,62 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-27（Asia/Shanghai）。状态：纯文本条件密集事项超限并遗漏必要条件，FAIL_LENGTH_AND_REQUIRED_CONDITION；完整摘要仍未通过。
+日期：2026-10-27（Asia/Shanghai）。状态：固定呈现事项条件的隔离候选已实现，仅离线机制验证；完整摘要真实验收仍未通过。
 v2执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
 用户已同意“原文保留＋事项最终状态＋带引用的生成式摘要”方向。
 当前普通checkpoint仍为v15，既有真实验收失败裁决不变。
 
-## 当前候选：按实际版式分配逐项写作预算
+## 当前候选：固定呈现事项条件与未决限制
+
+基线HEAD：`a579afdcaf3ce238e7b60fe66518d97892f1c788`，仅源码和开发验证，真实请求0次。
+
+条件密集探针超限并丢失source值，说明必要限定不能继续完全依赖最后一次文字改写。
+复核历史45项organize原始响应又发现：e40的`source=before_prompt_build`在conclusion内，
+conditions只有“仅只读核验 memory_events 元数据，未读取消息正文”。
+所以固定呈现只保护已经放入对应数组的内容，不能自动修正前一阶段的错放或遗漏。
+该历史响应是v1，未迁移、改写或作为新模型结果使用。
+
+### 实现
+
+复用`summary-budgeted-rewrite.cjs`及现有ledger字段，新增
+`planLedgerRewrite/buildLedgerRewritePrompt/completeLedgerRewrite/runLedgerRewrite`独立入口：
+
+- scope作为标题，conditions与unresolved由程序按原序原样附加；模型只改写conclusion。
+- 固定字段、分隔符、标题、引用、更正标记和换行先计入实际UTF-16预算，再分配可改写文字额度。
+  固定开销已不容纳正文时，在调用前停止；不删条件、不截断、不提高5000上限。
+- 可改写部分沿用现有按conclusion长度分配的启发式，尚未证明额度足够表达所有结论。
+- 回复仍是现有version/binding/texts结构；绑定覆盖ledger内容，固定字段等长改动也使旧回复失效。
+  原普通写作入口与生产checkpoint调用路径均未接入这个候选。
+- organize提示同时明确：时间窗口、筛选资格、来源/触发/有效性、截断、统计口径、阶段与证据限制
+  必须进入conditions，不能仅埋在conclusion；条件和未决事项也需引用支持。
+  这项提示修改尚无新真实模型验证。
+
+### 离线证据与边界
+
+64项定向检查通过（原54项＋新增10项），静态检查887文件通过，test-integrity扫描408、invalid=0。
+覆盖固定条件/未决文字保留、精确总预算、Unicode、引用更正、预算不可能时0次调用、
+条件变更绑定失效、一次调用无重试及调用方/plan修改。
+反例测试明确展示：条件仅留在conclusion仍可丢失，编造的条件与矛盾结论也不会被结构检查自动识别；
+semantic_correctness/coverage仍为NOT_EVALUATED，publishable=false。
+
+固定2026-10-20完整原文193可见units的离线演示使用人工整理的单项ledger和人工8字结论：
+输入32674字符；273字符总目标中，条件/未决固定230、标题引用等19，剩余结论24；
+最终257字符，所给条件均保留。
+此273包括标题和引用，上轮273仅是text上限，不能据此比较模型压缩表现。
+这是人工输入的机制演示，不是模型输出、自动提取、完整17项验收或holdout；Bug尚未解决。
+
+证据目录：`/home/lionsol/.openclaw/ops/memory-engine/checkpoint-ledger-layout-a579afd-20261027-offline/`；
+执行器：同目录上级的`checkpoint-ledger-layout-a579afd-20261027-offline.cjs`。
+report.json记录原文/episode、候选源码、测试、执行器及历史响应SHA-256；
+执行器SHA-256为`d118af4c9d9113193bb51d6d1219b87415a4ba340878dbd38b3f3cfecfc915a5`。
+源码检查及离线演示未调用provider、publisher、scheduler，未部署或改变runtime/DB/配置。
+
+下一步回到完整原文，单次验证新的organize输出，逐项复核条件与结论分栏是否正确、有来源支持，
+并计算整份ledger的真实固定开销与写作输入预算，再决定是否进入写作验收。
+不能先假设条件已被正确提取，也不继续增加单事项提示词探针。
+
+## 历史候选：按实际版式分配逐项写作预算
 
 本轮基于已提交失败记录 `00e37319b79ea50f22534e25cd807289a4773ac3`。
 新增隔离模块 `lib/checkpoint/summary-budgeted-rewrite.cjs`，

@@ -19,7 +19,10 @@ v2直接摘要已单次真实验证：引用通过但正文6408字符超5000；�
 裁决仅为PASS_SINGLE_KNOWN_ITEM_ONLY；指令、输入长度和输出格式同时改变，不能认定JSON是根因。
 条件密集单项已真实请求1次：414字压到317字，仍超273字上限44字，且source=before_prompt_build只剩字段名source；不确定归因保留。
 人工裁决FAIL_LENGTH_AND_REQUIRED_CONDITION；简单单项成功不能推广。请求、原文/草稿及请求前复核清单已审计，未重试、发布或部署。
-下一步停止扩展单项提示词探针，复用现有ledger.conditions/unresolved固定呈现必要条件，扣除固定开销后只压缩解释文字；条件提取仍须原文复核，不增加生产协议或门禁。
+已新增独立ledger预算写作入口：程序固定呈现conditions/unresolved，先扣除实际开销，模型只改写conclusion，未接入普通checkpoint。
+历史45项整理结果e40把source值留在conclusion而非conditions；因此同时明确organize提示的条件分栏要求，尚未真实验证新提取结果。
+64项定向检查、静态检查887文件、test-integrity扫描408均通过；固定原文单项人工ledger演示257字符满足273总目标，仅为离线机制证据。
+条件漏提、错提或模型结论矛盾仍不能由结构检查识别。下一步单次验证完整原文organize及整份ledger预算，不再增加单事项提示词探针。
 holdout未执行，未接入生产，Bug未解决。
 
 ## 当前v15：编号及标签选择
