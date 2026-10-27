@@ -1,6 +1,6 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-27（Asia/Shanghai）。状态：预算写作真实验证失败，BUDGET_WRITE_FAIL_NO_REWRITE。
+日期：2026-10-27（Asia/Shanghai）。状态：短输入单事项探针也未满足字数，SHORT_SINGLE_ITEM_FAIL_LENGTH。
 v2执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
@@ -145,6 +145,75 @@ BUDGET_WRITE_FAIL_NO_REWRITE。摘要事实Bug未修复，未取得生产发布�
 - request：`5294b1b86b0a10a860ba918eb45fb229736e0e771c29cb6959ce3e6d75de83c1`。
 - response：`9ad30bf32000e01cdf980858ebc3aa51d2f50b0a6c42e95dc293df679da4eee3`。
 - content：`1df3a351aaf16d300dec2112fc632b57228917643db44f77380d156bf2864a4e`。
+
+## 短输入单事项探针：95字只缩为92字
+
+执行HEAD：`b8cb1e7a0a7f5d1fae4a5fa083188ce168dc1131`。
+2026-10-27 19:35:52–19:35:53（Asia/Shanghai）。
+未修改产品代码；执行前工作树干净，原文/episode/冻结草稿/构建器/执行器哈希检查均通过。
+
+从冻结v2草稿中取第5项“部署时刻mtime证据撤回”，保留原95字正文。
+按原始顺序取该项evidence/corrects指向的3段原文，逐字保留及原User/Assistant角色。
+引用重编号有origin-mapping.json记录，保留父source_hash、unit id和偏移，
+不把短输入重新编号当作原文发生变化。
+沿用相同预算写作系统提示词，题目从17项减为1项；模型/temperature/thinking设置与上一轮相同。
+
+固定正文64字符上限，与全输入时该项预算相同。
+短输入版式开销30字符，因此探针目标94字符；硬上限仍5000。
+这只是单事项执行能力定位，不是把生产正文预算改为94。
+
+执行器先通过7项模拟检查，外部请求0；
+随后仅执行1次真实请求，无重试/回退/发布或部署。
+HTTP200、finish_reason=stop，输入2784字符、prompt1292 tokens、
+completion108 tokens、total1400 tokens。
+
+| 项目 | 实测 |
+| --- | ---: |
+| 原始可见证据段落 / 写作项 | 3 / 1 |
+| 原草稿正文 | 95字符 |
+| 返回正文 | 92字符 |
+| 正文上限 | 64字符 |
+| 诊断版式长度 / 探针目标 | 122 / 94字符 |
+
+原始返回：
+> “10:51:54 部署”已从报告撤掉：目录 mtime 可被 git archive 或保留时间戳的复制继承，不能单独作为部署时刻证据，实际启用时刻以 Gateway 加载记录为准。
+
+回复结构和绑定正确，人工核查仍表达了撤回、mtime继承不确定性及加载记录依据；
+但仅删去“的说法”3字符，触发rewrite_item_budget。
+因此本轮不是逐字全等照抄，也没有满足压缩目标。
+没有截断文字、修改上限或生成有效候选。
+
+为诊断是否确有更短表达，助手另写了56字人工参考：
+> 已撤回10:51:54部署断言；mtime可被复制继承，不能证明部署时刻，实际启用以Gateway加载记录为准。
+
+该参考未发送给本轮模型，不是模型结果、不是质量PASS或holdout；
+它只提供了保留所关注含义且少于64字的人工可行性例子。
+
+### 诊断结论
+
+SHORT_SINGLE_ITEM_FAIL_LENGTH。
+相同模型/设置/请求形式在短输入也失败，所以长上下文不是这种字数失败的必要条件。
+仍不能单独归因到模型能力、提示词表述、结构化输出或字数估算中的某一项。
+短探针同时减少了输入长度和事项数量，也不是仅改变上下文长度的严格因果实验。
+原始请求/响应哈希及实际system/user内容均与同一构建器核对一致。
+
+下一步准备1次更直接的纯文本探针：
+在指令中直接写“64字以内”，去掉嵌套plan、binding和JSON输出要求，
+沿用这3段原文与95字草稿、相同模型设置；不提供人工参考答案。
+先判断简化请求后能否压缩，再决定后续长输入或模型设置比较。
+这项比较会同时改变字数指令表达和输出格式，不能据其结果单独断言某一个因素是根因。
+本轮只用了既定1次请求，没有追加纯文本调用；不再增加产品协议和门禁。
+
+证据位于 `/home/lionsol/.openclaw/ops/memory-engine/`：
+
+- 执行器：`checkpoint-budget-short-b8cb1e7-20261027.cjs`。
+- 原文映射、输入、草稿、plan及请求/响应：`checkpoint-budget-short-b8cb1e7-20261027-evidence/`。
+- 审计：`checkpoint-budget-short-b8cb1e7-20261027-audit.cjs`。
+- 人工复核及56字参考：`checkpoint-budget-short-b8cb1e7-20261027-review.json`。
+- 执行器SHA-256：`59573553e39a4f2db830dd1d16c1c0f47a14451c7a3831d43647bff50222a601`。
+- request：`9ba08889300258d0af265b5da3bb14b0fdead84ae44ff9de052b00fdda7adbd3`。
+- response：`946f04fe9e9ab51815eb1079020260f78b505bca89a518efe5a76cf7b565b5f7`。
+- content：`d20af699fdfdc292e764e33ca43a825dee6df43fe56dd2e3ae20af7db7f8797e`。
 
 ## v2直接摘要（历史）
 
