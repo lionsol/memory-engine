@@ -1,6 +1,7 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-27（Asia/Shanghai）。状态：v2直接摘要实验候选已实现，仅离线验证；最新真实质量裁决仍为FULL_SAMPLE_FAIL。
+日期：2026-10-27（Asia/Shanghai）。状态：v2直接摘要真实验证失败，V2_FULL_SAMPLE_FAIL_BUDGET。
+v2执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
 用户已同意“原文保留＋事项最终状态＋带引用的生成式摘要”方向。
@@ -46,8 +47,78 @@
 在新引用规则下到达预算校验，仍以7166字符被拒绝。
 runDirect假模型调用1次、无重试，结果同为预算拒绝。
 没有保存“修补成功正文”，不把诊断回放称为模型生成或语义PASS。
-本轮真实请求0、发布0、部署0；下一步须在提交v2后做单次完整样本真实验证。
+该次离线预检真实请求0、发布0、部署0；提交后单次完整样本真实验证结果见下节。
 未完成的整日事项覆盖、语义正确性和holdout仍是开放问题。
+
+## v2完整样本真实验证：引用通过，正文仍超限
+
+2026-10-27 17:25:28–17:25:43（Asia/Shanghai）。
+执行前工作树干净，HEAD、模块、fixture、源样本、episode与执行器按哈希绑定；
+结束后复核未变。仅使用runDirect，实际外部请求1次，
+无organize/compose、无回退、无重试。
+官方DeepSeek端点、deepseek-flash、temperature=0.1、thinking disabled，
+max_tokens=16384、timeout=120000ms；生产默认4096不变。
+
+执行器先完成7个模拟场景，包括成功、JSON/绑定/引用/预算错误、
+传输错误及token截断；模拟阶段外部请求0。
+真实响应HTTP200、finish_reason=stop，不是token截断。
+
+| 项目 | 实测 |
+| --- | ---: |
+| 来源 / 可见原始单元 | 4 / 193 |
+| 完整输入字符 | 32351 |
+| prompt / completion / total tokens | 15417 / 3706 / 19123 |
+| 原始JSON响应内容字符 | 8057 |
+| 摘要items | 17 |
+| 正文目标 / 硬上限 | 3500 / 5000 |
+| 校验报告正文字符 | 6408 |
+| 仅topic / 仅text字符 | 420 / 5636 |
+| 真实请求 / 重试 / 发布 | 1 / 0 / 0 |
+
+首个拒绝为comparison_summary_budget，observedChars=6408。
+结构、绑定与引用检查已通过，没有再遇到v1的引用角色交集拒绝。
+仅text字段5636字符已超过上限；不能通过删除引用标记或少量排版解决。
+相对v1的7166诊断长度下降758字符（约10.6%），仍超过硬上限1408字符。
+没有输出有效候选文件、没有修补原响应或发布。
+
+### 原始17项的定向人工复核
+
+- 主要更正保留：mtime部署断言撤回、ID/identity旧诊断更正；
+  每日10条与1830旧legacy统计口径区分。
+- 保留独立维护/Daily Stats、01/02/03健康结果、632/1241验收和49仍空但不据此判修复失败。
+- 恢复了v1遗漏的source=before_prompt_build和trigger=user；
+  自然样本窗口、LIMIT200已达上限、traffic_origin/valid及started/completed也保留。
+- 保留取消PENDING/INSUFFICIENT_EVIDENCE与“零事件不能证明触发或生效”，FTS采集缺口和max非p95。
+- 第7条“Gateway健康与未执行操作”不再明确声称“全程”，
+  但“未运行checkpoint、唯一改动是报告”仍未限定核验阶段。
+  这属于范围表达仍不充分，不把它等同于已经再次明确断言“全天未执行”。
+- 清单逐行指标、signal ID、报告绝对路径等仍大量进入正文，
+  没有可靠遵守精简目标，且topic与text仍有重复。
+- 原文残差908ms/47.6%的算术问题仍被转述；本轮不认证其计算正确性。
+
+审查为已知重点的人工定向复核，不是所有原子事实的穷尽评分。
+所有模型PASS表述均来自原始对话报告，本次没有读live DB或独立认证这些运行事实。
+
+### 裁决与下一步约束
+
+V2_FULL_SAMPLE_FAIL_BUDGET，Bug未修复，未取得发布资格。
+有来源限定改善的证据，但没有预算内完整覆盖的成功结果。
+这次也说明单次请求中的3500目标与5000硬上限提示没有形成可靠预算控制。
+下一候选应先离线明确正文与审计明细的边界，验证实际可执行的写作预算；
+不能只增强长度提示、删除引用或降低输出token上限造成截断后称成功。
+任何进一步压缩都须复核更正、执行阶段、样本资格和独立事项，不能用预算达标掩盖遗漏。
+本轮请求已结束，不用剩余的历史实验配额重试；holdout及产品接线仍未执行。
+
+证据位于 `/home/lionsol/.openclaw/ops/memory-engine/`：
+
+- 执行器：`checkpoint-summary-direct-v2-411bd1e-20261027.cjs`。
+- 原始材料：`checkpoint-summary-direct-v2-411bd1e-20261027-evidence/`。
+- 审计：`checkpoint-summary-direct-v2-411bd1e-20261027-audit.cjs`。
+- 人工复核：`checkpoint-summary-direct-v2-411bd1e-20261027-review.json`。
+- 执行器SHA-256：`3946f14f14f9463a43799b43655c97526f843acede0499c2cc07174254218eda`。
+- request：`28134d08a725d46a06b394faa15308195ae3c7c87dcc14807a4e3c4c2f48ea17`。
+- response：`fb9cde06a803caaa4fb687624fff5a53b01fa6cc2fabf220a91a8831fc95dd32`。
+- content：`bdfa7941e1fa834a16de078cdf462e8b6a4c619394dcd6155a70f7cc46e850f3`。
 
 ## 实验范围
 
