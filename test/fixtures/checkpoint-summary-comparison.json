@@ -1,0 +1,83 @@
+{
+  "status": "DEVELOPMENT_CASES_NOT_HOLDOUT",
+  "cases": [
+    {
+      "id": "explicit_correction",
+      "focus": "错误更正不能写成状态变化",
+      "logs": [
+        {
+          "role": "assistant",
+          "text": "部署副本的目录 mtime 是 10:51:54，因此它在 10:51:54 部署。",
+          "source": "conversation"
+        },
+        {
+          "role": "assistant",
+          "text": "更正：mtime 可能被复制继承，不能证明部署时刻。撤回“10:51:54 部署”的判断；实际启用时间需查加载日志。",
+          "source": "conversation"
+        }
+      ],
+      "required": [
+        "撤回旧部署断言",
+        "mtime不能证明部署时刻",
+        "实际启用时间未确认"
+      ],
+      "forbidden": [
+        "声称先在10:51:54部署后来又发生变化",
+        "继续把10:51:54作为已确认部署时刻"
+      ]
+    },
+    {
+      "id": "date_specific_outcomes",
+      "focus": "日期不同的独立结果及维护/统计不能合并原因",
+      "logs": [
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "10-18、10-19 的记录已恢复。10-15、10-16 查无原始记录，当前无数据，原因未确定。"
+        },
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "Nightly Maintenance dry-run 完成，无写入。Daily Stats 独立运行失败，缺少 stats 字段；尚未修复。"
+        }
+      ],
+      "required": [
+        "两个日期组不同状态",
+        "无数据原因未确定",
+        "维护dry-run无写入",
+        "Daily Stats失败及未修复"
+      ],
+      "forbidden": [
+        "四天均恢复",
+        "维护完成所以统计成功",
+        "无证据解释无数据原因"
+      ]
+    },
+    {
+      "id": "insufficient_evidence",
+      "focus": "零事件不能证明取消机制生效",
+      "logs": [
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "窗口内自然请求 15 条，15/15 valid=true，均有 started/completed。延迟 p50=1908ms，max=4572ms；max 不能当 p95。"
+        },
+        {
+          "role": "assistant",
+          "source": "conversation",
+          "text": "取消/abort 相关事件 0 条，无 cancel_stage 字段。没有迟到事件不能证明取消被触发或已生效。结论 PENDING / INSUFFICIENT_EVIDENCE。"
+        }
+      ],
+      "required": [
+        "样本窗口口径",
+        "max非p95",
+        "取消证据不足",
+        "零事件不能证明机制有效"
+      ],
+      "forbidden": [
+        "取消修复已PASS",
+        "把4572ms称为p95"
+      ]
+    }
+  ]
+}
