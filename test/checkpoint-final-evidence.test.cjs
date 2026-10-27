@@ -6,7 +6,7 @@ const finish=(input,facts)=>f.completeFinalEvidence(modelPlanResponse(planRespon
 test("final extraction transmits complete input once and directly renders only final literal evidence",()=>{
  const input=textInput("**Assistant:** 旧判断：无限回填。每日上限十条。最终确认：只处理当日队列。\n\n"+ "冗长过程。".repeat(1000));
  const packet=f.buildFinalEvidencePrompt(input,45000),wire=JSON.parse(packet.prompt);
- assert.equal(wire.stage,"final_evidence");assert.equal(wire.protocol,"checkpoint-source-facts-v14");
+ assert.equal(wire.stage,"final_evidence");assert.equal(wire.protocol,"checkpoint-source-facts-v15");
  assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.text)),input.sources.flatMap(s=>s.units.map(u=>u.text)));
  assert.equal(wire.candidate_rows,undefined);assert.match(packet.system,/没有第二轮/);
  const response=finish(input,[{unit:0,quote:"每日上限十条。",facet:"constraint"},

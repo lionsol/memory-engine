@@ -135,8 +135,9 @@ test("llmComplete preserves non-2xx error-body behavior", async () => {
 });
 
 
-const { factResponse, planResponse, candidateSelectionResponse, providerResponse, textInput, candidateWire, modelPlanResponse } = require("./checkpoint-fact-fixture.cjs");
-const { validateAndRenderFacts, FINAL_EVIDENCE, buildFactInput } = require("../lib/checkpoint/ordinary-summary-facts");
+const {textInput}=require("./checkpoint-fact-fixture.cjs");
+const {catalogReply}=require("./checkpoint-catalog-fixture.cjs");
+const {validateAndRenderFacts,CATALOG_SELECTION,buildFactInput}=require("../lib/checkpoint/ordinary-summary-facts");
 async function nightlyFixture(handler,action,overrides={}){
  const config={maxInputChars:45000,maxTokens:4096,timeoutMs:120000,...overrides},calls=[];
  const patches=[
@@ -146,119 +147,108 @@ async function nightlyFixture(handler,action,overrides={}){
   [checkpointConfig,"getDSBaseUrl",()=>"https://ds.example"],[checkpointConfig,"getSFBaseUrl",()=>"https://sf.example/v1"],
   [https,"request",createRequestStub(request=>{
    const body=JSON.parse(request.req.body);calls.push({url:String(request.url),body,timeout:request.req.timeoutMs});
-   handler({...request,body,input:candidateWire(JSON.parse(body.messages.at(-1).content))},calls.length);
+   handler({...request,body,input:JSON.parse(body.messages.at(-1).content)},calls.length);
   })]
  ];
  async function apply(i){if(i===patches.length)return action(calls);const[o,k,v]=patches[i];return withPatched(o,k,v,()=>apply(i+1));}
  return apply(0);
 }
-function content(callback,value,finish_reason="stop"){emitJsonResponse(callback,{choices:[{message:{content:typeof value==="string"?value:JSON.stringify(value?.events?modelPlanResponse(value):value)},finish_reason}]});}
-const reply=(callback,input)=>content(callback,providerResponse(input));
-test("ordinary flow directly extracts final literal evidence in one successful call",async()=>{
+function content(callback,value,finish_reason="stop"){emitJsonResponse(callback,{choices:[{message:{content:typeof value==="string"?value:JSON.stringify(value)},finish_reason}]});}
+const reply=(callback,input,facts)=>content(callback,catalogReply(input,facts));
+test("ordinary flow selects catalog IDs and annotations in one successful call",async()=>{
  const input=textInput("**Assistant:** 最终原因：令牌过期。\n\n归档已完成。");
  await nightlyFixture(({callback,input})=>{
-  assert.equal(input.stage,"final_evidence");
-  const p=planResponse(input);p.events[0].evidence[0].kind="correction";p.events[0].evidence[0].facet="cause";content(callback,p);
+  assert.equal(input.stage,"catalog_select");
+  reply(callback,input,[{unit:0,quote:"最终原因：令牌过期。",kind:"correction",facet:"cause"},{unit:1,quote:"归档已完成。"}]);
  },async calls=>{
   const response=await checkpointLlm.llmNightlyExtract(input);
-  assert.equal(calls.length,1);
-  assert.equal(calls[0].url,"https://ds.example/chat/completions");
+  assert.equal(calls.length,1);assert.equal(calls[0].url,"https://ds.example/chat/completions");
   const wire=JSON.parse(calls[0].body.messages[1].content);
-  assert.deepEqual(wire.sources.flatMap(s=>s.units.map(u=>u.text)),input.sources.flatMap(s=>s.units.map(u=>u.text)));
-  assert.equal(wire.fact_contract,undefined);assert.equal(wire.candidate_rows,undefined);
+  assert.deepEqual(wire.units.map(r=>r[5].map(p=>p[0]).join("")),input.sources.flatMap(s=>s.units.map(u=>u.text)));
   assert.equal(response.facts[0].kind,"correction");assert.equal(response.facts[0].facet,"cause");
-  assert.ok(response[FINAL_EVIDENCE]);
+  assert.ok(response[CATALOG_SELECTION]);
   const result=validateAndRenderFacts(response,input);
-  assert.equal(result.validation.final_evidence_selection_applied,true);
+  assert.equal(result.validation.catalog_selection_applied,true);
   assert.equal(result.validation.model_final_selection_verified,false);
   assert.equal(calls[0].body.max_tokens,4096);assert.equal(calls[0].timeout,120000);
  });
 });
-test("transport fallback uses the same complete input and finishes without a selector",async()=>{
+test("transport fallback uses the same complete catalog and never adds another selection",async()=>{
  await nightlyFixture(({callback,input},n)=>{if(n===1)return emitJsonResponse(callback,{error:{message:"primary unavailable"}});reply(callback,input);},async calls=>{
-  const input=textInput("**Assistant:** 最终完成。"),response=await checkpointLlm.llmNightlyExtract(input);
-  assert.equal(validateAndRenderFacts(response,input).validation.final_evidence_selection_applied,true);
+  const input=textInput("**Assistant:** 最终完成。");
+  assert.equal(validateAndRenderFacts(await checkpointLlm.llmNightlyExtract(input),input).validation.catalog_selection_applied,true);
   assert.deepEqual(calls.map(c=>c.url),["https://ds.example/chat/completions","https://sf.example/chat/completions"]);
   assert.deepEqual(calls[0].body.messages,calls[1].body.messages);
  });
 });
-for(const fallbackProvider of ["none","deepseek"])test("first transport has no redundant fallback for "+fallbackProvider,async()=>{
+for(const fallbackProvider of ["none","deepseek"])test("no redundant fallback for "+fallbackProvider,async()=>{
  await nightlyFixture(({callback})=>emitJsonResponse(callback,{error:{message:"failed"}}),async calls=>{
   assert.equal((await checkpointLlm.llmNightlyExtract(textInput("body"))).error,"llm超时");assert.equal(calls.length,1);
  },{fallbackProvider});
 });
-test("two unavailable candidate transports return unavailable without a selection request",async()=>{
+test("two unavailable transports return unavailable without repair",async()=>{
  await nightlyFixture(({callback})=>emitJsonResponse(callback,{error:{message:"failed"}}),async calls=>{
   assert.equal((await checkpointLlm.llmNightlyExtract(textInput("body"))).error,"llm超时");assert.equal(calls.length,2);
  });
 });
-for(const raw of ["plain private text",'prefix {"events":[]} suffix','{"events":'])test("malformed candidate JSON is refused without retry: "+raw.slice(0,10),async()=>{
+for(const raw of ["plain private text",'prefix {"selected":[]} suffix','{"selected":'])test("malformed JSON is refused without retry: "+raw.slice(0,10),async()=>{
  const {entries,logger}=createLogger();
  await withPatchedConsole(logger,()=>nightlyFixture(({callback})=>content(callback,raw),async calls=>{
   await assert.rejects(checkpointLlm.llmNightlyExtract(textInput("private body")),{code:"summary_response_json"});assert.equal(calls.length,1);
  }));
  assert.ok(entries.every(e=>!e.message.includes(raw)&&!e.message.includes("private body")));
 });
-for(const mode of ["old_facts","object_plan","missing_event","bad_ref","bad_facet","topic","old_protocol"])test("invalid candidates stop before ID selection: "+mode,async()=>{
+for(const mode of ["unknown","duplicate","empty","extra_fields","old_literals","bad_facet","bad_kind","old_protocol","overlap","budget","length"])test("invalid selection stops after one call: "+mode,async()=>{
+ const input=textInput("**Assistant:** "+(mode==="budget"?"背景。".repeat(1900):"甲完成。乙受限。"));
  await nightlyFixture(({callback,input})=>{
-  if(mode==="old_facts")return content(callback,factResponse(input));
-  if(mode==="object_plan")return content(callback,JSON.stringify(planResponse(input))); // Raw object wire must not be auto-encoded.
-  const p=planResponse(input);
-  if(mode==="missing_event")delete p.events;if(mode==="bad_ref")p.events[0].evidence[0].unit=999;
-  if(mode==="bad_facet")p.events[0].evidence[0].facet="correction";if(mode==="topic")p.events[0].topic="bad";
-  if(mode==="old_protocol")p.protocol="checkpoint-source-facts-v10";content(callback,p);
+  let response=catalogReply(input);
+  if(mode==="unknown")response.selected=[["unknown"]];
+  if(mode==="duplicate")response.selected=[["u0"],["u0"]];
+  if(mode==="empty")response.selected=[];
+  if(mode==="extra_fields")response.quote="伪造";
+  if(mode==="old_literals")response={protocol:input.protocol,target_date:input.target_date,events:[["s0",[[0,"甲完成。"]]]]};
+  if(mode==="bad_facet")response.selected=[["u0","correction"]];
+  if(mode==="bad_kind")response.selected=[["u0","cause","constraint"]];
+  if(mode==="old_protocol")response.protocol="checkpoint-source-facts-v14";
+  if(mode==="overlap")response.selected=[["u0"],["u0_1"]];
+  content(callback,response,mode==="length"?"length":"stop");
  },async calls=>{
-  const code=["bad_ref","bad_facet"].includes(mode)?"summary_plan_evidence":"summary_plan_structure";
-  await assert.rejects(checkpointLlm.llmNightlyExtract(textInput("**Assistant:** 完成。")),{code});assert.equal(calls.length,1);
- });
-});
-for(const mode of ["budget","length","selector"])test("invalid final output has no selector or retry: "+mode,async()=>{
- const input=textInput("**Assistant:** "+(mode==="budget"?"背景。".repeat(1900):"最终正常。"));
- await nightlyFixture(({callback,input})=>{
-  content(callback,mode==="selector"?{selected_candidate_ids:["c1"],omissions:[]}:planResponse(input),mode==="length"?"length":"stop");
- },async calls=>{
-  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:({budget:"summary_budget",length:"output_budget",selector:"summary_plan_structure"})[mode]});
+  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:({budget:"summary_budget",length:"output_budget",overlap:"summary_catalog_overlap"})[mode]||"summary_catalog_selection"});
   assert.equal(calls.length,1);
  });
 });
-test("only final selected excerpts are rendered; omitted long background is never expanded",async()=>{
+test("unselected long background is never expanded into the body",async()=>{
  const input=textInput("**Assistant:** "+"过时背景。".repeat(1200)+"\n\n最终结果正常。");
- await nightlyFixture(({callback,input})=>content(callback,planResponse(input,[{unit:1,quote:"最终结果正常。"}])),async calls=>{
+ await nightlyFixture(({callback,input})=>reply(callback,input,[{unit:1,quote:"最终结果正常。"}]),async calls=>{
   const result=validateAndRenderFacts(await checkpointLlm.llmNightlyExtract(input),input);
   assert.equal(calls.length,1);assert.match(result.episode_summary,/最终结果正常/);assert.doesNotMatch(result.episode_summary,/过时背景/);
-  assert.equal(result.validation.final_evidence_count,1);
-  assert.equal(result.validation.candidate_omissions_complete,undefined);
+  assert.deepEqual(result.validation.catalog_selected_ids,["u1"]);
  });
 });
-test("final evidence must still cover every source",async()=>{
+test("selected IDs must cover every source",async()=>{
  const input=buildFactInput([{source:"conversation",text:"**Assistant:** 甲完成。"},{source:"conversation",text:"**Assistant:** 乙正常。"}],"2026-10-20");
- await nightlyFixture(({callback,input})=>content(callback,planResponse(input,[{unit:0,quote:"甲完成。"}])),async calls=>{
+ await nightlyFixture(({callback,input})=>reply(callback,input,[{unit:0,quote:"甲完成。"}]),async calls=>{
   await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_plan_source_coverage"});assert.equal(calls.length,1);
  });
 });
-test("request token/time limits remain per call without a new persistent configuration",async()=>{
+test("request limits remain per call without persistent config",async()=>{
  await nightlyFixture(({callback,input})=>reply(callback,input),async calls=>{
   await checkpointLlm.llmNightlyExtract(textInput("body"));
   for(const c of calls){assert.equal(c.body.max_tokens,2048);assert.equal(c.timeout,90000);}
  },{maxTokens:2048,timeoutMs:90000});
 });
-test("legacy input cannot trigger the first provider request",async()=>{
- await nightlyFixture(()=>assert.fail("must not call"),async calls=>{
-  const input=textInput("body");input.protocol="checkpoint-source-facts-v10";
-  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:"summary_input_protocol"});assert.equal(calls.length,0);
+test("old input protocol and oversized catalog fail before transport",async()=>{
+ for(const mode of ["old","large"])await nightlyFixture(()=>assert.fail("must not call"),async calls=>{
+  const input=textInput(mode==="large"?"x".repeat(50000):"body");if(mode==="old")input.protocol="old";
+  await assert.rejects(checkpointLlm.llmNightlyExtract(input),{code:mode==="old"?"summary_input_protocol":"summary_catalog_input_budget"});assert.equal(calls.length,0);
  });
 });
-test("incomplete input budget stops before the first request",async()=>{
- await nightlyFixture(()=>assert.fail("must not call"),async calls=>{
-  await assert.rejects(checkpointLlm.llmNightlyExtract(textInput("x".repeat(50000))),{code:"summary_input_budget"});assert.equal(calls.length,0);
- });
-});
-test("first response token/envelope limits cannot trigger a retry or selector",async()=>{
+test("response token/envelope limits cannot trigger retry",async()=>{
  for(const mode of ["length","envelope"])await nightlyFixture(({callback})=>content(callback,mode==="envelope"?"x".repeat(32769):"{}",mode==="length"?"length":"stop"),async calls=>{
   await assert.rejects(checkpointLlm.llmNightlyExtract(textInput("body")),{code:"output_budget"});assert.equal(calls.length,1);
  });
 });
-test("diagnostics preserve provider/timing without source text or raw plans",async()=>{
+test("diagnostics retain provider and timing without private input or raw responses",async()=>{
  const {entries,logger}=createLogger();
  await withPatchedConsole(logger,()=>nightlyFixture(({callback,input},n)=>{
   if(n===1)return emitJsonResponse(callback,{error:{message:"ds failed"}});reply(callback,input);

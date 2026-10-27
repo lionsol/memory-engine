@@ -7,7 +7,8 @@ const {dedupeCollectedLogs}=require("../lib/checkpoint/raw-log-dedupe");
 const {withRuntime}=require("../lib/checkpoint/runtime");
 const llm=require("../lib/checkpoint/llm"),config=require("../lib/checkpoint/config");
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
-const {factResponse,planResponse,candidateSelectionResponse,candidateWire,modelPlanResponse}=require("./checkpoint-fact-fixture.cjs");
+const {factResponse}=require("./checkpoint-fact-fixture.cjs");
+const {catalogReply,sourceView}=require("./checkpoint-catalog-fixture.cjs");
 let currentInput;
 // The subject is the real bin, reader and publisher. Unrelated confidence DB writes
 // are counted at their boundary; every filesystem target is inside a fresh temp root.
@@ -91,12 +92,12 @@ test("aligned budget sends every full entry once and renders final short scopes"
     assert.match(fs.readFileSync(path,"utf8"),/long AAAAA/);
    },(request,callback)=>{
     requests++;const prompt=request.body.messages.at(-1).content;
-    const sent=candidateWire(JSON.parse(prompt));
-    assert.equal(sent.stage,"final_evidence");
+    const sent=sourceView(JSON.parse(prompt));
+    assert.equal(sent.stage,"catalog_select");
     for(const e of state.entries)assert.ok(sent.sources.some(s=>s.units.some(u=>u.text===e.text.slice("**User:** ".length))),"full entry missing");
     assert.equal(sent.candidate_rows,undefined);
     assert.equal(request.body.max_tokens,4096);
-    const response=modelPlanResponse(planResponse(currentInput,answer().facts));
+    const response=catalogReply(sent,answer().facts);
     emitJson(callback,completion(JSON.stringify(response)),{bytewise:true});
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
@@ -125,8 +126,8 @@ test("oversized final extraction stops after one fake HTTP call and preserves th
     const response=factResponse(currentInput);
     response.facts[0].facet="constraint";
     response.facts[0].memory_type="event";
-    const packet=candidateWire(JSON.parse(request.body.messages.at(-1).content));
-    emitJson(callback,completion(JSON.stringify(modelPlanResponse(planResponse(currentInput,response.facts)))));
+    const packet=sourceView(JSON.parse(request.body.messages.at(-1).content));
+    emitJson(callback,completion(JSON.stringify(catalogReply(packet,response.facts))));
    });
   }finally{config.resolveCheckpointLlmRequestConfig=oldRequest;config.resolveCheckpointProviders=oldProviders;}
   assert.equal(requests,1);

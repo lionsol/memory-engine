@@ -110,9 +110,9 @@ test("oversized selected body preserves the old episode and writes no generated 
 
 
 const checkpointLlm=require("../lib/checkpoint/llm");
-const {modelPlanResponse}=require("./checkpoint-fact-fixture.cjs");
+const {catalogReply}=require("./checkpoint-catalog-fixture.cjs");
 const {withFakeHttps,emitJson,completion}=require("./checkpoint-summary-http-fixture.cjs");
-const providerJson=value=>JSON.stringify(modelPlanResponse(value));
+const providerJson=value=>JSON.stringify(value);
 for(const mode of ["ok","invalid_scope","extra_fields","over_budget","mutate_kind","concurrent_episode","old_selector"]){
  test("single final extraction preserves publication gates: "+mode,async()=>{
   await fixture(async({root,path})=>{
@@ -137,19 +137,19 @@ for(const mode of ["ok","invalid_scope","extra_fields","over_budget","mutate_kin
      assert.equal(fs.existsSync(join(root,"generated")),false);
      assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
      if(mode!=="concurrent_episode")assert.equal(result.reason,({
-      invalid_scope:"summary_plan_evidence",over_budget:"summary_budget",mutate_kind:"summary_plan_fact_scope",
-      extra_fields:"summary_plan_structure",old_selector:"summary_plan_structure"})[mode]);
+      invalid_scope:"summary_catalog_selection",over_budget:"summary_budget",mutate_kind:"summary_plan_fact_scope",
+      extra_fields:"summary_catalog_selection",old_selector:"summary_catalog_selection"})[mode]);
     }
    },(request,callback)=>{
     const packet=JSON.parse(request.body.messages.at(-1).content);
-    assert.equal(packet.stage,"final_evidence");
+    assert.equal(packet.stage,"catalog_select");
     assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");assert.equal(fs.existsSync(join(root,"generated")),false);
-    const response={protocol:packet.protocol,target_date:packet.target_date,events:[
-     {id:"final",source_id:"s0",evidence:[{unit:1,quote:"最终结果：决定停止部署。",facet:"outcome",kind:"decision"},
-      {unit:2,quote:"每日上限十条。",facet:"constraint"}]}]};
-    if(mode==="invalid_scope")response.events[0].evidence[0].unit=999;
+    let response=catalogReply(packet,[
+     {unit:1,quote:"最终结果：决定停止部署。",facet:"outcome",kind:"decision"},
+     {unit:2,quote:"每日上限十条。",facet:"constraint"}]);
+    if(mode==="invalid_scope")response.selected[0][0]="u999";
     if(mode==="extra_fields")response.configs=[];
-    if(mode==="over_budget")response.events[0].evidence.unshift({unit:0,quote:packet.sources[0].units[0].text,facet:"outcome"});
+    if(mode==="over_budget")response=catalogReply(packet);
     if(mode==="concurrent_episode")fs.writeFileSync(path,"CONCURRENT SUMMARY");
     emitJson(callback,completion(mode==="old_selector"?JSON.stringify({selected_candidate_ids:["c1"],omissions:[]}):providerJson(response)));
    });
@@ -180,17 +180,18 @@ for(const mode of ["qualified","mixed","overlap","table","bare_cell","mutate_cel
      if(mode==="mixed"){assert.match(body,/每日上限十条/);assert.match(body,/只处理当日队列/);assert.doesNotMatch(body,/无限回填|未选的说明/);}
      if(mode==="table"){assert.match(body,/p50.*max/);assert.ok(body.includes(row));assert.doesNotMatch(body,/未选行/);}
     }else{
-     assert.equal(result.reason,({overlap:"summary_plan_evidence_overlap",bare_cell:"summary_plan_table_row_scope",
-      mutate_cell:"summary_table_row_scope",unknown_field:"summary_plan_structure"})[mode]);
+     assert.equal(result.reason,({overlap:"summary_catalog_overlap",bare_cell:"summary_catalog_selection",
+      mutate_cell:"summary_table_row_scope",unknown_field:"summary_catalog_selection"})[mode]);
      assert.equal(fs.readFileSync(path,"utf8"),"PREVIOUS EPISODE");assert.equal(fs.existsSync(join(root,"generated")),false);
      assert.deepEqual(result.writes,{file_written:0,confidence_bound:0,pending:0,failed:0});
     }
    },(request,callback)=>{
     const packet=JSON.parse(request.body.messages.at(-1).content);
-    const quotes=isTable?[mode==="bare_cell"?"333":row]:mode==="qualified"?[qualified]:
-     [mode==="overlap"?"每日上限十条。最终确认：只处理当日队列。":"每日上限十条。","最终确认：只处理当日队列。"];
-    const response={protocol:packet.protocol,target_date:packet.target_date,events:[
-     {id:"final",source_id:"s0",evidence:quotes.map(quote=>({unit:0,quote,facet:"outcome"}))}]};
+    const quotes=isTable?[row]:mode==="qualified"?[qualified]:
+     ["每日上限十条。","最终确认：只处理当日队列。"];
+    const response=catalogReply(packet,quotes.map(quote=>({unit:0,quote,facet:"outcome"})));
+    if(mode==="overlap")response.selected=[["u0"],["u0_2"]];
+    if(mode==="bare_cell")response.facts=[{unit:0,quote:"333"}];
     if(mode==="unknown_field")response.facts=[];
     emitJson(callback,completion(providerJson(response)));
    });
