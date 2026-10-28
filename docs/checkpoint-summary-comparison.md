@@ -1,13 +1,104 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-28（Asia/Shanghai）。状态：已新增分类多次摘要及可配置20000字实验预算，仅离线机制验证；既有真实语义失败不变，摘要事实错误尚未解决。
+日期：2026-10-28（Asia/Shanghai）。状态：分类多次摘要已真实请求5次，10224字在20000预算内；部署时点明确撤回仍失败，FAIL_RETRACTED_DEPLOYMENT_TIME。
 v2直接摘要历史执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
 用户已同意“原文保留＋事项最终状态＋带引用的生成式摘要”方向。
 当前普通checkpoint仍为v15，既有真实验收失败裁决不变。
 
-## 分类多次摘要候选：提示词与流程已实现，尚未真实验证
+## 分类多次摘要真实验证：预算通过，明确更正仍失败
+
+执行基线HEAD：`e72a2c7f5efee6e96d02b6850682b6a5032a5b0d`。
+2026-10-28 10:14:22–10:21:32（Asia/Shanghai），共5次独立真实请求：
+分类1次、四类摘要各1次。模型均为deepseek-v4-pro，HTTP 200、finish_reason stop；
+temperature 0.1、thinking disabled、max_tokens 16384、单次timeout上限120000ms，
+response_format=json_object，总正文预算20000。未重试、回退、最终重写、发布或部署。
+
+完整输入仍为同一份193段smart-add落盘对话，未加入人工参考或工具执行轨迹。
+分类31915字符；四类实际请求分别34137/33477/33376/33326字符。
+每次均保留完整SOURCE，分类阅读锚点没有用于裁剪输入。
+
+### 两次接口阻断与兼容修正
+
+这不是未经修改源码的一次干净端到端成功，必须保留以下执行过程：
+
+1. 原始HEAD的分类回复包含有效4类，但回显stage=categorize、max_categories=4，
+   因额外字段被category_schema拒收。原始失败和原回复保留。
+2. 增加精确请求元数据回显兼容：仅允许这两个字段与实际请求值完全相同，
+   未知字段、错误值、绑定/引用问题仍拒绝；分类内容没有人工改动。
+   复用原分类，仅请求c1/c2。c1通过，c2因11项均省略空corrects而被comparison_schema拒收。
+3. 缺失corrects现在表示“没有标注的更正引用”，规范化为[]；
+   不从正文猜测更正、不证明原文无更正，显式null/字符串/错误引用仍拒绝。
+   原始模型文本保存在raw，只有结构化副本补空注释。
+   复用既有分类与c1/c2，只新请求c3/c4，累计真实请求仍为5次。
+
+两次兼容修正没有改变提示词、分类范围、正文、evidence或已有corrects内容。
+各阶段冻结HEAD加源码diff哈希、模块/测试哈希、输入文件哈希和执行器；
+重放逐份核对原始request及HTTP回复哈希，确认没有重新抽样或偷偷改写模型结果。
+最终离线重放5份原始回复，可逐字重现10224字正文和整个pipeline结果。
+
+### 预算与事实分开裁决
+
+最终程序状态READY_FOR_REVIEW，仅表示结构/引用/总预算通过。
+正文10224 UTF-16字符、41项，位于20000预算内。
+人工语义裁决：FAIL_RETRACTED_DEPLOYMENT_TIME。
+
+| 分类 | 事项数 | text字段字符（不含标题/引用） |
+| --- | ---: | ---: |
+| Checkpoint与夜间维护诊断及修复 | 17 | 4788 |
+| CORE-IDENTITY-BACKFILL-632验收 | 11 | 1387 |
+| CORE-SOURCE-DOC-IDENTITY-BACKFILL-1241验收 | 7 | 1381 |
+| AutoRecall自然样本证据核验 | 6 | 1316 |
+
+c1第7项仍写“部署副本在10:51:54被整体替换（目录mtime一致，全新安装）”，
+随后附“mtime不能单独认定部署时刻”，corrects=[]。
+该项同时引用旧断言s0.t5.p1、用户质疑s0.t8.p6和明确撤回s0.t9.p3。
+旧断言和更正在同一类别、同一完整输入中，甚至均被引用，仍没有完成撤回。
+因此不能把这次错误归因于分类切断上下文，也不能靠补空注释当成语义修复。
+
+自然样本的窗口、LIMIT200已满、15条、source/trigger/valid、started/completed、
+无效1条排除、14→15未确证、FTS非0与取消PENDING等限定保留。
+ID/identity新路径和旧误判撤回、A/B验收边界及49条尚无自然修复证据也保留。
+分类锚点未包含三份健康检查的10段，但c1仍从完整SOURCE引用其结果，
+说明锚点遗漏不等同于这些结果实际缺失。
+残差894/1908/908/47.6%仍照录，统计定义未明，不能认证。
+c1另有未标清历史范围的“1830按每日10条需183天、追不上”，
+与后面的“1830不能当新版可回填队列”缺乏归并；
+这一点列为辅助复核意见，不替代上述明确部署时点失败。
+误建0字节文件删除仍遗漏，大量审计步骤、hash及报告路径仍被单列或重复，
+所以预算通过不等于信息取舍或覆盖已通过。
+
+5次合计prompt/completion/total tokens=79298/8637/87935。
+相比历史Pro单次20786 total约4.23倍，仅为两次实际用量描述；
+提示词、调用流程、response_format和预算同时变化，不能单独归因于分类。
+该已知开发样本尚未证明语义优势，holdout未执行。
+后续应聚焦同一事项内部的更正归并，而非继续用长度/引用校验代替事实验收。
+
+### 留档与检查
+
+私有操作证据均在 `/home/lionsol/.openclaw/ops/memory-engine/`：
+
+- 初次失败：`checkpoint-categorized-e72a2c7-20261028-evidence/`；
+  元数据兼容后部分执行：`checkpoint-categorized-e72a2c7-20261028-continuation-evidence/`；
+  完整组合结果：`checkpoint-categorized-e72a2c7-20261028-complete-evidence/`。
+- 完整目录包含5份request/provider-response/provider-content、原始分类、
+  完整SOURCE、冻结代码patch、body、response、引用证据、pipeline及audit。
+- 人工复核：`checkpoint-categorized-e72a2c7-20261028-review.json`。
+- 执行器：同前缀`.cjs`、`-continuation.cjs`、`-complete.cjs`；
+  最后执行器SHA-256为
+  `2c12ef648fc068da515a0368af7a70f4853164a504e6e8ecefe354e7fd24218f`。
+- 最终运行源码patch SHA-256：
+  `0c63fe8a7e2944acc559c64d857d08c3aae8257904fb8fa20fe1231d63c3dd63`；
+  正文SHA-256：
+  `3bd5749334061c24793028fa2a457d087381a70cee635cf24925e6665b57ba75`。
+
+新增2项兼容机制测试，分类测试13项、相关测试合计88项通过；
+静态检查887、test-integrity408及git diff --check通过。
+原始会话文件、episode及生产4096 token配置未变，未接入生产。
+预算PASS与语义FAIL分开保留，不把READY_FOR_REVIEW当publishable。
+
+## 分类候选初始实现（真实验证前）
 
 用户明确要求优化提示词并允许分类多次摘要后，新增隔离入口
 `lib/checkpoint/summary-categorized-lab.cjs`。此前单次提示词和Pro对照原样保留，
@@ -37,9 +128,9 @@ v2直接摘要历史执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
   hash、路径、代码行和重复核对一般留在原始引用中。
 - 保留用户请求/规则、助手报告与独立核实的区别，不把较晚陈述自动当更正，
   不把缺字段/零事件当机制生效，不扩大局部只读的范围。
-- 两阶段均要求仅返回JSON、不加围栏；请求元数据提供
+- 初始实现时两阶段均要求仅返回JSON、不加围栏；请求元数据提供
   `responseFormat: {type: "json_object"}`，调用方适配为provider的response_format。
-  未新增宽松解析或自动补字段。
+  当时未新增兼容解析；真实执行后新增的精确元数据回显及空更正注释兼容见上文。
 
 ### 放宽实验预算
 

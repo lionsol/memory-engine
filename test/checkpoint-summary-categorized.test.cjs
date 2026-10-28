@@ -50,12 +50,27 @@ test("classification is structural guidance, allows shared source anchors, and c
  for(const change of [
   p=>p.binding="wrong",p=>p.categories=[],p=>p.categories[1].id=p.categories[0].id,
   p=>p.categories[0].focus_units=["missing"],p=>p.categories[0].focus_units=[],
-  p=>p.categories[0].title="\ud800",p=>p.categories[0].extra=true,p=>p.stage="categorize"
+  p=>p.categories[0].title="\ud800",p=>p.categories[0].extra=true,p=>p.stage="wrong"
  ]){
   const bad=structuredClone(plan);change(bad);assert.throws(()=>cat.validateCategoryPlan(input,bad));
  }
  assert.throws(()=>cat.validateCategoryPlan(input,plan,{maxCategories:1}),{code:"category_schema"});
  assert.throws(()=>cat.buildCategorySummaryPrompt(input,plan,"unknown"),{code:"category_unknown"});
+});
+test("exact classification metadata echoes are harmless; mismatches or unknown fields remain rejected",async()=>{
+ const {input,plan,summaries}=fixture();
+ const echoed={...structuredClone(plan),stage:"categorize",max_categories:4};
+ assert.deepEqual(cat.validateCategoryPlan(input,echoed),plan);
+ assert.equal(echoed.stage,"categorize");assert.equal(echoed.max_categories,4);
+ for(const changed of [{...echoed,stage:"summarize_category"},{...echoed,max_categories:5},{...echoed,extra:true}]){
+  assert.throws(()=>cat.validateCategoryPlan(input,changed));
+ }
+ const raw=JSON.stringify(echoed);let calls=0;
+ const result=await cat.runCategorized(input,async p=>{
+  calls++;return p.stage==="categorize"?raw:JSON.stringify(summaries.find(s=>s.category_id===p.categoryId).response);
+ });
+ assert.equal(calls,3);assert.equal(result.status,"READY_FOR_REVIEW");
+ assert.equal(result.record.plan_raw,raw);assert.deepEqual(result.record.plan,plan);
 });
 test("one classify call plus one per category, without a final rewriting request",async()=>{
  const {input,plan,summaries}=fixture(),calls=[];
@@ -73,6 +88,24 @@ test("one classify call plus one per category, without a final rewriting request
  for(const s of summaries)for(const row of s.response.items)assert.ok(result.body.includes(row.text));
  assert.deepEqual(result.record.source,input);assert.deepEqual(result.record.plan,plan);
  assert.equal(result.record.categories[0].raw,JSON.stringify(summaries[0].response));
+});
+test("omitted correction annotations default to no marked references without changing prose or certifying semantics",async()=>{
+ const {input,plan,summaries}=fixture();
+ const wire=structuredClone(summaries[1].response);delete wire.items[0].corrects;
+ const raw=JSON.stringify(wire);
+ const result=await cat.runCategorized(input,async p=>JSON.stringify(p.stage==="categorize"?plan:
+  p.categoryId==="c1"?summaries[0].response:wire));
+ assert.equal(result.status,"READY_FOR_REVIEW");
+ assert.equal(result.record.categories[1].raw,raw);
+ assert.equal(Object.hasOwn(wire.items[0],"corrects"),false);
+ assert.deepEqual(result.record.categories[1].response.items[0].corrects,[]);
+ assert.equal(result.record.categories[1].response.items[0].text,wire.items[0].text);
+ assert.equal(result.validation.correction_resolution,"NOT_EVALUATED");
+ for(const change of [w=>w.items[0].corrects=null,w=>w.items[0].corrects="none",
+  w=>w.items[0].evidence=[],w=>w.items[0].extra="x",w=>w.binding="wrong"]){
+  const bad=structuredClone(wire);change(bad);
+  assert.throws(()=>cat.projectCategorySummaries(input,plan,[summaries[0],{category_id:"c2",response:bad}]));
+ }
 });
 test("global citations, correction references and same-titled independent items are retained without merging",()=>{
  const {input,plan,summaries}=fixture();
