@@ -1,11 +1,107 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-28（Asia/Shanghai）。状态：分类多次摘要已真实请求5次，10224字在20000预算内；部署时点明确撤回仍失败，FAIL_RETRACTED_DEPLOYMENT_TIME。
+日期：2026-10-28（Asia/Shanghai）。状态：Codex CLI已跑通完整摘要，3681字且部署时点撤回正确；自然样本具体资格遗漏，FAIL_REQUIRED_QUALIFICATIONS，尚未通过完整事实验收。
 v2直接摘要历史执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
 用户已同意“原文保留＋事项最终状态＋带引用的生成式摘要”方向。
 当前普通checkpoint仍为v15，既有真实验收失败裁决不变。
+
+## Codex CLI 隔离摘要：调用跑通，撤回处理改善，必要资格仍遗漏
+
+执行HEAD：`104cc0abc7a7a0c27c331ab328f7c4a42dade434`。
+成功运行时间：2026-10-28 12:08:00–12:09:36（Asia/Shanghai）。
+沿用本机Codex CLI 0.163.0配置的模型名gpt-6-luna及xhigh推理强度，
+通过已有ChatGPT登录运行。该模型名由CLI参数指定，没有原始provider HTTP响应可独立核对。
+
+此次是完整原文直接摘要：调用既有buildPrompt(input,"direct")，预算20000、
+软目标14000，再用runDirect/validateSummary校验实际结果；
+不是分类多次摘要的只换模型对照。
+193段smart-add落盘对话保持不变，原始工具事件仍为0。
+基础提示/数据32353字符，加封闭文本任务包装后stdin共32453字符。
+未提供人工参考、旧ledger、前次摘要或人工答案。
+
+CLI在空目录运行，ignore-user-config/ignore-rules/ephemeral、
+read-only、project_doc_max_bytes=0，并关闭命令、搜索、协作、
+hooks、memory及远程插件等可配置功能。
+只从stdin提供原文，使用output-schema约束既有topic/text/evidence/corrects结构。
+实际成功日志只有thread.started、turn.started、一个agent_message和turn.completed，
+工具事件0、错误事件0、退出码0。CLI自身仍有基础harness，
+不能把这些隔离措施等同于完全复刻普通API的system环境。
+
+### 启动及网络失败如实计入
+
+实际启动CLI共3次，不能写成总共只请求了一次API：
+
+1. 首次尝试覆盖内置OpenAI provider的重试配置，被本版本本地配置检查拒绝，
+   没有turn.started。旧错误和输入保留。
+2. 改用内置provider后，workspace routing discovery timed out，
+   WebSocket多次重连并回退HTTPS后仍未完成，最终超时终止。
+   无代理的公开连接探测中chatgpt.com/api.openai.com超时，DeepSeek返回401；
+   未由此推断具体DNS故障原因。
+3. 检查到本机交互式shell已有代理，但DevSpace进程未继承。
+   仅向CLI子进程传入已有HTTP(S)_PROXY配置后成功；
+   没有更改系统代理、shell配置、OpenClaw或项目模型配置。
+
+内置provider不允许上述覆盖，失败运行中可见CLI内部重连；
+因此实际provider网络请求数不可观察，不能声称无内部重试或“只有1次HTTP请求”。
+本轮只观察到1个成功完成的turn，前两次失败不算语义质量证据。
+成功运行input_tokens=26464，output_tokens=10662，
+其中reasoning_output_tokens=7754；input+output为37126，不另叠加reasoning子项。
+
+### 分项裁决
+
+结构、绑定、引用ID、预算通过：原始JSON6234字符，17项正文3681 UTF-16字符，
+低于20000上限。程序状态READY_FOR_REVIEW、publishable=false。
+人工整体验收：FAIL_REQUIRED_QUALIFICATIONS；不是部署时间撤回失败。
+
+- 部署时点处理在这个样本上通过：没有复活10:51:54断言，
+  明确mtime不能确定启用时刻，输入没有具体Gateway加载时间。
+  新entryId/identity路径、旧误判撤回、旧1830口径及保留每日10条也保留。
+- 原49条现状、无自然运行证据不判失败、两项backfill验收、三次健康检查、
+  Nightly与DailyStats保留，多处明确归属为“助手报告”。
+- 自然样本正文仅写“按trace去重后15条自然请求均满足来源有效性条件”，
+  没有保留traffic_origin=natural_user_turn、valid=true、
+  source=before_prompt_build、trigger=user，以及agent_id/run_id/session_id完整这些具体资格。
+  人工通读未找到等价具体表述；字符串检索只作定位，不单凭字面缺失判语义。
+  即使引用了含这些值的原段，正文仍未保留必要限定。
+- 明确排除1条unknown/valid=false未保留；
+  A路径成功所需identity/snapshot关联条件、无confidence行不算成功、
+  可观测性缺口不阻挡验收等细节也不完整。
+  窗口、LIMIT200已满、n15、p50/max、FTS不可得非0、
+  14→15未确认及取消PENDING主要保留。
+  源报告残差894/1908/908/47.6%的统计定义仍未澄清，不能认证。
+- 辅助的误建0字节文件删除仍遗漏。不能因正文更短或撤回处理正确，
+  就认定所有独立事件、必要条件和事实真实性已通过。
+
+由此确认已有Codex CLI可承担隔离摘要调用，并在该样本上正确处理已知部署时点撤回。
+但在预算有余时仍丢资格条件，不能继续只用预算不足解释这一遗漏。
+CLI/harness、推理、JSON Schema、direct提示和流程均与历史Pro分类实验不同，
+这不是严格模型对照，也未证明生产修复、稳定泛化或所有GPT模型的能力。
+
+### 证据及收尾
+
+私有操作目录前缀为
+`/home/lionsol/.openclaw/ops/memory-engine/checkpoint-codex-direct-104cc0a-20261028`：
+
+- `-evidence/`保存本地配置拒绝；
+  `-builtin-evidence/`保存无代理的routing超时；
+  `-proxy-evidence/`保存成功stdin/schema/invocation、
+  完整SOURCE、CLI原始JSONL/stderr、原始最终回复、正文及引用、pipeline与audit。
+- 人工复核：同前缀`-review.json`；执行器为`.cjs`、`-builtin.cjs`及`-proxy.cjs`。
+- 成功执行器SHA-256：
+  `5b6d27931ec9440b353c69f3e0b2b6c93efed80696b7aeb69b564c4584f4e899`。
+- 实际stdin SHA-256：
+  `052c47133bf5db72d250b9eebd2cdbe6d970cd132069ec3666e0c34aa970ca4e`。
+- 原始最终回复SHA-256：
+  `b944f6b426c4948131fb875d674ba175b582f0e3825ce8627bca9a565906c8f5`；
+  正文SHA-256：
+  `66300d6a8081e03356e038bcd5bceb15ff0c79f42c2445f201438444aa068bc0`。
+
+执行器离线自检及原始输出重放/哈希核对通过，不计为语义PASS；
+会话文件、episode和生产4096 token配置未变。
+本轮项目内仅更新验收记录，没有修改生产或实验模块、没有部署。
+后续应保留具体必要资格并再次复核，不能据单例撤回通过直接接入生产。
 
 ## 分类多次摘要真实验证：预算通过，明确更正仍失败
 

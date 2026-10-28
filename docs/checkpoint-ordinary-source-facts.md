@@ -49,7 +49,14 @@ Pro响应带Markdown JSON围栏，实际程序REJECTED/comparison_response_json�
 人工裁决FAIL_RETRACTED_DEPLOYMENT_TIME：c1仍确定断言10:51:54整体替换，同时引用明确撤回段并附mtime限制；更正在同类完整输入内，分类未切断它。
 自然样本具体资格、无效样本排除与取消PENDING等保留；残差统计定义未明、辅助删除事件遗漏和重复审计事项仍需处理。
 新增2项兼容测试，相关88项、静态887/test-integrity408及git diff --check通过；生产配置、原文和episode未变。
-预算PASS与语义FAIL分开，后续聚焦同一事项内部的更正归并；holdout未执行，未接入生产，Bug未解决。
+预算PASS与语义FAIL分开，后续聚焦同一事项内部的更正归并。
+已按用户授权验证Codex CLI：指定本机gpt-6-luna/xhigh、同一193段原文、20000预算，直接摘要17项/3681字。
+CLI总启动3次：先本地provider配置拒绝，再无代理routing超时，最后仅对子进程传入本机已有代理后完成1个turn；内部HTTP请求数不可观察，不能称无内部重试。
+成功日志0工具/0错误，模型正文未改；部署时点未复活，ID/identity更正、旧backlog限制及报告归属保留。
+人工裁决FAIL_REQUIRED_QUALIFICATIONS：自然样本仅概括“满足来源有效性条件”，缺具体origin/source/trigger/valid与IDs资格，无效1条排除及部分A路径判据也遗漏。
+完整stdin、schema、原始CLI日志/最终回复及重放证据已归档；CLI harness/推理/schema/direct流程与历史Pro不同，不是只换模型对照。
+执行器自检和原始输出重放通过；本轮仅更新记录，原文、episode及生产配置未变，未修改模块或部署。
+holdout未执行，未接入生产，Bug未解决。
 
 ## 当前v15：编号及标签选择
 
