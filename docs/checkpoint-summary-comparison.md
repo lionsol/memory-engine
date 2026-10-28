@@ -1,11 +1,172 @@
 # Checkpoint 摘要方案对照
 
-日期：2026-10-27（Asia/Shanghai）。状态：单次最终事项真实验证超长且复活已撤回判断，FAIL_BUDGET_AND_FINAL_STATE_CONTRADICTION；摘要事实错误未解决。
+日期：2026-10-28（Asia/Shanghai）。状态：已新增分类多次摘要及可配置20000字实验预算，仅离线机制验证；既有真实语义失败不变，摘要事实错误尚未解决。
 v2直接摘要历史执行HEAD：`411bd1e65e5d7b463bc06bbd9c4375b7cda95889`。
 实验源码提交：`9991345e314afd19cafd833eacabc59fec29f686`；完整样本执行HEAD：`7fa781a6aaff447cd261a85e52a42ad2372d3c64`。
 三个合成开发案例的通过只限短输入；holdout仍未执行。
 用户已同意“原文保留＋事项最终状态＋带引用的生成式摘要”方向。
 当前普通checkpoint仍为v15，既有真实验收失败裁决不变。
+
+## 分类多次摘要候选：提示词与流程已实现，尚未真实验证
+
+用户明确要求优化提示词并允许分类多次摘要后，新增隔离入口
+`lib/checkpoint/summary-categorized-lab.cjs`。此前单次提示词和Pro对照原样保留，
+生产普通checkpoint仍走v15，没有接入本候选。
+
+流程为“完整落盘对话分类1次 → 每类分别摘要1次 → 程序按类拼接”。
+默认最多4类、合计最多5次请求，顺序执行、不自动重试；可配置最多8类/9次请求。
+分类只返回类别、任务范围和阅读锚点，不先生成一份可能错误的事实ledger。
+每类都得到完整可见SOURCE，锚点不截断输入，避免把后文更正留在另一类之外。
+分类按对象/任务分工，不按时间位置机械切块；一个类别内仍区分独立事项。
+
+注意这里“完整”只指smart-add落盘的用户/助手对话文本。
+真实样本193可见段落中user=61、assistant=132，不含独立tool call/tool result事件。
+工具结果的助手转述不是独立核实证据，本轮也未补入完整执行轨迹。
+
+### 提示词调整
+
+两套实际system提示词分别由buildCategoryPlanPrompt/buildCategorySummaryPrompt生成，原文在新模块内。
+
+- 分类提示只要求划分任务范围，将同一事项的旧判断、质疑、更正和最终结果放在同一类别，
+  不在分类阶段裁决事实；阅读锚点允许跨类重叠，不能被当作唯一取证范围。
+- 分类摘要提示先要求沿同一事项核对“旧判断→明确更正→最后有效结论”，
+  特别说明不能在正文确定断言旧判断、再附相反条件；无法裁决才保留冲突。
+- 每类输出沿用简洁的topic/text/evidence/corrects结构，将结论、必要限定、未决写在同一text，
+  不再强制conclusion/conditions/unresolved三栏。
+  数字、资格具体值、统计口径、执行阶段和证据不足仍须保留；
+  hash、路径、代码行和重复核对一般留在原始引用中。
+- 保留用户请求/规则、助手报告与独立核实的区别，不把较晚陈述自动当更正，
+  不把缺字段/零事件当机制生效，不扩大局部只读的范围。
+- 两阶段均要求仅返回JSON、不加围栏；请求元数据提供
+  `responseFormat: {type: "json_object"}`，调用方适配为provider的response_format。
+  未新增宽松解析或自动补字段。
+
+### 放宽实验预算
+
+新候选默认总正文预算20000 UTF-16字符，可由summaryMaxChars配置，
+计入类别标题、正文、全局引用编号和更正标记。
+不继承旧单次候选5000硬限；生产5000和旧候选限制不变。
+20000是便于先检查正确性的实验起点，不是经产品需求证明的最佳值。
+每类只给总预算/类别数的篇幅参考，不设逐类硬配额；
+完成全部类别后统一计算实际总长，超出仍保留全部原始输出，不能截断或静默删类。
+
+最终正文由程序拼接所有类别及其原始text，统一引用编号，不再调用模型重写。
+缺类别、分类失败、任一类别失败或最终超预算都没有有效最终正文；
+此前已完成的类别、失败原始回复、完整结构化输入和分类原文保留在record。
+达到请求上限后不会补发。所有分类请求的输入长度在第一份分类摘要发送前预检。
+
+接口示例：
+
+```js
+const {runCategorized} = require("./lib/checkpoint/summary-categorized-lab.cjs");
+const result = await runCategorized(input, invoke, {
+  maxCategories: 4,
+  maxRequests: 5,
+  summaryMaxChars: 20000,
+  maxInputChars: 45000
+});
+// invoke接收stage/categoryId/system/prompt/responseFormat，返回模型content字符串。
+// 调用方负责模型、温度、输出tokens、超时、原始HTTP证据及response_format适配。
+// 入口本身不读取凭证，不调用provider或publisher。
+```
+
+### 本轮验证与边界
+
+新增11项机制测试，与原有相关测试共86项通过。
+验证完整更正仍可见、共享锚点、引用/更正原样保留、无最终重写、
+超过5000的正文可在新预算内保留、含标题及Unicode的准确边界、
+部分失败保留原始输出、请求次数上限和输入/配置快照。
+特意验证相互矛盾的模型文字仍可能通过结构检查：
+semantic_correctness、correction_resolution、category_ownership、coverage始终NOT_EVALUATED，
+publishable=false，不能把机制通过当成事实错误已解决。
+静态检查通过887个已跟踪文件，test-integrity通过408个已跟踪测试；
+新增文件另由上述实际测试加载执行，未计入git索引扫描。
+
+固定193段样本仅离线构造请求：分类31915字符；
+4个占位类别的单类请求各32587字符，都小于45000。
+这些类别只是测量占位符，不是模型分类结果，不作为人工答案发送。
+每类都重读完整对话，最多5次调用会增加输入tokens、时延和费用；
+这一版优先保证更正可见，未宣称降低上下文成本。
+
+本轮外部请求0次，尚未真实测试新提示词，未部署或写运行配置。
+下一次真实试验需冻结新源码和实际分类/摘要请求，逐项复核前后更正、独立事项及必要限定；
+正文在20000内只表示预算通过，不能替代事实裁决。
+本轮同时改变提示词、调用流程和实验预算，后续即使改善也不能单独归因于分类。
+
+## 仅更换模型的受控对照：Pro 仍未通过
+
+执行HEAD：`4e5b61c8a6e96a7eb8415733f2ef62099f9a4c61`；工作区请求前后干净。
+2026-10-28 07:27:36–07:28:02（Asia/Shanghai）实际请求1次，无重试、回退或第二阶段。
+9项执行器离线自检通过（0次外部请求），不计模型质量。
+
+依据[官方 Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)选用同一服务的
+`deepseek-v4-pro`，响应也报告该模型。实际请求与上一轮 Flash 请求逐字段比较，
+唯一变化是model；messages的JSON序列化SHA-256保持
+`b429c9dffde6f2f4d467ad7a50b85b7e8fc0f383a0503d52645c3899ab547a5e`。
+完整193可见units、32851输入字符、temperature 0.1、thinking disabled、
+max_tokens 16384、timeout 120000ms、正文5000硬限/3500软目标均未变。
+原文、episode、代码、测试及执行器均有哈希绑定；未输入人工参考、旧ledger或人工答案。
+请求前复制上一轮review-spec，保持复核标准不变。
+不同模型的分词、缓存及请求时刻未控制；这里只是一次历史对照和一次新请求，不是重复随机试验。
+
+HTTP 200、finish_reason stop；prompt/completion/total tokens为15679/5107/20786。
+原始回复12158字符，外有Markdown JSON围栏，实际runFinalState返回
+`REJECTED/comparison_response_json`，ledger为空，没有有效正文。
+
+### 诊断与事实复核
+
+以下数据来自单独离线诊断，未修改原始回复、程序解析器或请求，也不视为有效结果：
+去掉围栏后仍因多余顶层stage而报comparison_schema；
+另移除stage，才可校验16项ledger的结构、绑定及引用ID。
+原样投影为7636字符，仍报comparison_summary_budget。
+
+| 诊断渲染组成 | UTF-16字符 |
+| --- | ---: |
+| conclusion | 2032 |
+| 条件/未决文字及分隔符 | 4577 |
+| 标题/引用等 | 1027 |
+| 合计 | 7636 |
+
+条件栏仍复制大量代码行、清单hash、路径及审计细节，正文包含独立signal核对事项。
+上述开销不是全部都可删的必要条件，不能靠清空条件栏或删句规则宣称修复。
+
+人工裁决：FAIL_FORMAT_BUDGET_AND_RETRACTED_DEPLOYMENT_TIME。
+
+- e5保留新entryId与共享identity路径的更正，e6保留每日10条及旧欠账限制；
+  本次未发现Flash上一轮e11那种ID/identity误判复活。
+- e4仍断言“部署副本于10:51:54被整体替换（全新安装）”，同时在conditions写
+  “mtime不能单独作为部署时刻证据”，corrects为空。
+  原文s0.t8.p6已反驳mtime能确定时点，s0.t9.p3明确撤回“10:51:54部署”。
+  所以这是另一项已撤回判断仍被写成当前事实，附加相反限制没有完成撤回。
+- e15保留自然样本窗口/资格/source/trigger、n=15统计、max非p95、
+  FTS不可得、14→15未确证以及取消PENDING；显式无效样本排除未保留。
+  残差908ms/47.6%仍来自源报告，统计定义未澄清，不能认证为独立核实数据。
+- 632与1241最终结果、49条未观察自然修复不能判产品失败、A/B验收边界保留。
+  误建0字节文件删除这一辅助事件遗漏。复核只比对源报告，不新增运行时核验。
+
+### 结论与证据
+
+更换模型使这一次输出更短，但仍有格式、预算和明确撤回处理失败。
+“换模型即可解决”在这一已知样本上未成立；也不能据单次失败认定所有模型无效，
+或认定某个协议/JSON格式是语义错误根因。holdout仍未执行，生产v15裁决不变。
+本轮只新增对照记录，未更改实现、提示词、参数、验收上限、发布或部署。
+下一步先据这两份冻结结果界定更正归并和正文/审计信息分工；
+不自动追加模型重试或宽松解析，将是否需要分阶段处理留待明确方案后验证。
+
+私有操作证据位于 `/home/lionsol/.openclaw/ops/memory-engine/`：
+
+- 执行器：`checkpoint-model-pro-4e5b61c-20261028.cjs`，
+  SHA-256 `18c584b4e74dbd2de0982e9602656250da6342ca152a76fe2364aeb31c656e43`。
+- 证据目录：`checkpoint-model-pro-4e5b61c-20261028-evidence/`；
+  source/request/review-spec/comparison-spec/provider-response/provider-content/pipeline-result/result原样归档，
+  audit记录仅model变化；diagnostic文件明确不属于有效正文。
+- 人工复核：`checkpoint-model-pro-4e5b61c-20261028-review.json`。
+- request序列化SHA-256：
+  `56da5a08a4083da83274499231e799b165480c91fc87caaead5c2b1888bd21a0`。
+- 原始HTTP回复SHA-256：
+  `ead6dfb6d3c23f4c3e0ad7ff24b44b9d14e6f44d21d303bc6983fb73e9f2d020`。
+- 原始content SHA-256：
+  `a865a0dc7c0d86aefdcbc10139b559b9691ead0d17caad3f1710724eb883bc18`。
 
 ## 单次最终事项真实验证：预算失败并复活已撤回判断
 
