@@ -6,8 +6,9 @@
 并保证每条摘要的引用可以读回同一份原文。质量问题留档，不再逐项阻断摘要接受。
 本页描述归档入口、离线回溯验证及已完成的checkpoint源码接线。
 生成入口与memory_engine_get读取入口已接入，默认仍走legacy；尚未部署或开启生产路径。
-显式搜索、普通chunk读取与AutoRecall卡片已新增逐项定位接线，见下文；
-Nightly Maintenance清理/备份、无标记分片定位及下游执行约束尚未接入。
+显式搜索、普通chunk读取与AutoRecall卡片已新增逐项定位接线，
+Nightly Maintenance已新增归档检查与显式配置的追加式备份，见下文。
+默认不配置备份，不清理原文或历史归档；无标记分片定位及下游执行约束尚未接入。
 
 ## 接受标准
 
@@ -482,9 +483,94 @@ static-check889文件、test-integrity409文件及修改文件语法、git diff 
 
 尚未运行真实Core索引器验证标记覆盖率，完全不含程序标记的分片仍不能自动回溯；
 尚未统一强制所有下游执行工具等待原文读取。
-Nightly Maintenance归档清理/备份接入也仍待完成。
+该阶段尚未接入Nightly归档维护；后续检查与备份接线见下节，未新增档案清理策略。
 这些限制不会被“卡片带指针”或“引用可解析”改写为模型结论已获事实认证。
 当前原始样本没有独立工具调用/返回事件，回溯只能核对当时的对话原述。
+
+## Nightly归档检查与追加式备份（基线c83016d后）
+
+实际canonical入口是bin/nightly-maintenance-command.cjs。
+它原先只执行Engine生命周期处理，不存在原文文件清理或完整归档备份步骤；
+retired入口bin/nightly-maintenance.js继续拒绝执行旧Core写入逻辑。
+
+本轮新增lib/checkpoint/archive-maintenance.cjs，并在打开可写生命周期数据库之前调用。
+路径复用checkpoint runtime，包括启动时MEMORY_ENGINE_MEMORY_DIR兼容覆盖，
+避免生成入口与维护入口检查不同的归档目录。
+维护结果进入result.checkpoint_archives及nightly_maintenance_completed事件。
+任何归档检查或已配置备份失败都会退出1，本次生命周期变更和完成事件均不执行；
+已经成功复制的部分备份对象会保留，不冒充整个维护过程已回滚。
+
+### 保留与检查范围
+
+保留策略固定keep_all_versions_no_pruning，不按置信度、当前是否引用或是否为旧修订删除证据。
+扫描checkpoint-archives中的全部内容ID命名JSON，包括未被当前episode引用的档案。
+逐份验证归档内容哈希、原文范围、引用及版本关系；previous_archive_id必须仍存在且属于同一天。
+质量备注不导致拒收，检查通过也不改变NOT_CERTIFIED语义状态。
+
+扫描episodes中的日期文件及程序发布保留的.md.<token>.previous版本，
+验证可信derivedSummary头、日期、历史关系和带程序标记的项投影。
+头与正文标记冲突、缺失归档、损坏档案或改写项文字会拒收。
+正文校验范围仍为marked_items_only；旧格式只有元数据头时明确记为header_only，
+不把未标记正文认证为已验证投影。
+legacy无引用episode不推断归档，本备份也不包含这些legacy文件。
+存在checkpoint发布锁时延后维护并退出失败，不自行清理锁；
+归档或备份目录中其他既有临时文件也不删除。
+
+### 显式备份配置
+
+默认只检查，不创建备份目录。
+仅在维护进程显式配置下列变量后复制备份；本轮没有修改实际环境变量或cron：
+
+```text
+MEMORY_ENGINE_CHECKPOINT_ARCHIVE_BACKUP_DIR=/absolute/dedicated/backup-directory
+```
+
+--dry-run验证源归档并报告backup.status=planned，不创建目录、备份文件或完成事件。
+配置路径必须是绝对路径，与原文归档/episode目录互不包含；
+现有路径别名也参与检查。目标目录内的符号链接不作为普通证据文件使用，
+与活跃原文共用inode的硬链接不被接受为独立备份。
+
+备份目录布局：
+
+| 路径 | 内容 |
+| --- | --- |
+| checkpoint-archives/<archive_id>.json | 全部归档的逐字节副本，含完整已采集原文、摘要、来源、质量备注及历史关系 |
+| episode-objects/<sha256>.md | 带引用的当前/历史episode字节对象 |
+| manifests/<snapshot_id>.json | 归档与episode对象清单，包含大小、字节哈希、引用范围和修订关系 |
+
+文件仅追加，采用私有临时文件、fsync和原子无覆盖发布；
+已经存在的目标必须字节一致，否则拒收且不自动修复。
+新建目录为0700、新建文件为0600。
+发布清单前复核源清单未变，并再次读回全部备份对象，成功后才报告backup.status=complete。
+相同内容再次备份复用已有对象与清单，不覆盖旧文件，也不自动删历史快照。
+归档字节数通过archive_bytes报告。
+
+清单一致性明确为observed_stable_inventory_not_atomic_filesystem_snapshot。
+本实现使用文件清单及字节复核检测观察到的并发变化，不宣称跨目录原子快照或排除外部写入竞态；
+变化时拒绝发布本次完成清单，下一次维护重新捕获。
+备份不是整个workspace、Core/Engine数据库或完整session JSONL的备份，
+也不替代异机/异盘容灾。当前实现为全量扫描，内存和耗时随归档量增长，
+尚未验证长期大规模容量表现，未向召回热路径添加IO。
+
+### 验证与剩余范围
+
+新增归档维护测试含28个测试/子场景，覆盖全部版本及未引用原文保留、dry-run、
+追加式幂等备份、缺失历史/引用、篡改/损坏/冲突拒收、写入失败、
+路径别名/硬链接、复制后损坏、并发发布、checkpoint锁以及自定义memory目录。
+真实CLI在临时数据库中验证：检查或备份失败不改Engine字节；
+生命周期把摘要chunk标为archived后，旧归档和原文仍可显式读取，Core数据库字节不变。
+
+私有GPT档案以离线fixture备份；删除临时活跃源目录后，只读备份仍恢复
+14项、99次引用、93个不同段落的一致原文，私有源档案字节未变。
+没有新模型请求，未据此认证语义正确或工具实际执行真相。
+相关回归682/682通过，无跳过；static-check889文件、test-integrity409文件、
+新增/修改CJS语法和git diff --check通过。
+独立worktree测试通过临时NODE_PATH/NODE_OPTIONS及既有test-only加载器使用现成依赖，
+没有安装依赖或修改生产环境。
+
+本轮未运行实际生产Nightly、未部署、未开启备份任务。
+真实Core分片标记覆盖率、无标记分片定位和下游统一强制回读仍待完成；
+没有新增原文/历史档案清理策略，全部继续保留。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 

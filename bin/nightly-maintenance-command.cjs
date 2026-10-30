@@ -9,6 +9,7 @@
 
 const { existsSync, readFileSync } = require('node:fs');
 const { resolveMemoryEnginePaths } = require('../lib/runtime/paths.cjs');
+const { runCheckpointArchiveMaintenance } = require('../lib/checkpoint/archive-maintenance.cjs');
 
 const PATHS = resolveMemoryEnginePaths();
 const WORKSPACE = PATHS.workspaceDir;
@@ -111,6 +112,15 @@ function status(coreDb, engineDb) {
 
 async function main() {
   try {
+    // Verify collected evidence (and any explicitly configured backup) before
+    // opening writable lifecycle storage. A failure must not be a success event.
+    const checkpointPaths = require('../lib/checkpoint/runtime').getRuntime();
+    const checkpointArchives = runCheckpointArchiveMaintenance({
+      memoryDir: checkpointPaths.memoryDir,
+      episodesDir: checkpointPaths.episodesDir,
+      backupDir: process.env.MEMORY_ENGINE_CHECKPOINT_ARCHIVE_BACKUP_DIR,
+      dryRun: DRY_RUN,
+    });
     const {
       openCoreDbReadonly,
       openEngineDbIsolated,
@@ -158,6 +168,7 @@ async function main() {
         })
         : { skipped: true, reason: `knowledge graph not found: ${KG_PATH}`, dry_run: DRY_RUN };
       const steps = {
+        checkpoint_archives: checkpointArchives,
         detect_conflicts: detectConflicts,
         archive,
         kg_bridge: kgBridge,

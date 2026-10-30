@@ -70,9 +70,14 @@ function createFixture() {
 }
 
 function runNightly(fixture, args = []) {
-  const result = spawnSync(process.execPath, [NIGHTLY.pathname, ...args], {
+  const preload = process.env.MEMORY_ENGINE_TEST_DEPENDENCIES
+    ? ["--require", new URL("./checkpoint-dependency-loader.cjs", import.meta.url).pathname] : [];
+  const result = spawnSync(process.execPath, [...preload, NIGHTLY.pathname, ...args], {
     env: {
       ...process.env,
+      MEMORY_ENGINE_WORKSPACE_DIR: fixture.root,
+      MEMORY_ENGINE_MEMORY_DIR: join(fixture.root, "memory"),
+      MEMORY_ENGINE_CHECKPOINT_ARCHIVE_BACKUP_DIR: "",
       MEMORY_ENGINE_DB_PATH: fixture.engineDbPath,
       MEMORY_ENGINE_CORE_DB: fixture.coreDbPath,
       MEMORY_ENGINE_KG_PATH: fixture.kgPath,
@@ -89,6 +94,9 @@ test("nightly maintenance delegates lifecycle mutations and preserves dry-run", 
   try {
     const dry = runNightly(fixture, ["--dry-run"]);
     assert.equal(dry.dry_run, true);
+    assert.equal(dry.result.checkpoint_archives.status, "verified");
+    assert.equal(dry.result.checkpoint_archives.archive_count, 0);
+    assert.equal(dry.result.checkpoint_archives.backup.status, "not_configured");
     assert.equal(dry.result.detect_conflicts.flagged_as_conflict, 1);
     assert.equal(dry.result.archive.archived, 1);
     assert.equal(dry.result.kg_bridge.chunks_updated, 1);
