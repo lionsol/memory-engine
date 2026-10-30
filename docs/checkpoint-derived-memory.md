@@ -6,7 +6,8 @@
 并保证每条摘要的引用可以读回同一份原文。质量问题留档，不再逐项阻断摘要接受。
 本页描述归档入口、离线回溯验证及已完成的checkpoint源码接线。
 生成入口与memory_engine_get读取入口已接入，默认仍走legacy；尚未部署或开启生产路径。
-Nightly Maintenance清理/备份、检索结果逐片段携带回溯定位器及下游执行约束尚未接入。
+显式搜索与普通chunk读取已新增逐项定位接线，见下节；Nightly Maintenance清理/备份、
+AutoRecall卡片、无标记分片定位及下游执行约束尚未接入。
 
 ## 接受标准
 
@@ -138,7 +139,8 @@ item_index为零起序号，只返回指定项正文；省略时返回全部项�
 - 版本关联覆盖新路径发布的同日episode历史；旧legacy episode只有既有publisher备份，
   不虚构其archive_id。外部不合作写入者仍受既有publisher的已知竞争窗口限制。
 - 该入口把原文交给消费方，不强制所有未来执行工具等待证据确认。
-  搜索片段/AutoRecall逐项携带locator、独立备份和维护保留策略尚需后续接入。
+  显式搜索现已保留已标记摘要项的locator；AutoRecall卡片、丢失标记的分片、
+  独立备份和维护保留策略尚需后续接入。
 - 归档中的对话转述仍非独立工具事件。此次接线没有扩大原始证据范围。
 
 ### 验证
@@ -333,6 +335,101 @@ replay/result.json SHA-256：
 修改/新增源码node --check、test-integrity408扫描及git diff --check通过。
 未重跑或改写此前3项已知扩大回归基线失败。
 模型成功调用与回溯链路均已具备本次实证，生产启用和定时任务代理继承仍未验证。
+
+## 显式搜索及普通chunk读取的回溯定位（2026-10-30，未部署）
+
+接线基线HEAD=de66596，开始时工作树干净。
+此前archive_id仅在episode文件头；Core切出的正文chunk可能不含文件头，
+显式搜索又将text裁至240字符，无法保证消费方能发现已存在的原文入口。
+本轮新增lib/checkpoint/derived-summary-locator.cjs，接通发布投影、两个显式搜索工具和普通chunk get。
+
+### 写入投影
+
+新生成的episode每条摘要项都携带程序生成的独立标记：
+
+```text
+- [checkpoint-derived:v1 archive=<64位archive_id> item=0] 事项：派生摘要及引用
+```
+
+archive_id与item_index来自已保存并验证的档案，不由模型自由填写。
+每项原始内容按既有渲染规则呈现；模型字段中的反斜杠、CR和LF按单行形式编码，
+避免模型文字插入新的物理标记行。项内引用编号为该项局部编号；
+准确定位以archive_id、item_index及归档中的unit_id为准。
+
+这只是episode消费投影；归档中的summary、原始记录、引用数组、模型生成来源及p.body保持不变。
+原有归档不迁移、不覆盖，既有episode文件不批量改写。
+
+### 显式搜索
+
+memory_engine_search及memory_engine action=search在原有白名单投影后，
+从完整result.text解析标记，另行返回derived_memory；
+该字段不会跟随240字符正文预览一起丢失。
+即使检索结果自身带有伪造的derived_memory对象，也不会直接信任或转发，
+程序总是根据path/text重建字段。
+
+只识别标准memory/episodes/YYYY-MM-DD.md路径族；路径不匹配时不提取标记。
+无标记episode返回kind=episode_unlinked/status=locator_unavailable，
+不据路径自行认定作者为模型。
+标记互相冲突或条目序号越界返回locator_conflict。
+
+有效格式仅返回status=unverified、archive_id、get_id=checkpoint:<archive_id>、
+item_indexes及派生/语义未认证标记；搜索不认证文件存在或引用正确。
+整个搜索投影为纯函数，不读episode文件/归档、不增加数据库调用，
+不改变候选顺序、ID、分数、topK或rerank/canary策略。
+
+### 普通chunk get
+
+Owner授权的memory_engine_get现在也可直接使用搜索返回的普通Core chunk ID：
+
+```json
+{
+  "id": "搜索返回的完整chunk ID",
+  "purpose": "exact_parameters",
+  "item_index": 0
+}
+```
+
+读取方先按既有路径构造canonical memory，再验证chunk上的归档标记。
+只从当前runtime memoryDir/checkpoint-archives读取指定不可变档案，
+不读取当前episode文件来猜归档版本，因此旧chunk不会被改指向最新版归档。
+
+验证包括：档案哈希/原文范围、target_date与episode路径日期、
+item_index存在，以及带标记的文字必须与该归档对应项的程序投影一致。
+Core在长行中途截断后缀时，只允许该不可变项投影的精确前缀；
+增加或修改字符会拒收。状态为verified时scope仍固定marked_items_only，
+不把同一chunk中未标记的前缀/其他文字认证为该项原文，更不认证语义正确。
+
+recall返回经验证的定位信息、质量备注和历史关系；
+execution/exact_parameters/acceptance/disputed_claims同时返回derived_evidence，
+包含归档原文、引用及源目录。
+省略item_index时读取完整归档以便核对上下文；
+指定item_index时必须属于该chunk标出的项，不能静默切换到另一个事项。
+source_id仍可回查同一档案的完整来源记录。
+
+损坏/缺失档案、日期错误、伪造项文字、未知条目或冲突标记使get返回
+MEMORY_GET_DERIVED_INVALID，且不会调用成功强化回调。
+无定位器的旧episode仍允许普通recall，但敏感用途返回derived_locator_unavailable。
+直接checkpoint:<archive_id>读取及既有Owner权限保持原路径。
+
+### 验证与剩余范围
+
+新增12项测试，包含真实checkpoint发布、240字符之外的定位保留、两种显式搜索、
+普通canonical chunk读取、修改/缺失/冲突/损坏拒收、旧版本稳定定位和标记截断。
+最新相关回归215/215通过，涵盖此前190项及显式rerank/canary策略兼容性；
+修改源码node --check、test-integrity408扫描及git diff --check通过。
+
+其中一项显式通过MEMORY_ENGINE_TEST_CHECKPOINT_ARCHIVE加载上一轮私有GPT归档，
+在临时目录中原样保存后逐项验证新投影：
+14项、99次引用、93个不同段落全部仍可读回一致原文，原始档案字节未变，
+模型调用0、生产写入0。
+默认不提供该环境变量时，此项会明确跳过，仓库不包含私有对话样本。
+
+本轮没有运行真实Core索引器；长行/边界行为用Core式切片覆盖。
+从项中间开始且完全不含标记的分片，当前明确返回locator_unavailable，
+不会猜测其来源；后续需要结合真实分片边界验证覆盖率。
+AutoRecall卡片尚未携带本轮新增字段，未改其gate、排序或注入策略；
+所有下游执行工具也没有被统一强制等待原文读取。
+生产配置、cron、数据库、原始样本及已发布episode均未修改，没有新模型调用或部署。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 
