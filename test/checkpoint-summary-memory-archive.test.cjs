@@ -78,6 +78,21 @@ test("backtrace remains usable after original file is removed, and recovers omit
   }
  }finally{fs.rmSync(d,{recursive:true,force:true});}
 });
+test("derived archives retain duplicate valid citations unchanged as nonblocking quality findings",()=>{
+ const d=temp(),f=fixture();
+ try{
+  f.summary.items[0].evidence.push(f.summary.items[0].evidence[0]);
+  const a=archive.createArchive(f);
+  assert.deepEqual(a.payload.summary,f.summary);
+  assert.ok(a.payload.quality_findings.some(x=>x.includes("Duplicate reference IDs retained: item=0; field=evidence; extra=1")));
+  archive.persistArchive(d,a);
+  const resolved=archive.resolveItem(d,a.archive_id,0);
+  assert.deepEqual(resolved.item.evidence,f.summary.items[0].evidence);
+  assert.equal(resolved.sources.length,2);
+  const invalid=fixture();invalid.summary.items[0].evidence.push("missing","missing");
+  assert.throws(()=>archive.createArchive(invalid),{code:"comparison_reference"});
+ }finally{fs.rmSync(d,{recursive:true,force:true});}
+});
 test("source mutations, unknown citations and changed binding reject archive creation",()=>{
  for(const change of [f=>f.rawLogs[0].text+="changed",f=>f.summary.binding="wrong",
   f=>f.summary.items[0].evidence=["missing"],f=>f.summary.items[0].evidence=[]]){

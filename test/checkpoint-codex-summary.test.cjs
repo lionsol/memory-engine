@@ -127,6 +127,17 @@ test("CLI error and turn.failed events reject even if the process eventually ret
     await assert.rejects(f.generate(request()), e => e.code === "derived_cli_turn_failed" && !e.message.includes("secret"));
   }
 });
+test("CLI startup item.error is classified as an initialization failure before turn.started", async t => {
+  const f = harness(t, ({ lines }) => lines([
+    { type: "thread.started", thread_id: "offline" },
+    { type: "item.completed", item: { type: "error", message: "host unavailable" } },
+  ]));
+  await assert.rejects(f.generate(request()), { code: "derived_cli_turn_failed" });
+  const cfg = cli.cliArgs(cli.resolveCodexSummaryConfig({}));
+  assert.ok(!cfg.includes("code_mode_host"), "host availability is required by this CLI even with code_mode disabled");
+  const disabled = cfg.flatMap((arg, i) => arg === "--disable" ? [cfg[i + 1]] : []);
+  assert.ok(disabled.includes("code_mode"));
+});
 test("nonzero exit after valid output rejects without retry or fallback", async t => {
   const f = harness(t, ({ stdin, lines, close }) => { lines(events(stdin)); close(1); });
   await assert.rejects(f.generate(request()), { code: "derived_cli_exit" });

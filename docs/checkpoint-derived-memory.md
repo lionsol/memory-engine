@@ -131,8 +131,8 @@ item_index为零起序号，只返回指定项正文；省略时返回全部项�
   分类/分段摘要仍属既有实验，本轮没有把截断输入或部分摘要作为完整原文接受。
 - 默认适配器沿用现有HTTP primary provider；Codex CLI已新增显式选择入口，见下节。
   cron及生产配置尚未修改。仍可通过withRuntime({derivedSummaryGenerator})提供其他生成器。
-  当前CLI版本、参数及ChatGPT登录状态已只读核对，但当前DevSpace进程没有代理变量；
-  本轮未调用GPT，不能据此声称gpt-6-luna/xhigh现在仍可成功生成。
+  当前CLI版本、参数及ChatGPT登录状态已核对；后续已在单次显式代理环境中完成
+  gpt-6-luna/xhigh真实调用和归档回溯，见下节。成功仅适用于该次环境，不自动认证cron环境。
 - 原文归档和episode不是跨文件事务：归档成功后episode并发冲突/写入失败时，
   保留未被episode引用的归档，返回失败；不删除或覆盖它。
 - 版本关联覆盖新路径发布的同日episode历史；旧legacy episode只有既有publisher备份，
@@ -220,7 +220,7 @@ cli_contract表示本适配器核对的兼容契约，不声称每次都独立�
 原始checkpoint提示的prompt_sha256仍由上层独立绑定；
 stdin_sha256另绑定CLI任务包装后的实际输入。
 
-### 本轮验证与证据边界
+### CLI适配提交76d65b7的历史验证与证据边界
 
 - 本机/home/lionsol/.local/bin/codex --version为0.163.0；
   全部适配argv加--help退出0，验证参数解析，不启动模型或认证远程服务。
@@ -235,13 +235,104 @@ stdin_sha256另绑定CLI任务包装后的实际输入。
   修改文件和新增.cjs的node --check、test-integrity408扫描、git diff --check通过。
   上一轮已复现的3项扩大回归基线失败未在此轮修改或重新宣称解决。
 - 本轮真实模型请求0、部署0、生产发布0、cron启动0。
-  下一阶段仍须在明确代理环境中做受控真实调用，才能确认当前gpt-6-luna/xhigh可用；
-  随后才可评估部署或定时任务启用。本页不改写先前语义失败记录。
+  上述为76d65b7适配阶段的验证记录；其后真实调用结果见下节。
+  部署及定时任务启用仍需单独评估，本页不改写先前语义失败记录。
 
 官方机制参考：
 [OpenAI Docs：Non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)，
 用于核对exec、JSONL、output-schema、ephemeral及既有CLI认证机制；
 具体选项同时以本机0.163.0帮助与feature清单核对。
+
+## 新适配器真实调用与完整回溯（2026-10-30，未部署）
+
+核对HEAD=76d65b7，开始时工作树干净。使用本机Codex CLI 0.163.0，
+仍明确请求gpt-6-luna/xhigh，没有替换模型。
+本节为新生成的响应，不复用2026-10-28那份17项摘要，也不把它当作新的对照实验。
+
+### 入口及隔离范围
+
+新增bin/checkpoint-derived-smoke.cjs：不调用checkpoint main、Core/Engine数据库、
+episode publisher、flush或cron。默认仅报告计划，--execute才生成并保存验证证据；
+--out必须是新目录，既有证据目录拒绝覆盖。
+输入只从显式--input读取session_flush记录；完整源文件字节另存source.md，
+同时保存解析后的input-records.json、request.json、response.json、CLI原始输出及result.json。
+
+主样本仍为/home/lionsol/.openclaw/workspace/memory/smart-add/2026-10-20.md，
+完整文件SHA-256：
+9b119fdc8c72918cbdc97d2000200b6d14cf71fc3c9b75c0827b2c33e903dbf6。
+4条session_flush、197段完整归档；模型可见193段，含用户61段、助手132段，
+另外4条独立控制文本保留在归档输入，不发送模型。
+仍然没有独立工具调用或工具返回事件，不能据此核实当时工具执行真相。
+
+当前DevSpace父进程依旧没有代理变量。
+本次只读提取既有.bashrc中代理白名单的字面量export，取最后一个可解析值，
+不执行/不source文件、不求值命令或变量；仅向这一次子进程环境补入这些值。
+没有改写shell、系统代理、OpenClaw或服务配置，不在报告或generator元数据中保存代理值。
+
+### 两次CLI启动与一次离线复验
+
+1. r1：thread.started后立即出现item.completed(type=error)，没有turn.started或摘要。
+   诊断为Code Mode host被禁用导致初始化不可用。
+   参数--help可解析并不能证明CLI会话可初始化，这是上一轮离线验证未覆盖的问题。
+2. 单点修复：删除--disable code_mode_host，保留--disable code_mode及其他既有工具功能关闭设置；
+   CLI host仅保留可初始化性，不因此允许接受工具事件。
+   eventReader新增启动阶段item.error识别，仍直接拒收，不忽略/吞掉此类错误。
+3. r2：北京时间2026-10-30 11:29:06.747启动验证，
+   11:30:07.990保存响应，约61.24秒。
+   日志为thread.started、turn.started、一个agent_message和turn.completed；
+   退出码0、工具事件0、stderr字节0。CLI请求模型名仍为参数级记录，
+   model_identity=requested_not_provider_verified。
+4. r2返回14项摘要；初次归档仍判FAILED/comparison_reference。
+   定位到所有ID都在输入原文中，唯一结构问题是第0项evidence重复列出同一ID。
+   r2的失败result.json及原始响应保持不变。
+5. 按“可回溯派生记忆”政策，重复的有效引用改记非阻断质量备注。
+   不存在的ID、绑定不一致、缺引用及损坏原文仍拒收；
+   不改写正文、不去重、不修复模型响应。
+   仅派生归档/读取入口显式允许重复，实验比较入口默认严格规则保留。
+6. --response-file从r2已有response.json离线复验，
+   原始响应文件逐字节保存为replayed-response.json。
+   本次generator_invocations=0，归档summary与r2响应对象完全一致；
+   没有第三次模型调用。
+
+因此本轮为2次CLI启动，其中1次实际进入并完成生成；
+不是“总共只启动过一次”，也不能由CLI日志推断底层网络请求次数。
+
+### 结果
+
+| 检查 | 结果 |
+| --- | --- |
+| 摘要 | 14项、3458 UTF-16字符 |
+| 引用出现次数 | 99 |
+| 不同引用段落 | 93 |
+| 条目回溯 | 14/14可读取，所有99次引用可解析 |
+| 引文对应完整记录范围 | 全部一致 |
+| 模型输出/原始响应 | 不改写；离线保存的响应字节一致 |
+| 重复引用 | 第0项evidence多1次，自动写quality_findings |
+| 原始源文件 | 生成后SHA-256未变 |
+| 接受状态 | PASS_TRACEABILITY_NOT_SEMANTICS |
+| 语义正确性 | NOT_CERTIFIED，未新增独立语义验收 |
+| 生产episode/DB/部署/cron | 均未操作 |
+
+重复引用备注为：
+Duplicate reference IDs retained: item=0; field=evidence; extra=1。
+
+归档ID：
+660bc9d48e7ce66bb4e41f00c81656512d294b075ed8b3a8c7a42baf7863f591。
+
+私有证据目录均在/home/lionsol/.openclaw/ops/memory-engine/下：
+
+- checkpoint-codex-smoke-76d65b7-20261030-r1：保留初始化失败。
+- checkpoint-codex-smoke-76d65b7-20261030-r2：保留成功CLI生成和旧重复引用拒收结果。
+- checkpoint-codex-smoke-76d65b7-20261030-replay：已接受的归档、完整来源回读和新政策结果。
+
+replay/result.json SHA-256：
+35bace833245135385c2854b77d9a42da80c92ddbc21ffd5484bbb84f0414884。
+
+最新相关回归190/190通过，包含8项smoke测试、启动item.error回归、
+重复有效引用原样接受及未知引用拒收、旧实验严格规则与生成/读取回归。
+修改/新增源码node --check、test-integrity408扫描及git diff --check通过。
+未重跑或改写此前3项已知扩大回归基线失败。
+模型成功调用与回溯链路均已具备本次实证，生产启用和定时任务代理继承仍未验证。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 
