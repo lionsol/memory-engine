@@ -93,7 +93,7 @@ evidence/corrects用途及派生属性；readOriginalRecord读取完整原始记
    非法模式或derived失败均拒收，不回退legacy，也不执行旧的分段摘要。
 2. lib/checkpoint/derived-summary.js检查输入就绪、未截断、对话存在与来源版本，
    冻结完整采集记录，复用现有direct协议生成绑定原文的摘要。
-3. 默认llmDerivedSummary适配现有primary provider的chat-completions；
+3. 默认generateDerivedSummary按显式transport配置分发；未配置时llmDerivedSummary适配现有primary provider的chat-completions；
    每次只有一条逻辑生成请求，不做语义修复或fallback。测试中HTTPS边界全部替换为离线响应。
    生成器记录请求的model/provider/transport，身份固定为requested_not_provider_verified。
    包装层自行计算prompt_sha256并记录protocol_version，避免把模型回填值作为绑定依据。
@@ -129,11 +129,10 @@ item_index为零起序号，只返回指定项正文；省略时返回全部项�
 
 - 新路径要求完整采集输入；budgetCoverageComplete=false、超过512段或请求资源预算会拒收。
   分类/分段摘要仍属既有实验，本轮没有把截断输入或部分摘要作为完整原文接受。
-- 默认适配器沿用现有HTTP primary provider；没有把交互式Codex CLI自动接入cron。
-  可通过withRuntime({derivedSummaryGenerator})提供其他明确配置的生成器。
-  本机只读核对到/home/lionsol/.local/bin/codex、CLI 0.163.0及exec选项；
-  未调用GPT，未核实当前模型可用性、代理继承或登录状态。
-  不能据此声称gpt-6-luna/xhigh现在仍可成功生成。
+- 默认适配器沿用现有HTTP primary provider；Codex CLI已新增显式选择入口，见下节。
+  cron及生产配置尚未修改。仍可通过withRuntime({derivedSummaryGenerator})提供其他生成器。
+  当前CLI版本、参数及ChatGPT登录状态已只读核对，但当前DevSpace进程没有代理变量；
+  本轮未调用GPT，不能据此声称gpt-6-luna/xhigh现在仍可成功生成。
 - 原文归档和episode不是跨文件事务：归档成功后episode并发冲突/写入失败时，
   保留未被episode引用的归档，返回失败；不删除或覆盖它。
 - 版本关联覆盖新路径发布的同日episode历史；旧legacy episode只有既有publisher备份，
@@ -165,6 +164,84 @@ episode writer、LLM适配器、普通路径发布保护及工具兼容性。
 4项既有跳过由OpenClaw runtime依赖不可用触发。
 上述基线问题未在本轮修改，不能把扩大回归描述成全绿。
 本轮模型请求0、生产发布0、部署0，测试仅写临时目录。
+
+## Codex CLI生成适配（2026-10-30，未部署）
+
+接线基线HEAD=c7e10c3，核对时工作树干净。本轮补充：
+lib/checkpoint/codex-summary.cjs、derived-summary-schema.json及离线测试，
+并将checkpoint的默认生成器接到generateDerivedSummary分发入口。
+
+### 选择与配置
+
+新路径依然要求MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE=derived。
+只有同时显式指定MEMORY_ENGINE_CHECKPOINT_DERIVED_TRANSPORT=codex-cli，才会调用CLI。
+未配置transport仍走http；未知transport报derived_transport_invalid，不静默切换。
+本轮没有设置这些运行环境变量，没有修改cron、服务或OpenClaw配置。
+
+| 环境变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| MEMORY_ENGINE_CHECKPOINT_CODEX_BINARY | codex | 可用绝对路径消除cron的PATH差异；不是shell命令字符串 |
+| MEMORY_ENGINE_CHECKPOINT_CODEX_MODEL | gpt-6-luna | 沿用用户明确选定的模型，不自动替换 |
+| MEMORY_ENGINE_CHECKPOINT_CODEX_EFFORT | xhigh | 明确推理强度；非法值直接拒收 |
+| MEMORY_ENGINE_CHECKPOINT_CODEX_TIMEOUT_MS | 180000 | 单次CLI进程墙钟期限，最大900000 |
+| MEMORY_ENGINE_CHECKPOINT_CODEX_MAX_OUTPUT_BYTES | 1048576 | stdout累计字节限制，最大16777216 |
+
+适配器不source交互shell、不发现或改写代理；只继承调用进程明确传入的
+HTTP_PROXY/HTTPS_PROXY/ALL_PROXY/NO_PROXY及小写形式。
+环境白名单保留HOME、PATH、CODEX_HOME和TLS证书等必要项，
+不传递OPENAI_API_KEY、CODEX_API_KEY、其他provider密钥或NODE_OPTIONS。
+认证复用所选HOME/CODEX_HOME的既有CLI账号，不自行登录或更改凭据。
+
+### 子进程与接受条件
+
+- 每次在私有空临时目录启动一个shell=false的子进程；文本只经stdin传入，
+  不把原文放入argv或临时提示文件。输出schema从本仓库固定文件读取。
+- 显式使用no-daemon、ephemeral、ignore-user-config、ignore-rules、
+  read-only、approval=never及输出schema；关闭已核对的shell、exec、协作、
+  hooks、memory、plugin、browser等功能，web_search=disabled、project_doc_max_bytes=0。
+  这属于CLI文本任务约束，不等于操作系统对所有文件读取的完全隔离。
+- 严格解析JSONL生命周期：单thread、单turn、一个完整agent_message、
+  turn.completed及进程exit=0均须存在。只允许agent_message/reasoning item；
+  发现命令、文件修改、MCP、搜索、plan或未知item时立即终止并拒收。
+  error/turn.failed、非JSON、额外回合、损坏UTF-8、stdout/stderr超预算均拒收。
+- 默认先SIGTERM，1秒后未结束则SIGKILL；POSIX按进程组终止，覆盖持有管道的后代。
+  再等1秒仍不能观察close，返回derived_cli_termination_unconfirmed，不能称清理成功。
+  Windows仅有直接子进程终止行为，未认证Windows后代进程树管理。
+- 仅发起一次CLI逻辑调用，不做重跑、语义修复、HTTP或其他模型fallback。
+  CLI内部网络重连不受此“一次进程”计数认证，墙钟期限仍然生效。
+- CLI退出和事件通过后，继续使用既有createArchive/persistArchive与episode版本保护。
+  schema、binding、引用或持久化失败仍不得发布。质量问题继续作为非阻断备注。
+
+归档generator记录requested model、reasoning_effort、transport=codex-cli、
+cli_contract、stdin/schema/stdout SHA-256、事件数、输出字节和零工具事件。
+proxy_env_keys仅记录存在的变量名，不保存代理地址或凭据。
+model_identity保持requested_not_provider_verified，不把CLI参数当作provider身份认证；
+cli_contract表示本适配器核对的兼容契约，不声称每次都独立检测了二进制版本。
+原始checkpoint提示的prompt_sha256仍由上层独立绑定；
+stdin_sha256另绑定CLI任务包装后的实际输入。
+
+### 本轮验证与证据边界
+
+- 本机/home/lionsol/.local/bin/codex --version为0.163.0；
+  全部适配argv加--help退出0，验证参数解析，不启动模型或认证远程服务。
+- login status退出0，仅提取到ChatGPT登录标志；未输出账号详情、凭据或原始诊断。
+  当前DevSpace进程HTTP(S)/ALL_PROXY大小写六项均未设置，CODEX_HOME未显式覆盖。
+  这不能证明账号额度、token在线有效性、模型可用性或网络直连可用性。
+- 新增19项测试通过，包括逐字节Unicode流、异常事件/输出拒收、
+  超时/取消/无法确认终止、代理环境白名单、完整checkpoint归档与读取。
+  其中2项使用真正离线Node子进程，验证stdin/stdout和POSIX进程组强制结束，
+  不调用Codex或任何模型。其余模拟CLI事件均为测试数据，不记作GPT样本。
+- 包含上一轮142项的最新定向回归共161/161通过；
+  修改文件和新增.cjs的node --check、test-integrity408扫描、git diff --check通过。
+  上一轮已复现的3项扩大回归基线失败未在此轮修改或重新宣称解决。
+- 本轮真实模型请求0、部署0、生产发布0、cron启动0。
+  下一阶段仍须在明确代理环境中做受控真实调用，才能确认当前gpt-6-luna/xhigh可用；
+  随后才可评估部署或定时任务启用。本页不改写先前语义失败记录。
+
+官方机制参考：
+[OpenAI Docs：Non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)，
+用于核对exec、JSONL、output-schema、ephemeral及既有CLI认证机制；
+具体选项同时以本机0.163.0帮助与feature清单核对。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 

@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "target_date", "binding", "items"],
+  "properties": {
+    "version": {"type": "string"},
+    "target_date": {"type": "string"},
+    "binding": {"type": "string"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "text", "evidence", "corrects"],
+        "properties": {
+          "topic": {"type": "string"},
+          "text": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "corrects": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

@@ -1098,7 +1098,7 @@ async function main(argv = process.argv.slice(2)) {
 
 runtimeRegistry.installRuntimeFallbacks({
   llmNightlyExtract: checkpointLlm.llmNightlyExtract,
-  derivedSummaryGenerator: checkpointLlm.llmDerivedSummary,
+  derivedSummaryGenerator: checkpointLlm.generateDerivedSummary,
   readCheckpointRawLogs: checkpointRawLog.readCheckpointRawLogs,
   readYesterdayRawLogs: checkpointRawLog.readYesterdayRawLogs,
   flushCheckpointRawLog: runFlushSessionRawlogCheckpoint,
