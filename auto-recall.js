@@ -11,6 +11,7 @@ import {
   tokenCoverage,
 } from "./query-utils.js";
 import { evaluateAutoRecallEligibility } from "./lib/recall/auto-recall-eligibility.js";
+import derivedLocator from "./lib/checkpoint/derived-summary-locator.cjs";
 import {
   isInjectableMemoryCard,
   projectCandidateToMemoryCard,
@@ -401,6 +402,9 @@ export function formatAutoRecallContext(results, options = {}) {
     lines.push(`${index + 1}. [${id}] category=${category} confidence=${confidence} confidence_mode=${confidenceMode} source_type=${sourceType} badge=${externalBadge} sources=${sources}`);
     const memoryText = trimMemoryText(item.text);
     if (memoryText) lines.push(`   ${memoryText}`);
+    const derived = derivedLocator.inspectDerivedSnippet(item);
+    const sourceHint = derivedLocator.formatDerivedSourceHint(item.path || "unknown source", derived);
+    if (sourceHint !== (item.path || "unknown source")) lines.push(`   source: ${sourceHint}`);
   });
 
   return lines.join("\n");

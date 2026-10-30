@@ -6,8 +6,8 @@
 并保证每条摘要的引用可以读回同一份原文。质量问题留档，不再逐项阻断摘要接受。
 本页描述归档入口、离线回溯验证及已完成的checkpoint源码接线。
 生成入口与memory_engine_get读取入口已接入，默认仍走legacy；尚未部署或开启生产路径。
-显式搜索与普通chunk读取已新增逐项定位接线，见下节；Nightly Maintenance清理/备份、
-AutoRecall卡片、无标记分片定位及下游执行约束尚未接入。
+显式搜索、普通chunk读取与AutoRecall卡片已新增逐项定位接线，见下文；
+Nightly Maintenance清理/备份、无标记分片定位及下游执行约束尚未接入。
 
 ## 接受标准
 
@@ -139,7 +139,7 @@ item_index为零起序号，只返回指定项正文；省略时返回全部项�
 - 版本关联覆盖新路径发布的同日episode历史；旧legacy episode只有既有publisher备份，
   不虚构其archive_id。外部不合作写入者仍受既有publisher的已知竞争窗口限制。
 - 该入口把原文交给消费方，不强制所有未来执行工具等待证据确认。
-  显式搜索现已保留已标记摘要项的locator；AutoRecall卡片、丢失标记的分片、
+  显式搜索与AutoRecall现已保留已标记摘要项的locator；丢失标记的分片、
   独立备份和维护保留策略尚需后续接入。
 - 归档中的对话转述仍非独立工具事件。此次接线没有扩大原始证据范围。
 
@@ -427,9 +427,64 @@ MEMORY_GET_DERIVED_INVALID，且不会调用成功强化回调。
 本轮没有运行真实Core索引器；长行/边界行为用Core式切片覆盖。
 从项中间开始且完全不含标记的分片，当前明确返回locator_unavailable，
 不会猜测其来源；后续需要结合真实分片边界验证覆盖率。
-AutoRecall卡片尚未携带本轮新增字段，未改其gate、排序或注入策略；
+本节记录的搜索/chunk接线阶段尚未覆盖AutoRecall卡片；后续接线见下节，未改其gate、排序或注入策略；
 所有下游执行工具也没有被统一强制等待原文读取。
 生产配置、cron、数据库、原始样本及已发布episode均未修改，没有新模型调用或部署。
+
+## AutoRecall回溯入口（基线a068c6b后）
+
+AutoRecall卡片与既有raw-text fallback现已携带已标记摘要项的回溯入口。
+本轮只修改源码和离线测试，默认生成模式、生产配置、cron、索引数据库及已发布episode未改，
+没有新模型请求或部署。
+
+### 展示与授权边界
+
+回溯说明写入既有source_hint字段，保持卡片schema及字段白名单不变，例如：
+
+```text
+memory/episodes/2026-10-20.md:1-3 | derived_summary lossy=true semantic=NOT_CERTIFIED locator=unverified archive=checkpoint:<64位归档ID> items=0,1 source_required_for=parameters,acceptance,execution,disputed_claims
+```
+
+定位信息在摘要裁切之前从完整chunk提取；source_hint最多512个UTF-16字符，
+优先保留完整归档ID及用途要求。超过8个项序号时只展示前8个并标注more数量；
+仍可通过chunk ID或归档ID读取，未展示的序号没有被删除或改写。
+卡片不加载档案、不注入完整原文，也不把存在程序标记视为通过完整性或语义校验。
+冲突标记只展示locator=conflict，不选择任一归档ID；显式回读仍拒收。
+缺失或损坏的档案也只在显式读取时判定，不通过AutoRecall新增磁盘读取。
+
+Canonical投影只从Canonical source.path/text提取定位信息，
+忽略运行时候选的伪造标记、derived_memory及get_id；
+既有get_token仍指向Canonical chunk身份。
+正式卡片的source_hint属于原有Owner预览及projection_hash覆盖的payload，
+不是授权完成后追加的字段。仅改变定位器也会使旧授权不匹配；
+受影响的卡片需要按原有Owner preview/assert流程重新授权，不能自动继承旧许可。
+本轮没有向实际授权表写入任何许可。
+
+正式注入继续经过原有Owner身份、精确授权、生命周期、安全及scope门槛；
+没有改变选择顺序、topK、置信度门槛或检索排序。
+raw-text fallback与通用卡片格式器保留各自原有入口和限制，
+不因回溯指针而获得正式卡片授权。
+无标记的旧episode、完全失去标记的分片及非episode卡片维持既有source_hint，
+不会从日期或候选元数据猜测归档。
+
+### 验证与剩余限制
+
+新增7项测试，覆盖裁切后的完整指针、无归档IO、Canonical来源优先、
+512字符边界、冲突/无标记处理、source_hint单独篡改使授权失效，
+以及正式生产边界的“未授权/非Owner不展示、已精确授权才展示”。
+显式原文回读继续返回完整记录和NOT_CERTIFIED语义状态。
+
+私有GPT归档以离线fixture加载，14项、99次引用、93个不同段落在Owner卡片投影后
+仍可回读一致原文，原始归档字节未变。模型调用0、生产写入0。
+测试默认不加载私有档案；本轮通过MEMORY_ENGINE_TEST_CHECKPOINT_ARCHIVE显式运行。
+相关checkpoint、AutoRecall、disclosure及工具回归626/626通过，无跳过；
+static-check889文件、test-integrity409文件及修改文件语法、git diff --check通过。
+
+尚未运行真实Core索引器验证标记覆盖率，完全不含程序标记的分片仍不能自动回溯；
+尚未统一强制所有下游执行工具等待原文读取。
+Nightly Maintenance归档清理/备份接入也仍待完成。
+这些限制不会被“卡片带指针”或“引用可解析”改写为模型结论已获事实认证。
+当前原始样本没有独立工具调用/返回事件，回溯只能核对当时的对话原述。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 
