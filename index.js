@@ -224,6 +224,7 @@ export default definePluginEntry({
     const executeMemoryEngineGet = createMemoryEngineGetExecute({
       hybrid: hybridRuntimeContext,
       get: {
+        memoryDir: paths.memoryDir,
         withCoreDb,
         withEngineDb: withEngineDbReadonly,
         onMemoryEngineGetSuccess: autoRecallLifecycle.onMemoryEngineGetSuccess,

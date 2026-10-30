@@ -359,6 +359,22 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
   const allLogs = assessment.allLogs;
 
+  // Explicit opt-in; a derived failure must never fall through to legacy extraction.
+  const runtime = getRuntime();
+  if (runtime.checkpointSummaryMode !== "legacy") {
+    if (runtime.checkpointSummaryMode !== "derived") {
+      return { status: "summary_invalid", reason: "derived_mode_invalid", skipped: true,
+        memories: 0, configs: 0, episode: false, writes: writeStats,
+        publication: { published: false, reason: "derived_mode_invalid" } };
+    }
+    return require("../lib/checkpoint/derived-summary").generateDerivedCheckpoint(rawLogs, {
+      targetDate: episodeDate, generatedAt, diagnostics,
+      rawLogStats: options.rawLogStats, inputReady: options.inputReady,
+      conversationReady: assessment.shouldCallLlm === true,
+      generator: runtime.derivedSummaryGenerator, signal: options.signal,
+    });
+  }
+
   if (options.rawLogStats?.budgetCoverageComplete === false) {
     const segmented = await require("../lib/checkpoint/long-session-summary").summarizeLongSession(rawLogs, {
       targetDate: episodeDate, stats: options.rawLogStats, inputReady: options.inputReady === true,
@@ -1082,6 +1098,7 @@ async function main(argv = process.argv.slice(2)) {
 
 runtimeRegistry.installRuntimeFallbacks({
   llmNightlyExtract: checkpointLlm.llmNightlyExtract,
+  derivedSummaryGenerator: checkpointLlm.llmDerivedSummary,
   readCheckpointRawLogs: checkpointRawLog.readCheckpointRawLogs,
   readYesterdayRawLogs: checkpointRawLog.readYesterdayRawLogs,
   flushCheckpointRawLog: runFlushSessionRawlogCheckpoint,
