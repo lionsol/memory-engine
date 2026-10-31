@@ -1,6 +1,6 @@
 # 有损摘要与原文回溯
 
-日期：2026-10-30（Asia/Shanghai）。
+日期：2026-10-31（Asia/Shanghai）。
 
 当前接受标准为：允许摘要遗漏、归并不佳或判断出错，完整保存已采集的原始记录，
 并保证每条摘要的引用可以读回同一份原文。质量问题留档，不再逐项阻断摘要接受。
@@ -8,7 +8,9 @@
 生成入口与memory_engine_get读取入口已接入，默认仍走legacy；尚未部署或开启生产路径。
 显式搜索、普通chunk读取与AutoRecall卡片已新增逐项定位接线，
 Nightly Maintenance已新增归档检查与显式配置的追加式备份，见下文。
-默认不配置备份，不清理原文或历史归档；无标记分片定位及下游执行约束尚未接入。
+默认不配置备份，不清理原文或历史归档；
+新生成的不可变发布副本支持无标记Core分片的显式回溯，见2026-10-31接线记录。
+未保留发布副本的旧分片、AutoRecall无标记直接定位及下游统一强制回读仍有剩余范围。
 
 ## 接受标准
 
@@ -569,8 +571,112 @@ MEMORY_ENGINE_CHECKPOINT_ARCHIVE_BACKUP_DIR=/absolute/dedicated/backup-directory
 没有安装依赖或修改生产环境。
 
 本轮未运行实际生产Nightly、未部署、未开启备份任务。
-真实Core分片标记覆盖率、无标记分片定位和下游统一强制回读仍待完成；
-没有新增原文/历史档案清理策略，全部继续保留。
+本阶段尚未使用真实Core分片器；后续验证和无标记显式回溯见下节，
+下游统一强制回读仍待完成。没有新增原文/历史档案清理策略，全部继续保留。
+
+## 无标记Core分片的显式回溯（2026-10-31，基线f6493c5后）
+
+读取实际安装的OpenClaw 2026.7.1-2源码后确认：
+memory-core-host-engine-storage中的chunkMarkdown不只按源文件整行切分。
+长行先分段，再以换行连接；中文/Unicode字符估算还可能使同一原始行拆成更细的段。
+多个Core分片因此可共享同一个start_line/end_line，且续段不含完整程序标记。
+旧的“只核对标记所在行前缀”不能覆盖这些续段。
+
+### 不可变发布副本与版本状态
+
+新增lib/checkpoint/episode-projection.cjs。
+episode-writer导出renderEpisodeFile，发布与归档使用同一渲染结果，
+原有legacy文件格式、源归档协议及模型输出保持不变。
+副本按内容SHA-256保存于：
+
+```text
+memory/checkpoint-projections/YYYY-MM-DD/<projection_id>.json
+```
+
+副本绑定archive_id、episode路径、完整文件文字、协议版本及publication_status。
+校验可信头的归档/历史关系，要求所有摘要项的程序投影各出现一次；
+不修改模型正文或原文记录。
+
+| 状态 | 时机与用途 |
+| --- | --- |
+| prepared | episode发布前持久化并读回验证；失败则不发布。保留，但不参与来源匹配 |
+| published | episode提交后确认文件文字一致，再追加登记；显式回溯只匹配该状态 |
+
+两种状态是不同内容ID，不覆盖旧版本。
+发布前失败可保留未引用的原文归档或prepared副本；
+发布后登记失败返回summary_invalid，但保留episode=true、
+publication.published=true、projection_registered=false，不能报告已经回滚。
+直接按checkpoint:<archive_id>读取仍可使用已保存原文；
+登记缺失的无标记续段不会被自动认领。
+
+### 显式读取匹配
+
+memory_engine_get从Canonical Core行取得hash、start_line、end_line及完整text，
+不使用工具参数或运行时候选提供的定位声明。
+先确认Core分片SHA-256与完整text一致，再在该日期的不可变published副本中匹配：
+
+- 必须保留源行边界、字符顺序、空白及所有非换行字符；
+- 只允许同一原始行被Core分段后插入的额外换行；
+- 必须与副本中的摘要项行相交；不从无关头部文字推断摘要项；
+- 不读取活跃episode，不按日期或“最新版本”选择归档。
+
+匹配后返回scope=archived_projection_line_range、projection_ids、
+item_indexes和newline_policy=core_inserted_segment_separators_only。
+provenance_basis明确为exact_projection_match_not_core_ingestion_attestation：
+这证明文字与归档投影匹配，不证明Core索引的因果来源，也不认证模型语义或工具执行。
+相同归档与相同项的多个匹配副本可合并列出；
+不同archive_id或不同项集合同时匹配时返回derived_projection_ambiguous，
+不因文字相同就把旧修订重定向到新修订。
+
+敏感purpose继续返回完整已采集原文及字面引用。
+item_index必须属于该分片覆盖的项；失败不触发成功强化回调。
+具有有效Core定位信息、且归档已有published副本的标记分片，
+也不能凭开头标记绕过被改写续段的检查。
+没有副本的历史标记读取保留原来的marked_items_only兼容范围。
+
+单次读取最多检查该日期256份副本（prepared也计入预算），
+分片最多131072个UTF-16字符，单个发布副本文字最多2000000字符；
+匹配工作量也有显式预算，超限拒收，不截断后接受。
+没有匹配副本或缺少可信Core定位的无标记分片仍为locator_unavailable，
+不能追认旧分片的来源。
+
+搜索与AutoRecall保持纯投影，不在热路径读取这些副本。
+无标记搜索预览/卡片仍不会直接展示归档ID；
+消费方可以使用已有Canonical chunk ID显式get并请求相应purpose。
+下游所有执行工具尚未统一强制等待原文读取。
+
+### Nightly与备份
+
+Nightly同时验证并保留prepared/published全部副本及其原文绑定。
+备份清单升级checkpoint-archive-backup-v2，新增projections清单和projection_count，
+备份目录按原相对路径保留checkpoint-projections/YYYY-MM-DD/<id>.json。
+原v1清单和备份对象不改写，仍不自动清理任何历史版本。
+缺失/损坏副本、复制失败或目标字节冲突不会发布新的完成清单。
+
+### 验证范围
+
+新增18项测试，包含真实checkpoint发布、发布前写入失败、发布后登记失败、
+完全无标记get、续段篡改、跨修订歧义、旧版本稳定定位及备份恢复。
+相关回归700/700通过，无跳过；static-check889文件、test-integrity409文件、
+新增/修改CJS语法及git diff --check通过。
+
+通过MEMORY_ENGINE_TEST_OPENCLAW_ROOT显式加载实际安装的SDK纯分片函数，
+测试tokens/overlap为8/0、16/8、32/16、128/32、400/80。
+合成样本397个含摘要项分片全部通过，其中391个无完整标记，
+369个在同一原始行内含Core插入的换行。
+实际SDK文件SHA-256：
+1b7f015f10567a2df3ccd3b271bc4dfc82cd2dd9599465dbf9ab85b381eeefff。
+
+私有GPT样本在临时目录备份后，删除临时活跃归档和投影目录，
+仅用备份验证真实Core生成的71个分片（69个无完整标记），
+恢复14项、99次引用、93个不同段落的一致原文。
+私有源档案字节未变，模型调用0、provider调用0、生产写入0。
+默认未设置私有样本/SDK环境变量时，这两项测试会明确跳过。
+
+本轮只调用SDK纯分片函数，没有启动真实Core索引器或调用provider；
+provider二次拆分路径及整条生产索引链尚未实跑，不宣称覆盖全部生产分片。
+原始样本仍只有对话及助手转述，不能据此认证工具实际执行。
+尚未部署、未修改生产配置或cron，也未补写已发布的旧episode。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 
