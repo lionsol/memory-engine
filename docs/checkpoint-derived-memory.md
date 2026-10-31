@@ -675,7 +675,8 @@ Nightly同时验证并保留prepared/published全部副本及其原文绑定。
 默认未设置私有样本/SDK环境变量时，这两项测试会明确跳过。
 
 本轮只调用SDK纯分片函数，没有启动真实Core索引器或调用provider；
-provider二次拆分路径及整条生产索引链尚未实跑，不宣称覆盖全部生产分片。
+该阶段尚未运行provider二次拆分纯函数；后续验证见下节。
+整条生产索引链仍未实跑，不宣称覆盖全部生产分片。
 原始样本仍只有对话及助手转述，不能据此认证工具实际执行。
 尚未部署、未修改生产配置或cron，也未补写已发布的旧episode。
 
@@ -767,6 +768,88 @@ static-check889文件、test-integrity409文件、新增CJS语法及git diff --c
 原始样本仍没有独立tool call/result，不能凭对话转述认证工具真相。
 全局操作强制回读仍需确定具体下游消费者并由宿主接线。
 本轮未部署、未启用策略、未改生产配置/数据库/cron，也没有新模型请求。
+
+## Provider二次拆分的行窗口回溯（2026-10-31，基线9a81f92后）
+
+已核对实际安装OpenClaw 2026.7.1-2的两个SDK入口：
+chunkMarkdown及enforceEmbeddingMaxInputTokens。
+后者对超限的文本按UTF-8字节拆分并重新计算分片哈希，
+但保留父分片的startLine/endLine，不把行号改成子片段的精确位置。
+
+这会让合法子片段只含父范围中的某一行或一行中的几个字符，
+也可能恰好从分隔换行处开始或结束。
+旧的精确范围匹配在“first source line / second source line / third source line”
+这类三行例子中会把三个真实SDK子片段全部误拒收。
+本轮修复该读取问题，没有修改Core分片器或provider实现。
+
+### 匹配规则与范围
+
+episode-projection新增matchLineWindow，把Canonical行号视为有界搜索窗口，
+在已登记的不可变发布副本中核对完整子片段文字：
+
+- 仍检查完整分片哈希，不修剪空白或替换、重排任何非换行字符；
+- 原始换行及真实空行不能被删除或凭空增加；
+- 允许Core在原始长行内插入的分隔换行，以及二次切分后首尾留下的分隔符；
+- 根据实际含非空文字的源行计算item_indexes，不把父窗口覆盖的全部事项都授予子分片；
+- 同时保留所有可能匹配的源跨度，不把其中一个位置冒充provider精确offset记录。
+
+完整范围匹配继续使用scope=archived_projection_line_range。
+只有窗口内部分内容匹配时，返回scope=archived_projection_line_window，
+并附带core_line_window及matched_source_spans；其语义仍为归档投影文字匹配，
+不是对Core索引因果来源、摘要事实或工具执行的认证。
+
+若相同子片段同时出现在多个事项、不同归档版本，或同时出现在头部与摘要项中，
+不同事项范围会触发derived_projection_ambiguous。
+不丢弃头部匹配来挑选一个事项；调用方传入item_index也不能消除来源歧义。
+只有头部匹配的子片段保持locator_unavailable，敏感读取拒收。
+明确已知归档ID的整份原文回读仍可使用原有checkpoint:<archive_id>入口。
+
+匹配工作量按字符比较计入预算，最多保留256个匹配位置；
+整个读取也最多接受256个候选匹配，不截断后选择“第一个”。
+原有快照/分片大小预算继续生效。
+搜索、AutoRecall、原文归档、发布副本状态及Nightly备份格式均未改变，
+仅显式读取的投影匹配增加该路径。
+
+### 离线验证
+
+新增test/checkpoint-provider-projection.test.cjs，共10项测试。
+直接调用真实SDK纯函数，用较小输入限额触发路径；
+provider stub的embedding函数若被调用就使测试失败。
+当前SDK以UTF-8字节估算这里的限额，本轮人为预算不是生产provider的token配额，
+也不据此推断生产请求曾实际触发该分支。
+
+| 场景 | 结果 |
+| --- | --- |
+| 单父窗口、多种provider/hard上限组合 | 125次非空子片段检查：113次通过、2次歧义拒收、10次头部/非事项范围未认领 |
+| 主Unicode分片再做字节拆分 | 529次事项续段检查通过，含120次首尾换行及271次片段内换行场景 |
+| 实际memory_engine_get | 只允许子片段实际覆盖的item_index，错误事项不触发成功强化回调 |
+| 空白/字符/哈希/越界篡改 | 拒收，不扩大事项范围 |
+| 私有GPT档案备份恢复 | 59个SDK子片段：57个摘要片段通过，2个纯头部片段未认领；恢复14项、99次引用、93个不同段落 |
+
+所有字节拆分均额外核对：子片段重新连接后与父文本完全一致，
+Unicode合法，哈希等于完整子片段的SHA-256。
+事项期望值独立按父文本的原始字符offset计算，歧义也与原文重复出现位置交叉检查。
+私有档案仅复制到临时目录；删除临时活跃归档/投影后只用备份回读，
+原始私有档案字节未变。
+
+验证SDK指纹：
+
+| 文件 | SHA-256 |
+| --- | --- |
+| plugin-sdk/memory-core-host-engine-embeddings.js | c648220ea0122589bc5d5e231f3224662128627b1f8e7fa104e4b99126e4eeee |
+| memory-core-host-engine-embeddings-DVluEqwT.js | ca7f8f7e2146cea0329afe218b60dc0aab4dd02e3dd3062288316f5da9330964 |
+| internal-ss-Qpla0.js | ba0a670347e61bbf9c85a07a482fb23c30d26cb64b1657edc646d74298d560a8 |
+
+相关回归730/730通过，无跳过；static-check889文件、test-integrity409文件、
+修改/新增CJS语法及git diff --check通过。
+provider调用0、模型调用0、生产数据库写入0，没有运行真实生产索引器。
+这补齐了两段SDK拆分的离线验证，不等于整条生产索引/嵌入链已经验收。
+
+歧义片段仍需更多可验证上下文，不能从现有父行号和重复文字中唯一恢复事项。
+没有发布副本的旧记录、AutoRecall无标记直接定位及全局下游强制回读仍有剩余范围；
+可选最终执行守卫也仍未在默认装配中启用。
+本轮未部署，未修改生产配置、cron、原始样本或已发布episode。
+原始实验样本没有独立tool call/result事件，所有语义与工具真相边界保持不变。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 
