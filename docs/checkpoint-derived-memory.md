@@ -11,6 +11,7 @@ Nightly Maintenance已新增归档检查与显式配置的追加式备份，见�
 默认不配置备份，不清理原文或历史归档；
 新生成的不可变发布副本支持无标记Core分片的显式回溯，见2026-10-31接线记录。
 未保留发布副本的旧分片、AutoRecall无标记直接定位及下游统一强制回读仍有剩余范围。
+已新增宿主明确声明依赖的最终执行边界，但默认装配未启用，不代表全局执行工具已受控。
 
 ## 接受标准
 
@@ -677,6 +678,95 @@ Nightly同时验证并保留prepared/published全部副本及其原文绑定。
 provider二次拆分路径及整条生产索引链尚未实跑，不宣称覆盖全部生产分片。
 原始样本仍只有对话及助手转述，不能据此认证工具实际执行。
 尚未部署、未修改生产配置或cron，也未补写已发布的旧episode。
+
+## 敏感消费的最终执行边界（2026-10-31，基线06de582后）
+
+新增lib/checkpoint/derived-evidence-consumer.cjs，
+并在createMemoryEngineExecute中提供宿主侧action.derivedEvidencePolicy接线。
+该策略必须是运行时装配的函数，memoryDir也取自同一宿主装配，
+不读取模型参数中的策略、已验证声明或回读令牌。
+
+当前index.js默认装配没有注入该策略，也没有新增公开工具、JSON配置开关或生产启用项。
+本轮完成可调用的执行边界及memory-engine操作入口接线，
+不代表所有外部exec、部署工具或结论输出已经自动受控。
+
+### 为什么放在最终执行入口
+
+实际SDK中，trusted tool policy运行之后，其他before_tool_call hook仍可修改参数；
+单靠较早的hook检查不能证明校验绑定最终执行内容。
+SDK也不能可靠判定任意命令是否依赖摘要，不能用关键词冒充依赖识别。
+
+包装器因此在实际调用操作函数前执行以下步骤：
+
+1. 对本次参数做严格JSON快照并深度冻结，绑定工具名、toolCallId及参数的SHA-256。
+2. 由宿主策略返回明确的敏感purpose、不可变archive_id及可选item_index。
+3. 对每个依赖调用readDerivedSummary，读取引用所在完整原始记录。
+4. 再次验证所有涉及的原文归档仍可读且完整。
+5. 把冻结的原文证据上下文交给消费者，再且仅再调用一次操作函数。
+
+每次调用都会重新读取，不缓存可转移的“已读凭证”；
+不能用上轮成功、相同toolCallId或模型传入的已验证字段跳过本次读取。
+没有依赖声明的默认执行器维持原行为；
+显式配置策略后，只有返回null表示这次操作不在其范围内。
+策略缺失返回值、抛错、绑定不符或非法引用都会拒收，不静默视为无依赖。
+
+### 宿主声明与消费者接口
+
+声明结构固定如下：
+
+```js
+{
+  operation_sha256: expectedOperationDigest,
+  purpose: "execution", // 或exact_parameters/acceptance/disputed_claims
+  references: [
+    { archive_id: immutableArchiveId, item_index: 0 }
+  ]
+}
+```
+
+operationDigest({toolName, toolCallId, params})导出供宿主计算同一规范摘要。
+依赖计划必须由宿主负责，不能从模型的“我已经核验”或工具参数直接复制。
+如果宿主计划预先绑定了操作参数，应返回计划中的expected digest；
+最终参数变化后绑定必须失效。
+
+wrapDerivedEvidenceConsumer({memoryDir, toolName, resolveDeclaration, execute})
+返回execute(toolCallId, params, trustedContext)。
+宿主策略接收冻结的invocation及trustedContext；
+操作函数接收(toolCallId, frozenParams, evidenceContext, trustedContext)。
+evidenceContext包含purpose、references、完整证据读取结果及operation_sha256，
+语义状态固定NOT_CERTIFIED，范围仍为已采集原文。
+源记录级单独读取不被当作完整事项声明；声明只接受archive_id及可选item_index。
+
+memory-engine自身操作可通过action.derivedEvidencePolicy和action.memoryDir使用该包装器。
+普通动作回复不会自动附带完整原文；既有cite授权、Owner Get约束和其他权限不被替代。
+取消信号在读取前后检查，失败返回MEMORY_DERIVED_EVIDENCE_REQUIRED及稳定reason。
+操作函数自身失败原样传播，不重试、不回退，也不承诺撤回已开始的操作。
+
+输入/证据上下文最多20000个节点、32层、1000000个UTF-16字符串/键字符，
+单次声明最多16个引用；重复引用去重，非法JSON、getter、稀疏数组或预算超限拒收，
+不截断证据后继续执行。
+
+### 验证与适用边界
+
+新增20项测试，包括：
+已知错误摘要仍按非阻断质量问题接受、完整原文及资格可见、四种敏感purpose、
+缺失/损坏/部分失败拒收、最终重验、跨调用绑定、等待期间参数篡改、
+取消、非法声明/预算，以及消费者失败不重试。
+
+真实memory_engine cite在临时Engine数据库中验证：
+证据通过后才变更；归档损坏或取消时hit_count及事件不变；
+证据通过仍不能绕过原有cite授权。
+默认执行器不读取归档，模型参数不能注入宿主策略。
+私有GPT归档进入消费者回调后，14项、99次引用、93个不同段落仍一致，
+原始档案字节未变。相关回归720/720通过，无跳过；
+static-check889文件、test-integrity409文件、新增CJS语法及git diff --check通过。
+
+这个边界保证经过该入口且被宿主明确声明的消费会先机械回读证据；
+不自动发现遗漏的依赖，不证明消费方采纳了证据或使用了正确参数，
+也不替代执行权限、业务验收、跨文件事务或工具实际执行结果验证。
+原始样本仍没有独立tool call/result，不能凭对话转述认证工具真相。
+全局操作强制回读仍需确定具体下游消费者并由宿主接线。
+本轮未部署、未启用策略、未改生产配置/数据库/cron，也没有新模型请求。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 
