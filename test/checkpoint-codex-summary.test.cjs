@@ -53,6 +53,43 @@ function harness(t, behavior, extraEnv = {}, killBehavior) {
   const options = { env, spawnImpl, signalChildImpl, tempRoot: root, killGraceMs: 10 };
   return { root, env, options, invocations, kills, generate: cli.createCodexSummaryGenerator(options) };
 }
+test("host-selected claim inventory schema reaches the isolated CLI and literal-evidence projector", async t => {
+  const claims = require("../lib/checkpoint/summary-claim-ledger.cjs");
+  const source = buildFactInput(logs(), DATE);
+  const f = harness(t, ({ stdin, lines, close }) => {
+    const p = JSON.parse(inputEnvelope(stdin).source_packet), row = p.SOURCE.sources[0].fragments[0];
+    lines([...start(), message({ version: p.version, target_date: p.target_date, binding: p.binding,
+      claims: [{ id: "c1", scope: "本次观测", kind: "report", text: "样本资格需按原文核对",
+        quotes: [{ fragment: row[0], quote: row[4] }], conditions: [], corrects: [] }],
+      dispositions: [] }), completed()]);
+    close();
+  });
+  const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract: "claim_ledger" });
+  let metadata;
+  const r = await claims.runClaimInventory(source, async request => {
+    const reply = await generate(request); metadata = reply.generator; return JSON.stringify(reply.summary);
+  });
+  assert.equal(r.status, "READY_FOR_REVIEW"); assert.equal(r.semantic_correctness, "NOT_CERTIFIED");
+  const args = f.invocations[0].args, selected = args[args.indexOf("--output-schema") + 1];
+  assert.equal(path.basename(selected), "claim-ledger-schema.json");
+  assert.equal(metadata.output_contract, "claim_ledger");
+  assert.equal(metadata.schema_sha256, require("node:crypto").createHash("sha256").update(fs.readFileSync(selected)).digest("hex"));
+  assert.equal(metadata.tool_events, 0); assert.equal(f.invocations.length, 1);
+});
+test("unknown host output schemas refuse before spawn and cannot become arbitrary file paths", async t => {
+  const f = harness(t);
+  for (const outputContract of ["unknown", "../arbitrary.json", null]) {
+    const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract });
+    await assert.rejects(generate(request()), { code: "derived_cli_output_contract" });
+  }
+  assert.equal(f.invocations.length, 0); assert.deepEqual(fs.readdirSync(f.root), []);
+});
+test("request data cannot select an experimental schema and default summary metadata remains unchanged", async t => {
+  const f = harness(t), r = await f.generate({ ...request(), outputContract: "claim_ledger" });
+  const args = f.invocations[0].args;
+  assert.equal(path.basename(args[args.indexOf("--output-schema") + 1]), "derived-summary-schema.json");
+  assert.equal(Object.hasOwn(r.generator, "output_contract"), false);
+});
 test("CLI uses explicit model/effort, stdin, empty private cwd and account/proxy allowlist without a shell", async t => {
   const f = harness(t, ({ child, stdin, close, options }) => {
     assert.deepEqual(fs.readdirSync(options.cwd), []);

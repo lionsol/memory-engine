@@ -1,0 +1,122 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "target_date",
+    "binding",
+    "claims",
+    "dispositions"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "target_date": {
+      "type": "string"
+    },
+    "binding": {
+      "type": "string"
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "scope",
+          "kind",
+          "text",
+          "quotes",
+          "conditions",
+          "corrects"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "observation",
+              "report",
+              "request",
+              "decision",
+              "hypothesis",
+              "correction"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "quotes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "fragment",
+                "quote"
+              ],
+              "properties": {
+                "fragment": {
+                  "type": "string"
+                },
+                "quote": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "corrects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "dispositions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fragment",
+          "reason",
+          "claim_ids"
+        ],
+        "properties": {
+          "fragment": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "duplicate",
+              "context",
+              "unresolved"
+            ]
+          },
+          "claim_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
