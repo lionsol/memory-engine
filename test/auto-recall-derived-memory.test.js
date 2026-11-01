@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { createHash } from "node:crypto";
+import projections from "../lib/checkpoint/episode-projection.cjs";
+import episodeWriter from "../lib/checkpoint/episode-writer.js";
+import { createMemoryEngineGetExecute } from "../lib/tools/memory-engine-actions.js";
 import Database from "better-sqlite3";
 import archive from "../lib/checkpoint/summary-memory-archive.cjs";
 import locator from "../lib/checkpoint/derived-summary-locator.cjs";
@@ -102,7 +106,12 @@ test("Canonical locator authority rejects forged runtime previews and ignores su
     { ...f.core, path: "memory/projects/plain.md" }]) {
     const canonical = composeCanonicalMemoryObject(source, f.engine);
     const card = projectCanonicalMemoryToMemoryCard(canonical, forged);
-    assert.equal(card.memory_object.content_ref.derived_memory, undefined);
+    if (source.path === EPISODE) {
+      assert.equal(card.memory_object.content_ref.derived_memory.status, "locator_unavailable");
+      assert.match(card.memory_card.source_hint, /episode_unlinked semantic=NOT_CERTIFIED locator=unavailable/);
+      assert.ok(card.memory_card.source_hint.includes("get=memory_engine_get:" + ID));
+      assert.ok(!card.memory_card.source_hint.includes(FAKE_ID));
+    } else assert.equal(card.memory_object.content_ref.derived_memory, undefined);
     assert.ok(!card.memory_card.source_hint.includes("checkpoint:"));
   }
 });
@@ -126,13 +135,18 @@ test("source hints remain bounded, preserve the full archive ID, and never choos
     { code: "derived_locator_conflict" });
 });
 
-test("unmarked, split-away and non-episode cards preserve source hints and gain no guessed archive", t => {
+test("unmarked and split-away episode cards retain Get routes without guessing an archive; other paths stay unchanged", t => {
   const f = fixture(t);
   for (const candidate of [{ ...f.candidate, text: "legacy episode" },
     { ...f.candidate, text: f.lines[0].slice(150) },
     { ...f.candidate, path: "memory/projects/plain.md" }]) {
     const card = projectCandidateToMemoryCard(candidate).memory_card;
-    assert.equal(card.source_hint, candidate.path + ":0-0");
+    if (candidate.path === EPISODE) {
+      assert.ok(card.source_hint.startsWith(candidate.path + ":0-0"));
+      assert.match(card.source_hint, /episode_unlinked semantic=NOT_CERTIFIED locator=unavailable/);
+      assert.ok(card.source_hint.includes("get=memory_engine_get:" + ID));
+      assert.ok(formatAutoRecallContext([candidate]).includes("get=memory_engine_get:" + ID));
+    } else assert.equal(card.source_hint, candidate.path + ":0-0");
     assert.ok(!formatAutoRecallContext([candidate]).includes("archive=checkpoint:"));
   }
 });
@@ -183,6 +197,114 @@ test("production AutoRecall requires unchanged Owner authority, then explicit so
   assert.equal(read.metadata.status, "verified");
   assert.equal(read.metadata.semantic_correctness, "NOT_CERTIFIED");
   assert.equal(read.evidence.original_records[0].record.text, f.rawLogs[0].text);
+});
+
+
+test("unlinked episode hints bound exact Get IDs and reject malformed or reserved IDs without claiming an archive", () => {
+  const info = locator.inspectDerivedSnippet({ path: EPISODE, text: "unmarked continuation" });
+  const fullId = "a".repeat(256);
+  const hint = locator.formatDerivedSourceHint("long source ".repeat(100), info, fullId);
+  assert.equal(hint.length, 512);
+  assert.ok(hint.includes("get=memory_engine_get:" + fullId));
+  assert.match(hint, /source_required_for=parameters,acceptance,execution,disputed_claims/);
+  assert.doesNotMatch(hint, /derived_summary|lossy=true|archive=|items=|locator=verified/);
+  for (const id of ["", "a".repeat(257), "checkpoint:" + FAKE_ID, "../outside", "id with spaces",
+    "line\nbreak", "id\u0000tail", "路径", undefined]) {
+    const unavailable = locator.formatDerivedSourceHint("base", info, id);
+    assert.match(unavailable, /locator=unavailable get=unavailable/);
+    assert.ok(unavailable.length <= 512);
+    assert.ok(!unavailable.includes("get=memory_engine_get:"));
+    assert.ok(!/[\n\r\u0000]/.test(unavailable));
+  }
+  assert.equal(locator.formatDerivedSourceHint("base", { ...info, kind: "derived_summary" }, ID), "base");
+});
+
+test("Owner-attested marker-free card leads through exact Canonical Get to originals, while corrupt evidence still rejects", async t => {
+  const f = fixture(t);
+  const text = episodeWriter.renderEpisodeFile({ episodeDate: DATE, generatedAt: f.stored.payload.created_at,
+    configs: [], episodeText: f.lines.join("\n"), diagnostics: { derivedSummary: {
+      archive_id: f.stored.archive_id, previous_archive_id: null } } });
+  const projection = projections.createProjection(f.stored, text);
+  projections.persistProjection(f.root, projection);
+  const line = projections.verifyProjection(projection, f.stored).itemLines[0].line;
+  const fragment = f.lines[0].slice(f.lines[0].indexOf("] ") + 2);
+  const core = { ...f.core, text: fragment, hash: createHash("sha256").update(fragment).digest("hex"),
+    start_line: line, end_line: line };
+  const canonical = composeCanonicalMemoryObject(core, f.engine);
+  const db = dbFixture(t, { ...f, core });
+  const forged = { ...f.candidate, id: "forged-short", memory_id: "forged-get-id",
+    text: f.lines[0].replaceAll(f.stored.archive_id, FAKE_ID),
+    derived_memory: { archive_id: FAKE_ID, status: "verified" }, get_token: "outside:/secret" };
+  const originalLoad = archive.loadArchive, originalResolve = projections.resolveProjectionChunk;
+  let preview;
+  archive.loadArchive = () => { throw Error("card projection must not load archives"); };
+  projections.resolveProjectionChunk = () => { throw Error("card projection must not resolve disk snapshots"); };
+  try {
+    const projected = projectCanonicalMemoryToMemoryCard(canonical, forged);
+    const card = projected.memory_card;
+    assert.ok(card.source_hint.includes("get=memory_engine_get:" + ID));
+    assert.equal(card.get_token, "memory_engine_get:" + ID);
+    assert.ok(!card.source_hint.includes("forged"));
+    assert.ok(!card.source_hint.includes(FAKE_ID));
+    assert.ok(!card.source_hint.includes("archive="));
+    assert.equal(projected.memory_object.content_ref.derived_memory.status, "locator_unavailable");
+    preview = buildOwnerDisclosurePreview(canonical);
+    assert.equal(preview.artifact.payload.source_hint, card.source_hint);
+  } finally { archive.loadArchive = originalLoad; projections.resolveProjectionChunk = originalResolve; }
+
+  const stale = structuredClone(preview.artifact);
+  stale.payload.source_hint = EPISODE + ":" + line + "-" + line;
+  const oldBinding = deriveDisclosureAttestationBinding(canonical, stale);
+  assert.equal(oldBinding.valid, true);
+  assert.notEqual(oldBinding.binding.projection_hash, preview.projection_hash);
+  assertDisclosureAttestation(db.engineDb, oldBinding.binding, { now: 100 });
+  const evaluate = (event, candidates = [{ ...forged, memory_id: ID }]) =>
+    evaluateDirectCardProductionBoundary({ event, candidates,
+      runtimeAgentScope: "edi", withHybridDbAccessScope: db.withHybridDbAccessScope });
+  assert.equal((await evaluate({ senderIsOwner: true }, [forged])).selected.length, 0,
+    "a forged lookup ID must not be rebound to the Canonical row");
+  assert.equal((await evaluate({ senderIsOwner: true })).selected.length, 0,
+    "an old card attestation cannot authorize the changed Get hint");
+  assertDisclosureAttestation(db.engineDb, preview.binding, { now: 101 });
+  assert.equal((await evaluate({ senderIsOwner: false })).selected.length, 0);
+  const allowed = await evaluate({ senderIsOwner: true });
+  assert.equal(allowed.selected.length, 1);
+  const context = formatDirectCardContext(allowed.selected);
+  assert.ok(context.includes("get=memory_engine_get:" + ID));
+  for (const secret of [FAKE_ID, RAW_SENTINEL, "source=before_prompt_build", "archive=checkpoint:"])
+    assert.ok(!context.includes(secret));
+  const access = await db.withHybridDbAccessScope(value => value), successes = [];
+  const get = createMemoryEngineGetExecute({ get: { memoryDir: f.root, ...access,
+    onMemoryEngineGetSuccess: id => successes.push(id) } });
+  const read = await get("card-explicit-get", { id: ID, purpose: "exact_parameters", item_index: 0 });
+  assert.equal(read.found, true, read.reason);
+  assert.equal(read.memory.derived_memory.archive_id, f.stored.archive_id);
+  assert.deepEqual(read.memory.derived_memory.item_indexes, [0]);
+  assert.deepEqual(read.memory.derived_evidence.original_records[0].record, f.rawLogs[0]);
+  assert.deepEqual(successes, [ID]);
+  fs.writeFileSync(path.join(f.root, "checkpoint-archives", f.stored.archive_id + ".json"), "{}");
+  const corrupt = await get("card-corrupt-get", { id: ID, purpose: "execution" });
+  assert.equal(corrupt.found, false);
+  assert.equal(corrupt.code, "MEMORY_GET_DERIVED_INVALID");
+  assert.deepEqual(successes, [ID]);
+});
+
+test("legacy unmarked episode Get hint does not invent an archive or grant sensitive evidence", async t => {
+  const f = fixture(t), core = { ...f.core, text: "legacy episode without immutable publication evidence" };
+  const canonical = composeCanonicalMemoryObject(core, f.engine), db = dbFixture(t, { ...f, core });
+  const preview = buildOwnerDisclosurePreview(canonical);
+  assert.ok(preview.artifact.payload.source_hint.includes("get=memory_engine_get:" + ID));
+  assert.ok(!preview.artifact.payload.source_hint.includes("archive="));
+  const access = await db.withHybridDbAccessScope(value => value), successes = [];
+  const get = createMemoryEngineGetExecute({ get: { memoryDir: f.root, ...access,
+    onMemoryEngineGetSuccess: id => successes.push(id) } });
+  const read = await get("legacy-recall", { id: ID });
+  assert.equal(read.found, true, read.reason);
+  assert.equal(read.memory.derived_memory.status, "locator_unavailable");
+  const sensitive = await get("legacy-sensitive", { id: ID, purpose: "acceptance" });
+  assert.equal(sensitive.found, false);
+  assert.equal(sensitive.reason, "derived_locator_unavailable");
+  assert.deepEqual(successes, [ID]);
 });
 
 test("captured GPT items retain AutoRecall locators and exact original evidence without a model call", {

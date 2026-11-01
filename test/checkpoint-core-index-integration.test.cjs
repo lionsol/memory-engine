@@ -54,6 +54,8 @@ test("published derived memory survives the real Core index/search/Get/backup ch
     await Promise.all([import("../lib/tools/memory-engine-actions.js"), import("../lib/db/isolated-dbs.js"),
       import("../lib/db/schema.js")]);
   const { createIsolatedHybridDbAccessScope } = await import("../lib/recall/hybrid/db-access.js");
+  const { composeCanonicalMemoryObject } = await import("../lib/canonical/memory-object.js");
+  const { buildOwnerDisclosurePreview } = await import("../lib/recall/disclosure/owner-attestable-projection.js");
   const Database = require("better-sqlite3");
   const totals = { offline_summary_calls: 0, offline_embedding_batches: 0, offline_query_embeddings: 0,
     initial_indexed_chunks: 0, initial_marker_free_reads: 0, restored_version_items: 0, initial_sensitive_reads: 0 };
@@ -393,7 +395,14 @@ test("published derived memory survives the real Core index/search/Get/backup ch
         // the verified chunk's metadata scope is checked independently above.
         verifyEvidence(read.memory.derived_evidence, summary.items.map((_, i) => i));
         report.verified_chunks++; verifiedRows.push(row);
-        if (!locator.inspectDerivedSnippet({ path: row.path, text: row.text }).archive_id) report.marker_free_chunks++;
+        if (!locator.inspectDerivedSnippet({ path: row.path, text: row.text }).archive_id) {
+          const card = buildOwnerDisclosurePreview(composeCanonicalMemoryObject(row)).artifact.payload;
+          assert.ok(card.source_hint.includes("get=memory_engine_get:" + row.id));
+          assert.match(card.source_hint, /episode_unlinked semantic=NOT_CERTIFIED locator=unavailable/);
+          assert.ok(card.source_hint.length <= 512);
+          assert.ok(!card.source_hint.includes("archive="), "AutoRecall must not infer an archive without IO");
+          report.marker_free_chunks++;
+        }
         for (const index of indexes) seen.set(index, row);
       }
       assert.deepEqual([...seen.keys()].sort((a, b) => a - b), summary.items.map((_, i) => i));

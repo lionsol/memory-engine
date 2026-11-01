@@ -403,7 +403,8 @@ export function formatAutoRecallContext(results, options = {}) {
     const memoryText = trimMemoryText(item.text);
     if (memoryText) lines.push(`   ${memoryText}`);
     const derived = derivedLocator.inspectDerivedSnippet(item);
-    const sourceHint = derivedLocator.formatDerivedSourceHint(item.path || "unknown source", derived);
+    const sourceHint = derivedLocator.formatDerivedSourceHint(item.path || "unknown source", derived,
+      item.memory_id || item.id || item.chunk_id);
     if (sourceHint !== (item.path || "unknown source")) lines.push(`   source: ${sourceHint}`);
   });
 

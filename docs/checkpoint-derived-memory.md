@@ -12,7 +12,8 @@
 Nightly Maintenance已新增归档检查与显式配置的追加式备份，见下文。
 默认不配置备份，不清理原文或历史归档；
 新生成的不可变发布副本支持无标记Core分片的显式回溯，见2026-10-31接线记录。
-未保留发布副本的旧分片、AutoRecall无标记直接定位及下游统一强制回读仍有剩余范围。
+AutoRecall无标记episode卡片现保留未确认状态和完整Core Get回查提示，不提前读取归档或猜测archive_id。
+未保留发布副本的旧分片及下游统一强制回读仍有剩余范围。
 已新增宿主明确声明依赖的最终执行边界，但默认装配未启用，不代表全局执行工具已受控。
 
 ## 接受标准
@@ -1010,6 +1011,79 @@ static-check889文件、test-integrity409文件、CJS语法及git diff --check�
 完整索引集成文件合计4次合成摘要fixture调用、2次已有GPT输出离线重放、
 11批离线embedding、8次离线query embedding，网络尝试0。
 真实模型调用0、真实embedding provider调用0、生产数据库写入0、部署0。
+
+
+## AutoRecall无标记episode的显式回查提示（2026-11-01，未部署）
+
+基线HEAD=6ee471f，核对时工作树干净。
+前两轮已经验证无标记Core分片可以经显式Get解析发布副本；
+本轮补上卡片表现层丢弃locator_unavailable状态的问题。
+
+### 提示与读取路径
+
+无完整定位标记的episode可能是派生摘要续段，也可能是旧格式文字。
+AutoRecall不读取归档或投影，不能仅凭路径把它标成已认证的派生摘要。
+现在在MemoryObject中保留episode_unlinked/locator_unavailable，
+并把以下提示写入既有、最多512字符的source_hint：
+
+episode_unlinked semantic=NOT_CERTIFIED locator=unavailable get=memory_engine_get:<完整Core ID>
+
+同时保留source_required_for=parameters,acceptance,execution,disputed_claims。
+不猜测archive_id或item_indexes，也不增加lossy=true或derived_summary断言。
+这条Get路径表示尝试解析证据，不是保证已有原文或回溯成功。
+旧格式episode同样带未确认提示；其他路径和已有完整标记的提示保持原来的格式。
+
+普通候选卡片和Canonical卡片都保留该状态。
+旧文本fallback优先使用候选的完整memory_id，避免既有16字符显示截断；
+缺少memory_id时只能沿用候选ID，提示不认证其完整性或唯一性，仍由Get校验。
+Canonical卡片只使用Canonical source.path/text及memory_id，
+不接受runtime candidate携带的伪造文本、derived_memory或get_token作为定位权威。
+提示中显示的Get ID限制为1至256个ASCII字母/数字及点、下划线、冒号、连字符，
+排除checkpoint:保留前缀；非法或超长ID仅显示get=unavailable，不截断后伪装成有效ID。
+Get token本身仍遵守既有披露策略，未增加新工具或新payload字段。
+
+### Owner披露与显式证据验证
+
+生产DIRECT_CARD仍从已选中的Owner披露artifact格式化source_hint。
+新提示在Owner preview计算projection_hash之前生成，
+因此无法把一个旧的不带提示卡片授权直接沿用到新卡片。
+受影响的无标记episode需要Owner重新确认新投影；本轮没有写入任何生产授权，
+也没有放宽Owner、风险或披露能力检查。
+已有完整标记卡片和非episode卡片的提示不因本轮改变。
+
+AutoRecall中仍不打开归档、不注入原始记录、不提前认证投影。
+显式memory_engine_get收到完整Core ID和敏感purpose后，
+继续由原有读取器核对完整Core文本、哈希、行窗口及已发布的不可变副本。
+有证据时返回可验证的archive_id和完整来源记录；
+旧格式无发布副本仍以derived_locator_unavailable拒绝敏感读取，
+归档损坏仍在成功强化回调前拒收。
+提示不是强制执行守卫，也不证明模型实际调用了Get或正确理解原文。
+
+### 验证
+
+新增3项测试，覆盖：
+
+- 最长完整ID和512字符提示上限；非法、保留前缀及控制字符ID不会进入回查提示；
+- 无标记Canonical卡片在不访问归档/投影的情况下生成正确提示，伪造runtime ID不能改变投影权威；
+- 旧卡片授权不能覆盖新提示，非Owner仍拒绝；新Owner授权后卡片可显示完整Get路径；
+- 显式Get恢复完整原文和事项范围，损坏归档不触发额外成功回调；
+- 旧格式episode可普通回忆，但提示不会让它凭空获得原文证据。
+
+既有真实Core索引集成另外对GPT档案的124个无完整标记分片
+（主分片70个、provider拆分54个）核对Owner preview：
+提示包含该真实Core行的完整ID、locator=unavailable和NOT_CERTIFIED，
+不包含推测archive_id；随后仍使用原有Get验证14项/99引用/93段原文。
+原GPT对象、私有档案字节及质量备注不变。
+
+无发布副本的历史记录仍需独立处理。
+本轮补齐的是AutoRecall到显式Get的可见回查入口，
+并未让AutoRecall直接确定无标记分片的archive_id，
+也未启用外部敏感消费者的默认强制回读、生产路径或定时任务。
+主实验没有独立tool call/result事件，不能由回溯证明实际工具执行结果。
+
+相关回归738/738通过，无跳过；static-check889文件、test-integrity409文件、
+修改CJS语法和git diff --check通过。
+真实模型调用0、真实embedding provider调用0、生产数据库/授权写入0、部署0。
 
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 
