@@ -851,6 +851,81 @@ provider调用0、模型调用0、生产数据库写入0，没有运行真实生
 本轮未部署，未修改生产配置、cron、原始样本或已发布episode。
 原始实验样本没有独立tool call/result事件，所有语义与工具真相边界保持不变。
 
+## 真实Core索引链隔离集成（2026-10-31，未部署）
+
+接线基线HEAD=0d211eb，核对时工作树干净。
+新增test/checkpoint-core-index-integration.test.cjs；本轮没有修改生产业务代码。
+验证发现现有Core只读适配层已经兼容新版memory_index_chunks表，
+无需新增业务层表名分支。
+
+### 实际调用和隔离范围
+
+测试使用本机OpenClaw 2026.7.1-2的真实MemoryIndexManager实现，
+调用真实sync、文件发现、分片、provider输入拆分、SQLite/FTS写入及search。
+随后经memory-engine现有只读适配层、混合搜索和memory_engine_get读取。
+Core主库由Core管理器创建；Engine仅在临时库初始化现有生命周期表，
+没有伪造Core行、手工复制分片或用模拟SQL结果代替Core索引。
+
+每次测试先创建私有临时根目录，在导入SDK前设置该测试进程自己的
+OPENCLAW_HOME、OPENCLAW_STATE_DIR、OPENCLAW_CONFIG_PATH和日志位置。
+管理器构造前显式覆盖store.databasePath，provider直接由constructor/providerResult注入，
+purpose=cli，禁用watch、定时同步、自动搜索同步及provider fallback。
+Core的agent database登记也落在临时state中；没有调用默认生产索引入口。
+没有修改HOME、CODEX_HOME、真实配置或服务环境。
+
+摘要生成使用两项合成fixture；embedding由本地确定性三维向量替身生成。
+测试直接阻断fetch、HTTP(S) request及Socket.connect，观测到网络尝试0。
+SQLite向量扩展关闭，走Core现有内存余弦/FTS路径；
+LanceDB不装配，既有日志中的lancedb_table_null是该测试的预期条件。
+这些人工向量和合成摘要不用于评价模型、语义检索质量或生产provider性能，
+也不记作新增GPT实验。
+
+该测试依赖安装版本的私有构造注入接口，明确限制包版本为2026.7.1-2。
+只在设置MEMORY_ENGINE_TEST_OPENCLAW_ROOT时运行；没有设置时显式跳过。
+SDK升级需重新核对接口和路径隔离，不能把测试适配当作稳定生产API。
+
+### 覆盖与结果
+
+两种配置分别为主分片tokens=64/overlap=16，以及单大父窗口加provider输入上限128。
+128在此SDK分支按UTF-8字节估算，仅用于触发二次拆分，不代表生产token配额。
+
+| 场景 | 结果 |
+| --- | --- |
+| 真实checkpoint发布 | 4次离线fixture调用，两个配置各发布初版和修订版，均通过 |
+| 初版真实Core索引 | 两个配置合计71个分片；路径、完整文本SHA-256一致 |
+| 无标记分片Get | 初版32次读取成功，归档定位仍可解析 |
+| 初版敏感读取 | 41次；完整来源记录与引用字符范围逐一一致 |
+| 实际搜索再Get | Core原生search和memory-engine搜索均有结果，ID来自真实Core表，返回项可Get |
+| 修订再次索引 | 新分片定位到新归档及参数43；previous_archive_id和旧episode副本指向初版 |
+| 旧版本 | 初版归档原始字节保留，旧参数42及完整记录仍可回读 |
+| 备份恢复 | 关闭管理器后删除整个临时活跃memory目录，仅用备份和既有只读Core库回读 |
+| 恢复版本/事项 | 两个配置各恢复两版、每版两项，共8个版本事项；不是8项新模型摘要 |
+| 损坏拒收 | 临时备份中的新归档损坏后Get拒收，不触发成功强化回调；直接读取完整旧归档仍成功 |
+| 数据库读取边界 | Core写入尝试被readonly连接拒绝；备份回读前后Core/Engine主文件字节一致 |
+
+修订回读和备份回读另有完整记录及引用检查，不计入表中的初版41次。
+原文回读保留source=before_prompt_build、trigger=user等被合成摘要省略的资格。
+重复文字导致事项来源歧义的片段保持拒收，不靠指定item_index选择一个来源。
+两个事项都必须至少有一个可验证的真实Core分片，不能通过跳过全部歧义来通过测试。
+
+本轮相关回归733/733通过，无跳过；包含上轮730项及本次父测试/两个子测试。
+static-check889文件、test-integrity409文件、显式新增CJS语法检查及git diff --check通过。
+静态工具当前不计入这份新增CJS，因此它另经真实测试执行和node --check核对。
+观测到4次离线摘要fixture调用、6批离线embedding、4次离线query embedding；
+真实模型调用0、真实embedding provider调用0、生产数据库写入0、部署0。
+
+### 尚未覆盖的范围
+
+这是实际Core管理器的隔离集成，不包含生产配置装配、provider工厂/认证、
+远程embedding、sqlite-vec或LanceDB写入、文件watch及定时任务运行。
+本次合成fixture的完整索引链结果，与前文真实GPT档案的纯函数分片/备份验证分开记录；
+不能据此宣称那份14项/99引用样本已经经过真实生产索引。
+
+无发布副本的历史记录、AutoRecall无标记直接定位，以及默认装配尚未覆盖外部敏感消费者的强制回读，
+仍保留原有边界。没有将可选最终执行守卫装配到生产。
+主实验原文没有独立tool call/result事件，回溯仍只核实对话当时说了什么。
+语义状态继续为NOT_CERTIFIED，先前的语义失败和质量备注不改写。
+
 ## 已完成的真实记录回溯验证（2026-10-29历史记录）
 
 使用2026-10-28已经生成的GPT原始输出，没有新模型请求：
