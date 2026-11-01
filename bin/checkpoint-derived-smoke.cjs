@@ -17,7 +17,7 @@ function parseArgs(args) {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--execute") { options.execute = true; continue; }
-    const key = { "--input": "input", "--target-date": "targetDate", "--out": "out", "--response-file": "responseFile" }[arg];
+    const key = { "--input": "input", "--target-date": "targetDate", "--out": "out", "--response-file": "responseFile", "--prompt-variant": "promptVariant" }[arg];
     if (!key || !args[i + 1] || args[i + 1].startsWith("--") || options[key] !== undefined) fail("smoke_arguments");
     options[key] = args[++i];
   }
@@ -34,7 +34,8 @@ function prepare(options) {
       entry_id: entry.entryId, category: entry.category, source_file_sha256: hash(bytes) }));
   if (!records.length) fail("smoke_no_session_flush");
   const input = buildFactInput(records, options.targetDate);
-  const request = lab.buildPrompt(input, "direct", { maxInputChars: 200000, summaryMaxChars: 20000 });
+  const request = lab.buildPrompt(input, "direct", { maxInputChars: 200000, summaryMaxChars: 20000,
+    promptVariant: options.promptVariant ?? "baseline" });
   return { bytes, records, input, request, sourceHash: hash(bytes) };
 }
 function save(directory, name, value) {
@@ -48,6 +49,7 @@ async function runSmoke(options, { env = process.env, generator } = {}) {
     input_chars: data.request.inputChars, requested_model: cfg.model, reasoning_effort: cfg.effort,
     semantic_correctness: "NOT_CERTIFIED", generator_invocations: 0,
     response_replay: Boolean(options.responseFile),
+    ...(options.promptVariant === undefined ? {} : { prompt_variant: options.promptVariant }),
     production_publications: 0, database_operations: 0, deployments: 0 };
   if (!options.execute) return plan;
   if (!path.isAbsolute(options.out || "")) fail("smoke_output_required");

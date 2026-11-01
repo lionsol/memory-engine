@@ -93,10 +93,35 @@ test("replayed output with the wrong source binding remains rejected without a m
   assert.equal(r.status, "FAILED"); assert.equal(r.error, "comparison_binding");
   assert.equal(r.generator_invocations, 0); assert.equal(fs.existsSync(path.join(f.out, "archives")), false);
 });
+test("experimental smoke preserves the actual request and its archive prompt hash", async t => {
+  const f = fixture(t), options = { ...f.options, promptVariant: "qualifier_review_v1" };
+  let sent;
+  const r = await runSmoke(options, { env: {}, generator: async request => {
+    sent = structuredClone(request); return f.generator(request);
+  } });
+  assert.equal(r.status, "PASS_TRACEABILITY_NOT_SEMANTICS");
+  assert.equal(r.prompt_variant, "qualifier_review_v1");
+  assert.equal(r.semantic_correctness, "NOT_CERTIFIED");
+  const recorded = JSON.parse(fs.readFileSync(path.join(f.out, "request.json"), "utf8"));
+  assert.deepEqual(recorded, sent);
+  assert.notEqual(recorded.system, prepare(f.options).request.system);
+  const stored = JSON.parse(fs.readFileSync(path.join(f.out, "archives", r.archive_id + ".json"), "utf8"));
+  const digest = require("node:crypto").createHash("sha256").update(JSON.stringify({
+    system: sent.system, prompt: sent.prompt })).digest("hex");
+  assert.equal(stored.payload.generator.prompt_sha256, digest);
+  assert.equal(f.calls(), 1);
+});
+test("unknown experimental smoke variant refuses before generation or evidence-directory creation", async t => {
+  const f = fixture(t);
+  await assert.rejects(runSmoke({ ...f.options, promptVariant: "unknown" },
+    { env: {}, generator: f.generator }), { code: "comparison_input" });
+  assert.equal(f.calls(), 0); assert.equal(fs.existsSync(f.out), false);
+});
 test("CLI parser rejects unknown arguments and incomplete options", () => {
   assert.deepEqual(parseArgs(["--input", "/a", "--target-date", "2026-10-20", "--execute", "--out", "/b"]),
     { input: "/a", targetDate: "2026-10-20", execute: true, out: "/b" });
-  for (const args of [["--unknown"], ["--input"], ["--input", "--execute"], ["--input", "/a", "--input", "/b"]]) {
+  assert.equal(parseArgs(["--prompt-variant", "qualifier_review_v1"]).promptVariant, "qualifier_review_v1");
+  for (const args of [["--unknown"], ["--input"], ["--input", "--execute"], ["--input", "/a", "--input", "/b"], ["--prompt-variant"], ["--prompt-variant", "baseline", "--prompt-variant", "qualifier_review_v1"]]) {
     assert.throws(() => parseArgs(args), { code: "smoke_arguments" });
   }
 });

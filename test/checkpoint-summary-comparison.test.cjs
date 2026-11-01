@@ -122,3 +122,26 @@ test("ledger supports conditions/unresolved without truncation or mutable valida
  assert.equal(l.items[0].conditions.length,1);l.items[0].unresolved="none";
  assert.throws(()=>lab.validateLedger(i,l),{code:"comparison_schema"});
 });
+test("experimental instructions preserve the full source, binding and resource budget without changing the default",()=>{
+ for(const c of cases){
+  const i=buildFactInput(c.logs,"2026-10-20"),before=structuredClone(i);
+  const baseline=lab.buildPrompt(i,"direct",{summaryMaxChars:20000});
+  const explicit=lab.buildPrompt(i,"direct",{summaryMaxChars:20000,promptVariant:"baseline"});
+  const experimental=lab.buildPrompt(i,"direct",{summaryMaxChars:20000,promptVariant:"qualifier_review_v1"});
+  assert.deepEqual(baseline,explicit);
+  assert.deepEqual(JSON.parse(experimental.prompt),JSON.parse(baseline.prompt));
+  assert.equal(experimental.binding,baseline.binding);
+  assert.notEqual(experimental.system,baseline.system);
+  assert.equal(experimental.inputChars,experimental.system.length+experimental.prompt.length);
+  assert.deepEqual(i,before);
+ }
+});
+test("invalid or non-direct experimental variants cannot silently run another prompt",async()=>{
+ for(const promptVariant of ["unknown",null,42]){
+  let calls=0;
+  const result=await lab.runDirect(input(),async()=>{calls++;return "{}";},{promptVariant});
+  assert.equal(calls,0);assert.equal(result.results.direct.error,"comparison_input");
+ }
+ for(const stage of ["organize","compose"])
+  assert.throws(()=>lab.buildPrompt(input(),stage,{promptVariant:"qualifier_review_v1"}),{code:"comparison_input"});
+});
