@@ -1,7 +1,8 @@
 # 命题清单实验：段内事实覆盖与精确更正
 
 日期：2026-11-01（Asia/Shanghai）；基线提交：0ca08c8。
-状态：源码与离线验证完成；尚无本协议的真实模型语义验收，未接入生产checkpoint。
+状态：完整输入真实提取超时；小型v1返回112条但因9处错引拒收。
+片段ID模式v2已完成显式离线回溯，仍未取得完整样本语义通过；未接入生产checkpoint。
 
 ## 要修复的缺口
 
@@ -53,6 +54,30 @@ corrects仅允许correction使用，目标必须是本响应中的具体claim.id
 quote须在该fragment内连续且唯一；程序返回原文角色、source_hash及UTF-16范围。
 text和conditions是否忠实、kind是否合适仍为NOT_CERTIFIED。
 
+## 片段ID证据模式v2：程序复制原文
+
+真实v1小型实验暴露9处错引后，新增显式referenceMode=fragment_ids，
+协议为checkpoint-claim-ledger-fragments-v2。
+模型只返回evidence片段ID数组，不返回quotes/quote/偏移；
+程序按冻结的SOURCE复制完整片段、计算范围并返回角色及来源哈希。
+不会猜测字符位置、去除Markdown标记、修正转义或做模糊匹配。
+
+claim的其他字段、条件与具体更正关系不变。
+同一片段仍可支持多个claim；证据包含整个片段，不表示片段的所有文字都支持单个claim。
+未知ID、重复ID、空证据及试图夹带quote字段均拒收。
+新协议有不同version/binding，必须显式选择，旧v1精确引文校验保持不变。
+
+~~~js
+const generate = createCodexSummaryGenerator({ env, outputContract: "claim_ledger_fragments" });
+const result = await runClaimInventory(input, async request => {
+  const reply = await generate(request);
+  return JSON.stringify(reply.summary);
+}, { referenceMode: "fragment_ids" });
+~~~
+
+该v2真实生成示例尚未执行；本轮只有v1真实调用及已声明的离线证据重绑定。
+程序复制证据的累计片段长度另限1048576字符，防止紧凑ID放大回读负载；超限拒收、不截断。
+
 ## 不再发生隐式的第二次内容选择
 
 projectClaimLedger逐条呈现全部已提供claim、conditions及更正关系，
@@ -65,7 +90,7 @@ projectClaimLedger逐条呈现全部已提供claim、conditions及更正关系�
 
 ## 覆盖诊断不等于事实完整
 
-每个fragment可被quote覆盖，或由dispositions说明：
+每个fragment可被quote（v1）或evidence（v2）覆盖，或由dispositions说明：
 duplicate须指向已有claim；context/unresolved不携带替代claim。
 未知片段、重复处置、已引用又处置及悬空引用拒收。
 
@@ -97,7 +122,7 @@ const result = await runClaimInventory(input, async request => {
 });
 ~~~
 
-上述是显式调用示例，本轮没有实际执行它。
+上述为v1调用示例；本轮真实执行及拒收结果见下文。
 真实实验执行器仍须保存完整raw_records/原始文件、实际request、CLI原始输出及生成元数据。
 模块record.source只是结构化可见输入，不替代完整原始记录归档；
 raw_response是invoke返回文本，也不等同于CLI stdout原始字节。
@@ -108,7 +133,7 @@ raw_response是invoke返回文本，也不等同于CLI stdout原始字节。
 超正文预算时不截断、不再请求压缩；返回拒收并保留可复核记录。
 semantic_correctness固定NOT_CERTIFIED、publishable=false。
 
-## 本轮验证
+## 初始源码离线验证
 
 新增19项命题清单测试、3项CLI实验schema接线测试。
 覆盖同段多项、同片段多命题、部分更正、独立观测保留、
@@ -129,8 +154,92 @@ semantic_correctness固定NOT_CERTIFIED、publishable=false。
 | Daily Stats定位 | s0.t1.p1.l4，与同段维护结果分开 |
 | 全部可见unit逐字拼回 | 通过 |
 | 原始source.md SHA-256 | 9b119fdc8c72918cbdc97d2000200b6d14cf71fc3c9b75c0827b2c33e903dbf6，未变 |
-| 本轮新模型调用 / 生产写入 / 部署 | 0 / 0 / 0 |
+| 初始源码阶段新模型调用 / 生产写入 / 部署 | 0 / 0 / 0 |
 
-下一步是用这份完整输入运行受控真实提取，人工核对三类独立结果、资格、
-矛盾统计及部分更正，再评估是否优于已记录的direct输出。
-在此之前，不能将结构修复候选或197项程序测试描述为历史摘要语义Bug已解决。
+## 首轮真实提取与错引修复（2026-11-01，执行基线2113019）
+
+本轮两次CLI启动/逻辑生成：一次完整输入，一次另立的小型定位实验，
+模型均明确请求gpt-6-luna/xhigh，超时均配置180000ms，未自动重试或替换模型。
+CLI内部底层网络请求次数未观察，不声称只有两次HTTP请求。
+原文仍只有对话和助手报告，没有独立工具事件。
+
+| 实验 | 模型输入 | 结果 |
+| --- | --- | --- |
+| 完整输入 | 193个可见段落、435片段、47623字符 | thread.started与turn.started后触及期限；derived_cli_timeout，没有最终消息，不能作语义裁决 |
+| 小型定位 | 19个真实段落（含所需标题）、47片段、7436字符 | CLI退出0、工具事件0；返回112条claim、112处引用、7条dispositions；v1因claim_quote拒收 |
+
+DevSpace请求通道先于生成进程返回而超时，检查确认原进程仍在运行后仅回读结果；
+没有因此重新启动相同提取。完整输入失败不能单独归因为输入长度、模型能力或服务过载，
+小型任务随后成功也不能证明完整任务的语义质量。
+
+### 精确错引的原因
+
+112处模型复制的引文中有9处不满足v1合同：
+
+| 类型 | claim | 情况 |
+| --- | --- | --- |
+| 非连续拼接 | c2、c3 | 将合并的三个时间点列表改写为单个时间点加共同结果，文字不在原文中连续出现 |
+| 标记/转义改变 | c26、c32、c94、c97、c102 | 移动Markdown加粗边界、改写反斜杠转义或省掉位于引文内部的标记 |
+| 不唯一 | c95、c96 | 表格同一行两次出现“不可得”，短引文不能唯一定位 |
+
+这些缺陷不是同一回事：部分claim的含义有原文依据，但model quote仍不精确。
+旧v1拒收正确保留，原quote、CLI原始JSONL和最终模型文本均未改动。
+片段ID模式让程序承担逐字复制，不再要求模型同时改写命题和复制精确标记；
+不因此认证命题语义，也没有放宽旧的字面校验。
+
+### 小型输入的定向人工语义复核
+
+本表只评审这19段中的已列检查点，不能外推为全部历史或完整输入通过。
+
+| 检查点 | 模型输出 |
+| --- | --- |
+| 维护、Daily Stats、误建文件删除分别保留 | c5–c10、c13、c21–c24 |
+| 共享identity补齐路径与旧误判更正 | c36–c41、c49–c57，含代码路径与运行效果尚待核验的区别 |
+| mtime部署推断只撤回具体命题 | c58仅指向c26 |
+| 独立更新时间观测仍保留 | c64/c65保留03:30:07最后更新及固定时刻后未更新；没有把该时刻认证为部署时刻 |
+| 自然样本具体窗口、筛选资格、排除项 | c71–c78保留UTC窗口、natural_user_turn、valid、source、trigger、身份字段及排除1条 |
+| 残差统计限制 | c100–c104将口径列为待复核，不计算新的“正确残差”或认证未知组件贡献 |
+
+112条清单包含大量逐指标、逐计数条目，不等同于112个独立业务事件。
+它只是候选中间表示，不能把条目数增加当成最终摘要质量改善。
+
+### 同一输出的显式离线片段视图
+
+只复用这次v1已返回的fragment ID，程序另建v2形式的派生视图；
+不重新调用模型，不改任何claim的id、scope、kind、text、conditions或corrects。
+原始quotes保留在模型响应和original-quote-findings.json中，
+新视图明确标记explicit_offline_reference_rebinding_of_v1_output_not_v2_model_generation，
+不是模型曾生成v2协议的证据，也没有将旧拒收结果改写为成功。
+
+结果：112条命题、112处完整片段证据均可按来源哈希和UTF-16范围
+从同一原始记录读回；正文12501字符，低于20000上限。
+38个片段被引用，7个由模型标为上下文，2个标题未登记，状态仍为GAPS_REMAIN。
+未登记项为“两个遗留隐患”标题和Edi补充的引导标题；7条context均为标题/表格列名或分隔行。
+这些是人工核对结果，不作为程序以后自动忽略类似文本的规则。
+
+完整输入提取仍失败，v2尚无真实生成验收；
+仅19段的中间清单已达12501字符，后续还须验证全量成本和最终摘要的覆盖。
+不能把该小型视图或程序回溯通过当作全量语义修复。
+
+### 私有证据与程序检查
+
+证据均位于/home/lionsol/.openclaw/ops/memory-engine/：
+
+- checkpoint-claim-inventory-2113019-20261101-r1：完整输入、配置、原始CLI输出与超时结果。
+- checkpoint-claim-inventory-2113019-20261101-micro-r1：完整原文/记录、完整及选取的fact input、实际request/schema、原始CLI输出、最终文本、112条原始claim及拒收结果。
+- checkpoint-claim-inventory-2113019-20261101-micro-r1-fragment-view：原始模型文本副本、9处错引发现、显式派生清单及全部片段回溯。
+- 对应.cjs执行器保存单次调用、子进程代理字面量提取及离线重绑定步骤，不执行shell配置、不输出代理值。
+
+原始小型模型文本SHA-256：
+08abe7fea53feb62750357c94b715485838cd9fec3d697ac76f561f19e3dfe85。
+完整source.md与原响应字节均未变；全量和小型调用时源代码哈希未变。
+新片段视图是源码修正后的离线结果，未冒充2113019下的原始产物。
+
+新增10项程序测试，包含ID唯一定位、Markdown与表格重复值、旧v1仍拒收、
+模式/绑定隔离、未知ID与夹带quote拒收、证据展开预算、原输出离线重放及CLI固定schema选择。
+相关回归207/207通过、无跳过；已显式提供私有输入和响应路径。
+默认不提供MEMORY_ENGINE_TEST_CLAIM_INPUT/RESPONSE时，私有重放用例明确跳过。
+新模式CLI测试使用模拟响应，不算真实v2模型验收。
+
+本轮生产发布/数据库操作/部署均为0，默认literal_quotes与derived_summary路径不变，
+未启用生产命题清单。原有有损接受政策、NOT_CERTIFIED及生产legacy失败裁决保持不变。

@@ -76,6 +76,23 @@ test("host-selected claim inventory schema reaches the isolated CLI and literal-
   assert.equal(metadata.schema_sha256, require("node:crypto").createHash("sha256").update(fs.readFileSync(selected)).digest("hex"));
   assert.equal(metadata.tool_events, 0); assert.equal(f.invocations.length, 1);
 });
+test("host-selected fragment-only schema uses ID evidence and retains the explicit experimental boundary", async t => {
+  const claims = require("../lib/checkpoint/summary-claim-ledger.cjs");
+  const source = buildFactInput(logs(), DATE);
+  const f = harness(t, ({ stdin, lines, close }) => {
+    const p = JSON.parse(inputEnvelope(stdin).source_packet), row = p.SOURCE.sources[0].fragments[0];
+    lines([...start(), message({ version: p.version, target_date: p.target_date, binding: p.binding,
+      claims: [{ id: "c1", scope: "本次观测", kind: "report", text: "资格需按原文核对",
+        evidence: [row[0]], conditions: [], corrects: [] }], dispositions: [] }), completed()]);
+    close();
+  });
+  const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract: "claim_ledger_fragments" });
+  const r = await claims.runClaimInventory(source, async request => JSON.stringify((await generate(request)).summary),
+    { referenceMode: "fragment_ids" });
+  assert.equal(r.status, "READY_FOR_REVIEW"); assert.equal(r.evidence_origin, "PROGRAM_COPIED_FULL_FRAGMENTS");
+  const args = f.invocations[0].args;
+  assert.equal(path.basename(args[args.indexOf("--output-schema") + 1]), "claim-ledger-fragments-schema.json");
+});
 test("unknown host output schemas refuse before spawn and cannot become arbitrary file paths", async t => {
   const f = harness(t);
   for (const outputContract of ["unknown", "../arbitrary.json", null]) {
