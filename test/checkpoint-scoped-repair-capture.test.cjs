@@ -1,0 +1,106 @@
+"use strict";
+const test = require("node:test"), assert = require("node:assert/strict");
+const fs = require("node:fs"), path = require("node:path"), { createHash } = require("node:crypto");
+const repair = require("../lib/checkpoint/summary-scoped-repair.cjs");
+const archive = require("../lib/checkpoint/summary-memory-archive.cjs");
+const { readDerivedSummary } = require("../lib/checkpoint/derived-summary");
+for (const [label, variable] of [
+  ["first local repair", "MEMORY_ENGINE_TEST_SCOPED_REPAIR_V1_RESPONSE"],
+  ["identifier-hinted local repair", "MEMORY_ENGINE_TEST_SCOPED_REPAIR_RESPONSE"]
+]) test(label + " replays immutable proposal and base, preserves untargeted fields and keeps full original-record backtrace", {
+  skip: process.env[variable] ? false : "set " + variable + " for the private proposal"
+}, async () => {
+  const responsePath = process.env[variable], directory = path.dirname(responsePath), bytes = fs.readFileSync(responsePath);
+  const load = name => JSON.parse(fs.readFileSync(path.join(directory, name)));
+  const input = load("fact-input.json"), inventory = load("inventory-model-output.json"), current = load("base-model-output.json");
+  const request = load("request.json"), result = load("result.json"), plan = load("plan.json"), wire = JSON.parse(bytes);
+  const hash = x => createHash("sha256").update(x).digest("hex");
+  const originalBytes = fs.readFileSync(path.join(directory, "source.md"));
+  const baseBytes = fs.readFileSync(path.join(directory, "base-model-output.json"));
+  const inventoryBytes = fs.readFileSync(path.join(directory, "inventory-model-output.json"));
+  assert.equal(hash(originalBytes), plan.source_sha256); assert.equal(hash(baseBytes), plan.base_response_sha256);
+  assert.equal(hash(inventoryBytes), plan.inventory_response_sha256);
+  const codePath = "lib/checkpoint/summary-scoped-repair.cjs";
+  assert.equal(hash(fs.readFileSync(path.join(directory, "repair-code.cjs"))), plan.code_hashes[codePath]);
+  // Historical v1 prompts are not relabelled as current hinted prompts.
+  if (hash(fs.readFileSync(path.join(__dirname, "..", codePath))) === plan.code_hashes[codePath])
+    assert.deepEqual(repair.buildScopedRepairPrompt(input, inventory, current), request);
+  let calls = 0;
+  const replay = await repair.runScopedRepair(input, inventory, current, async () => { calls++; return bytes.toString("utf8"); });
+  assert.equal(calls, 1);
+  if (result.status === "REJECTED") {
+    assert.equal(replay.status, "REJECTED"); assert.equal(replay.error, result.error);
+    assert.equal(replay.record.raw_response, bytes.toString("utf8")); assert.deepEqual(replay.record.base_summary, current);
+    assert.equal(replay.publisherCalls, 0); assert.equal(replay.semantic_correctness, "NOT_CERTIFIED");
+    assert.deepEqual(fs.readFileSync(responsePath), bytes);
+    assert.deepEqual(fs.readFileSync(path.join(directory, "base-model-output.json")), baseBytes);
+    return;
+  }
+  assert.equal(replay.status, "READY_FOR_REVIEW");
+  assert.deepEqual(replay.patch, wire); assert.deepEqual(replay.scopedResponse, load("scoped-response.json"));
+  assert.deepEqual(replay.response, load("projected-summary.json")); assert.deepEqual(replay.repairAudit, load("repair-audit.json"));
+  assert.equal(replay.semantic_correctness, "NOT_CERTIFIED"); assert.equal(replay.validation.coverage, "NOT_EVALUATED");
+  assert.equal(replay.validation.untargeted_fields_preserved, true); assert.equal(replay.validation.repair_validity, "MODEL_DECLARED_NOT_CERTIFIED");
+  assert.equal(replay.validation.publishable, false); assert.equal(replay.bodyChars, result.body_chars); assert.ok(replay.bodyChars <= 20000);
+  const targeted = new Set([...wire.replacements.map(x => [x.item_index, x.field, x.index].join(":")),
+    ...wire.moves.map(x => [x.item_index, x.from, x.index].join(":"))]);
+  current.items.forEach((row, item) => {
+    const next = replay.scopedResponse.items[item];
+    for (const field of ["scope", "conclusion", "evidence", "corrects"]) assert.deepEqual(next[field], row[field]);
+    for (const field of ["conditions", "unresolved"]) {
+      let cursor = 0;
+      row[field].forEach((part, index) => {
+        if (targeted.has([item, field, index].join(":"))) return;
+        const found = next[field].findIndex((candidate, n) => n >= cursor && JSON.stringify(candidate) === JSON.stringify(part));
+        assert.ok(found >= cursor); cursor = found + 1;
+      });
+    }
+  });
+  const records = load("input-records.json"), archivePath = path.join(directory, "archives");
+  const stored = archive.loadArchive(archivePath, result.archive_id);
+  assert.deepEqual(stored.payload.raw_records, records); assert.deepEqual(stored.payload.summary, replay.response);
+  const resolved = readDerivedSummary(result.archive_id, { directory: archivePath, purpose: "acceptance" });
+  const originals = new Map(records.map(r => [hash(r.text), r.text])); let references = 0;
+  for (const item of resolved.items) for (const ref of item.sources) {
+    assert.equal(originals.get(ref.source_hash).slice(ref.locator.start, ref.locator.end), ref.quote); references++;
+  }
+  assert.equal(references, result.verified_literal_references); assert.equal(replay.record.raw_response, bytes.toString("utf8"));
+  assert.deepEqual(fs.readFileSync(responsePath), bytes);
+  assert.deepEqual(fs.readFileSync(path.join(directory, "source.md")), originalBytes);
+  assert.deepEqual(fs.readFileSync(path.join(directory, "base-model-output.json")), baseBytes);
+  assert.deepEqual(fs.readFileSync(path.join(directory, "inventory-model-output.json")), inventoryBytes);
+});
+
+test("explicit offline conversion preserves rejected v1 bytes and operation intent while applying host-computed v2 targets", {
+  skip: process.env.MEMORY_ENGINE_TEST_SCOPED_REPAIR_REBOUND_RESPONSE ? false : "set MEMORY_ENGINE_TEST_SCOPED_REPAIR_REBOUND_RESPONSE for the offline conversion"
+}, () => {
+  const responsePath = process.env.MEMORY_ENGINE_TEST_SCOPED_REPAIR_REBOUND_RESPONSE, directory = path.dirname(responsePath);
+  const load = name => JSON.parse(fs.readFileSync(path.join(directory, name)));
+  const bytes = fs.readFileSync(responsePath), patch = JSON.parse(bytes), current = load("base-model-output.json"), input = load("fact-input.json");
+  const result = load("result.json"), migration = load("migration.json"), rebound = repair.rebindLegacyRepair(input, current, patch);
+  assert.throws(() => repair.applyScopedRepair(input, current, patch), { code: "scoped_repair_stale" });
+  assert.deepEqual(rebound.migration, migration); assert.deepEqual(rebound.migratedPatch, load("migrated-proposal.json"));
+  assert.deepEqual(rebound.scopedResponse, load("scoped-response.json")); assert.deepEqual(rebound.response, load("projected-summary.json"));
+  assert.equal(migration.text_or_addresses_changed, false); assert.equal(migration.model_generations, 0);
+  assert.equal(migration.target_hash_comparisons.filter(x => !x.matched).length, 1);
+  for (const name of ["replacements", "moves"]) {
+    patch[name].forEach((old, index) => {
+      const intended = structuredClone(old); delete intended.expected_sha256;
+      assert.deepEqual(rebound.migratedPatch[name][index], intended);
+    });
+  }
+  for (const name of ["appends", "additions", "findings"]) assert.deepEqual(rebound.migratedPatch[name], patch[name]);
+  assert.equal(result.model_generations, 0); assert.equal(rebound.semantic_correctness, "NOT_CERTIFIED");
+  assert.equal(rebound.validation.untargeted_fields_preserved, true); assert.equal(rebound.bodyChars, result.body_chars);
+  const records = load("input-records.json"), archivePath = path.join(directory, "archives");
+  const stored = archive.loadArchive(archivePath, result.archive_id);
+  assert.deepEqual(stored.payload.raw_records, records); assert.deepEqual(stored.payload.summary, rebound.response);
+  const hash = x => createHash("sha256").update(x).digest("hex");
+  assert.equal(hash(bytes), result.original_model_patch_sha256);
+  const originals = new Map(records.map(r => [hash(r.text), r.text])); let references = 0;
+  for (const item of readDerivedSummary(result.archive_id, { directory: archivePath, purpose: "acceptance" }).items)
+    for (const ref of item.sources) {
+      assert.equal(originals.get(ref.source_hash).slice(ref.locator.start, ref.locator.end), ref.quote); references++;
+    }
+  assert.equal(references, result.verified_literal_references); assert.deepEqual(fs.readFileSync(responsePath), bytes);
+});

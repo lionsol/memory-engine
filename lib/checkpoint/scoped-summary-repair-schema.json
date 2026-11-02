@@ -1,0 +1,311 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "target_date",
+    "binding",
+    "summary_sha256",
+    "replacements",
+    "appends",
+    "moves",
+    "additions",
+    "findings"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": [
+        "checkpoint-scoped-repair-v2"
+      ]
+    },
+    "target_date": {
+      "type": "string"
+    },
+    "binding": {
+      "type": "string"
+    },
+    "summary_sha256": {
+      "type": "string"
+    },
+    "replacements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_index",
+          "field",
+          "index",
+          "part",
+          "reason",
+          "evidence"
+        ],
+        "properties": {
+          "item_index": {
+            "type": "integer"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "conditions",
+              "unresolved"
+            ]
+          },
+          "index": {
+            "type": "integer"
+          },
+          "part": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope",
+              "text",
+              "evidence"
+            ],
+            "properties": {
+              "scope": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "appends": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_index",
+          "field",
+          "part",
+          "reason",
+          "evidence"
+        ],
+        "properties": {
+          "item_index": {
+            "type": "integer"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "conditions",
+              "unresolved"
+            ]
+          },
+          "part": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope",
+              "text",
+              "evidence"
+            ],
+            "properties": {
+              "scope": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "moves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_index",
+          "from",
+          "index",
+          "to",
+          "reason",
+          "evidence"
+        ],
+        "properties": {
+          "item_index": {
+            "type": "integer"
+          },
+          "from": {
+            "type": "string",
+            "enum": [
+              "conditions",
+              "unresolved"
+            ]
+          },
+          "index": {
+            "type": "integer"
+          },
+          "to": {
+            "type": "string",
+            "enum": [
+              "conditions",
+              "unresolved"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "additions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "conclusion",
+          "conditions",
+          "unresolved",
+          "evidence",
+          "corrects"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "conclusion": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "scope",
+                "text",
+                "evidence"
+              ],
+              "properties": {
+                "scope": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "unresolved": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "scope",
+                "text",
+                "evidence"
+              ],
+              "properties": {
+                "scope": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "corrects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "text",
+          "evidence"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

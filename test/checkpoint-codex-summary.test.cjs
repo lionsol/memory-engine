@@ -53,6 +53,39 @@ function harness(t, behavior, extraEnv = {}, killBehavior) {
   const options = { env, spawnImpl, signalChildImpl, tempRoot: root, killGraceMs: 10 };
   return { root, env, options, invocations, kills, generate: cli.createCodexSummaryGenerator(options) };
 }
+test("host-selected repair schema carries only source-grounded local edits through CLI into deterministic application", async t => {
+  const repair = require("../lib/checkpoint/summary-scoped-repair.cjs");
+  const claims = require("../lib/checkpoint/summary-claim-ledger.cjs");
+  const compose = require("../lib/checkpoint/summary-claim-compose.cjs");
+  const source = buildFactInput(logs(), DATE);
+  const fp = JSON.parse(claims.buildClaimPrompt(source, { referenceMode: "fragment_ids" }).prompt);
+  const inventory = { version: fp.version, target_date: fp.target_date, binding: fp.binding, claims: [
+    { id: "c1", scope: "资格", kind: "report", text: "报告valid=true", conditions: [], corrects: [], evidence: [fp.SOURCE.sources[0].fragments[0][0]] }
+  ], dispositions: [] };
+  const p = JSON.parse(compose.buildClaimSummaryPrompt(source, inventory).prompt), id = source.sources[0].units[0].id;
+  const current = { version: p.version, target_date: p.target_date, binding: p.binding, items: [
+    { scope: "本次采样", conclusion: "报告样本资格", conditions: [{ scope: "字段", text: "错误字段", evidence: [id] }],
+      unresolved: [], evidence: [id], corrects: [] }
+  ] };
+  const f = harness(t, ({ stdin, lines, close }) => {
+    const packet = JSON.parse(inputEnvelope(stdin).source_packet);
+    lines([...start(), message({ version: packet.repair_version, target_date: packet.target_date, binding: packet.binding,
+      summary_sha256: packet.summary_sha256, replacements: [{ item_index: 0, field: "conditions", index: 0,
+        part: { scope: "字段", text: "valid=true", evidence: [id] },
+        reason: "按报告字段恢复", evidence: [id] }], appends: [], moves: [], additions: [], findings: [] }), completed()]);
+    close();
+  });
+  const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract: "scoped_summary_repair" });
+  const req = repair.buildScopedRepairPrompt(source, inventory, current);
+  const reply = await generate(req), applied = repair.applyScopedRepair(source, current, reply.summary);
+  const args = f.invocations[0].args, selected = args[args.indexOf("--output-schema") + 1];
+  assert.equal(path.basename(selected), "scoped-summary-repair-schema.json");
+  assert.equal(reply.generator.output_contract, "scoped_summary_repair");
+  assert.equal(reply.generator.schema_sha256, require("node:crypto").createHash("sha256").update(fs.readFileSync(selected)).digest("hex"));
+  assert.equal(f.invocations.length, 1); assert.equal(reply.generator.tool_events, 0);
+  assert.match(applied.body, /valid=true/); assert.equal(applied.validation.untargeted_fields_preserved, true);
+  assert.equal(applied.scopedResponse.items[0].conclusion, current.items[0].conclusion);
+});
 test("host-selected scoped summary schema preserves condition ownership through CLI and deterministic projection", async t => {
   const compose = require("../lib/checkpoint/summary-claim-compose.cjs");
   const source = buildFactInput(logs(), DATE);
