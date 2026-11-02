@@ -6,7 +6,8 @@
 
 `lib/checkpoint/summary-pipeline.cjs`提供`runSummaryPipeline(input, invoke, settings)`，
 顺序执行一次片段命题提取、一次显式条件合成、一次不限事项的局部审核。
-三个host输出合同固定为claim_ledger_fragments、scoped_summary、scoped_summary_repair。
+前两阶段host输出合同固定为claim_ledger_fragments、scoped_summary。
+第三阶段默认scoped_summary_repair；可选reviewMode="claim_audit"使用claim_audit_review。
 不接受reviewScope、additionScope、重试次数、手工参考答案或额外生成阶段配置。
 
 invoke接收system、prompt、pipelineStage、outputContract、outputBindings及signal，返回模型原始最终JSON字符串。
@@ -122,6 +123,14 @@ archive_id为c2aa158b99c985d283fcc87608374379a9036e7314b2e70dcdc7f500ef4e1869。
 因此按原文unit计覆盖不能作为最终事实完整的判据。
 现有局部协议禁止改scope/conclusion，范围过宽只能追加限定或记finding；
 本次两者均未发生。没有因此新增语义硬门槛或声称bug已经解决。
+
+## 逐命题审核后续实验
+
+新增[逐命题审核模式](checkpoint-claim-audit.md)，在局部补丁之外记录每条清单命题对冻结摘要的具体去向。
+其覆盖声明、遗漏与主动省略均是模型判断和质量发现，不是完整认证或新增硬门槛。
+原三阶段流水线默认行为不变；reviewMode="claim_audit"仅替换第三阶段，仍三次生成，不接受人工scope。
+独立真实审核在同一208条清单/25项候选上完成：28项、14507字符、154处回溯；
+报告修订事项补回，但仅改报告的阶段边界仍遗漏。新模式流水线接入只有集成测试，未做新的完整真实运行。
 
 ## 回放
 

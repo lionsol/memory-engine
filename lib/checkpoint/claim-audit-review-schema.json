@@ -1,0 +1,324 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "target_date",
+    "binding",
+    "summary_sha256",
+    "replacements",
+    "appends",
+    "moves",
+    "additions",
+    "findings",
+    "claim_checks"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": [
+        "checkpoint-claim-audit-review-v1"
+      ]
+    },
+    "target_date": {
+      "type": "string"
+    },
+    "binding": {
+      "type": "string"
+    },
+    "summary_sha256": {
+      "type": "string"
+    },
+    "replacements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "part_id",
+          "part",
+          "reason",
+          "evidence"
+        ],
+        "properties": {
+          "part_id": {
+            "type": "string"
+          },
+          "part": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope",
+              "text",
+              "evidence"
+            ],
+            "properties": {
+              "scope": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "appends": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_id",
+          "field",
+          "part",
+          "reason",
+          "evidence"
+        ],
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "conditions",
+              "unresolved"
+            ]
+          },
+          "part": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scope",
+              "text",
+              "evidence"
+            ],
+            "properties": {
+              "scope": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "moves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "part_id",
+          "to",
+          "reason",
+          "evidence"
+        ],
+        "properties": {
+          "part_id": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string",
+            "enum": [
+              "conditions",
+              "unresolved"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "additions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "conclusion",
+          "conditions",
+          "unresolved",
+          "evidence",
+          "corrects"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "conclusion": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "scope",
+                "text",
+                "evidence"
+              ],
+              "properties": {
+                "scope": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "unresolved": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "scope",
+                "text",
+                "evidence"
+              ],
+              "properties": {
+                "scope": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "corrects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "text",
+          "evidence"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "claim_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "status",
+          "item_ids",
+          "note"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "represented",
+              "omitted",
+              "excluded",
+              "uncertain"
+            ]
+          },
+          "item_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

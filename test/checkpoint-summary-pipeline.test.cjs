@@ -43,6 +43,23 @@ test("automatic pipeline performs exactly three fixed-schema serial generations 
   assert.equal(saved[1].outcome.status, "READY_FOR_REVIEW");
   assert.ok(result.requests.every(x => typeof x.raw_response === "string"));
 });
+test("claim audit mode replaces only the final reviewer and still performs three bounded generations", async () => {
+  const f = fixture(), calls = [];
+  const result = await pipeline.runSummaryPipeline(f.input, async request => {
+    calls.push(request.outputContract);
+    const wire = f.respond(request);
+    if (request.pipelineStage === "review") {
+      assert.equal(request.outputBindings.version, require("../lib/checkpoint/summary-claim-audit.cjs").VERSION);
+      wire.claim_checks = [{ claim_id: "c1", status: "represented", item_ids: ["i001"], note: "模型自报对应" }];
+    }
+    return JSON.stringify(wire);
+  }, { reviewMode: "claim_audit" });
+  assert.deepEqual(calls, ["claim_ledger_fragments", "scoped_summary", "claim_audit_review"]);
+  assert.equal(result.status, "READY_FOR_REVIEW"); assert.equal(result.generation_count, 3);
+  assert.equal(result.stages.review.claimAudit.valid_checks.length, 1);
+  assert.equal(result.candidate_origin, "SINGLE_CLAIM_AUDIT_MODEL_REVIEW");
+  assert.equal(result.semantic_correctness, "NOT_CERTIFIED"); assert.equal(result.publisherCalls, 0);
+});
 test("structural failure at any stage stops without retries and keeps prior stage outcomes", async () => {
   for (const [broken, expectedCalls] of [["inventory", 1], ["compose", 2], ["review", 3]]) {
     const f = fixture(); let calls = 0;
@@ -70,7 +87,7 @@ test("invalid review target preserves the valid composed candidate but cannot si
 });
 test("manual scopes, unknown options and pre-cancel are rejected before generation", async () => {
   for (const settings of [{ reviewScope: { item_ids: ["i001"], question: "manual" } },
-    { additionScope: { source_unit_ids: ["s0"], question: "manual" } }, { retry: 1 }, { summaryMaxChars: 0 },
+    { additionScope: { source_unit_ids: ["s0"], question: "manual" } }, { retry: 1 }, { reviewMode: "unknown" }, { summaryMaxChars: 0 },
     { signal: AbortSignal.abort() }]) {
     const f = fixture(); let calls = 0;
     const r = await pipeline.runSummaryPipeline(f.input, async () => { calls++; }, settings);
