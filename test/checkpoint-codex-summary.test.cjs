@@ -53,6 +53,27 @@ function harness(t, behavior, extraEnv = {}, killBehavior) {
   const options = { env, spawnImpl, signalChildImpl, tempRoot: root, killGraceMs: 10 };
   return { root, env, options, invocations, kills, generate: cli.createCodexSummaryGenerator(options) };
 }
+test("host-selected scoped summary schema preserves condition ownership through CLI and deterministic projection", async t => {
+  const compose = require("../lib/checkpoint/summary-claim-compose.cjs");
+  const source = buildFactInput(logs(), DATE);
+  const f = harness(t, ({ stdin, lines, close }) => {
+    const p = JSON.parse(inputEnvelope(stdin).source_packet), id = p.SOURCE.sources[0].units[0][0];
+    lines([...start(), message({ version: p.version, target_date: p.target_date, binding: p.binding,
+      items: [{ scope: "本轮自然样本", conclusion: "助手报告资格已记录",
+        conditions: [{ scope: "自然样本", text: "valid=true", evidence: [id] }],
+        unresolved: [], evidence: [id], corrects: [] }] }), completed()]);
+    close();
+  });
+  const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract: "scoped_summary" });
+  const reply = await generate(request()), projected = compose.projectScopedSummary(source, reply.summary);
+  const args = f.invocations[0].args, selected = args[args.indexOf("--output-schema") + 1];
+  assert.equal(path.basename(selected), "scoped-summary-schema.json");
+  assert.equal(reply.generator.output_contract, "scoped_summary");
+  assert.equal(reply.generator.schema_sha256, require("node:crypto").createHash("sha256").update(fs.readFileSync(selected)).digest("hex"));
+  assert.equal(f.invocations.length, 1); assert.equal(reply.generator.tool_events, 0);
+  assert.match(projected.body, /条件（自然样本）：valid=true/);
+  assert.equal(projected.validation.scoped_fields_preserved, true);
+});
 test("host-selected claim inventory schema reaches the isolated CLI and literal-evidence projector", async t => {
   const claims = require("../lib/checkpoint/summary-claim-ledger.cjs");
   const source = buildFactInput(logs(), DATE);
