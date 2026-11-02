@@ -232,6 +232,57 @@ test("invalid scope stops before generation and a returned proposal cannot expan
   assert.equal(calls, 1); assert.equal(r.error, "scoped_repair_scope"); assert.equal(r.record.raw_response, raw);
   assert.equal(r.publisherCalls, 0); assert.deepEqual(r.record.base_summary, f.current);
 });
+test("addition-only scope freezes every existing row and transmits the selected source IDs without changing the source", () => {
+  const f = fixture(), additionScope = { source_unit_ids: [f.ids[1]], question: "补独立核对结果，保留阶段" };
+  const packet = JSON.parse(repair.buildScopedRepairPrompt(f.input, f.inventory, f.current, { additionScope }).prompt);
+  assert.deepEqual(packet.addition_scope, additionScope); assert.ok(!Object.hasOwn(packet, "review_scope"));
+  const row = { scope: "独立核对", conclusion: "助手报告本次采样正常", conditions: [
+    f.part("本次核对", "这是助手报告，不推断整个工作时段") ], unresolved: [], evidence: [f.ids[1]], corrects: [] };
+  const patch = { ...f.patch, version: repair.VERSION, additions: [row] };
+  const r = repair.applyScopedRepair(f.input, f.current, patch, { additionScope });
+  assert.deepEqual(r.scopedResponse.items.slice(0, f.current.items.length), f.current.items);
+  assert.deepEqual(r.scopedResponse.items.at(-1), row); assert.equal(r.semantic_correctness, "NOT_CERTIFIED");
+});
+test("addition-only scope rejects existing-row edits and source citations outside its allowlist at every new field", () => {
+  const f = fixture(), additionScope = { source_unit_ids: [f.ids[1]], question: "只补这一来源" };
+  for (const operation of ["replacements", "appends", "moves"]) {
+    const patch = { ...structuredClone(f.patch), version: repair.VERSION };
+    if (operation === "replacements") patch.replacements = [{ part_id: "p001", part: f.replacement.part, reason: "r", evidence: [f.ids[1]] }];
+    if (operation === "appends") patch.appends = [{ item_id: "i001", field: "conditions", part: f.replacement.part, reason: "r", evidence: [f.ids[1]] }];
+    if (operation === "moves") patch.moves = [{ part_id: "p003", to: "conditions", reason: "r", evidence: [f.ids[1]] }];
+    assert.throws(() => repair.applyScopedRepair(f.input, f.current, patch, { additionScope }), { code: "scoped_repair_scope" });
+  }
+  for (const location of ["evidence", "conditions", "unresolved", "corrects"]) {
+    const row = { scope: "新增", conclusion: "本次核对", conditions: [], unresolved: [], evidence: [f.ids[1]], corrects: [] };
+    if (location === "evidence") row.evidence = [f.ids[0]];
+    if (location === "corrects") row.corrects = [f.ids[0]];
+    if (location === "conditions" || location === "unresolved") row[location] = [f.part("范围外", "不能借用", [f.ids[0]])];
+    assert.throws(() => repair.applyScopedRepair(f.input, f.current,
+      { ...f.patch, version: repair.VERSION, additions: [row] }, { additionScope }), { code: "scoped_repair_scope" });
+  }
+});
+test("invalid or conflicting addition scopes stop before generation and cannot be expanded by a proposal", async () => {
+  const f = fixture();
+  for (const additionScope of [
+    { source_unit_ids: [], question: "q" }, { source_unit_ids: [f.ids[1], f.ids[1]], question: "q" },
+    { source_unit_ids: ["missing"], question: "q" }, { source_unit_ids: [f.ids[1]], question: "" }
+  ]) {
+    let calls = 0;
+    const r = await repair.runScopedRepair(f.input, f.inventory, f.current, async () => { calls++; }, { additionScope });
+    assert.equal(calls, 0); assert.equal(r.status, "REJECTED");
+  }
+  assert.throws(() => repair.buildScopedRepairPrompt(f.input, f.inventory, f.current, {
+    additionScope: { source_unit_ids: [f.ids[1]], question: "q" },
+    reviewScope: { item_ids: ["i001"], question: "q" }
+  }), { code: "scoped_repair_options" });
+  const patch = { ...f.patch, version: repair.VERSION, additions: [{
+    scope: "不能扩大", conclusion: "越出来源", conditions: [], unresolved: [], evidence: [f.ids[0]], corrects: [] }] };
+  const raw = JSON.stringify(patch); let calls = 0;
+  const r = await repair.runScopedRepair(f.input, f.inventory, f.current, async () => { calls++; return raw; },
+    { additionScope: { source_unit_ids: [f.ids[1]], question: "q" } });
+  assert.equal(calls, 1); assert.equal(r.error, "scoped_repair_scope"); assert.equal(r.record.raw_response, raw);
+  assert.deepEqual(r.record.base_summary, f.current); assert.equal(r.publisherCalls, 0);
+});
 test("v2 binds all target addresses to the complete base and computes per-part hashes in the host", () => {
   const f = fixture(); f.patch.version = repair.NUMERIC_VERSION;
   const change = structuredClone(f.replacement); delete change.expected_sha256; f.patch.replacements.push(change);

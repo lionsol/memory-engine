@@ -4,8 +4,8 @@
 状态：完整v1提取超时；原生v2小型提取已返回78条。
 修正零填充ID限制并保留来源标题/表头后，82处正文证据及12处上下文回溯通过。
 完整原生v2返回290条；旧叙述合成19项、4994字符仍丢验收条件。
-最新原生短ID修订及限定事项复核为24项、13412字符，已补完当前样本的分类指令。
-字段名拼接、未来归因限制和Daily Stats修复保留；独立Gateway核对及报告修订边界仍未完整呈现。
+最新仅新增修订为26项、13980字符，已补独立Gateway核对与报告修订边界，原24项不变。
+分类、字段名、未来归因及Daily Stats修复保留；仍是已知开发样本的定向验证，未证明完整或泛化。
 未接入生产checkpoint；完整提取、条件结构、局部修订及原生实测的证据见文末。
 
 ## 要修复的缺口
@@ -767,3 +767,67 @@ r2的重复退出码条件也保持原样，r3没有跨范围清理它。
 MEMORY_ENGINE_TEST_NATIVE_LABELLED_REPAIR_RESPONSE、
 MEMORY_ENGINE_TEST_FOCUSED_LABELLED_REPAIR_RESPONSE启用，未提供时明确跳过。
 生产发布、数据库操作、部署和调度为0；测试计数不代表语义完整认证。
+
+## 仅新增模式：补独立核对与报告阶段（5a315c6基线，2026-11-02 Asia/Shanghai）
+
+### 现有缺口与接口选择
+
+前一24项摘要已修复分类、字段名和归因限制，但遗漏：
+s0.t5.p0的独立Gateway核对，以及s0.t9.p4/p9的报告修订及其操作边界。
+它们是不同阶段的独立结果，不应塞进既有632/1241健康采样或泛化成全天只读。
+此前reviewScope限定既有事项，禁止新增，因此本轮增加可选additionScope。
+
+additionScope={source_unit_ids,question}最多指定32个唯一原unit.id，问题最长2000字符；
+与reviewScope互斥，未知或非法来源在模型调用前拒收。
+完整SOURCE、290条清单及当前摘要仍一起提供；范围选择不是缩删原始输入。
+指定后程序只接受additions，replacements/appends/moves必须为空。
+新增事项的evidence、corrects及每个条件/未决的引用均须在指定来源内；
+全部既有事项原样保留，全文及新引用标记仍计入20000字符预算。
+findings只是审核意见，不产生越界摘要修改或语义认证。
+协议仍是原生v3，默认普通修订和生产derived_summary不变。
+
+### 单次实际生成
+
+冻结同一完整4条原始记录、290条清单和此前24项/13412字符候选。
+host明确选定s0.t5.p0、s0.t9.p4、s0.t9.p9，要求分别补独立核对与报告修订，
+保留各自阶段边界；未提供手工写好的新摘要。
+输入129278字符，请求gpt-6-luna/xhigh、期限270秒；
+北京时间13:06:46开始，13:07:18完成，1次生成、4个事件、exit=0、tool events=0。
+未重试、重提清单、改写响应、做离线转换或换模型。
+
+模型仅新增2项：
+- Gateway独立核对：助手报告reachable93ms、systemd active（pid512590）、
+  compatibility none；未执行checkpoint/改配置/重启只限定到该次核对。
+- 取证报告修订：助手报告修改报告、修正源码树/部署副本口径、旧1830范围和旧Lance断言，
+  补自然首跑清单；该次未手动checkpoint/改配置/重启/新增03:45调度，
+  唯一改动文件为报告，之后03:30核对是计划而非已完成结果。
+
+输出26项、13980字符，148处引用从完整原始记录逐字核对通过。
+原24项的scope、conclusion、conditions、unresolved、evidence、corrects全部逐字不变，
+包括已补的原行消失不算成功、可解释例外、字段差异、未来归因限制和残差待核。
+源文件、清单、父提案、24项基线和执行时代码hash均不变。
+
+本轮两处已知遗漏已补，且没有把“该次未执行”归纳为“整个日期未执行”。
+这些仍是助手报告；模型未重新核验Gateway或原报告文件。
+范围由人工根据已知缺口选择，不证明自动发现其他遗漏或跨样本泛化。
+既有重复退出码和长样例明细仍保留，未顺带清理；没有重新逐项认证全部源事实。
+裁决：SOURCE_BOUNDED_ADDITIONS_READY / TWO_KNOWN_GAPS_FIXED / NOT_PROMOTED。
+有损摘要的接受政策不变，不新增语义硬门。
+
+### 证据与回归
+
+私有目录：
+/home/lionsol/.openclaw/ops/memory-engine/checkpoint-scoped-additions-5a315c6-20261102-r1。
+对应.cjs执行器、原始request/schema、CLI事件、模型JSON、parent/base快照、
+新增审计、semantic-review.json和只追加归档均保留。
+
+原始模型提案SHA-256：
+199b1fe576ee419a7d77753966391c991cb5037f36076c0310e1d1d2c82d564f。
+最终archive_id：
+e2d8dbb8881b77d8ae698e6df08806ccaa345cb631d71569324daf47c6739ace。
+
+267/267相关回归通过、无跳过，包括历史协议、全部既有原始响应、
+仅新增范围/来源约束、已有事项冻结、预算及当前真实响应回放。
+本轮私有回放由MEMORY_ENGINE_TEST_ADDITIVE_LABELLED_REPAIR_RESPONSE启用，
+未设置时明确跳过。
+生产发布、DB操作、配置变更、部署及调度为0；程序通过不代表语义完整认证。

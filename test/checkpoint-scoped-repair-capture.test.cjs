@@ -9,7 +9,8 @@ for (const [label, variable] of [
   ["identifier-hinted local repair", "MEMORY_ENGINE_TEST_SCOPED_REPAIR_RESPONSE"],
   ["native numeric v2 local repair", "MEMORY_ENGINE_TEST_NATIVE_SCOPED_REPAIR_RESPONSE"],
   ["native labelled v3 local repair", "MEMORY_ENGINE_TEST_NATIVE_LABELLED_REPAIR_RESPONSE"],
-  ["scoped native labelled repair", "MEMORY_ENGINE_TEST_FOCUSED_LABELLED_REPAIR_RESPONSE"]
+  ["scoped native labelled repair", "MEMORY_ENGINE_TEST_FOCUSED_LABELLED_REPAIR_RESPONSE"],
+  ["source-bounded additive repair", "MEMORY_ENGINE_TEST_ADDITIVE_LABELLED_REPAIR_RESPONSE"]
 ]) test(label + " replays immutable proposal and base, preserves untargeted fields and keeps full original-record backtrace", {
   skip: process.env[variable] ? false : "set " + variable + " for the private proposal"
 }, async () => {
@@ -23,14 +24,16 @@ for (const [label, variable] of [
   const inventoryBytes = fs.readFileSync(path.join(directory, "inventory-model-output.json"));
   assert.equal(hash(originalBytes), plan.source_sha256); assert.equal(hash(baseBytes), plan.base_response_sha256);
   assert.equal(hash(inventoryBytes), plan.inventory_response_sha256);
+  const settings = plan.review_scope ? { reviewScope: plan.review_scope }
+    : plan.addition_scope ? { additionScope: plan.addition_scope } : {};
   const codePath = "lib/checkpoint/summary-scoped-repair.cjs";
   assert.equal(hash(fs.readFileSync(path.join(directory, "repair-code.cjs"))), plan.code_hashes[codePath]);
   // Historical v1 prompts are not relabelled as current hinted prompts.
   if (hash(fs.readFileSync(path.join(__dirname, "..", codePath))) === plan.code_hashes[codePath])
-    assert.deepEqual(repair.buildScopedRepairPrompt(input, inventory, current, plan.review_scope ? { reviewScope: plan.review_scope } : {}), request);
+    assert.deepEqual(repair.buildScopedRepairPrompt(input, inventory, current, settings), request);
   let calls = 0;
   const replay = await repair.runScopedRepair(input, inventory, current, async () => { calls++; return bytes.toString("utf8"); },
-    plan.review_scope ? { reviewScope: plan.review_scope } : {});
+    settings);
   assert.equal(calls, 1);
   if (variable === "MEMORY_ENGINE_TEST_NATIVE_SCOPED_REPAIR_RESPONSE") {
     assert.equal(wire.version, repair.NUMERIC_VERSION);
@@ -41,7 +44,8 @@ for (const [label, variable] of [
     for (const change of (replay.repairAudit ?? []).filter(x => x.action === "replace" || x.action === "move"))
       assert.equal(change.before_sha256, hash(JSON.stringify(change.before)));
   }
-  if (["MEMORY_ENGINE_TEST_NATIVE_LABELLED_REPAIR_RESPONSE", "MEMORY_ENGINE_TEST_FOCUSED_LABELLED_REPAIR_RESPONSE"].includes(variable)) {
+  if (["MEMORY_ENGINE_TEST_NATIVE_LABELLED_REPAIR_RESPONSE", "MEMORY_ENGINE_TEST_FOCUSED_LABELLED_REPAIR_RESPONSE",
+    "MEMORY_ENGINE_TEST_ADDITIVE_LABELLED_REPAIR_RESPONSE"].includes(variable)) {
     assert.equal(result.status, "READY_FOR_REVIEW"); assert.equal(wire.version, repair.VERSION);
     assert.equal(plan.repair_protocol, repair.VERSION); assert.equal(result.generator_invocations, 1);
     assert.equal(result.generator.tool_events, 0); assert.equal(replay.validation.opaque_targets_resolved, true);
@@ -62,6 +66,16 @@ for (const [label, variable] of [
     current.items.forEach((row, index) => {
       if (!allowed.has(packet.CURRENT_SUMMARY.items[index].item_id)) assert.deepEqual(replay.scopedResponse.items[index], row);
     });
+  }
+  if (variable === "MEMORY_ENGINE_TEST_ADDITIVE_LABELLED_REPAIR_RESPONSE") {
+    assert.deepEqual(wire.replacements, []); assert.deepEqual(wire.appends, []); assert.deepEqual(wire.moves, []);
+    assert.ok(wire.additions.length > 0);
+    assert.deepEqual(replay.scopedResponse.items.slice(0, current.items.length), current.items);
+    const allowed = new Set(plan.addition_scope.source_unit_ids);
+    for (const row of wire.additions) {
+      const ids = [...row.evidence, ...row.corrects, ...row.conditions.flatMap(x => x.evidence), ...row.unresolved.flatMap(x => x.evidence)];
+      assert.ok(ids.every(id => allowed.has(id)));
+    }
   }
   if (result.status === "REJECTED") {
     assert.equal(replay.status, "REJECTED"); assert.equal(replay.error, result.error);
