@@ -6,7 +6,10 @@ const archive = require("../lib/checkpoint/summary-memory-archive.cjs");
 const { readDerivedSummary } = require("../lib/checkpoint/derived-summary");
 for (const [label, variable] of [
   ["first local repair", "MEMORY_ENGINE_TEST_SCOPED_REPAIR_V1_RESPONSE"],
-  ["identifier-hinted local repair", "MEMORY_ENGINE_TEST_SCOPED_REPAIR_RESPONSE"]
+  ["identifier-hinted local repair", "MEMORY_ENGINE_TEST_SCOPED_REPAIR_RESPONSE"],
+  ["native numeric v2 local repair", "MEMORY_ENGINE_TEST_NATIVE_SCOPED_REPAIR_RESPONSE"],
+  ["native labelled v3 local repair", "MEMORY_ENGINE_TEST_NATIVE_LABELLED_REPAIR_RESPONSE"],
+  ["scoped native labelled repair", "MEMORY_ENGINE_TEST_FOCUSED_LABELLED_REPAIR_RESPONSE"]
 ]) test(label + " replays immutable proposal and base, preserves untargeted fields and keeps full original-record backtrace", {
   skip: process.env[variable] ? false : "set " + variable + " for the private proposal"
 }, async () => {
@@ -24,10 +27,42 @@ for (const [label, variable] of [
   assert.equal(hash(fs.readFileSync(path.join(directory, "repair-code.cjs"))), plan.code_hashes[codePath]);
   // Historical v1 prompts are not relabelled as current hinted prompts.
   if (hash(fs.readFileSync(path.join(__dirname, "..", codePath))) === plan.code_hashes[codePath])
-    assert.deepEqual(repair.buildScopedRepairPrompt(input, inventory, current), request);
+    assert.deepEqual(repair.buildScopedRepairPrompt(input, inventory, current, plan.review_scope ? { reviewScope: plan.review_scope } : {}), request);
   let calls = 0;
-  const replay = await repair.runScopedRepair(input, inventory, current, async () => { calls++; return bytes.toString("utf8"); });
+  const replay = await repair.runScopedRepair(input, inventory, current, async () => { calls++; return bytes.toString("utf8"); },
+    plan.review_scope ? { reviewScope: plan.review_scope } : {});
   assert.equal(calls, 1);
+  if (variable === "MEMORY_ENGINE_TEST_NATIVE_SCOPED_REPAIR_RESPONSE") {
+    assert.equal(wire.version, repair.NUMERIC_VERSION);
+    assert.equal(plan.repair_protocol, repair.NUMERIC_VERSION); assert.equal(result.generator_invocations, 1);
+    assert.equal(result.generator.tool_events, 0);
+    for (const change of [...wire.replacements, ...wire.moves])
+      assert.ok(!Object.hasOwn(change, "expected_sha256"), "no model-copied per-part hash");
+    for (const change of (replay.repairAudit ?? []).filter(x => x.action === "replace" || x.action === "move"))
+      assert.equal(change.before_sha256, hash(JSON.stringify(change.before)));
+  }
+  if (["MEMORY_ENGINE_TEST_NATIVE_LABELLED_REPAIR_RESPONSE", "MEMORY_ENGINE_TEST_FOCUSED_LABELLED_REPAIR_RESPONSE"].includes(variable)) {
+    assert.equal(result.status, "READY_FOR_REVIEW"); assert.equal(wire.version, repair.VERSION);
+    assert.equal(plan.repair_protocol, repair.VERSION); assert.equal(result.generator_invocations, 1);
+    assert.equal(result.generator.tool_events, 0); assert.equal(replay.validation.opaque_targets_resolved, true);
+    for (const change of [...wire.replacements, ...wire.moves]) {
+      assert.equal(typeof change.part_id, "string");
+      for (const key of ["item_index", "index", "from", "expected_sha256"]) assert.ok(!Object.hasOwn(change, key));
+    }
+    for (const change of replay.repairAudit.filter(x => x.action === "replace" || x.action === "move"))
+      assert.equal(change.before_sha256, hash(JSON.stringify(change.before)));
+  }
+  if (variable === "MEMORY_ENGINE_TEST_FOCUSED_LABELLED_REPAIR_RESPONSE") {
+    const packet = JSON.parse(request.prompt), allowed = new Set(plan.review_scope.item_ids);
+    assert.equal(wire.additions.length, 0);
+    for (const change of replay.resolvedTargets) {
+      const id = packet.CURRENT_SUMMARY.items[change.item_index].item_id;
+      assert.ok(allowed.has(id));
+    }
+    current.items.forEach((row, index) => {
+      if (!allowed.has(packet.CURRENT_SUMMARY.items[index].item_id)) assert.deepEqual(replay.scopedResponse.items[index], row);
+    });
+  }
   if (result.status === "REJECTED") {
     assert.equal(replay.status, "REJECTED"); assert.equal(replay.error, result.error);
     assert.equal(replay.record.raw_response, bytes.toString("utf8")); assert.deepEqual(replay.record.base_summary, current);
@@ -42,8 +77,9 @@ for (const [label, variable] of [
   assert.equal(replay.semantic_correctness, "NOT_CERTIFIED"); assert.equal(replay.validation.coverage, "NOT_EVALUATED");
   assert.equal(replay.validation.untargeted_fields_preserved, true); assert.equal(replay.validation.repair_validity, "MODEL_DECLARED_NOT_CERTIFIED");
   assert.equal(replay.validation.publishable, false); assert.equal(replay.bodyChars, result.body_chars); assert.ok(replay.bodyChars <= 20000);
-  const targeted = new Set([...wire.replacements.map(x => [x.item_index, x.field, x.index].join(":")),
-    ...wire.moves.map(x => [x.item_index, x.from, x.index].join(":"))]);
+  const targeted = new Set(replay.resolvedTargets ? replay.resolvedTargets.filter(x => x.operation !== "append")
+    .map(x => [x.item_index, x.field, x.index].join(":")) : [...wire.replacements.map(x => [x.item_index, x.field, x.index].join(":")),
+      ...wire.moves.map(x => [x.item_index, x.from, x.index].join(":"))]);
   current.items.forEach((row, item) => {
     const next = replay.scopedResponse.items[item];
     for (const field of ["scope", "conclusion", "evidence", "corrects"]) assert.deepEqual(next[field], row[field]);

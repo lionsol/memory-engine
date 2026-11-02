@@ -70,7 +70,7 @@ test("host-selected repair schema carries only source-grounded local edits throu
   const f = harness(t, ({ stdin, lines, close }) => {
     const packet = JSON.parse(inputEnvelope(stdin).source_packet);
     lines([...start(), message({ version: packet.repair_version, target_date: packet.target_date, binding: packet.binding,
-      summary_sha256: packet.summary_sha256, replacements: [{ item_index: 0, field: "conditions", index: 0,
+      summary_sha256: packet.summary_sha256, replacements: [{ part_id: packet.CURRENT_SUMMARY.items[0].conditions[0].part_id,
         part: { scope: "字段", text: "valid=true", evidence: [id] },
         reason: "按报告字段恢复", evidence: [id] }], appends: [], moves: [], additions: [], findings: [] }), completed()]);
     close();

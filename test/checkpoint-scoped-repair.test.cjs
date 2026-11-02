@@ -35,7 +35,8 @@ test("field-name hints compare assignment identifiers with each part's own citat
   assert.deepEqual(hints, [{ kind: "ASSIGNMENT_IDENTIFIER_NOT_IN_CITED_TEXT", status: "NONBLOCKING_REVIEW_HINT",
     item_index: 0, field: "conditions", index: 0, identifier: "requested_field", evidence: [f.ids[1]] }]);
   const packet = JSON.parse(repair.buildScopedRepairPrompt(f.input, f.inventory, f.current).prompt);
-  assert.deepEqual(packet.identifier_review_hints, hints);
+  assert.deepEqual(packet.identifier_review_hints, [{ kind: hints[0].kind, status: hints[0].status, identifier: "requested_field",
+    evidence: [f.ids[1]], item_id: "i001", part_id: "p001" }]);
   assert.deepEqual(f.current, before);
   f.current.items[0].conditions[0].text = "observed_field=true";
   assert.deepEqual(repair.identifierReviewHints(f.input, f.current), []);
@@ -56,10 +57,14 @@ test("repair receives identical original source, role-separated inventory and fr
   const f = fixture(), request = repair.buildScopedRepairPrompt(f.input, f.inventory, f.current);
   const p = JSON.parse(request.prompt), base = JSON.parse(compose.buildClaimSummaryPrompt(f.input, f.inventory, { outputMode: "scoped_fields" }).prompt);
   assert.deepEqual(p.SOURCE, base.SOURCE); assert.deepEqual(p.claim_inventory, base.claim_inventory);
-  assert.deepEqual(p.CURRENT_SUMMARY, f.current); assert.equal(p.summary_sha256, hash(f.current));
+  const unlabelled = structuredClone(p.CURRENT_SUMMARY);
+  for (const row of unlabelled.items) { delete row.item_id; for (const field of ["conditions", "unresolved"]) for (const part of row[field]) delete part.part_id; }
+  assert.deepEqual(unlabelled, f.current); assert.equal(p.summary_sha256, hash(f.current));
   assert.equal(p.repair_version, repair.VERSION); assert.equal(p.summary_max_chars, 20000);
-  assert.deepEqual(p.part_addresses[0], [0, "conditions", 0]);
-  assert.ok(!Object.hasOwn(p, "part_hashes"));
+  assert.equal(p.CURRENT_SUMMARY.items[0].item_id, "i001");
+  assert.equal(p.CURRENT_SUMMARY.items[0].conditions[0].part_id, "p001");
+  assert.equal(p.CURRENT_SUMMARY.items[0].unresolved[0].part_id, "p003");
+  assert.ok(!Object.hasOwn(p, "part_addresses")); assert.ok(!Object.hasOwn(p, "part_hashes"));
   assert.equal(p.SOURCE.sources[0].units[0][1], "user"); assert.equal(p.SOURCE.sources[1].units[0][1], "assistant");
   assert.ok(!Object.hasOwn(p, "summary_target_chars"));
 });
@@ -149,8 +154,86 @@ test("zero edits and even semantically incorrect model suggestions remain explic
   assert.equal(bad.semantic_correctness, "NOT_CERTIFIED"); assert.equal(bad.validation.semantic_correctness, "NOT_EVALUATED");
   assert.equal(bad.validation.publishable, false); assert.equal(bad.findings.length, 1);
 });
+test("opaque item and part labels resolve replacement, move and append addresses without model-supplied indices", () => {
+  const f = fixture(), before = structuredClone(f.current), packet = JSON.parse(repair.buildScopedRepairPrompt(f.input, f.inventory, f.current).prompt);
+  const patch = { ...f.patch, version: repair.VERSION, replacements: [{
+    part_id: packet.CURRENT_SUMMARY.items[0].conditions[0].part_id, part: f.replacement.part,
+    reason: f.replacement.reason, evidence: f.replacement.evidence }],
+    moves: [{ part_id: packet.CURRENT_SUMMARY.items[0].unresolved[0].part_id, to: "conditions",
+      reason: "观测重新归组", evidence: [f.ids[1]] }],
+    appends: [{ item_id: packet.CURRENT_SUMMARY.items[1].item_id, field: "conditions",
+      part: f.part("补充规则", "未来结果不能单独归因", [f.ids[0]]), reason: "补条件", evidence: [f.ids[0]] }] };
+  const r = repair.applyScopedRepair(f.input, f.current, patch);
+  assert.deepEqual(f.current, before); assert.equal(r.validation.opaque_targets_resolved, true);
+  assert.deepEqual(r.scopedResponse.items[0].conditions, [f.replacement.part, before.items[0].conditions[1], before.items[0].unresolved[0]]);
+  assert.deepEqual(r.scopedResponse.items[0].unresolved, [before.items[0].unresolved[1]]);
+  assert.equal(r.scopedResponse.items[1].conclusion, before.items[1].conclusion);
+  assert.equal(r.scopedResponse.items[1].conditions.length, 1);
+  assert.deepEqual(r.resolvedTargets.map(x => [x.operation, x.item_index, x.field, x.index]), [
+    ["replace", 0, "conditions", 0], ["move", 0, "unresolved", 0], ["append", 1, "conditions", undefined] ]);
+  assert.equal(r.repairAudit[0].before_sha256, hash(before.items[0].conditions[0]));
+});
+test("opaque targets reject unknown IDs, padding aliases, guessed numeric addresses and target IDs used as source citations", () => {
+  for (const mode of ["unknown", "padding", "numeric", "citation", "wrong_namespace"]) {
+    const f = fixture(), patch = { ...f.patch, version: repair.VERSION, replacements: [{
+      part_id: "p001", part: structuredClone(f.replacement.part), reason: "r", evidence: [f.ids[1]] }] };
+    if (mode === "unknown") patch.replacements[0].part_id = "p999";
+    if (mode === "padding") patch.replacements[0].part_id = "p1";
+    if (mode === "numeric") patch.replacements[0].item_index = 0;
+    if (mode === "citation") patch.replacements[0].part.evidence = ["p001"];
+    if (mode === "wrong_namespace") patch.replacements[0].part_id = "i001";
+    assert.throws(() => repair.applyScopedRepair(f.input, f.current, patch));
+  }
+});
+test("opaque labels cannot bypass whole-base binding or conceal two operations on the same original field", () => {
+  const f = fixture(), patch = { ...f.patch, version: repair.VERSION, replacements: [{
+    part_id: "p001", part: f.replacement.part, reason: "r", evidence: [f.ids[1]] }] };
+  const changed = structuredClone(f.current); changed.items[0].conditions.unshift(f.part("new", "new"));
+  assert.throws(() => repair.applyScopedRepair(f.input, changed, patch), { code: "scoped_repair_binding" });
+  patch.moves.push({ part_id: "p001", to: "unresolved", reason: "overlap", evidence: [f.ids[1]] });
+  assert.throws(() => repair.applyScopedRepair(f.input, f.current, patch), { code: "scoped_repair_conflict" });
+});
+test("valid opaque labels are mechanical addresses and cannot certify semantic choice or lift the final budget", () => {
+  const f = fixture(), patch = { ...f.patch, version: repair.VERSION, replacements: [{
+    part_id: "p001", part: f.part("模型归属可能错", "模型仍可能误改已有事实"), reason: "模型意见", evidence: [f.ids[1]] }] };
+  const r = repair.applyScopedRepair(f.input, f.current, patch);
+  assert.equal(r.semantic_correctness, "NOT_CERTIFIED"); assert.equal(r.validation.repair_validity, "MODEL_DECLARED_NOT_CERTIFIED");
+  assert.equal(r.validation.publishable, false);
+  patch.replacements[0].part.text = "很长".repeat(1000);
+  assert.throws(() => repair.applyScopedRepair(f.input, f.current, patch, { summaryMaxChars: 1000 }), { code: "comparison_summary_budget" });
+});
+test("caller-selected review scope preserves unrelated items and forbids cross-scope edits or additions", () => {
+  const f = fixture(), reviewScope = { item_ids: ["i001"], question: "复核分类动作，不改其他事项" };
+  const request = JSON.parse(repair.buildScopedRepairPrompt(f.input, f.inventory, f.current, { reviewScope }).prompt);
+  assert.deepEqual(request.review_scope, reviewScope);
+  const patch = { ...f.patch, version: repair.VERSION, appends: [{
+    item_id: "i001", field: "conditions", part: f.part("规则", "原行消失不计成功"), reason: "补规则", evidence: [f.ids[1]] }] };
+  const r = repair.applyScopedRepair(f.input, f.current, patch, { reviewScope });
+  assert.deepEqual(r.scopedResponse.items[1], f.current.items[1]);
+  patch.appends[0].item_id = "i002";
+  assert.throws(() => repair.applyScopedRepair(f.input, f.current, patch, { reviewScope }), { code: "scoped_repair_scope" });
+  patch.appends = []; patch.additions.push(structuredClone(f.current.items[1]));
+  assert.throws(() => repair.applyScopedRepair(f.input, f.current, patch, { reviewScope }), { code: "scoped_repair_scope" });
+});
+test("invalid scope stops before generation and a returned proposal cannot expand the host's scope", async () => {
+  for (const reviewScope of [
+    { item_ids: ["i999"], question: "q" }, { item_ids: [], question: "q" },
+    { item_ids: ["i001", "i001"], question: "q" }, { item_ids: ["i001"], question: "" }
+  ]) {
+    const f = fixture(); let calls = 0;
+    const r = await repair.runScopedRepair(f.input, f.inventory, f.current, async () => { calls++; }, { reviewScope });
+    assert.equal(calls, 0); assert.equal(r.status, "REJECTED");
+  }
+  const f = fixture(), patch = { ...f.patch, version: repair.VERSION, appends: [{
+    item_id: "i002", field: "conditions", part: f.part("other", "越出复核范围"), reason: "r", evidence: [f.ids[1]] }] };
+  let calls = 0; const raw = JSON.stringify(patch);
+  const r = await repair.runScopedRepair(f.input, f.inventory, f.current, async () => { calls++; return raw; },
+    { reviewScope: { item_ids: ["i001"], question: "只改这一项" } });
+  assert.equal(calls, 1); assert.equal(r.error, "scoped_repair_scope"); assert.equal(r.record.raw_response, raw);
+  assert.equal(r.publisherCalls, 0); assert.deepEqual(r.record.base_summary, f.current);
+});
 test("v2 binds all target addresses to the complete base and computes per-part hashes in the host", () => {
-  const f = fixture(); f.patch.version = repair.VERSION;
+  const f = fixture(); f.patch.version = repair.NUMERIC_VERSION;
   const change = structuredClone(f.replacement); delete change.expected_sha256; f.patch.replacements.push(change);
   const r = repair.applyScopedRepair(f.input, f.current, f.patch);
   assert.equal(r.repairAudit[0].before_sha256, hash(f.current.items[0].conditions[0]));
@@ -166,7 +249,7 @@ test("legacy hash-copy failure stays rejected until an explicit whole-base-bound
   assert.throws(() => repair.applyScopedRepair(f.input, f.current, f.patch), { code: "scoped_repair_stale" });
   const rebound = repair.rebindLegacyRepair(f.input, f.current, f.patch);
   assert.deepEqual(f.patch, before.patch); assert.deepEqual(f.current, before.current);
-  assert.equal(rebound.migratedPatch.version, repair.VERSION);
+  assert.equal(rebound.migratedPatch.version, repair.NUMERIC_VERSION);
   assert.ok(!Object.hasOwn(rebound.migratedPatch.replacements[0], "expected_sha256"));
   assert.deepEqual(rebound.migratedPatch.replacements[0].part, f.replacement.part);
   assert.equal(rebound.migration.kind, "EXPLICIT_OFFLINE_HOST_REBIND");
