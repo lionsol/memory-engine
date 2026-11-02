@@ -53,6 +53,44 @@ function harness(t, behavior, extraEnv = {}, killBehavior) {
   const options = { env, spawnImpl, signalChildImpl, tempRoot: root, killGraceMs: 10 };
   return { root, env, options, invocations, kills, generate: cli.createCodexSummaryGenerator(options) };
 }
+test("host binding constants are written into a private output schema and hashed without altering the static template", async t => {
+  const bindings = { version: "checkpoint-scoped-repair-v3", target_date: DATE, binding: "a".repeat(64), summary_sha256: "b".repeat(64) };
+  let schemaBytes, selected;
+  const f = harness(t, ({ lines, close }) => {
+    const call = f.invocations[0]; selected = call.args[call.args.indexOf("--output-schema") + 1];
+    schemaBytes = fs.readFileSync(selected);
+    const schema = JSON.parse(schemaBytes);
+    for (const [key, value] of Object.entries(bindings)) assert.deepEqual(schema.properties[key].enum, [value]);
+    assert.equal(path.dirname(selected), call.options.cwd);
+    lines([...start(), message({ ...bindings, replacements: [], appends: [], moves: [], additions: [], findings: [] }), completed()]);
+    close();
+  });
+  const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract: "scoped_summary_repair", outputBindings: bindings });
+  const result = await generate(request());
+  assert.equal(result.summary.summary_sha256, bindings.summary_sha256);
+  assert.deepEqual(result.generator.schema_binding_fields, Object.keys(bindings));
+  assert.equal(result.generator.schema_sha256, require("node:crypto").createHash("sha256").update(schemaBytes).digest("hex"));
+  assert.equal(fs.existsSync(selected), false); assert.deepEqual(fs.readdirSync(f.root), []);
+  assert.ok(!Object.hasOwn(JSON.parse(fs.readFileSync(path.join(__dirname, "../lib/checkpoint/scoped-summary-repair-schema.json"))).properties.binding, "enum"));
+});
+test("invalid or unsupported host binding constants reject before process creation", async t => {
+  for (const outputBindings of [{ binding: "wrong" }, { summary_sha256: "a".repeat(64) }, { target_date: "bad" },
+    { version: "bad\nversion" }, { schema_path: "/arbitrary/path" }, {}]) {
+    const f = harness(t);
+    const generate = cli.createCodexSummaryGenerator({ ...f.options, outputBindings });
+    await assert.rejects(generate(request()), { code: "derived_cli_output_bindings" });
+    assert.equal(f.invocations.length, 0); assert.deepEqual(fs.readdirSync(f.root), []);
+  }
+});
+test("schema binding violations still reject locally; request data cannot override or repair host constants", async t => {
+  const bindings = { version: "checkpoint-scoped-repair-v3", summary_sha256: "a".repeat(64) };
+  const f = harness(t, ({ lines, close }) => {
+    lines([...start(), message({ ...bindings, summary_sha256: "b".repeat(64) }), completed()]); close();
+  });
+  const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract: "scoped_summary_repair", outputBindings: bindings });
+  await assert.rejects(generate({ ...request(), outputBindings: { summary_sha256: "b".repeat(64) } }), { code: "derived_cli_output_binding" });
+  assert.equal(f.invocations.length, 1); assert.deepEqual(fs.readdirSync(f.root), []);
+});
 test("host-selected repair schema carries only source-grounded local edits through CLI into deterministic application", async t => {
   const repair = require("../lib/checkpoint/summary-scoped-repair.cjs");
   const claims = require("../lib/checkpoint/summary-claim-ledger.cjs");
