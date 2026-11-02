@@ -8,6 +8,16 @@
 >
 > It describes current product/source decisions only and does not pin its own containing Git commit. Use `git rev-parse HEAD` for exact repository authority.
 
+## 当前项目取舍 — 2026-11-02
+
+Sol明确本项目是个人实验性项目，不要求生产级安全性和稳定性。
+后续开发以简单、可用、便于修改为先，遵循[项目工作约定](../AGENTS.md)。
+摘要按“有损摘要＋原文可回溯”交付：原文保留和引用可读取是基本功能，
+遗漏、归纳和阶段判断错误作为质量备注，不要求逐项修复后才接受摘要。
+实现以现有直接派生摘要路径为基础，多轮命题审核、模型对照和生产级流程不是使用前提。
+以下历史运维、部署和验收记录保留原事实，不据此扩张后续实验的默认要求。
+该定位更新不等于运行环境已切换到derived模式。
+
 ## Latest Recent I/O qualification — 2026-10-11
 
 - `current_fact`: bounded isolated Recent I/O and its operator-created covering index are **`PASS_WITH_FINDINGS / DEPLOYMENT CLOSED`** on the qualified host. The bounded shared query was introduced at `65bb8cff792d942ce3afb89d049cd2aee2b5c221`; index activation was bound to the card-only commit `9a534ca201aca2a0709b8a025a1ec072fe5a1626` and [the single-execution card](smoke-tests/autorecall-recent-index-only-activation-stage-card-20261011.md). Activation used one stop, one CREATE, one recovery/start, two health probes, one status check and zero installs/DROPs. Core canonical content, schema identity and user_version were unchanged; the sole schema delta was `idx_memory_index_chunks_recent_cover ON memory_index_chunks(updated_at DESC, id ASC, path)`. The actual shared Recent SQL used covering-index selection and primary-key SEARCH for text projection. The active artifact remained EXACT; Gateway/RPC/config acceptance passed. The first health probe failed transiently and the second passed; earlier stopped runs retain their original failure classifications and consumed counts, not additional successful activations.

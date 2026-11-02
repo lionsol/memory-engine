@@ -49,8 +49,9 @@ tmp/memory-quality/
 *-context.json
 actions.md
 
-# Local Codex / agent instructions
+# Keep nested/local agent instructions ignored; track root project conventions
 AGENTS.md
+!/AGENTS.md
 
 # Reports
 reports/*
