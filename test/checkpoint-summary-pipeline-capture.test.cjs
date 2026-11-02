@@ -4,10 +4,12 @@ const fs = require("node:fs"), path = require("node:path"), { createHash } = req
 const { runSummaryPipeline } = require("../lib/checkpoint/summary-pipeline.cjs");
 const archive = require("../lib/checkpoint/summary-memory-archive.cjs");
 const { readDerivedSummary } = require("../lib/checkpoint/derived-summary");
-test("captured automatic pipeline replays fresh stage outputs with no human scopes or answer substitution and retains both candidates", {
-  skip: process.env.MEMORY_ENGINE_TEST_SUMMARY_PIPELINE_DIRECTORY ? false : "set MEMORY_ENGINE_TEST_SUMMARY_PIPELINE_DIRECTORY for the complete experiment"
+for (const [label, variable] of [["legacy explicit resume", "MEMORY_ENGINE_TEST_SUMMARY_PIPELINE_DIRECTORY"],
+  ["fresh claim-audit pipeline", "MEMORY_ENGINE_TEST_CLAIM_AUDIT_PIPELINE_DIRECTORY"]]) {
+test("captured " + label + " preserves stage outputs without human scopes or answer substitution", {
+  skip: process.env[variable] ? false : "set " + variable + " for the complete experiment"
 }, async () => {
-  const directory = process.env.MEMORY_ENGINE_TEST_SUMMARY_PIPELINE_DIRECTORY;
+  const directory = process.env[variable];
   const load = name => JSON.parse(fs.readFileSync(path.join(directory, name)));
   const plan = load("plan.json"), result = load("result.json"), saved = load("pipeline-result.json");
   const input = load("fact-input.json"), records = load("input-records.json"), bytes = fs.readFileSync(path.join(directory, "source.md"));
@@ -35,7 +37,24 @@ test("captured automatic pipeline replays fresh stage outputs with no human scop
     assert.equal(request.inputChars, expected.inputChars); assert.equal(request.outputContract, expected.output_contract);
     assert.ok(!Object.hasOwn(p, "review_scope")); assert.ok(!Object.hasOwn(p, "addition_scope"));
     const rawPath = path.join(directory, stage + "-model-output.json");
-    if (fs.existsSync(rawPath)) return fs.readFileSync(rawPath, "utf8");
+    if (fs.existsSync(rawPath)) {
+      const raw = fs.readFileSync(rawPath, "utf8");
+      if (expected.output_bindings) {
+        assert.deepEqual(request.outputBindings, expected.output_bindings);
+        const schemaBytes = fs.readFileSync(path.join(directory, stage + "-bound-output-schema.json"));
+        const schema = JSON.parse(schemaBytes), invocation = load(stage + "-invocation.json"), response = load(stage + "-response.json");
+        const wire = JSON.parse(raw);
+        for (const [key, value] of Object.entries(expected.output_bindings)) {
+          assert.deepEqual(schema.properties[key].enum, [value]); assert.equal(wire[key], value);
+        }
+        assert.equal(hash(schemaBytes), invocation.schema_sha256);
+        assert.equal(hash(schemaBytes), response.generator.schema_sha256);
+        assert.equal(invocation.private_schema_mode, 0o600); assert.equal(invocation.private_directory_mode, 0o700);
+        assert.equal(response.generator.tool_events, 0); assert.deepEqual(response.summary, wire);
+        assert.equal(hash(fs.readFileSync(path.join(directory, stage + "-stdout.jsonl"))), response.generator.stdout_sha256);
+      }
+      return raw;
+    }
     const failed = load(stage + "-outcome.json");
     throw Object.assign(new Error("captured transport failure"), { code: failed.error });
   }, plan.limits);
@@ -56,7 +75,13 @@ test("captured automatic pipeline replays fresh stage outputs with no human scop
   if (replay.status === "READY_FOR_REVIEW") {
     assert.deepEqual(replay.response, saved.response); assert.deepEqual(replay.scopedResponse, saved.scopedResponse);
     assert.equal(replay.body, saved.body); assert.ok(replay.bodyChars <= plan.limits.summaryMaxChars);
-    assert.equal(replay.candidate_origin, "SINGLE_UNRESTRICTED_MODEL_REVIEW");
+    assert.equal(replay.candidate_origin, plan.limits.reviewMode === "claim_audit"
+      ? "SINGLE_CLAIM_AUDIT_MODEL_REVIEW" : "SINGLE_UNRESTRICTED_MODEL_REVIEW");
+    if (plan.limits.reviewMode === "claim_audit") {
+      assert.equal(calls, 3);
+      assert.deepEqual(replay.stages.review.claimAudit, saved.stages.review.claimAudit);
+      assert.deepEqual(replay.stages.review.claimAudit.raw_checks, load("review-model-output.json").claim_checks);
+    }
   } else {
     assert.equal(replay.error, saved.error); assert.equal(replay.failed_stage, saved.failed_stage);
     assert.ok(!Object.hasOwn(replay, "response"));
@@ -78,3 +103,4 @@ test("captured automatic pipeline replays fresh stage outputs with no human scop
   }
   assert.deepEqual(fs.readFileSync(path.join(directory, "source.md")), bytes);
 });
+}

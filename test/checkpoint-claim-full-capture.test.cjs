@@ -17,7 +17,9 @@ test("full native v2 inventory preserves model bytes and every evidence range wh
   assert.equal(hash(sourceBytes), plan.source_sha256);
   assert.deepEqual(buildFactInput(records, "2026-10-20"), input);
   const mode = { referenceMode: "fragment_ids", bodyMaxChars: 200000 };
-  assert.deepEqual(lab.buildClaimPrompt(input, mode), request);
+  const { evidenceIds, ...modelRequest } = lab.buildClaimPrompt(input, mode);
+  assert.deepEqual(modelRequest, request, "historical model instructions and source packet remain byte-identical");
+  assert.deepEqual(evidenceIds, JSON.parse(request.prompt).SOURCE.sources.flatMap(s => s.fragments.map(f => f[0])));
   const result = lab.projectClaimLedger(input, wire, mode);
   assert.deepEqual(result.ledger, wire); assert.equal(result.claims.length, wire.claims.length);
   const originals = new Map(records.map(record => [hash(record.text), record.text]));

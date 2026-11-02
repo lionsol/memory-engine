@@ -29,6 +29,10 @@ test("automatic pipeline performs exactly three fixed-schema serial generations 
     assert.equal(Object.isFrozen(request.outputBindings), true);
     assert.deepEqual(request.outputBindings, { version: wire.version, target_date: wire.target_date, binding: wire.binding,
       ...(request.pipelineStage === "review" ? { summary_sha256: wire.summary_sha256 } : {}) });
+    if (request.pipelineStage === "inventory") {
+      assert.equal(Object.isFrozen(request.evidenceIds), true);
+      assert.deepEqual(request.evidenceIds, p.SOURCE.sources.flatMap(s => s.fragments.map(f => f[0])));
+    } else assert.ok(!Object.hasOwn(request, "evidenceIds"));
     assert.equal(Object.isFrozen(request), true); assert.ok(!Object.hasOwn(p, "review_scope")); assert.ok(!Object.hasOwn(p, "addition_scope"));
     assert.equal(saved.length, calls.length - 1, "each stage is checkpointed before the next request");
     return JSON.stringify(f.respond(request));

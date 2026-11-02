@@ -11,8 +11,11 @@
 不接受reviewScope、additionScope、重试次数、手工参考答案或额外生成阶段配置。
 
 invoke接收system、prompt、pipelineStage、outputContract、outputBindings及signal，返回模型原始最终JSON字符串。
+提取阶段还提供冻结的evidenceIds，内容来自SOURCE片段目录。
 CLI适配器须把request.outputContract与request.outputBindings传入createCodexSummaryGenerator的构造参数；
 outputBindings不是模型可覆盖的请求选项。
+片段提取的CLI适配器还须把request.evidenceIds传入构造参数evidenceIds，
+将claims[].evidence[]限制为源片段目录；其他阶段不使用此选项。
 流水线本身不选模型、不读取凭据、不调用DB或publisher；transport与原始CLI事件保存由调用方负责。
 默认输入上限200000字符、中间清单正文上限200000、最终正文上限20000，
 源绑定、引文范围和最终预算继续严格验证。
@@ -131,6 +134,56 @@ archive_id为c2aa158b99c985d283fcc87608374379a9036e7314b2e70dcdc7f500ef4e1869。
 原三阶段流水线默认行为不变；reviewMode="claim_audit"仅替换第三阶段，仍三次生成，不接受人工scope。
 独立真实审核在同一208条清单/25项候选上完成：28项、14507字符、154处回溯；
 报告修订事项补回，但仅改报告的阶段边界仍遗漏。新模式流水线接入只有集成测试，未做新的完整真实运行。
+
+## 145962d完整流程验证与片段引用约束
+
+使用已推送145962d重新运行完整流程：新提取、新合成、逐命题审核，最多三次调用，
+没有历史模型响应、修好候选、人工参考或指定scope作为输入；仍是已知开发样本。
+三阶段使用root单值schema，但当时尚无片段ID枚举。
+
+实际第1次提取返回267条claims和133条dispositions，以claim_reference拒收，
+后续合成/审核调用均为0。c005/c006的evidence分别写成不存在的s3.t1.p1.l1/l2；
+原文Embedding/Vision在s3.t1.p0.l2/l3。未修正这份原始响应，也未换旧清单续行。
+证据目录：
+/home/lionsol/.openclaw/ops/memory-engine/checkpoint-pipeline-145962d-20261102-r1。
+它是一次完整流程尝试的提取失败，不是端到端成功。
+
+原因可定位为程序已有有限来源目录，却让模型自由填写可计算形状的片段ID。
+后续为claim_ledger_fragments增加可选host evidenceIds：
+把claims.items.properties.evidence.items.enum约束为冻结源目录，并在CLI返回后再次验证。
+只约束命题证据；dispositions的非阻断质量政策保留。不自动猜ID、改原响应或放宽精确回溯。
+合法ID不证明语义支持关系正确，选错合法片段仍可能形成事实错误。
+原默认transport和静态schema保持兼容；不支持其他合同或任意schema路径使用evidenceIds。
+
+单独再做1次提取对照，system/prompt与上述失败请求逐字一致，仅改变schema证据词表。
+目录：
+/home/lionsol/.openclaw/ops/memory-engine/checkpoint-fragment-vocabulary-145962d-20261102-r1。
+这不是原失败续行，没有新合成/审核。
+实际CLI期限270秒触发derived_cli_timeout；总执行290.353秒，只有thread.started/turn.started，
+无最终JSON、无stderr。原始输出、实际schema及超时拒收保持原样，不推断超时原因或schema质量收益。
+
+另新增1次短合同检查，使用相同435项枚举回传一条已给定测试命题，
+不作完整提取或语义质量评价：
+/home/lionsol/.openclaw/ops/memory-engine/checkpoint-fragment-enum-contract-145962d-20261102-r1。
+实际CLI退出0，返回一条合法引用，generator记录435项词表。
+最初检查脚本误用JSON.stringify比较键顺序，result.json仍保留REJECTED/contract_smoke_failed；
+offline-verification.json采用深对象比较，确认原始响应等值、schema/事件哈希匹配，
+标记VERIFIED_CONTRACT_ONLY。没有重试模型或改写原JSON。
+因此只验证435项枚举schema的原生合同可用，完整提取成功和端到端成功仍未建立。
+本轮实际调用共3次：完整流程尝试1次、完整提取词表对照1次、短合同检查1次。
+
+原失败267条草稿还有独立语义发现：c109引用s0.t9.p9.l0，
+却在text/conditions中漏掉“唯一动过的文件是那份报告”，scope仅写“2026-10-20 后续操作状态”。
+上一208条清单曾保留此事实，随后被合成/审核省略；本次则在提取草稿中就已丢失。
+这不表示原文从归档删除，也不能归咎于本次未调用的合成阶段。
+具体失败与阶段追踪见原实验目录failure-analysis.json；仍未解决限定归属的语义保留。
+
+新增回放环境变量：
+MEMORY_ENGINE_TEST_CLAIM_AUDIT_PIPELINE_DIRECTORY、
+MEMORY_ENGINE_TEST_REFERENCE_BOUND_INVENTORY_DIRECTORY、
+MEMORY_ENGINE_TEST_REFERENCE_ENUM_CONTRACT_DIRECTORY。
+所有私有记录启用后的相关回归297/297通过、0跳过；测试不调用模型，
+不以拒收回放或短合同输出冒充完整提取成功。
 
 ## 回放
 

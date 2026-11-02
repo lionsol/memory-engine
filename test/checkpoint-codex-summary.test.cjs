@@ -53,6 +53,43 @@ function harness(t, behavior, extraEnv = {}, killBehavior) {
   const options = { env, spawnImpl, signalChildImpl, tempRoot: root, killGraceMs: 10 };
   return { root, env, options, invocations, kills, generate: cli.createCodexSummaryGenerator(options) };
 }
+test("host fragment IDs constrain claim evidence without changing non-claim accounting or the static schema", async t => {
+  const evidenceIds = ["s0.t1.p0.l0", "s0.t1.p0.l1"];
+  let schemaBytes;
+  const f = harness(t, ({ lines, close }) => {
+    const call = f.invocations[0], file = call.args[call.args.indexOf("--output-schema") + 1];
+    schemaBytes = fs.readFileSync(file);
+    const schema = JSON.parse(schemaBytes);
+    assert.deepEqual(schema.properties.claims.items.properties.evidence.items.enum, evidenceIds);
+    assert.ok(!Object.hasOwn(schema.properties.dispositions.items.properties.fragment, "enum"));
+    lines([...start(), message({ version: "checkpoint-claim-ledger-fragments-v2", claims: [{ evidence: [evidenceIds[1]] }],
+      dispositions: [{ fragment: "unknown-accounting-only" }] }), completed()]); close();
+  });
+  const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract: "claim_ledger_fragments", evidenceIds });
+  const result = await generate(request());
+  assert.equal(result.generator.schema_evidence_id_count, 2);
+  assert.equal(result.generator.schema_sha256, require("node:crypto").createHash("sha256").update(schemaBytes).digest("hex"));
+  assert.deepEqual(fs.readdirSync(f.root), []);
+  const original = JSON.parse(fs.readFileSync(path.join(__dirname, "../lib/checkpoint/claim-ledger-fragments-schema.json")));
+  assert.ok(!Object.hasOwn(original.properties.claims.items.properties.evidence.items, "enum"));
+});
+test("unsupported or invalid host evidence vocabularies reject before spawn", async t => {
+  for (const [outputContract, evidenceIds] of [["derived_summary", ["f1"]], ["claim_ledger_fragments", []],
+    ["claim_ledger_fragments", ["f1", "f1"]], ["claim_ledger_fragments", [""]], ["claim_ledger_fragments", null]]) {
+    const f = harness(t);
+    const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract, evidenceIds });
+    await assert.rejects(generate(request()), { code: "derived_cli_evidence_ids" });
+    assert.equal(f.invocations.length, 0);
+  }
+});
+test("a claim evidence enum violation is rejected locally and request data cannot override the host vocabulary", async t => {
+  for (const wire of [{ claims: [{ evidence: ["invented"] }] }, { claims: [{ evidence: null }] }, null]) {
+    const f = harness(t, ({ lines, close }) => { lines([...start(), message(wire === null ? "null" : wire), completed()]); close(); });
+    const generate = cli.createCodexSummaryGenerator({ ...f.options, outputContract: "claim_ledger_fragments", evidenceIds: ["real"] });
+    await assert.rejects(generate({ ...request(), evidenceIds: ["invented"] }), { code: "derived_cli_output_evidence" });
+    assert.equal(f.invocations.length, 1); assert.deepEqual(fs.readdirSync(f.root), []);
+  }
+});
 test("host binding constants are written into a private output schema and hashed without altering the static template", async t => {
   const bindings = { version: "checkpoint-scoped-repair-v3", target_date: DATE, binding: "a".repeat(64), summary_sha256: "b".repeat(64) };
   let schemaBytes, selected;
