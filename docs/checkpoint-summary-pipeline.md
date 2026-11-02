@@ -185,6 +185,14 @@ MEMORY_ENGINE_TEST_REFERENCE_ENUM_CONTRACT_DIRECTORY。
 所有私有记录启用后的相关回归297/297通过、0跳过；测试不调用模型，
 不以拒收回放或短合同输出冒充完整提取成功。
 
+## 邻接证据实验结论（9fff662后）
+
+[对照记录](checkpoint-adjacent-evidence.md)：同一完整原文/208条清单，各一次Luna合成。
+邻接原文增加约67%输入，仍漏报告专属阶段并新增Daily Stats遗漏；两组均有无依据字段等同。
+未支持默认启用。临时API改动已撤回，只留独立summary-adjacent-lab.cjs，主流水线没有新开关。
+额外一次Sol/xhigh同prompt/schema对照超时，没有语义结果，未重试。
+303项相关回归通过，0跳过；这次没有证明语义修复。
+
 ## 回放
 
 test/checkpoint-summary-pipeline.test.cjs验证固定阶段/合同、失败停止、取消、
