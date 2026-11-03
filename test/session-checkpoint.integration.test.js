@@ -9,6 +9,8 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const checkpoint = require("../bin/session-checkpoint.js");
 const { factResponse } = require("./checkpoint-fact-fixture.cjs");
+// This file exercises legacy extraction and its downstream writes in an isolated test process.
+process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE = "legacy";
 // These downstream integration tests do not invoke the host Core indexer.
 const completeCoreIndex = async ({ targetDate }) => ({
   ok: true, status: "complete", index_invocation: { status: "succeeded" },

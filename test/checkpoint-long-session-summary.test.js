@@ -77,7 +77,7 @@ async function fixture(fn, { entries = [entry(source()), entry("**User:** other 
   writeFileSync(path, "OLD SUMMARY");
   const state = { entries };
   const read = reader(() => state.entries);
-  const overrides = { workspaceDir: root, memoryDir: root, episodesDir: episodes,
+  const overrides = { checkpointSummaryMode: "legacy", workspaceDir: root, memoryDir: root, episodesDir: episodes,
     smartAddDir: join(root, "smart-add"), generatedSmartAddDir: join(root, "generated"),
     sessionsDir: join(root, "sessions"), coreDbPath: join(root, "core.sqlite"),
     engineDbPath: join(root, "engine.sqlite"), configJsonPath: join(root, "absent.json"),

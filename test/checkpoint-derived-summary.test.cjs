@@ -33,9 +33,15 @@ async function fixture(fn) {
     counts: () => ({ calls, legacy }), directory: derived.archiveDirectory(root) })); }
   finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
-test("real checkpoint entry archives before publication and accepts quality findings without semantic certification", async () => {
+test("default checkpoint entry archives before publication and accepts quality findings without semantic certification", async t => {
+  const previous = process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE;
+  delete process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE;
+  t.after(() => {
+    if (previous === undefined) delete process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE;
+    else process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE = previous;
+  });
   await fixture(async ({ run, directory, episode, root, counts }) => {
-    const result = await run();
+    const result = await withRuntime({ checkpointSummaryMode: undefined }, run);
     assert.equal(result.status, "valid_summary"); assert.equal(result.publication.published, true);
     assert.equal(result.semantic_correctness, "NOT_CERTIFIED");
     assert.equal(fs.readFileSync(result.publication.backup, "utf8"), "OLD EPISODE");

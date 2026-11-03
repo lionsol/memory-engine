@@ -45,7 +45,7 @@ async function fixture(action){
  fs.mkdirSync(episodes);const path=join(episodes,DATE+".md");fs.writeFileSync(path,"OLD SUMMARY");
  const state={entries:[entry(22932,"long"),entry(366,"one"),entry(356,"two"),entry(360,"three")]};
  const read=makeReader(state,ALIGNED);
- const runtime={workspaceDir:root,memoryDir:root,episodesDir:episodes,smartAddDir:join(root,"smart"),
+ const runtime={checkpointSummaryMode:"legacy",workspaceDir:root,memoryDir:root,episodesDir:episodes,smartAddDir:join(root,"smart"),
   generatedSmartAddDir:join(root,"generated"),sessionsDir:join(root,"sessions"),coreDbPath:join(root,"core"),
   engineDbPath:join(root,"engine"),configJsonPath:join(root,"absent.json"),lancedbDir:join(root,"lance"),
   timeZone:"Asia/Shanghai",checkpointLegacyDailyMirror:false,

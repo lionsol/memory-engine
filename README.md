@@ -16,6 +16,9 @@
 这是 Sol 的个人实验性项目，优先简单、可用和可修改，不要求生产级别的安全性与稳定性。
 摘要采用“有损摘要＋原文可回溯”：允许遗漏与归纳错误，保留原始记录和回读路径，语义问题作为质量备注。
 后续开发遵循 [项目工作约定](AGENTS.md)，实现入口见[有损摘要与原文回溯](docs/checkpoint-derived-memory.md)。
+Checkpoint 默认使用直接派生摘要（`derived`）：一次生成，保存本次输入原文和摘要，
+通过 `memory_engine_get` 的 `checkpoint:<archive_id>` 回读；无需开启多轮审核。
+显式设置 `MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE=legacy` 可选择旧提取路径。
 
 Memory Engine 是 OpenClaw `memory-core` 之上的**增强与治理层**，不是 memory slot 的替代实现。
 

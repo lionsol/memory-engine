@@ -84,6 +84,25 @@ test("getRuntime default fields remain available", () => {
   assert.equal(Object.isFrozen(runtime.dbOptions), true);
 });
 
+test("summary mode defaults to derived and explicit mode selections take precedence", async t => {
+  const previous = process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE;
+  t.after(() => {
+    if (previous === undefined) delete process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE;
+    else process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE = previous;
+  });
+  delete process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE;
+  assert.equal(getRuntime().checkpointSummaryMode, "derived");
+  process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE = "legacy";
+  assert.equal(getRuntime().checkpointSummaryMode, "legacy");
+  await checkpoint.withRuntime({ checkpointSummaryMode: "derived" }, () => {
+    assert.equal(getRuntime().checkpointSummaryMode, "derived");
+  });
+  process.env.MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE = "derived";
+  await checkpoint.withRuntime({ checkpointSummaryMode: "legacy" }, () => {
+    assert.equal(getRuntime().checkpointSummaryMode, "legacy");
+  });
+});
+
 test("one checkpoint runtime scope reuses one immutable descriptor", async () => {
   await checkpoint.withRuntime({
     coreDbPath: "/tmp/descriptor-core.sqlite",

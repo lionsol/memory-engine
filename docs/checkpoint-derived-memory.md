@@ -12,7 +12,12 @@ memory-engine是个人实验性项目，不要求生产级别的安全性和稳�
 本页描述归档入口、离线回溯验证及已完成的checkpoint源码接线。
 已有14项GPT摘要已通过真实Core临时索引、搜索/Get及备份回读，99次引用/93个不同段落一致；
 该验证使用离线embedding，不认证摘要语义或生产provider，见2026-11-01记录。
-生成入口与memory_engine_get读取入口已接入，默认仍走legacy；尚未部署或开启生产路径。
+生成入口与memory_engine_get读取入口已接入。2026-11-03起，源码默认选择derived，
+不再要求设置MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE；显式legacy仍可选择旧路径。
+默认transport为http，沿用现有primary provider配置；codex-cli仍须显式选择。
+调用nightlyCheckpoint的程序需要传inputReady=true；CLI主流程从采集结果计算该值。
+来源未就绪、已截断、输出格式或引用无效时返回失败；不自动改走旧提取路径。
+此默认值变更尚未安装到运行目录，不代表既有cron或服务已切换。
 显式搜索、普通chunk读取与AutoRecall卡片已新增逐项定位接线，
 Nightly Maintenance已新增归档检查与显式配置的追加式备份，见下文。
 默认不配置备份，不清理原文或历史归档；
@@ -102,7 +107,7 @@ evidence/corrects用途及派生属性；readOriginalRecord读取完整原始记
 调用链：
 
 1. bin/session-checkpoint.js的nightlyCheckpoint按checkpointSummaryMode选择路径。
-   默认legacy；只有显式MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE=derived才选择新路径。
+   本节接线当时默认legacy；2026-11-03起源码默认derived，显式legacy可选择旧路径。
    非法模式或derived失败均拒收，不回退legacy，也不执行旧的分段摘要。
 2. lib/checkpoint/derived-summary.js检查输入就绪、未截断、对话存在与来源版本，
    冻结完整采集记录，复用现有direct协议生成绑定原文的摘要。
@@ -187,7 +192,7 @@ lib/checkpoint/codex-summary.cjs、derived-summary-schema.json及离线测试，
 
 ### 选择与配置
 
-新路径依然要求MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE=derived。
+本节适配当时要求MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE=derived；2026-11-03起源码默认derived。
 只有同时显式指定MEMORY_ENGINE_CHECKPOINT_DERIVED_TRANSPORT=codex-cli，才会调用CLI。
 未配置transport仍走http；未知transport报derived_transport_invalid，不静默切换。
 本轮没有设置这些运行环境变量，没有修改cron、服务或OpenClaw配置。

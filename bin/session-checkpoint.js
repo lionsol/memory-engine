@@ -359,7 +359,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
   const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
   const allLogs = assessment.allLogs;
 
-  // Explicit opt-in; a derived failure must never fall through to legacy extraction.
+  // Default to a lossy summary with archived originals; legacy remains an explicit option.
   const runtime = getRuntime();
   if (runtime.checkpointSummaryMode !== "legacy") {
     if (runtime.checkpointSummaryMode !== "derived") {
@@ -919,7 +919,7 @@ async function main(argv = process.argv.slice(2)) {
     const pendingRecovery = retryPendingCheckpointEntries();
     console.log(`[checkpoint] Pending generated-entry recovery ${JSON.stringify(pendingRecovery)}`);
 
-    // Step 2: Ordinary extraction or the bounded, fully covered long-session summary.
+    // Step 2: Derived summary by default; explicit legacy mode keeps the old extraction paths.
     const result = await nightlyCheckpoint(rawLogs, { targetDate, rawLogStats,
       inputReady: engineComplete && coreIngestion.status === "complete",
       parentDeadline: checkpointDeadline,

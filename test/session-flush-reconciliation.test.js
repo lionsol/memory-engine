@@ -123,6 +123,7 @@ function createFixture({ sourceFiles = {}, coreRows = [], confidenceRows = [] } 
 
 function withFixtureRuntime(fixture, fn, overrides = {}) {
   return checkpoint.withRuntime({
+    checkpointSummaryMode: "legacy",
     workspaceDir: fixture.workspaceDir,
     memoryDir: fixture.memoryDir,
     lancedbDir: fixture.lancedbDir,

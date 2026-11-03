@@ -15,7 +15,7 @@ async function fixture(action) {
   fs.mkdirSync(episodesDir);
   const path = join(episodesDir, DATE + ".md");
   fs.writeFileSync(path, "PREVIOUS EPISODE");
-  const runtime = { workspaceDir: root, memoryDir: root, episodesDir,
+  const runtime = { checkpointSummaryMode: "legacy", workspaceDir: root, memoryDir: root, episodesDir,
     generatedSmartAddDir: join(root, "generated"), smartAddDir: join(root, "smart"),
     sessionsDir: join(root, "sessions"), coreDbPath: join(root, "core.sqlite"),
     engineDbPath: join(root, "engine.sqlite"), configJsonPath: join(root, "absent.json"),

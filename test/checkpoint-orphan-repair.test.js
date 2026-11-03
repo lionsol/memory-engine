@@ -782,6 +782,7 @@ test("runtime override repairOrphanVectors still controls main flow", async () =
 
   try {
     await checkpoint.withRuntime({
+      checkpointSummaryMode: "legacy",
       workspaceDir: fixture.workspaceDir,
       memoryDir: fixture.memoryDir,
       coreDbPath: fixture.coreDbPath,
@@ -790,6 +791,15 @@ test("runtime override repairOrphanVectors still controls main flow", async () =
       now: () => Date.parse("2026-06-18T09:10:11.000+08:00"),
       readCheckpointRawLogs: () => [],
       flushCheckpointRawLog: () => ({ ok: true }),
+      syncCoreMemoryIndex: async ({ targetDate }) => ({
+        ok: true, index_invocation: { status: "succeeded" },
+        target_date_coverage: { status: "complete", target_date: targetDate,
+          path: `memory/smart-add/${targetDate}.md`, required_fingerprints: 1,
+          matched_fingerprints: 1, missing_fingerprints: 0 },
+      }),
+      reconcileSessionFlushManagedState: async () => ({
+        ok: true, target_date_input_complete: true, eligibleCoreRows: [],
+      }),
       repairOrphanVectors: async () => {
         repairCalls += 1;
         return 7;
