@@ -103,6 +103,7 @@ function writeSessionFile(fixture, fileName, records, mtimeIso) {
 
 function getLogsForTargetDate(fixture, targetDate, options = {}) {
   return checkpoint.withRuntime({
+    checkpointSummaryMode: "legacy",
     workspaceDir: fixture.workspaceDir,
     memoryDir: fixture.memoryDir,
     smartAddDir: fixture.smartAddDir,

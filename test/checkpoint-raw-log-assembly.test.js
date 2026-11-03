@@ -89,7 +89,7 @@ test("DB collector uses readonly Engine dual handles and keeps event-time role m
     prepare(sql) {
       if (sql.includes("PRAGMA table_info")) return { all: () => [{ name: "event_at" }] };
       if (sql.includes("COUNT(*) AS c")) return { get: () => ({ c: 0 }) };
-      if (sql.includes("SELECT id, text")) {
+      if (sql.includes("AS raw_log_time")) {
         return { all: () => [{ id: "id-1", text: "**User:** hello", raw_log_time: 1_718_556_000 }] };
       }
       throw new Error(`unexpected core SQL: ${sql}`);

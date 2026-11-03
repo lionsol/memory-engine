@@ -349,7 +349,7 @@ function resolveExistingCheckpointEntry(text, category, episodeDate) {
 // ── Unified Nightly Smart Extraction ──
 
 /**
- * Run the full nightly checkpoint: one LLM call → 4 outputs.
+ * Run the nightly checkpoint; derived summary requests are bounded per batch.
  */
 async function nightlyCheckpoint(rawLogs, options = {}) {
   const episodeDate = resolveTargetDate(options);
@@ -372,6 +372,7 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
       rawLogStats: options.rawLogStats, inputReady: options.inputReady,
       conversationReady: assessment.shouldCallLlm === true,
       generator: runtime.derivedSummaryGenerator, signal: options.signal,
+      parentDeadline: options.parentDeadline,
     });
   }
 
@@ -985,6 +986,8 @@ async function main(argv = process.argv.slice(2)) {
       console.log(`[checkpoint] Summary not published: ${result.reason || "publication_incomplete"} — ${elapsed}s`);
     } else if (result.timeout) {
       console.log(`[checkpoint] ⏰ llm超时 — completed in ${elapsed}s`);
+    } else if (result.status === "partial_summary") {
+      console.log(`[checkpoint] Partial summary published: ${result.batches.completed}/${result.batches.total} batches — ${elapsed}s`);
     } else if (result.status === "empty_input") {
       console.log(`[checkpoint] Empty input — no summary generated (${elapsed}s)`);
     } else if (result.skipped) {
@@ -1041,6 +1044,8 @@ async function main(argv = process.argv.slice(2)) {
     const businessStatus = {
       publication_complete: publicationComplete,
       segmented_summary: result.segmented || null,
+      summary_batches: result.batches || null,
+      summary_source_snapshot_id: result.source_snapshot_id || null,
       ordinary_publication: result.publication || null,
       ordinary_source_version_valid: result.source_version_valid ?? null,
       ordinary_summary_validation: result.summary_validation || null,
@@ -1085,6 +1090,7 @@ async function main(argv = process.argv.slice(2)) {
       ok: publicationComplete && businessStatus.status !== "input_incomplete"
         && businessStatus.status !== "publication_incomplete"
         && businessStatus.status !== "timeout"
+        && businessStatus.status !== "partial_summary"
         && businessStatus.vector_validation_state !== "conflict"
         && !vectorOperationFailed,
       businessStatus,
