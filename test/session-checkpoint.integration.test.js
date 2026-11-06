@@ -386,7 +386,7 @@ test("session checkpoint exports legacy and official busy-timeout inspectors", (
   assert.equal(typeof checkpoint.inspectCheckpointBusyTimeouts, "function");
 });
 
-test("session checkpoint calls flush before reading targetDate-bounded raw logs and keeps reset direct parse off by default", async () => {
+test("session checkpoint dry-run reads targetDate-bounded raw logs without flushing and keeps reset direct parse off by default", async () => {
   const fixture = createFixture();
   let flushed = 0;
   let reconciled = 0;
@@ -417,7 +417,7 @@ test("session checkpoint calls flush before reading targetDate-bounded raw logs 
       resolveConfigConflicts: () => 0,
     }, () => checkpoint.main(["--dry-run"]));
 
-    assert.equal(flushed, 1);
+    assert.equal(flushed, 0);
     assert.equal(reconciled, 0);
     assert.equal(readerOptions.targetDate, "2026-06-16");
     assert.equal(readerOptions.resetDirectParseEnabled, false);

@@ -64,6 +64,32 @@
 同一进程自定义 generator 的实现改变而其他信息不变时，调用方应更换 resumeKey 或 CACHE_KEY。
 正常的 CLI 补跑仍使用原 target-date 参数，不需要任务队列或后台守护进程。
 
+## 本地运行入口
+
+bin/run-session-checkpoint-direct.sh 启动时加载插件根目录的 checkpoint-summary.env。
+可用 MEMORY_ENGINE_CHECKPOINT_ENV_FILE 指定其他文件。文件中的赋值覆盖继承值，
+由 wrapper 导出给 checkpoint 进程；机器路径、账号和代理配置不应写入公共源码。
+
+环境文件可配置 SUMMARY_MODE=derived、DERIVED_TRANSPORT=codex-cli、CODEX_BINARY、CODEX_MODEL、
+CODEX_EFFORT、CODEX_TIMEOUT_MS 以及分批预算，对应完整变量名均以 MEMORY_ENGINE_CHECKPOINT_ 开头。
+MEMORY_ENGINE_NODE_BIN 可固定 Node；PATH 应能让 OpenClaw 子命令找到受支持的 Node。
+不需要修改 Gateway 的全局代理环境。
+
+在实际安装目录只读检查：bash bin/run-session-checkpoint-direct.sh --check-config。
+它返回实际入口、Node、时区、原文目录、预算、CLI版本及代理变量名称；
+不执行flush、模型请求、数据库操作或日报写入。
+
+2026-11-03已将24个相关源码/schema文件安装到
+/home/lionsol/.openclaw/extensions/memory-engine，并核对文件哈希一致。
+本地环境文件选择Node v24.19.0、codex-cli 0.163.0、gpt-6-luna/xhigh、每批200000/20000字符；
+安装目录的Get工厂已通过已有隔离归档回读检查，未新增模型请求。
+原有9个文件的副本和安装清单保留于宿主ops目录，前缀checkpoint-runtime-install-20261103-r1。
+
+Gateway仍active/running，本轮未重启；Get新接口需要重启Gateway后加载。
+现有session-checkpoint任务7b40cc54-3c66-4183-a0f7-453e3e9cec00原本停用，安装后仍停用，
+原03:30 Asia/Shanghai计划和最后运行时间保持不变。本轮没有运行实际checkpoint或重跑历史日期。
+当前命令工具仅用于检查、测试和构建，Gateway重载及恢复定时执行由Owner完成。
+
 ## 功能验证
 
 离线测试覆盖：原文在首次请求前可读取、全部失败仍可回溯、同 session 合批、

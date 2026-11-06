@@ -87,19 +87,32 @@ function parseCliArgs(argv = []) {
       continue;
     }
     if (arg === "--target-date") {
-      options.targetDate = argv[index + 1] || null;
+      options.targetDate = argv[index + 1];
+      if (!options.targetDate || options.targetDate.startsWith("--")) throw new Error("--target-date requires a date");
       index += 1;
       continue;
     }
     if (arg.startsWith("--target-date=")) {
-      options.targetDate = arg.slice("--target-date=".length) || null;
+      options.targetDate = arg.slice("--target-date=".length);
+      if (!options.targetDate) throw new Error("--target-date requires a date");
       continue;
     }
     if (arg === "--legacy-reset-direct-parse") {
       options.legacyResetDirectParse = true;
+      continue;
     }
+    if (arg === "--replay-transcripts") {
+      options.replayTranscripts = argv[++index];
+      if (!options.replayTranscripts || options.replayTranscripts.startsWith("--")) {
+        throw new Error("--replay-transcripts requires a directory");
+      }
+      continue;
+    }
+    throw new Error("Unknown checkpoint argument: " + arg);
   }
 
+  if (options.targetDate) require("../lib/business-time.cjs").validateBusinessDate(options.targetDate);
+  if (options.replayTranscripts && !options.targetDate) throw new Error("transcript replay requires --target-date");
   return options;
 }
 
@@ -682,19 +695,40 @@ async function nightlyCheckpoint(rawLogs, options = {}) {
 
 async function main(argv = process.argv.slice(2)) {
   const start = Date.now();
-  const checkpointDeadline = require("node:perf_hooks").performance.now() + 900000;
+  const checkpointDeadline = require("node:perf_hooks").performance.now() + 1800000;
   const options = parseCliArgs(argv);
   const targetDate = resolveTargetDate(options);
   console.log(`[checkpoint] === Session Checkpoint ${todayDateStr()} ===`);
 
   try {
+    const replay = require("../lib/checkpoint/transcript-replay.cjs");
+    if (options.replayTranscripts) {
+      const result = await replay.replayTranscripts({ directory: options.replayTranscripts,
+        targetDate, dryRun: options.dryRun, parentDeadline: checkpointDeadline });
+      console.log(`[checkpoint] Transcript replay ${JSON.stringify(result)}`);
+      return result;
+    }
+    if (options.dryRun) {
+      const logs = getRuntime().readCheckpointRawLogs({ targetDate, timeZone: getRuntime().timeZone,
+        resetDirectParseEnabled: options.legacyResetDirectParse });
+      const preview = replay.previewLogs(logs, targetDate);
+      console.log(`[checkpoint] Dry run summary ${JSON.stringify(preview)}`);
+      return preview;
+    }
     const flushResult = getRuntime().flushCheckpointRawLog({ targetDate });
+    if (flushResult?.ok === false) throw new Error("checkpoint_flush_failed");
     console.log(`[checkpoint] flush status ${JSON.stringify({
       performed: true,
       ok: flushResult?.ok !== false,
       may_write_smart_add_files: true,
       dry_run: options.dryRun,
     })}`);
+
+    const emptyDay = replay.tryEmptyCheckpoint(targetDate);
+    if (emptyDay) {
+      console.log(`[checkpoint] Business status ${JSON.stringify(emptyDay.businessStatus)}`);
+      return emptyDay;
+    }
 
     let coreIngestion = options.dryRun
       ? { status: "skipped_dry_run", index_invocation: { status: "skipped" }, target_date_coverage: { status: "skipped" } }
@@ -827,50 +861,6 @@ async function main(argv = process.argv.slice(2)) {
     console.log(`[checkpoint] Found ${rawLogs.length} raw log entries (targetDate: ${targetDate}, timeZone: ${getRuntime().timeZone})`);
     if (rawLogStats) {
       console.log(`[checkpoint] Input stats ${JSON.stringify(rawLogStats)}`);
-    }
-
-    if (options.dryRun) {
-      const assessment = checkpointCompleteness.assessCheckpointCompleteness(rawLogs);
-      if (rawLogStats) {
-        rawLogStats.finalCombinedTextCharCount = assessment.combinedText.length;
-      }
-      console.log(`[checkpoint] Dry run summary ${JSON.stringify({
-        targetDate,
-        timeZone: getRuntime().timeZone,
-        rawCount: assessment.rawCount,
-        allCount: assessment.allCount,
-        conversationCount: assessment.conversationCount,
-        noteCount: assessment.noteCount,
-        combinedTextCharCount: assessment.combinedText.length,
-        rawLogIncluded: diagnostics.rawLogIncluded,
-        rawLogSkippedOutOfTargetDate: diagnostics.rawLogSkippedOutOfTargetDate,
-        rawLogTimeBasis: diagnostics.rawLogTimeBasis,
-        resetDirectParseEnabled: diagnostics.resetDirectParseEnabled,
-        resetFilesScanned: diagnostics.resetFilesScanned,
-        resetEventsIncluded: diagnostics.resetEventsIncluded,
-        resetEventsSkippedOutOfTargetDate: diagnostics.resetEventsSkippedOutOfTargetDate,
-        resetEventsSkippedMissingTimestamp: diagnostics.resetEventsSkippedMissingTimestamp,
-        smartAddPath: diagnostics.smartAddPath,
-        smartAddInputPolicy: diagnostics.smartAddInputPolicy,
-        smartAddIncluded: diagnostics.smartAddIncluded,
-        smartAddConversationIncluded: diagnostics.smartAddConversationIncluded,
-        smartAddSkippedUnknownProvenance: diagnostics.smartAddSkippedUnknownProvenance,
-        smartAddSkippedCheckpointGenerated: diagnostics.smartAddSkippedCheckpointGenerated,
-        budgetCoverageComplete: diagnostics.budgetCoverageComplete,
-        budgetExcludedCount: diagnostics.budgetExcludedCount,
-        budgetTruncatedCount: diagnostics.budgetTruncatedCount,
-        budgetUncoveredEntries: diagnostics.budgetUncoveredEntries,
-        generatedEpisodePath: diagnostics.generatedEpisodePath,
-        flushPerformed: true,
-        flushMayWriteSmartAddFiles: true,
-      })}`);
-      return {
-        dryRun: true,
-        targetDate,
-        flush: { performed: true, mayWriteSmartAddFiles: true },
-        stats: rawLogStats,
-        assessment,
-      };
     }
 
     const engineComplete = options.dryRun || (

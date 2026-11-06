@@ -22,7 +22,9 @@ Sol明确本项目是个人实验性项目，不要求生产级安全性和稳�
 原文、批次结果与版本可回读，见[超预算分批摘要](checkpoint-summary-batching.md)。
 显式MEMORY_ENGINE_CHECKPOINT_SUMMARY_MODE=legacy保留旧提取路径；默认transport仍为http。
 仅格式、原文归档和引用等基本功能检查阻断保存，不增加语义审核调用。
-本次修改未安装到运行目录，既有cron和服务是否切换需以实际运行代码及环境变量为准。
+2026-11-03已向实际扩展目录安装24个相关源码/schema文件，配置codex-cli/gpt-6-luna/xhigh，
+入口配置与隔离原文回读检查通过。Gateway仍运行但未重载Get新接口；原03:30 checkpoint任务仍停用，
+没有额外运行实际checkpoint。安装记录和Owner后续操作见[超预算分批摘要](checkpoint-summary-batching.md)。
 
 ## Latest Recent I/O qualification — 2026-10-11
 

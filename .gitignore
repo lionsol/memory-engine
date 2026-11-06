@@ -4,6 +4,7 @@ node_modules/
 # Secrets / env
 .env
 .env.*
+checkpoint-summary.env
 !.env.example
 
 # Databases / runtime data

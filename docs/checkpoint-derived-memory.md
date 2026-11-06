@@ -24,7 +24,8 @@ derived采集使用去重后的完整记录，不应用legacy的每会话8000/�
 来源未就绪或调用方提交的输入已截断时返回失败；单批格式或引用无效时标记该批失败，不自动改走旧路径。
 部分成功发布partial_summary并注明未完成批次，全部失败仍可读原文快照。
 当前行为与配置见[超预算分批摘要](checkpoint-summary-batching.md)；下文历史接线记录保留当时事实。
-此默认值变更尚未安装到运行目录，不代表既有cron或服务已切换。
+相关checkpoint/Get文件已安装并通过入口配置和隔离回读检查；Gateway重载及定时任务恢复尚未完成，
+详见[本地运行入口](checkpoint-summary-batching.md#本地运行入口)。
 显式搜索、普通chunk读取与AutoRecall卡片已新增逐项定位接线，
 Nightly Maintenance已新增归档检查与显式配置的追加式备份，见下文。
 默认不配置备份，不清理原文或历史归档；

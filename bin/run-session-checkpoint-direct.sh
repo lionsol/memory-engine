@@ -7,10 +7,20 @@
 
 set -uo pipefail
 
+PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CHECKPOINT_ENV_FILE="${MEMORY_ENGINE_CHECKPOINT_ENV_FILE:-$PLUGIN_DIR/checkpoint-summary.env}"
+if [ -f "$CHECKPOINT_ENV_FILE" ]; then
+  set -a
+  if ! source "$CHECKPOINT_ENV_FILE"; then
+    printf '[checkpoint-direct] Failed to load checkpoint environment file\\n' >&2
+    exit 1
+  fi
+  set +a
+fi
+
 TIME_ZONE=""
 WORKSPACE="${MEMORY_ENGINE_WORKSPACE_DIR:-$HOME/.openclaw/workspace}"
 NODE_BIN="${MEMORY_ENGINE_NODE_BIN:-$HOME/.local/node24/bin/node}"
-PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MEMORY_DIR="${MEMORY_ENGINE_MEMORY_DIR:-$WORKSPACE/memory}"
 CORE_DB_PATH="${MEMORY_ENGINE_CORE_DB_PATH:-$HOME/.openclaw/agents/main/agent/openclaw-agent.sqlite}"
 EPISODES_DIR="$MEMORY_DIR/episodes"
@@ -88,12 +98,18 @@ EOF
 }
 
 main() {
-  local target_date episode_file checkpoint_status reason
+  local target_date episode_file checkpoint_status reason preview_only=false replay_mode=false
+  local -a checkpoint_args=()
 
   if [ ! -x "$NODE_BIN" ]; then
     reason="configured Node binary is unavailable or not executable: $NODE_BIN"
     warn "$reason"
     exit 1
+  fi
+
+  if [ "${1:-}" = "--check-config" ]; then
+    "$NODE_BIN" "$PLUGIN_DIR/bin/checkpoint-runtime-config.cjs"
+    return $?
   fi
 
   if ! TIME_ZONE="$("$NODE_BIN" "$BUSINESS_TIME_SCRIPT" --timezone)"; then
@@ -103,9 +119,48 @@ main() {
   fi
   export MEMORY_ENGINE_TIME_ZONE="$TIME_ZONE"
 
-  if [ -n "${1:-}" ]; then
-    target_date="$1"
-  else
+  target_date=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run)
+        preview_only=true
+        checkpoint_args+=("$1")
+        shift ;;
+      --legacy-reset-direct-parse)
+        checkpoint_args+=("$1")
+        shift ;;
+      --replay-transcripts|--target-date)
+        if [ "$#" -lt 2 ] || [[ "$2" == --* ]]; then
+          warn "$1 requires a value"
+          return 2
+        fi
+        if [ "$1" = "--target-date" ]; then
+          target_date="$2"
+        else
+          replay_mode=true
+          checkpoint_args+=("$1" "$2")
+        fi
+        shift 2 ;;
+      --target-date=*)
+        target_date="${1#*=}"
+        shift ;;
+      --*)
+        warn "unknown checkpoint option: $1"
+        return 2 ;;
+      *)
+        if [ -n "$target_date" ]; then
+          warn "unexpected checkpoint argument: $1"
+          return 2
+        fi
+        target_date="$1"
+        shift ;;
+    esac
+  done
+  if [ "$replay_mode" = true ] && [ -z "$target_date" ]; then
+    warn "transcript replay requires an explicit target date"
+    return 2
+  fi
+  if [ -z "$target_date" ]; then
     if ! target_date="$("$NODE_BIN" "$BUSINESS_TIME_SCRIPT" --yesterday)"; then
       reason="canonical business target-date resolution failed"
       warn "$reason"
@@ -118,8 +173,13 @@ main() {
   log "Start targetDate=$target_date timeZone=$TIME_ZONE workspace=$WORKSPACE"
 
   log "Running canonical session-checkpoint (flush -> Core index ingress -> Engine reconciliation -> extraction)"
-  "$NODE_BIN" "$CHECKPOINT_SCRIPT" --target-date "$target_date"
+  "$NODE_BIN" "$CHECKPOINT_SCRIPT" --target-date "$target_date" "${checkpoint_args[@]}"
   checkpoint_status=$?
+
+  # A preview must not create a fallback episode, including on failure.
+  if [ "$preview_only" = true ]; then
+    return "$checkpoint_status"
+  fi
 
   if [ "$checkpoint_status" -eq 0 ] && [ -s "$episode_file" ]; then
     log "Run ended targetDate=$target_date episode=$episode_file process_status=0; see structured Business status for completeness"
